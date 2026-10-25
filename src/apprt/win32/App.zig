@@ -19,6 +19,7 @@ const TabBar = @import("TabBar.zig");
 const Window = @import("Window.zig");
 const DimOverlay = @import("DimOverlay.zig");
 const Taskbar = @import("Taskbar.zig");
+const Notifier = @import("Notifier.zig");
 
 const log = std.log.scoped(.win32);
 
@@ -53,6 +54,9 @@ msg_hwnd: c.HWND,
 /// Taskbar COM interface and the Explorer notification message.
 taskbar: Taskbar,
 taskbar_button_created: c.UINT,
+
+/// Desktop notifications.
+notifier: Notifier,
 
 /// All of our open top-level windows.
 windows: std.ArrayList(*Window) = .empty,
@@ -120,6 +124,7 @@ pub fn init(
         .msg_hwnd = msg_hwnd,
         .taskbar = taskbar,
         .taskbar_button_created = taskbar_button_created,
+        .notifier = .init(msg_hwnd, util.loadIcon(hinstance, 1)),
     };
 
     _ = c.SetWindowLongPtrW(msg_hwnd, util.GWLP_USERDATA, @bitCast(@intFromPtr(self)));
@@ -255,6 +260,7 @@ pub fn terminate(self: *App) void {
     self.windows.deinit(self.core_app.alloc);
 
     self.taskbar.deinit();
+    self.notifier.deinit();
 
     _ = c.DestroyWindow(self.msg_hwnd);
     unregisterClasses(self.hinstance);
@@ -281,6 +287,13 @@ fn msgWndProc(
                 self.core_app.tick(self) catch |err| {
                     log.err("error ticking app err={}", .{err});
                 };
+                return 0;
+            },
+
+            Notifier.WM_NOTIFY_ICON => {
+                if (self.notifier.handleMessage(lparam)) |surface| {
+                    self.presentSurface(surface);
+                }
                 return 0;
             },
 
@@ -326,6 +339,16 @@ fn activeWindow(self: *App) ?*Window {
     if (self.core_app.focusedSurface()) |surface| return surface.rt_surface.window;
     if (self.windows.items.len > 0) return self.windows.items[self.windows.items.len - 1];
     return null;
+}
+
+/// Bring the given surface to the front, if it still exists.
+fn presentSurface(self: *App, surface: *CoreSurface) void {
+    for (self.core_app.surfaces.items) |rt_surface| {
+        if (rt_surface.core() == surface) {
+            rt_surface.window.present(rt_surface);
+            return;
+        }
+    }
 }
 
 /// Called by a window when it's destroyed, to remove it from our list.
@@ -526,6 +549,11 @@ pub fn performAction(
             .app => return false,
             .surface => |v| v.rt_surface.commandFinished(value),
         },
+
+        .desktop_notification => self.notifier.send(switch (target) {
+            .app => null,
+            .surface => |v| v,
+        }, value.title, value.body),
 
         .open_url => openUrl(self.core_app.alloc, value.url),
 
