@@ -568,8 +568,13 @@ pub fn wndProc(
             return 0;
         },
 
-        c.WM_LBUTTONDOWN => {
-            const hit = self.hitTest(util.loword(lparam), util.hiword(lparam)) orelse return 0;
+        // We set CS_DBLCLKS for double clicks on empty space. A quick
+        // second click on anything else is just another click.
+        c.WM_LBUTTONDOWN, c.WM_LBUTTONDBLCLK => {
+            const hit = self.hitTest(util.loword(lparam), util.hiword(lparam)) orelse {
+                if (msg == c.WM_LBUTTONDBLCLK) _ = self.window.newTab();
+                return 0;
+            };
             switch (hit) {
                 .tab => |i| {
                     self.window.selectTab(i);
@@ -605,14 +610,6 @@ pub fn wndProc(
             switch (hit) {
                 .tab, .close => |i| self.window.closeTabAt(i),
                 .new_tab, .shell_menu => {},
-            }
-            return 0;
-        },
-
-        c.WM_LBUTTONDBLCLK => {
-            // Double clicking empty space opens a new tab.
-            if (self.hitTest(util.loword(lparam), util.hiword(lparam)) == null) {
-                _ = self.window.newTab();
             }
             return 0;
         },
