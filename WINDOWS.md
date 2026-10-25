@@ -153,7 +153,8 @@ Notes:
 - [ ] Bell title/border indicators and custom audio
   - [x] Pending bell marker on tabs with an unfocused ringing surface
   - [x] Window title indicator while any surface has a pending bell
-  - [ ] Border indicator and custom audio
+  - [x] Border indicator
+  - [ ] Custom audio
 - [ ] Shell integration for PowerShell
 - [ ] DirectWrite font discovery and rendering
 - [ ] Packaging (installer and MSIX) and release builds
@@ -323,3 +324,11 @@ Reviewed the branch against this file and discussion #2563.
   window to the foreground; an OSC 133 fixture with
   `notify-on-command-finish-action=notify` showed "Command Failed".
   `zig build test -Dtest-filter=copyTruncated` passes.
+- The `border` bell feature draws a click-through layered child window
+  over the surface: a 3px (DPI-scaled) frame in the system accent color at
+  half opacity, matching GTK. Like GTK and the documented behavior, a
+  pending bell (title and border) is now set even for the focused surface
+  and clears on focus or on any key the core consumes. The title marker
+  only counts surfaces with the `title` feature. Native test: BEL with
+  `bell-features=border,title` showed the frame and 🔔 title, and a key
+  press cleared both.

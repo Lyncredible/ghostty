@@ -331,6 +331,7 @@ pub fn surfaceFocused(self: *Window, surface: *Surface) void {
     const tab = self.tabOf(surface) orelse return;
     tab.focused = surface;
     surface.bell_pending = false;
+    surface.updateBellBorder();
     tab.updateDimming();
     self.tab_bar.invalidate();
     if (tab == self.activeTab()) {
@@ -339,12 +340,10 @@ pub fn surfaceFocused(self: *Window, surface: *Surface) void {
     }
 }
 
-/// Mark a bell from a surface that the user is not currently viewing.
+/// Mark a bell from a surface until it's focused or receives key input.
 pub fn surfaceBell(self: *Window, surface: *Surface) void {
     if (self.tabOf(surface) == null) return;
-    if (c.GetForegroundWindow() == self.hwnd and c.GetFocus() == surface.hwnd) return;
-    surface.bell_pending = true;
-    self.updateBellIndicators();
+    surface.setBellPending(true);
 }
 
 /// Refresh the tab markers and title after a pending bell changes.
