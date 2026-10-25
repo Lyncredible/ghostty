@@ -8,6 +8,7 @@
 const Device = @This();
 
 const std = @import("std");
+const builtin = @import("builtin");
 const Allocator = std.mem.Allocator;
 
 const com = @import("com.zig");
@@ -82,9 +83,10 @@ pub fn createDevice(self: *const Device) !struct {
 
     // The debug layer is only available when the Graphics Tools optional
     // feature is installed, so if creating a debug device fails we just
-    // try again without it.
+    // try again without it. It's slow, so we only use it in debug builds
+    // (not ReleaseSafe, which is a release configuration).
     const attempts: []const struct { driver: c.D3D_DRIVER_TYPE, flags: c.UINT } =
-        if (std.debug.runtime_safety) &.{
+        if (builtin.mode == .debug) &.{
             .{ .driver = c.D3D_DRIVER_TYPE_HARDWARE, .flags = base_flags | c.D3D11_CREATE_DEVICE_DEBUG },
             .{ .driver = c.D3D_DRIVER_TYPE_HARDWARE, .flags = base_flags },
             .{ .driver = c.D3D_DRIVER_TYPE_WARP, .flags = base_flags },
