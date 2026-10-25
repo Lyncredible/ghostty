@@ -333,16 +333,27 @@ const WindowsPty = struct {
 
     out_pipe: windows.HANDLE,
     in_pipe: windows.HANDLE,
-    out_pipe_pty: windows.HANDLE,
-    in_pipe_pty: windows.HANDLE,
     pseudo_console: windows.HPCON,
     size: winsize,
+
+    /// Whether the pseudoconsole has been closed, see `closeConsole`.
+    console_closed: bool = false,
 
     pub const OpenError = error{Unexpected};
 
     /// Open a new PTY with the given initial size.
     pub fn open(size: winsize) OpenError!Pty {
-        var pty: Pty = undefined;
+        var pty: Pty = .{
+            .out_pipe = undefined,
+            .in_pipe = undefined,
+            .pseudo_console = undefined,
+            .size = size,
+        };
+
+        // The pseudoconsole's ends of the pipes. The pseudoconsole
+        // duplicates these when it's created, so we close ours after.
+        var in_pipe_pty: windows.HANDLE = undefined;
+        var out_pipe_pty: windows.HANDLE = undefined;
 
         var pipe_path_buf: [128]u8 = undefined;
         var pipe_path_buf_w: [128]u16 = undefined;
@@ -387,7 +398,7 @@ const WindowsPty = struct {
         errdefer _ = windows.exp.kernel32.CloseHandle(pty.in_pipe);
 
         var security_attributes_read = security_attributes;
-        pty.in_pipe_pty = windows.exp.kernel32.CreateFileW(
+        in_pipe_pty = windows.exp.kernel32.CreateFileW(
             pipe_path_w.ptr,
             windows.GENERIC_READ,
             0,
@@ -396,10 +407,10 @@ const WindowsPty = struct {
             windows.FILE_ATTRIBUTE_NORMAL,
             null,
         );
-        if (pty.in_pipe_pty == windows.INVALID_HANDLE_VALUE) {
+        if (in_pipe_pty == windows.INVALID_HANDLE_VALUE) {
             return windows.unexpectedError(windows.GetLastError());
         }
-        errdefer _ = windows.exp.kernel32.CloseHandle(pty.in_pipe_pty);
+        errdefer _ = windows.exp.kernel32.CloseHandle(in_pipe_pty);
 
         // The in_pipe needs to be created as a named pipe, since anonymous
         // pipes created with CreatePipe do not support overlapped operations,
@@ -408,20 +419,20 @@ const WindowsPty = struct {
         // It would be ideal to use CreatePipe here, so that our pipe isn't
         // visible to any other processes.
 
-        // if (windows.exp.kernel32.CreatePipe(&pty.in_pipe_pty, &pty.in_pipe, null, 0) == 0) {
+        // if (windows.exp.kernel32.CreatePipe(&in_pipe_pty, &pty.in_pipe, null, 0) == 0) {
         //     return windows.unexpectedError(windows.kernel32.GetLastError());
         // }
         // errdefer {
-        //     _ = windows.CloseHandle(pty.in_pipe_pty);
+        //     _ = windows.CloseHandle(in_pipe_pty);
         //     _ = windows.CloseHandle(pty.in_pipe);
         // }
 
-        if (windows.exp.kernel32.CreatePipe(&pty.out_pipe, &pty.out_pipe_pty, null, 0) == windows.FALSE) {
+        if (windows.exp.kernel32.CreatePipe(&pty.out_pipe, &out_pipe_pty, null, 0) == windows.FALSE) {
             return windows.unexpectedError(windows.GetLastError());
         }
         errdefer {
             _ = windows.exp.kernel32.CloseHandle(pty.out_pipe);
-            _ = windows.exp.kernel32.CloseHandle(pty.out_pipe_pty);
+            _ = windows.exp.kernel32.CloseHandle(out_pipe_pty);
         }
 
         const SetHandleInformation = struct {
@@ -437,30 +448,47 @@ const WindowsPty = struct {
         };
 
         try SetHandleInformation.f(pty.in_pipe);
-        try SetHandleInformation.f(pty.in_pipe_pty);
+        try SetHandleInformation.f(in_pipe_pty);
         try SetHandleInformation.f(pty.out_pipe);
-        try SetHandleInformation.f(pty.out_pipe_pty);
+        try SetHandleInformation.f(out_pipe_pty);
 
         const result = windows.exp.kernel32.CreatePseudoConsole(
             .{ .X = @intCast(size.ws_col), .Y = @intCast(size.ws_row) },
-            pty.in_pipe_pty,
-            pty.out_pipe_pty,
+            in_pipe_pty,
+            out_pipe_pty,
             0,
             &pty.pseudo_console,
         );
         if (result != windows.S_OK) return error.Unexpected;
 
-        pty.size = size;
+        // We must not keep the pseudoconsole's ends of the pipes open.
+        // In particular, if we held the write end of the output pipe,
+        // reading from the output pipe would never see the end of the
+        // stream once the pseudoconsole is closed.
+        _ = windows.exp.kernel32.CloseHandle(in_pipe_pty);
+        _ = windows.exp.kernel32.CloseHandle(out_pipe_pty);
+
         return pty;
     }
 
     pub fn deinit(self: *Pty) void {
-        _ = windows.exp.kernel32.CloseHandle(self.in_pipe_pty);
+        self.closeConsole();
         _ = windows.exp.kernel32.CloseHandle(self.in_pipe);
-        _ = windows.exp.kernel32.CloseHandle(self.out_pipe_pty);
         _ = windows.exp.kernel32.CloseHandle(self.out_pipe);
-        _ = windows.exp.kernel32.ClosePseudoConsole(self.pseudo_console);
         self.* = undefined;
+    }
+
+    /// Close the pseudoconsole. This terminates the attached processes
+    /// and, once the pseudoconsole has flushed its output, closes its end
+    /// of the output pipe, so that readers of the output pipe see the end
+    /// of the stream. A reader must keep draining the output pipe until
+    /// then since ClosePseudoConsole may wait for it on older Windows.
+    ///
+    /// This is safe to call multiple times.
+    pub fn closeConsole(self: *Pty) void {
+        if (self.console_closed) return;
+        self.console_closed = true;
+        windows.exp.kernel32.ClosePseudoConsole(self.pseudo_console);
     }
 
     pub const GetSizeError = error{};
