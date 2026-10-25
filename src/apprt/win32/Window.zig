@@ -410,8 +410,10 @@ fn updateWindowTitle(self: *Window) void {
     const pending = for (self.tabs.items) |tab| {
         if (tab.hasBell()) break true;
     } else false;
+    // Like other platforms, mark the title with a bell emoji. We do so
+    // for any tab so that it remains visible when the tab bar is hidden.
     const display_title = if (pending)
-        std.fmt.allocPrint(alloc, "[!] {s}", .{title}) catch return
+        std.fmt.allocPrint(alloc, "🔔 {s}", .{title}) catch return
     else
         alloc.dupe(u8, title) catch return;
     defer alloc.free(display_title);
