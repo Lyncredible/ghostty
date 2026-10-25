@@ -21,6 +21,7 @@ const DimOverlay = @import("DimOverlay.zig");
 const BellBorder = @import("BellBorder.zig");
 const LinkPreview = @import("LinkPreview.zig");
 const Scrollbar = @import("Scrollbar.zig");
+const Badge = @import("Badge.zig");
 const Taskbar = @import("Taskbar.zig");
 const Notifier = @import("Notifier.zig");
 const BellAudio = @import("BellAudio.zig");
@@ -255,6 +256,20 @@ fn registerClasses(hinstance: c.HINSTANCE) !void {
         .{
             .cbSize = @sizeOf(c.WNDCLASSEXW),
             .style = 0,
+            .lpfnWndProc = Badge.wndProc,
+            .cbClsExtra = 0,
+            .cbWndExtra = 0,
+            .hInstance = hinstance,
+            .hIcon = null,
+            .hCursor = null,
+            .hbrBackground = null,
+            .lpszMenuName = null,
+            .lpszClassName = Badge.class_name,
+            .hIconSm = null,
+        },
+        .{
+            .cbSize = @sizeOf(c.WNDCLASSEXW),
+            .style = 0,
             .lpfnWndProc = msgWndProc,
             .cbClsExtra = 0,
             .cbWndExtra = 0,
@@ -284,6 +299,7 @@ fn unregisterClasses(hinstance: c.HINSTANCE) void {
     _ = c.UnregisterClassW(BellBorder.class_name, hinstance);
     _ = c.UnregisterClassW(LinkPreview.class_name, hinstance);
     _ = c.UnregisterClassW(Scrollbar.class_name, hinstance);
+    _ = c.UnregisterClassW(Badge.class_name, hinstance);
     _ = c.UnregisterClassW(message_class, hinstance);
 }
 
@@ -661,6 +677,26 @@ pub fn performAction(
         .mouse_shape => switch (target) {
             .app => return false,
             .surface => |v| v.rt_surface.setMouseShape(value),
+        },
+
+        .readonly => switch (target) {
+            .app => return false,
+            .surface => |v| v.rt_surface.setReadonly(value),
+        },
+
+        .renderer_health => switch (target) {
+            .app => return false,
+            .surface => |v| v.rt_surface.setRendererHealth(value),
+        },
+
+        .key_sequence => switch (target) {
+            .app => return false,
+            .surface => |v| try v.rt_surface.keySequence(value),
+        },
+
+        .key_table => switch (target) {
+            .app => return false,
+            .surface => |v| try v.rt_surface.keyTable(value),
         },
 
         .scrollbar => switch (target) {
