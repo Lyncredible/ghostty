@@ -5,7 +5,6 @@
 #define _UNICODE
 
 #include <windows.h>
-#include <commctrl.h>
 #include <dwmapi.h>
 #include <imm.h>
 #include <shellapi.h>

@@ -1,0 +1,414 @@
+//! The tab bar of a window. This is a custom drawn child window so that
+//! it can match the colors of the terminal, which the native tab control
+//! can't.
+const TabBar = @This();
+
+const std = @import("std");
+const Allocator = std.mem.Allocator;
+
+const util = @import("util.zig");
+const c = util.c;
+const App = @import("App.zig");
+const Window = @import("Window.zig");
+
+const log = std.log.scoped(.win32);
+
+window: *Window,
+
+/// The tab bar's window handle.
+hwnd: c.HWND,
+
+/// The font used for tab titles, scaled for our DPI.
+font: ?c.HFONT = null,
+
+/// The element under the mouse, if any.
+hover: ?Hit = null,
+
+/// Whether we're tracking the mouse to get WM_MOUSELEAVE.
+tracking_mouse: bool = false,
+
+/// The parts of the tab bar the mouse can be over.
+const Hit = union(enum) {
+    tab: usize,
+    close: usize,
+    new_tab,
+
+    fn eql(a: ?Hit, b: ?Hit) bool {
+        const x = a orelse return b == null;
+        const y = b orelse return false;
+        return std.meta.eql(x, y);
+    }
+};
+
+pub fn init(self: *TabBar, window: *Window) !void {
+    const hwnd = c.CreateWindowExW(
+        0,
+        App.tab_bar_class,
+        null,
+        c.WS_CHILD | c.WS_CLIPSIBLINGS,
+        0,
+        0,
+        0,
+        0,
+        window.hwnd,
+        null,
+        window.app.hinstance,
+        null,
+    ) orelse {
+        log.err("failed to create tab bar err={}", .{c.GetLastError()});
+        return error.CreateWindowFailed;
+    };
+
+    self.* = .{ .window = window, .hwnd = hwnd };
+    _ = c.SetWindowLongPtrW(hwnd, util.GWLP_USERDATA, @bitCast(@intFromPtr(self)));
+    self.updateFont();
+}
+
+pub fn deinit(self: *TabBar) void {
+    _ = c.SetWindowLongPtrW(self.hwnd, util.GWLP_USERDATA, 0);
+    if (self.font) |f| _ = c.DeleteObject(f);
+}
+
+/// Redraw the tab bar, e.g. after tabs or titles changed.
+pub fn invalidate(self: *TabBar) void {
+    _ = c.InvalidateRect(self.hwnd, null, c.FALSE);
+}
+
+/// The height of the tab bar for our current font and DPI.
+pub fn height(self: *const TabBar) c_int {
+    return self.scale(32);
+}
+
+/// Scale a size in DPI-independent pixels to physical pixels.
+fn scale(self: *const TabBar, v: c_int) c_int {
+    const dpi: c_int = @intCast(c.GetDpiForWindow(self.window.hwnd));
+    return @divTrunc(v * dpi, util.USER_DEFAULT_SCREEN_DPI);
+}
+
+/// Set our font to the system UI font for our DPI.
+pub fn updateFont(self: *TabBar) void {
+    const dpi = c.GetDpiForWindow(self.window.hwnd);
+    var metrics: c.NONCLIENTMETRICSW = undefined;
+    metrics.cbSize = @sizeOf(c.NONCLIENTMETRICSW);
+    if (c.SystemParametersInfoForDpi(
+        c.SPI_GETNONCLIENTMETRICS,
+        metrics.cbSize,
+        &metrics,
+        0,
+        dpi,
+    ) == 0) return;
+
+    const font = c.CreateFontIndirectW(&metrics.lfMessageFont) orelse return;
+    if (self.font) |old| _ = c.DeleteObject(old);
+    self.font = font;
+    self.invalidate();
+}
+
+//----------------------------------------------------------------------------
+// Layout
+
+const Layout = struct {
+    /// The width of each tab.
+    tab_width: c_int,
+
+    /// The rectangle of the new tab button.
+    new_tab: c.RECT,
+
+    fn tabRect(self: Layout, idx: usize, h: c_int) c.RECT {
+        const left = @as(c_int, @intCast(idx)) * self.tab_width;
+        return .{ .left = left, .top = 0, .right = left + self.tab_width, .bottom = h };
+    }
+};
+
+fn layout(self: *const TabBar) Layout {
+    var client: c.RECT = undefined;
+    _ = c.GetClientRect(self.hwnd, &client);
+    const h = client.bottom;
+    const n: c_int = @intCast(@max(1, self.window.tabs.items.len));
+
+    // Tabs share the width (less the new tab button) up to a maximum.
+    const button = h;
+    const available = @max(0, client.right - button);
+    const tab_width = @min(self.scale(240), @divTrunc(available, n));
+
+    const new_left = tab_width * n;
+    return .{
+        .tab_width = tab_width,
+        .new_tab = .{ .left = new_left, .top = 0, .right = new_left + button, .bottom = h },
+    };
+}
+
+/// The rectangle of the close button of a tab.
+fn closeRect(self: *const TabBar, tab: c.RECT) c.RECT {
+    const size = self.scale(16);
+    const margin = self.scale(8);
+    const top = tab.top + @divTrunc(tab.bottom - tab.top - size, 2);
+    return .{
+        .left = tab.right - margin - size,
+        .top = top,
+        .right = tab.right - margin,
+        .bottom = top + size,
+    };
+}
+
+fn hitTest(self: *const TabBar, x: c_int, y: c_int) ?Hit {
+    const l = self.layout();
+    var client: c.RECT = undefined;
+    _ = c.GetClientRect(self.hwnd, &client);
+    const pt: c.POINT = .{ .x = x, .y = y };
+
+    if (c.PtInRect(&l.new_tab, pt) != 0) return .new_tab;
+    for (0..self.window.tabs.items.len) |i| {
+        const rect = l.tabRect(i, client.bottom);
+        if (c.PtInRect(&rect, pt) == 0) continue;
+        const close = self.closeRect(rect);
+        if (c.PtInRect(&close, pt) != 0) return .{ .close = i };
+        return .{ .tab = i };
+    }
+    return null;
+}
+
+//----------------------------------------------------------------------------
+// Painting
+
+const Rgb = struct { r: u8, g: u8, b: u8 };
+
+const Colors = struct {
+    bar: Rgb,
+    active: Rgb,
+    hover: Rgb,
+    text: Rgb,
+    text_inactive: Rgb,
+    separator: Rgb,
+};
+
+fn colors(self: *const TabBar) Colors {
+    const config = &self.window.app.config;
+    const bg: Rgb = .{ .r = config.background.r, .g = config.background.g, .b = config.background.b };
+    const fg: Rgb = .{ .r = config.foreground.r, .g = config.foreground.g, .b = config.foreground.b };
+    const black: Rgb = .{ .r = 0, .g = 0, .b = 0 };
+    const bar = blend(bg, black, 0.25);
+    return .{
+        .bar = bar,
+        .active = bg,
+        .hover = blend(bar, fg, 0.08),
+        .text = fg,
+        .text_inactive = blend(fg, bg, 0.4),
+        .separator = blend(bg, fg, 0.15),
+    };
+}
+
+/// Blend color `a` toward `b` by `t` (0 to 1).
+fn blend(a: Rgb, b: Rgb, t: f32) Rgb {
+    return .{
+        .r = mix(a.r, b.r, t),
+        .g = mix(a.g, b.g, t),
+        .b = mix(a.b, b.b, t),
+    };
+}
+
+fn mix(a: u8, b: u8, t: f32) u8 {
+    const af: f32 = @floatFromInt(a);
+    const bf: f32 = @floatFromInt(b);
+    return @intFromFloat(@round(af + (bf - af) * t));
+}
+
+fn colorref(v: Rgb) c.COLORREF {
+    return @as(c.COLORREF, v.r) | (@as(c.COLORREF, v.g) << 8) | (@as(c.COLORREF, v.b) << 16);
+}
+
+fn fill(hdc: c.HDC, rect: *const c.RECT, color: Rgb) void {
+    const brush = c.CreateSolidBrush(colorref(color));
+    defer _ = c.DeleteObject(brush);
+    _ = c.FillRect(hdc, rect, brush);
+}
+
+fn paint(self: *TabBar, hdc: c.HDC, client: c.RECT) void {
+    const col = self.colors();
+    const l = self.layout();
+    const window = self.window;
+
+    fill(hdc, &client, col.bar);
+
+    _ = c.SetBkMode(hdc, c.TRANSPARENT);
+    const old_font = if (self.font) |f| c.SelectObject(hdc, f) else null;
+    defer if (old_font) |f| {
+        _ = c.SelectObject(hdc, f);
+    };
+
+    const alloc = window.app.core_app.alloc;
+    for (window.tabs.items, 0..) |tab, i| {
+        const rect = l.tabRect(i, client.bottom);
+        const active = i == window.active;
+        const hovered = Hit.eql(self.hover, .{ .tab = i }) or Hit.eql(self.hover, .{ .close = i });
+
+        if (active) {
+            fill(hdc, &rect, col.active);
+        } else if (hovered) {
+            fill(hdc, &rect, col.hover);
+        }
+
+        // Separators between inactive tabs.
+        if (!active and i + 1 != window.active and i + 1 < window.tabs.items.len) {
+            const sep: c.RECT = .{
+                .left = rect.right - 1,
+                .top = rect.top + self.scale(8),
+                .right = rect.right,
+                .bottom = rect.bottom - self.scale(8),
+            };
+            fill(hdc, &sep, col.separator);
+        }
+
+        // Title
+        const close = self.closeRect(rect);
+        var text_rect: c.RECT = .{
+            .left = rect.left + self.scale(12),
+            .top = rect.top,
+            .right = close.left - self.scale(4),
+            .bottom = rect.bottom,
+        };
+        const title16 = util.utf16Alloc(alloc, tab.focused.title orelse "Ghostty") catch continue;
+        defer alloc.free(title16);
+        _ = c.SetTextColor(hdc, colorref(if (active) col.text else col.text_inactive));
+        _ = c.DrawTextW(
+            hdc,
+            title16.ptr,
+            @intCast(title16.len),
+            &text_rect,
+            c.DT_SINGLELINE | c.DT_VCENTER | c.DT_END_ELLIPSIS | c.DT_NOPREFIX,
+        );
+
+        // Close button, shown on the active and hovered tabs.
+        if (active or hovered) {
+            if (Hit.eql(self.hover, .{ .close = i })) {
+                fill(hdc, &close, blend(if (active) col.active else col.hover, col.text, 0.15));
+            }
+            self.drawCross(hdc, close, if (active) col.text else col.text_inactive);
+        }
+    }
+
+    // New tab button
+    if (Hit.eql(self.hover, .new_tab)) fill(hdc, &l.new_tab, col.hover);
+    self.drawPlus(hdc, l.new_tab, col.text_inactive);
+}
+
+fn drawCross(self: *const TabBar, hdc: c.HDC, rect: c.RECT, color: Rgb) void {
+    const inset = self.scale(4);
+    const pen = c.CreatePen(c.PS_SOLID, @max(1, self.scale(1)), colorref(color));
+    defer _ = c.DeleteObject(pen);
+    const old = c.SelectObject(hdc, pen);
+    defer _ = c.SelectObject(hdc, old);
+    _ = c.MoveToEx(hdc, rect.left + inset, rect.top + inset, null);
+    _ = c.LineTo(hdc, rect.right - inset, rect.bottom - inset);
+    _ = c.MoveToEx(hdc, rect.right - inset - 1, rect.top + inset, null);
+    _ = c.LineTo(hdc, rect.left + inset - 1, rect.bottom - inset);
+}
+
+fn drawPlus(self: *const TabBar, hdc: c.HDC, rect: c.RECT, color: Rgb) void {
+    const size = self.scale(6);
+    const cx = @divTrunc(rect.left + rect.right, 2);
+    const cy = @divTrunc(rect.top + rect.bottom, 2);
+    const pen = c.CreatePen(c.PS_SOLID, @max(1, self.scale(1)), colorref(color));
+    defer _ = c.DeleteObject(pen);
+    const old = c.SelectObject(hdc, pen);
+    defer _ = c.SelectObject(hdc, old);
+    _ = c.MoveToEx(hdc, cx - size, cy, null);
+    _ = c.LineTo(hdc, cx + size + 1, cy);
+    _ = c.MoveToEx(hdc, cx, cy - size, null);
+    _ = c.LineTo(hdc, cx, cy + size + 1);
+}
+
+//----------------------------------------------------------------------------
+// Window procedure
+
+fn setHover(self: *TabBar, hit: ?Hit) void {
+    if (Hit.eql(self.hover, hit)) return;
+    self.hover = hit;
+    self.invalidate();
+}
+
+pub fn wndProc(
+    hwnd: c.HWND,
+    msg: c.UINT,
+    wparam: c.WPARAM,
+    lparam: c.LPARAM,
+) callconv(.c) c.LRESULT {
+    const ptr = c.GetWindowLongPtrW(hwnd, util.GWLP_USERDATA);
+    if (ptr == 0) return c.DefWindowProcW(hwnd, msg, wparam, lparam);
+    const self: *TabBar = @ptrFromInt(@as(usize, @bitCast(ptr)));
+
+    switch (msg) {
+        c.WM_ERASEBKGND => return 1,
+
+        c.WM_PAINT => {
+            var ps: c.PAINTSTRUCT = undefined;
+            const hdc = c.BeginPaint(hwnd, &ps);
+            defer _ = c.EndPaint(hwnd, &ps);
+
+            // Draw into a memory bitmap to avoid flicker.
+            var client: c.RECT = undefined;
+            _ = c.GetClientRect(hwnd, &client);
+            const mem = c.CreateCompatibleDC(hdc);
+            defer _ = c.DeleteDC(mem);
+            const bmp = c.CreateCompatibleBitmap(hdc, client.right, client.bottom);
+            defer _ = c.DeleteObject(bmp);
+            const old = c.SelectObject(mem, bmp);
+            defer _ = c.SelectObject(mem, old);
+
+            self.paint(mem, client);
+            _ = c.BitBlt(hdc, 0, 0, client.right, client.bottom, mem, 0, 0, c.SRCCOPY);
+            return 0;
+        },
+
+        c.WM_MOUSEMOVE => {
+            if (!self.tracking_mouse) {
+                var tme: c.TRACKMOUSEEVENT = .{
+                    .cbSize = @sizeOf(c.TRACKMOUSEEVENT),
+                    .dwFlags = c.TME_LEAVE,
+                    .hwndTrack = hwnd,
+                    .dwHoverTime = 0,
+                };
+                if (c.TrackMouseEvent(&tme) != 0) self.tracking_mouse = true;
+            }
+            self.setHover(self.hitTest(util.loword(lparam), util.hiword(lparam)));
+            return 0;
+        },
+
+        c.WM_MOUSELEAVE => {
+            self.tracking_mouse = false;
+            self.setHover(null);
+            return 0;
+        },
+
+        c.WM_LBUTTONDOWN => {
+            const hit = self.hitTest(util.loword(lparam), util.hiword(lparam)) orelse return 0;
+            switch (hit) {
+                .tab => |i| self.window.selectTab(i),
+                .close => |i| self.window.closeTabAt(i),
+                .new_tab => _ = self.window.newTab(),
+            }
+            return 0;
+        },
+
+        c.WM_MBUTTONUP => {
+            const hit = self.hitTest(util.loword(lparam), util.hiword(lparam)) orelse return 0;
+            switch (hit) {
+                .tab, .close => |i| self.window.closeTabAt(i),
+                .new_tab => {},
+            }
+            return 0;
+        },
+
+        c.WM_LBUTTONDBLCLK => {
+            // Double clicking empty space opens a new tab.
+            if (self.hitTest(util.loword(lparam), util.hiword(lparam)) == null) {
+                _ = self.window.newTab();
+            }
+            return 0;
+        },
+
+        else => {},
+    }
+
+    return c.DefWindowProcW(hwnd, msg, wparam, lparam);
+}
