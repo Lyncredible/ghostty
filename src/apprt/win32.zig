@@ -9,4 +9,5 @@ pub const resourcesDir = internal_os.resourcesDir;
 test {
     @import("std").testing.refAllDecls(@This());
     _ = @import("win32/key.zig");
+    _ = @import("win32/Notifier.zig");
 }

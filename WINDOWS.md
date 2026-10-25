@@ -144,12 +144,12 @@ Notes:
 - [ ] Terminal inspector (needs a Dear ImGui D3D11 backend)
 - [x] Bell attention flash in the taskbar, honoring `bell-features`;
       system sound is now opt-in via `system`
-- [ ] Desktop notifications and progress reports (taskbar)
+- [x] Desktop notifications and progress reports (taskbar)
   - [x] OSC 9;4 progress on the active surface's taskbar button
-  - [ ] Desktop notifications
-- [ ] Command-finished notifications
+  - [x] Desktop notifications (OSC 9 and OSC 777) as toasts
+- [x] Command-finished notifications
   - [x] Configured bell action and duration/focus filtering
-  - [ ] Desktop notification action
+  - [x] Desktop notification action
 - [ ] Bell title/border indicators and custom audio
   - [x] Pending bell marker on tabs with an unfocused ringing surface
   - [x] Window title indicator while any surface has a pending bell
@@ -308,3 +308,18 @@ Reviewed the branch against this file and discussion #2563.
   `shadertoy to hlsl`, `execCommand windows`,
   `windowsCreateCommandLine`) pass. UI behavior of these changes wasn't
   tested in this review.
+
+## Development log (2026-10-25)
+
+- Desktop notifications use `Shell_NotifyIconW` balloons, which Windows
+  10/11 show as toasts. Unlike WinRT toasts they need no AppUserModelID or
+  Start menu shortcut, which unpackaged builds lack. The notification area
+  icon is only added while a notification is showing and is removed when
+  it's clicked, dismissed, or times out (so it doesn't linger in Action
+  Center). Clicking a toast restores the window and focuses the surface that
+  sent it, if that surface still exists. A newer notification replaces the
+  current one. ConPTY passes OSC 9 and OSC 777 through. Native tests: an
+  OSC 9 toast appeared with the app icon; clicking it restored a minimized
+  window to the foreground; an OSC 133 fixture with
+  `notify-on-command-finish-action=notify` showed "Command Failed".
+  `zig build test -Dtest-filter=copyTruncated` passes.

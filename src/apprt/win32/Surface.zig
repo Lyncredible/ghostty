@@ -219,6 +219,7 @@ pub fn deinit(self: *Surface) void {
 
     // Remove ourselves from the list of known surfaces in the app.
     self.app.core_app.deleteSurface(self);
+    self.app.notifier.surfaceDestroyed(&self.core_surface);
 
     // Clean up our core surface so that all the rendering and IO stop.
     if (self.core_initialized) {
@@ -297,6 +298,28 @@ pub fn commandFinished(self: *Surface, value: apprt.Action.Value(.command_finish
         log.debug("command finished bell duration={f}", .{value.duration});
         self.ringBell();
     }
+    if (self.notify_on_command_finish_action.notify) {
+        self.notifyCommandFinished(value);
+    }
+}
+
+fn notifyCommandFinished(self: *Surface, value: apprt.Action.Value(.command_finished)) void {
+    const title = if (value.exit_code) |code|
+        if (code == 0) "Command Succeeded" else "Command Failed"
+    else
+        "Command Finished";
+
+    var buf: [128]u8 = undefined;
+    const duration = value.duration.round(std.time.ns_per_ms);
+    const body = if (value.exit_code) |code|
+        std.fmt.bufPrint(&buf, "Command took {f} and exited with code {d}.", .{ duration, code })
+    else
+        std.fmt.bufPrint(&buf, "Command took {f}.", .{duration});
+    self.app.notifier.send(
+        &self.core_surface,
+        title,
+        body catch "Command finished.",
+    );
 }
 
 pub fn setProgressReport(self: *Surface, report: terminal.osc.Command.ProgressReport) void {
