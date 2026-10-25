@@ -79,6 +79,9 @@ hidden_active: ?*Window = null,
 /// The quick terminal, once it's been opened.
 quick_terminal: ?*Window = null,
 
+/// Set by toggle_background_opacity to make translucent windows opaque.
+background_opaque: bool = false,
+
 /// All of our open top-level windows.
 windows: std.ArrayList(*Window) = .empty,
 
@@ -550,6 +553,23 @@ fn gotoWindow(self: *App, from: *Window, direction: apprt.action.GotoWindow) boo
     return true;
 }
 
+/// Whether windows let the desktop show through the terminal background.
+pub fn translucent(self: *const App) bool {
+    return self.config.@"background-opacity" < 1 and !self.background_opaque;
+}
+
+/// Like macOS, switch all windows between their translucent background
+/// and an opaque one. The renderer keeps drawing with the configured
+/// opacity; surfaces paint the background color beneath it instead.
+fn toggleBackgroundOpacity(self: *App) void {
+    if (self.config.@"background-opacity" >= 1) return;
+    self.background_opaque = !self.background_opaque;
+    for (self.windows.items) |window| window.configChanged();
+    for (self.core_app.surfaces.items) |surface| {
+        _ = c.InvalidateRect(surface.hwnd, null, c.TRUE);
+    }
+}
+
 /// Show the quick terminal, creating it if needed, or hide it if it's
 /// in front.
 fn toggleQuickTerminal(self: *App) !void {
@@ -842,6 +862,8 @@ pub fn performAction(
         .toggle_visibility => self.toggleVisibility(),
 
         .toggle_quick_terminal => try self.toggleQuickTerminal(),
+
+        .toggle_background_opacity => self.toggleBackgroundOpacity(),
 
         .goto_window => switch (target) {
             .app => return false,

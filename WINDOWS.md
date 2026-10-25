@@ -142,7 +142,7 @@ Notes:
 - [x] Drag tabs to reorder within a window
 - [x] Move a tab to a new window (`move_tab_to_new_window`)
 - [x] Background opacity/blur (DirectComposition swap chain)
-  - [ ] `toggle_background_opacity`
+  - [x] `toggle_background_opacity` (needs a manual UI test)
   - [ ] Blur on Windows 10 (the acrylic backdrop is Windows 11 only)
 - [ ] Single instance and IPC
   - [x] `+new-window` and `+new-tab` (with `-e`, `--working-directory`,
@@ -192,7 +192,6 @@ Notes:
   - [x] Quick terminal (`toggle_quick_terminal`, `+toggle-quick-terminal`)
     - [ ] Slide animation (`quick-terminal-animation-duration`)
   - [ ] Command palette
-  - [ ] `toggle_background_opacity` (needs the renderer's alpha to change)
 - [x] Share built-in compiled shader bytecode across surfaces
 - [x] Cache compiled custom shader bytecode across surfaces
 
@@ -562,3 +561,11 @@ Reviewed the branch against this file and discussion #2563.
   4,045 passed, 65 skipped, 0 failed. `zig build test` prints "failed
   command" for the test step because a test writes `terminal-snapshot`
   diagnostics to stderr, but the step and the test binary both exit 0.
+- `toggle_background_opacity` follows macOS: it switches every window
+  between translucent and opaque, and does nothing when
+  `background-opacity` is 1. The renderer keeps drawing with the configured
+  alpha; when opaque, surfaces paint the background color beneath the
+  composition visual instead of zero-alpha black, so the result looks like
+  an opaque terminal. The translucent and default paths were rechecked
+  with screenshots; the toggle itself needs a keybind, so it hasn't been
+  tested in the app yet.
