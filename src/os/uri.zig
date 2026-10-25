@@ -203,24 +203,40 @@ test isValidMacAddress {
     try testing.expect(!isValidMacAddress("01:23:45:67:89:Aa:Bb"));
 }
 
-/// Convert the path of a file URI to a Windows path. File URIs for drive
-/// paths have a leading slash before the drive letter ("/C:/Users"), which
-/// we remove. Forward slashes become backslashes. The caller owns the
-/// returned memory.
-pub fn windowsPath(alloc: std.mem.Allocator, path: []const u8) std.mem.Allocator.Error![]u8 {
-    const drive = path.len >= 3 and path[0] == '/' and
-        std.ascii.isAlphabetic(path[1]) and path[2] == ':' and
-        (path.len == 3 or path[3] == '/');
-    const result = try alloc.dupe(u8, if (drive) path[1..] else path);
-    std.mem.replaceScalar(u8, result, '/', '\\');
+/// Convert the path of a file URI to a Windows path, or null if it isn't
+/// one. The caller owns the returned memory.
+///
+/// File URIs for drive paths have a leading slash before the drive letter
+/// ("/C:/Users"). Shells in WSL and MSYS2 report Linux style paths, so we
+/// also convert their drive mounts ("/mnt/c/Users" and "/c/Users").
+/// Other Linux paths, such as "/home/me" in WSL, have no Windows path.
+pub fn windowsPath(alloc: std.mem.Allocator, path: []const u8) std.mem.Allocator.Error!?[]u8 {
+    const drive: u8, const rest: []const u8 = drive: {
+        // "/C:" or "/C:/..."
+        if (path.len >= 3 and path[0] == '/' and std.ascii.isAlphabetic(path[1]) and
+            path[2] == ':' and (path.len == 3 or path[3] == '/'))
+        {
+            break :drive .{ path[1], path[3..] };
+        }
 
-    // On its own "C:" would be relative to that drive's current
-    // directory, but the URI "/C:" means the drive's root.
-    if (drive and result.len == 2) {
-        const root = try alloc.realloc(result, 3);
-        root[2] = '\\';
-        return root;
-    }
+        // "/mnt/c" or "/mnt/c/..." (WSL), "/c" or "/c/..." (MSYS2)
+        const mount = if (std.mem.startsWith(u8, path, "/mnt/")) path[4..] else path;
+        if (mount.len >= 2 and mount[0] == '/' and std.ascii.isAlphabetic(mount[1]) and
+            (mount.len == 2 or mount[2] == '/'))
+        {
+            break :drive .{ std.ascii.toUpper(mount[1]), mount[2..] };
+        }
+
+        return null;
+    };
+
+    // The drive's root if there's no path after it, since on its own
+    // "C:" would be relative to that drive's current directory.
+    const result = try std.fmt.allocPrint(alloc, "{c}:{s}", .{
+        drive,
+        if (rest.len == 0) "/" else rest,
+    });
+    std.mem.replaceScalar(u8, result, '/', '\\');
     return result;
 }
 
@@ -228,18 +244,28 @@ test windowsPath {
     const testing = std.testing;
     const alloc = testing.allocator;
 
-    const cases = [_]struct { []const u8, []const u8 }{
+    const cases = [_]struct { []const u8, ?[]const u8 }{
         .{ "/C:/Users/me", "C:\\Users\\me" },
         .{ "/c:/", "c:\\" },
         .{ "/C:", "C:\\" },
         .{ "/C:/Program Files/x", "C:\\Program Files\\x" },
-        // Not a drive path: only the separators change.
-        .{ "/home/me", "\\home\\me" },
-        .{ "/CC:/x", "\\CC:\\x" },
+        .{ "/mnt/c/Users/me", "C:\\Users\\me" },
+        .{ "/mnt/d", "D:\\" },
+        .{ "/c/Users", "C:\\Users" },
+        // No Windows path.
+        .{ "/home/me", null },
+        .{ "/mnt/wsl", null },
+        .{ "/CC:/x", null },
+        .{ "relative", null },
     };
     for (cases) |case| {
         const result = try windowsPath(alloc, case[0]);
-        defer alloc.free(result);
-        try testing.expectEqualStrings(case[1], result);
+        defer if (result) |v| alloc.free(v);
+        if (case[1]) |expected| {
+            try testing.expectEqualStrings(expected, result.?);
+        } else {
+            try testing.expect(result == null);
+        }
     }
 }
+
