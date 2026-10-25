@@ -163,9 +163,8 @@ Notes:
     - [x] `reset_window_size`, `resize_window`, `size_limit`
     - [x] `goto_window`, `present_terminal`, `float_window`,
           `toggle_window_decorations` (and `window-decoration=none`)
-    - [ ] `toggle_visibility` (needs global keybinds first, or hidden
-          windows can't be brought back)
-- [ ] Global keybinds (`RegisterHotKey`)
+    - [x] `toggle_visibility`
+- [x] Global keybinds (`RegisterHotKey`)
   - [x] Titles: `set_tab_title`, `set_window_title`,
         `copy_title_to_clipboard`, `prompt_title`
   - [ ] Hover link preview (`mouse_over_link`) and `show_child_exited`
@@ -401,3 +400,12 @@ Reviewed the branch against this file and discussion #2563.
   `present_terminal` restores and focuses the surface. Native test: the
   caption and topmost style bits toggled both ways, and `goto_window:next`
   alternated the foreground between two windows.
+- `global:` keybinds register with `RegisterHotKey` on the message window
+  (with `MOD_NOREPEAT`) and re-register on app config reload. Like GTK,
+  only single-action binds are supported. Physical keys map through their
+  scancode; unicode keys through `VkKeyScanW`, adding the modifiers needed
+  to type the character. A hot key owned by another app logs a warning.
+  `toggle_visibility` follows macOS: hide every window when one of ours is
+  active, otherwise show them and activate the previously active one.
+  Native test: `global:ctrl+alt+shift+g=toggle_visibility` hid, showed
+  (in the foreground), and hid the window on three presses.
