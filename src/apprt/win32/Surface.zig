@@ -23,6 +23,7 @@ const TitleDialog = @import("TitleDialog.zig");
 const LinkPreview = @import("LinkPreview.zig");
 const Scrollbar = @import("Scrollbar.zig");
 const Badge = @import("Badge.zig");
+const SearchBar = @import("SearchBar.zig");
 
 const log = std.log.scoped(.win32);
 
@@ -86,6 +87,11 @@ scrollbar: Scrollbar = .{},
 readonly_badge: Badge = .{},
 key_badge: Badge = .{},
 health_badge: Badge = .{},
+search_bar: SearchBar = .{},
+
+/// The search state from the core, shown in the search bar.
+search_total: ?usize = null,
+search_selected: ?usize = null,
 
 /// Active key tables (innermost last) and the pending key sequence, as
 /// display labels.
@@ -223,6 +229,8 @@ pub fn init(self: *Surface, app: *App, window: *Window, opts: Options) !void {
     errdefer self.key_badge.deinit(alloc);
     try self.health_badge.init(hwnd, app.hinstance, &config, .center);
     errdefer self.health_badge.deinit(alloc);
+    try self.search_bar.init(hwnd, app.hinstance, &config, self, searchEvent);
+    errdefer self.search_bar.deinit();
 
     // Initialize our surface now that we have the stable pointer.
     try self.core_surface.init(
@@ -258,6 +266,7 @@ pub fn deinit(self: *Surface) void {
     self.readonly_badge.deinit(alloc);
     self.key_badge.deinit(alloc);
     self.health_badge.deinit(alloc);
+    self.search_bar.deinit();
     clearLabels(alloc, &self.key_tables);
     self.key_tables.deinit(alloc);
     clearLabels(alloc, &self.key_sequence);
@@ -420,6 +429,45 @@ fn updateKeyBadge(self: *Surface) void {
     self.key_badge.set(alloc, text.written());
 }
 
+/// Show the search bar, for the start_search action.
+pub fn startSearch(self: *Surface, needle: []const u8) void {
+    self.search_bar.show(self.app.core_app.alloc, needle);
+}
+
+/// Hide the search bar, for the end_search action.
+pub fn endSearch(self: *Surface) void {
+    const had_focus = c.GetFocus() == self.search_bar.edit;
+    self.search_bar.hide();
+    self.search_total = null;
+    self.search_selected = null;
+    if (had_focus) _ = c.SetFocus(self.hwnd);
+}
+
+pub fn setSearchTotal(self: *Surface, total: ?usize) void {
+    self.search_total = total;
+    self.search_bar.setCount(self.search_selected, total);
+}
+
+pub fn setSearchSelected(self: *Surface, selected: ?usize) void {
+    self.search_selected = selected;
+    self.search_bar.setCount(selected, self.search_total);
+}
+
+/// Called by the search bar for user input.
+fn searchEvent(ctx: *anyopaque, event: SearchBar.Event) void {
+    const self: *Surface = @ptrCast(@alignCast(ctx));
+    if (!self.core_initialized) return;
+    const action: input.Binding.Action = switch (event) {
+        .changed => |needle| .{ .search = needle },
+        .next => .{ .navigate_search = .next },
+        .previous => .{ .navigate_search = .previous },
+        .close => .end_search,
+    };
+    _ = self.core_surface.performBindingAction(action) catch |err| {
+        log.warn("error performing search action err={}", .{err});
+    };
+}
+
 /// Called by the scrollbar while dragging its thumb.
 fn scrollToRow(ctx: *anyopaque, row: usize) void {
     const self: *Surface = @ptrCast(@alignCast(ctx));
@@ -463,6 +511,7 @@ pub fn configChanged(self: *Surface, config: *const configpkg.Config) void {
     self.readonly_badge.updateConfig(config);
     self.key_badge.updateConfig(config);
     self.health_badge.updateConfig(config);
+    self.search_bar.updateConfig(config);
     self.dim_overlay.updateConfig(config) catch |err| {
         log.err("error updating split dimming err={}", .{err});
     };
@@ -858,6 +907,7 @@ pub fn wndProc(
                 self.readonly_badge.parentResized();
                 self.key_badge.parentResized();
                 self.health_badge.parentResized();
+                self.search_bar.parentResized();
                 self.core_surface.sizeCallback(size) catch |err| {
                     log.err("error in size callback err={}", .{err});
                 };
