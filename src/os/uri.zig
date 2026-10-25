@@ -202,3 +202,44 @@ test isValidMacAddress {
     try testing.expect(!isValidMacAddress("01-23-45-67-89-Aa"));
     try testing.expect(!isValidMacAddress("01:23:45:67:89:Aa:Bb"));
 }
+
+/// Convert the path of a file URI to a Windows path. File URIs for drive
+/// paths have a leading slash before the drive letter ("/C:/Users"), which
+/// we remove. Forward slashes become backslashes. The caller owns the
+/// returned memory.
+pub fn windowsPath(alloc: std.mem.Allocator, path: []const u8) std.mem.Allocator.Error![]u8 {
+    const drive = path.len >= 3 and path[0] == '/' and
+        std.ascii.isAlphabetic(path[1]) and path[2] == ':' and
+        (path.len == 3 or path[3] == '/');
+    const result = try alloc.dupe(u8, if (drive) path[1..] else path);
+    std.mem.replaceScalar(u8, result, '/', '\\');
+
+    // On its own "C:" would be relative to that drive's current
+    // directory, but the URI "/C:" means the drive's root.
+    if (drive and result.len == 2) {
+        const root = try alloc.realloc(result, 3);
+        root[2] = '\\';
+        return root;
+    }
+    return result;
+}
+
+test windowsPath {
+    const testing = std.testing;
+    const alloc = testing.allocator;
+
+    const cases = [_]struct { []const u8, []const u8 }{
+        .{ "/C:/Users/me", "C:\\Users\\me" },
+        .{ "/c:/", "c:\\" },
+        .{ "/C:", "C:\\" },
+        .{ "/C:/Program Files/x", "C:\\Program Files\\x" },
+        // Not a drive path: only the separators change.
+        .{ "/home/me", "\\home\\me" },
+        .{ "/CC:/x", "\\CC:\\x" },
+    };
+    for (cases) |case| {
+        const result = try windowsPath(alloc, case[0]);
+        defer alloc.free(result);
+        try testing.expectEqualStrings(case[1], result);
+    }
+}
