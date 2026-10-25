@@ -70,7 +70,8 @@ Notes:
       with symlink tests skipped when the symlink privilege isn't
       available.
 - [x] Direct3D 11 renderer: text, colors, sRGB/linear blending, color emoji
-      and images (atlases), background images, and custom shaders.
+      and images (atlases), background images (verified), and custom
+      shaders.
 - [x] Win32 apprt: window, message loop, and cross-thread wakeups.
   - [x] Per-monitor DPI, resizing, focus, and occlusion.
   - [x] Keyboard: layouts, dead keys, Ctrl/Alt/AltGr handling, and
@@ -92,6 +93,15 @@ Notes:
         interval.
 - [x] ConPTY: clean shutdown when the shell exits or the surface closes.
 - [x] CI job that builds and tests the app on Windows.
+
+### Known limitations
+
+- ConPTY (as used with no flags) doesn't pass through APC or OSC 8
+  sequences. Kitty graphics payloads leak into the terminal as text and
+  hyperlinks are dropped. Fixing this needs a ConPTY passthrough mode (if
+  the OS supports one) or bypassing ConPTY for capable programs.
+- ConPTY requests win32-input-mode (DECSET 9001), which Ghostty doesn't
+  implement yet; ConPTY falls back to plain VT input.
 
 ### Next
 
