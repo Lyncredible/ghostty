@@ -180,7 +180,22 @@ pub fn initTranslator(b: *std.Build, options: Options) !Translator {
             } else null,
             .direct => |libc_file| libc_file,
         },
-        .extra_args = options.extra_args,
+        .extra_args = extra_args: {
+            // In ReleaseSafe builds translate-c defines _FORTIFY_SOURCE,
+            // which makes MinGW's headers define fortified wrappers that
+            // translate-c mistranslates (it passes a Zig bool to
+            // __builtin_object_size, which takes a C int).
+            //
+            // MinGW only enables these when __OPTIMIZE__ is set, and since
+            // translate-c defines _FORTIFY_SOURCE after our arguments we
+            // undefine __OPTIMIZE__ instead. This only affects inline
+            // header functions, which don't matter for translation.
+            if (options.target.result.os.tag != .windows) break :extra_args options.extra_args;
+            break :extra_args try std.mem.concat(b.allocator, []const u8, &.{
+                options.extra_args,
+                &.{"-U__OPTIMIZE__"},
+            });
+        },
     });
 }
 
