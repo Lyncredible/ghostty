@@ -130,7 +130,8 @@ Notes:
   - [ ] Desktop notification action
 - [ ] Bell title/border indicators and custom audio
   - [x] Pending bell marker on tabs with an unfocused ringing surface
-  - [ ] Window title and border indicators, custom audio
+  - [x] Window title indicator while any surface has a pending bell
+  - [ ] Border indicator and custom audio
 - [ ] Shell integration for PowerShell
 - [ ] DirectWrite font discovery and rendering
 - [ ] Packaging (installer and MSIX) and release builds
@@ -257,3 +258,8 @@ Notes:
   feature on reload clears pending markers. A native UI test opened a second
   tab before a timed BEL, saw the marker on the first tab, and confirmed it
   disappeared when that tab was selected.
+- A pending bell also prefixes the top-level window title with `[!]`, so
+  it remains visible when the tab bar is hidden. A native UI test saw the
+  prefix and tab marker appear together after a timed BEL in an inactive
+  tab, then clear together when that tab was selected. The GNU Debug build
+  passes.

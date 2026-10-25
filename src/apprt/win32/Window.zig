@@ -355,7 +355,13 @@ pub fn surfaceBell(self: *Window, surface: *Surface) void {
     if (self.tabOf(surface) == null) return;
     if (c.GetForegroundWindow() == self.hwnd and c.GetFocus() == surface.hwnd) return;
     surface.bell_pending = true;
+    self.updateBellIndicators();
+}
+
+/// Refresh the tab markers and title after a pending bell changes.
+pub fn updateBellIndicators(self: *Window) void {
     self.tab_bar.invalidate();
+    if (self.tabs.items.len > 0) self.updateWindowTitle();
 }
 
 /// Show the focused surface's live progress on this window's taskbar button.
@@ -412,7 +418,15 @@ pub fn surfaceTitleChanged(self: *Window, surface: *Surface) void {
 fn updateWindowTitle(self: *Window) void {
     const alloc = self.app.core_app.alloc;
     const title = self.activeSurface().title orelse "Ghostty";
-    const title16 = util.utf16Alloc(alloc, title) catch return;
+    const pending = for (self.tabs.items) |tab| {
+        if (tab.hasBell()) break true;
+    } else false;
+    const display_title = if (pending)
+        std.fmt.allocPrint(alloc, "[!] {s}", .{title}) catch return
+    else
+        alloc.dupe(u8, title) catch return;
+    defer alloc.free(display_title);
+    const title16 = util.utf16Alloc(alloc, display_title) catch return;
     defer alloc.free(title16);
     _ = c.SetWindowTextW(self.hwnd, title16);
 }
