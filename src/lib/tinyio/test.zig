@@ -682,7 +682,9 @@ test "deleteFile edge cases" {
         .data = "x",
     });
     tmp_dir.dir.symLink(testing.io, "target.txt", "link.txt", .{}) catch |err| switch (err) {
-        error.AccessDenied => if (comptime is_windows) return error.SkipZigTest else return err,
+        error.AccessDenied,
+        error.PermissionDenied,
+        => if (comptime is_windows) return error.SkipZigTest else return err,
         else => return err,
     };
     try dir.deleteFile(test_io, "link.txt");
