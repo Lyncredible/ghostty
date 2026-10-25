@@ -361,9 +361,14 @@ pub fn updateTaskbarProgress(self: *Window) void {
 
     const surface = self.activeSurface();
     const now = c.GetTickCount64();
-    if (!surface.progress_style or surface.progress_report == null or
-        surface.progress_expires_at <= now)
-    {
+    if (!surface.progress_style or surface.progress_report == null) {
+        taskbar.clear(self.hwnd);
+        return;
+    }
+    if (surface.progress_expires_at <= now) {
+        log.debug("progress report expired", .{});
+        surface.progress_report = null;
+        surface.progress_value = null;
         taskbar.clear(self.hwnd);
         return;
     }
@@ -378,7 +383,9 @@ pub fn updateTaskbarProgress(self: *Window) void {
     };
     taskbar.setState(self.hwnd, state);
     if (state != c.TBPF_INDETERMINATE and state != c.TBPF_NOPROGRESS) {
-        taskbar.setValue(self.hwnd, report.progress orelse 100);
+        // A pause without a percentage retains the previous fraction.
+        // Error without one similarly keeps the last known value.
+        taskbar.setValue(self.hwnd, report.progress orelse surface.progress_value orelse 100);
     }
 
     const remaining: c.UINT = @intCast(@min(surface.progress_expires_at - now, 15_000));
