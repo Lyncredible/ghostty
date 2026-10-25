@@ -293,6 +293,7 @@ pub fn configChanged(self: *Surface, config: *const configpkg.Config) void {
 
 pub fn ringBell(self: *Surface) void {
     if (self.bell_features.system) _ = c.MessageBeep(c.MB_OK);
+    if (self.bell_features.audio) self.app.playBellAudio();
     if (self.bell_features.attention) self.window.requestAttention();
     if (self.bell_features.title or self.bell_features.border) {
         self.window.surfaceBell(self);

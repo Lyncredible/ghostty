@@ -150,11 +150,11 @@ Notes:
 - [x] Command-finished notifications
   - [x] Configured bell action and duration/focus filtering
   - [x] Desktop notification action
-- [ ] Bell title/border indicators and custom audio
+- [x] Bell title/border indicators and custom audio
   - [x] Pending bell marker on tabs with an unfocused ringing surface
   - [x] Window title indicator while any surface has a pending bell
   - [x] Border indicator
-  - [ ] Custom audio
+  - [x] Custom audio
 - [ ] Shell integration for PowerShell
 - [ ] DirectWrite font discovery and rendering
 - [ ] Packaging (installer and MSIX) and release builds
@@ -332,3 +332,10 @@ Reviewed the branch against this file and discussion #2563.
   only counts surfaces with the `title` feature. Native test: BEL with
   `bell-features=border,title` showed the frame and 🔔 title, and a key
   press cleared both.
+- The `audio` bell feature plays `bell-audio-path` through MCI's
+  `mpegvideo` device (winmm), which decodes common formats via the system
+  media stack and supports `bell-audio-volume`. The file stays open across
+  bells and reopens when the path changes. A missing `optional` path is
+  silent; a missing required path logs a warning. Native test: two BELs
+  played `C:\Windows\Media\chord.wav` at volume 300/1000 with no MCI
+  errors (audible output not verified from the session).
