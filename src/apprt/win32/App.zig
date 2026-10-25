@@ -146,9 +146,8 @@ fn registerClasses(hinstance: c.HINSTANCE) !void {
         },
         .{
             .cbSize = @sizeOf(c.WNDCLASSEXW),
-            // We need double click messages to detect multi-clicks
-            // ourselves, but the core does its own click counting so
-            // we don't set CS_DBLCLKS.
+            // The core does its own click counting, so we don't set
+            // CS_DBLCLKS: every click should be a button down message.
             .style = 0,
             .lpfnWndProc = Surface.wndProc,
             .cbClsExtra = 0,
