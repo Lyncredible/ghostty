@@ -115,8 +115,10 @@ Notes:
 - [ ] Background opacity/blur (needs a DirectComposition swap chain)
 - [ ] Single instance and IPC (`+new-window`)
 - [ ] Terminal inspector (needs a Dear ImGui D3D11 backend)
-- [ ] Desktop notifications, progress reports (taskbar), and the bell
-      attention flash
+- [x] Bell attention flash in the taskbar, honoring `bell-features`;
+      system sound is now opt-in via `system`
+- [ ] Desktop notifications and progress reports (taskbar)
+- [ ] Bell title/border indicators and custom audio
 - [ ] Shell integration for PowerShell
 - [ ] DirectWrite font discovery and rendering
 - [ ] Packaging (installer and MSIX) and release builds
@@ -139,7 +141,9 @@ Notes:
 - Windows `command` values now use Windows CRT quoting rules, including
   executable paths with spaces, quoted arguments, empty arguments,
   backslashes before quotes, and Unicode. For example, a command value
-  can contain `"C:\Program Files\PowerShell\7\pwsh.exe" -NoLogo`.
+  can contain `shell:"C:\Program Files\PowerShell\7\pwsh.exe" -NoLogo`.
+  The `shell:` prefix prevents the config file's outer-quote handling
+  from consuming the executable's quotes.
   This launches the executable directly; shell operators such as `|`
   still require explicitly invoking a shell. Direct argv commands are
   unchanged. Empty executable names are rejected.
@@ -147,3 +151,14 @@ Notes:
   passes, including ownership and quoting regression cases.
 - Follow-up: audit close confirmation dialogs for reentrancy when a shell
   exits while the dialog is open.
+- Bell handling now copies each surface's `bell-features` (including on
+  reload), gates `MessageBeep` on `system`, and requests taskbar attention
+  only for background windows. `FLASHW_TIMERNOFG` stops the flash on
+  activation. Native Debug build passes; visual taskbar verification is
+  still pending.
+- A real ConPTY smoke test launched an executable whose path contains
+  spaces, preserved a spaced argument and a trailing backslash, and
+  exited cleanly after emitting BEL. It exposed a separate bug: the
+  Windows process command-line serializer drops empty arguments even
+  though `execCommand` now parses them correctly. Fix and regression-test
+  this next.
