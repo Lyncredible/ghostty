@@ -20,6 +20,9 @@ const log = std.log.scoped(.direct3d11);
 /// Buffer 0 is always the vertex buffer.
 pub const first_buffer_slot = 8;
 
+/// The constant buffer slot the uniforms are bound to.
+pub const uniforms_slot = 1;
+
 /// The number of shader resource slots we may bind, used to clear them.
 const max_srv_slots = first_buffer_slot + 8;
 
@@ -139,11 +142,13 @@ pub fn step(self: *const Self, s: Step) void {
         @as(c.UINT, 0xFFFFFFFF),
     });
 
-    // Uniforms are always in constant buffer slot 0.
+    // Uniforms are always in constant buffer slot 1, which matches
+    // the binding of the uniform block in our GLSL shaders, and so of
+    // the custom shaders we translate from GLSL.
     if (s.uniforms) |u| {
         const bufs = [_]?*c.ID3D11Buffer{u.buffer};
-        com.call(context, "VSSetConstantBuffers", .{ 0, 1, &bufs });
-        com.call(context, "PSSetConstantBuffers", .{ 0, 1, &bufs });
+        com.call(context, "VSSetConstantBuffers", .{ uniforms_slot, 1, &bufs });
+        com.call(context, "PSSetConstantBuffers", .{ uniforms_slot, 1, &bufs });
     }
 
     // Buffer 0 is the vertex buffer, the rest are structured buffers.

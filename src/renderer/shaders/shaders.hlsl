@@ -5,7 +5,8 @@
 // with D3DCompile using the vs_5_0/ps_5_0 profiles.
 //
 // Resource bindings (see direct3d11/RenderPass.zig):
-// - b0: the global uniforms
+// - b1: the global uniforms (matching the binding of the GLSL uniform
+//   block, which custom shaders translated by spirv-cross also use)
 // - t0..t7: step textures, in order
 // - t8..: step buffers 1.., as structured buffers (buffer 0 is the
 //   vertex buffer)
@@ -14,7 +15,7 @@
 //----------------------------------------------------------------------------//
 // Global Uniforms
 //----------------------------------------------------------------------------//
-cbuffer Globals : register(b0) {
+cbuffer Globals : register(b1) {
     float4x4 projection_matrix;
     float2 screen_size;
     float2 cell_size;
@@ -90,18 +91,18 @@ float contrast_ratio(float3 color1, float3 color2) {
 // Takes colors in linear RGB space. If your colors are gamma
 // encoded, linearize them before using them with this function.
 float4 contrasted_color(float min_ratio, float4 fg, float4 bg) {
+    float4 result = fg;
+
     float ratio = contrast_ratio(fg.rgb, bg.rgb);
     if (ratio < min_ratio) {
         float white_ratio = contrast_ratio(float3(1.0, 1.0, 1.0), bg.rgb);
         float black_ratio = contrast_ratio(float3(0.0, 0.0, 0.0), bg.rgb);
-        if (white_ratio > black_ratio) {
-            return float4(1.0, 1.0, 1.0, 1.0);
-        } else {
-            return float4(0.0, 0.0, 0.0, 1.0);
-        }
+        result = white_ratio > black_ratio
+            ? float4(1.0, 1.0, 1.0, 1.0)
+            : float4(0.0, 0.0, 0.0, 1.0);
     }
 
-    return fg;
+    return result;
 }
 
 // Converts a color from sRGB gamma encoding to linear.
