@@ -54,6 +54,9 @@ title: ?[:0]const u8 = null,
 
 /// Bell behavior from this surface's config, including conditional config.
 bell_features: configpkg.Config.BellFeatures = .{},
+notify_on_command_finish: configpkg.Config.NotifyOnCommandFinish = .never,
+notify_on_command_finish_action: configpkg.Config.NotifyOnCommandFinishAction = .{},
+notify_on_command_finish_after: configpkg.Config.Duration = .{ .duration = 5 * std.time.ns_per_s },
 
 /// The most recent terminal progress report, expiring after 15 seconds.
 progress_style: bool = true,
@@ -174,6 +177,9 @@ pub fn init(self: *Surface, app: *App, window: *Window, opts: Options) !void {
         config.@"initial-command" = null;
     }
     self.bell_features = config.@"bell-features";
+    self.notify_on_command_finish = config.@"notify-on-command-finish";
+    self.notify_on_command_finish_action = config.@"notify-on-command-finish-action";
+    self.notify_on_command_finish_after = config.@"notify-on-command-finish-after";
     self.progress_style = config.@"progress-style";
     try self.dim_overlay.init(hwnd, app.hinstance, &config);
     errdefer self.dim_overlay.deinit();
@@ -259,6 +265,9 @@ pub fn setTitle(self: *Surface, title: [:0]const u8) void {
 /// Apply runtime settings that aren't handled by the core surface.
 pub fn configChanged(self: *Surface, config: *const configpkg.Config) void {
     self.bell_features = config.@"bell-features";
+    self.notify_on_command_finish = config.@"notify-on-command-finish";
+    self.notify_on_command_finish_action = config.@"notify-on-command-finish-action";
+    self.notify_on_command_finish_after = config.@"notify-on-command-finish-after";
     self.progress_style = config.@"progress-style";
     self.window.updateTaskbarProgress();
     self.dim_overlay.updateConfig(config) catch |err| {
@@ -269,6 +278,19 @@ pub fn configChanged(self: *Surface, config: *const configpkg.Config) void {
 pub fn ringBell(self: *Surface) void {
     if (self.bell_features.system) _ = c.MessageBeep(c.MB_OK);
     if (self.bell_features.attention) self.window.requestAttention();
+}
+
+pub fn commandFinished(self: *Surface, value: apprt.Action.Value(.command_finished)) void {
+    const notify = switch (self.notify_on_command_finish) {
+        .never => false,
+        .unfocused => c.GetFocus() != self.hwnd,
+        .always => true,
+    };
+    if (!notify or value.duration.lte(self.notify_on_command_finish_after)) return;
+    if (self.notify_on_command_finish_action.bell) {
+        log.debug("command finished bell duration={f}", .{value.duration});
+        self.ringBell();
+    }
 }
 
 pub fn setProgressReport(self: *Surface, report: terminal.osc.Command.ProgressReport) void {
