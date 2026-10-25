@@ -753,7 +753,6 @@ fn addWin32(
     });
 
     step.root_module.linkSystemLibrary("user32", dynamic_link_opts);
-    step.root_module.linkSystemLibrary("comctl32", dynamic_link_opts);
     step.root_module.linkSystemLibrary("gdi32", dynamic_link_opts);
     step.root_module.linkSystemLibrary("imm32", dynamic_link_opts);
     step.root_module.linkSystemLibrary("dwmapi", dynamic_link_opts);

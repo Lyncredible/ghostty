@@ -9,10 +9,6 @@ pub const CW_USEDEFAULT: c_int = @bitCast(@as(c_uint, 0x80000000));
 pub const GWLP_USERDATA: c_int = -21;
 pub const USER_DEFAULT_SCREEN_DPI = 96;
 
-/// Tab control selection change notification. The header defines this
-/// with unsigned wraparound, which translate-c can't convert.
-pub const TCN_SELCHANGE: c.UINT = @bitCast(@as(c_int, -551));
-
 /// Load one of the predefined system cursors (IDC_*).
 pub fn loadSystemCursor(id: u16) c.HCURSOR {
     return LoadCursorW(null, id);
