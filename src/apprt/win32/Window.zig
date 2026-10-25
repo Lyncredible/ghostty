@@ -341,12 +341,21 @@ pub fn closeTabs(self: *Window, surface: *Surface, mode: apprt.action.CloseTabMo
 pub fn surfaceFocused(self: *Window, surface: *Surface) void {
     const tab = self.tabOf(surface) orelse return;
     tab.focused = surface;
+    surface.bell_pending = false;
     tab.updateDimming();
     self.tab_bar.invalidate();
     if (tab == self.activeTab()) {
         self.updateWindowTitle();
         self.updateTaskbarProgress();
     }
+}
+
+/// Mark a bell from a surface that the user is not currently viewing.
+pub fn surfaceBell(self: *Window, surface: *Surface) void {
+    if (self.tabOf(surface) == null) return;
+    if (c.GetForegroundWindow() == self.hwnd and c.GetFocus() == surface.hwnd) return;
+    surface.bell_pending = true;
+    self.tab_bar.invalidate();
 }
 
 /// Show the focused surface's live progress on this window's taskbar button.
