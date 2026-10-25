@@ -177,9 +177,12 @@ pub fn remove(self: *Tab, surface: *Surface) !void {
     } else null;
 
     const new_tree = try self.tree.remove(alloc, at);
+    // Destroying the removed surface can synchronously send focus
+    // messages to the parent window. Publish its replacement before
+    // releasing the old tree so activeSurface() never returns it.
+    if (next) |n| self.focused = n;
     self.replaceTree(new_tree);
 
-    if (next) |n| self.focused = n;
     self.window.layout();
     if (next) |n| self.focus(n);
 }
