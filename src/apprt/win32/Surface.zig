@@ -538,7 +538,10 @@ pub fn wndProc(
 
         c.WM_MOUSELEAVE => {
             self.tracking_mouse = false;
-            self.cursorPosEvent(.{ .x = -1, .y = -1 });
+
+            // While we have the mouse captured (a button is held) we keep
+            // getting mouse events, so the mouse hasn't really left us.
+            if (c.GetCapture() != hwnd) self.cursorPosEvent(.{ .x = -1, .y = -1 });
             return 0;
         },
 
