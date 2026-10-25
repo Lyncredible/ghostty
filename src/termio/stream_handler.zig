@@ -1583,7 +1583,12 @@ pub const StreamHandler = struct {
         defer arena_alloc.deinit();
         const uri_path = try uri.path.toRawMaybeAlloc(stack_alloc.allocator());
         const path = if (builtin.target.os.tag == .windows)
-            try internal_os.uri.windowsPath(stack_alloc.allocator(), uri_path)
+            try internal_os.uri.windowsPath(stack_alloc.allocator(), uri_path) orelse {
+                // For example, a Linux path from a shell in WSL. We can't
+                // start new terminals there, so forget the old pwd.
+                log.debug("OSC 7 path has no Windows path, ignoring path={s}", .{uri_path});
+                return self.reportPwd("");
+            }
         else
             uri_path;
 
