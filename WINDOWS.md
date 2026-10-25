@@ -156,9 +156,10 @@ Notes:
   only for background windows. `FLASHW_TIMERNOFG` stops the flash on
   activation. Native Debug build passes; visual taskbar verification is
   still pending.
-- A real ConPTY smoke test launched an executable whose path contains
-  spaces, preserved a spaced argument and a trailing backslash, and
-  exited cleanly after emitting BEL. It exposed a separate bug: the
-  Windows process command-line serializer drops empty arguments even
-  though `execCommand` now parses them correctly. Fix and regression-test
-  this next.
+- A real ConPTY smoke test exposed the Windows process command-line
+  serializer dropping empty arguments. Fixed by quoting empty strings;
+  round-trip regression tests cover adjacent/trailing empty arguments,
+  spaced paths, embedded quotes, Unicode, and trailing backslashes.
+  The rebuilt app passed a real ConPTY launch: all four argv entries
+  (including the empty one) matched exactly, and the child and Ghostty
+  exited with status 0. Targeted `windowsCreateCommandLine` tests pass.
