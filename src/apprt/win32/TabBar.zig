@@ -319,6 +319,28 @@ fn drawChevron(self: *const TabBar, hdc: c.HDC, rect: c.RECT, color: Rgb) void {
     _ = c.LineTo(hdc, cx + size, cy - @divTrunc(size, 2));
 }
 
+/// WSL may be installed without a registered distribution. In that case
+/// launching bare wsl.exe only displays an error instead of a shell.
+fn hasWslDistribution() bool {
+    var current_user: c.HKEY = null;
+    if (c.RegOpenCurrentUser(c.KEY_READ, &current_user) != c.ERROR_SUCCESS) return false;
+    defer _ = c.RegCloseKey(current_user);
+
+    var key: c.HKEY = null;
+    if (c.RegOpenKeyExW(
+        current_user,
+        std.unicode.utf8ToUtf16LeStringLiteral("Software\\Microsoft\\Windows\\CurrentVersion\\Lxss"),
+        0,
+        c.KEY_READ,
+        &key,
+    ) != c.ERROR_SUCCESS) return false;
+    defer _ = c.RegCloseKey(key);
+
+    var name: [256]u16 = undefined;
+    var name_len: c.DWORD = name.len;
+    return c.RegEnumKeyExW(key, 0, &name, &name_len, null, null, null, null) == c.ERROR_SUCCESS;
+}
+
 /// This native menu pumps messages: the window may close while it is open.
 fn showShellMenu(self: *TabBar) void {
     const hwnd = self.hwnd;
@@ -342,9 +364,15 @@ fn showShellMenu(self: *TabBar) void {
     var env = global.environMap() catch return;
     defer env.deinit();
     inline for (candidates, 0..) |candidate, i| {
-        if (path.expand(global.io(), alloc, &env, candidate[1]) catch null) |exe| {
-            shells[i] = alloc.dupeSentinel(u8, exe, 0) catch return;
-            _ = c.AppendMenuW(menu, c.MF_STRING, i + 2, std.unicode.utf8ToUtf16LeStringLiteral(candidate[0]));
+        const available = if (comptime std.mem.eql(u8, candidate[1], "wsl.exe"))
+            hasWslDistribution()
+        else
+            true;
+        if (available) {
+            if (path.expand(global.io(), alloc, &env, candidate[1]) catch null) |exe| {
+                shells[i] = alloc.dupeSentinel(u8, exe, 0) catch return;
+                _ = c.AppendMenuW(menu, c.MF_STRING, i + 2, std.unicode.utf8ToUtf16LeStringLiteral(candidate[0]));
+            }
         }
     }
 
