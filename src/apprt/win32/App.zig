@@ -523,6 +523,11 @@ pub fn performAction(
             .surface => |v| v.rt_surface.setProgressReport(value),
         },
 
+        .command_finished => switch (target) {
+            .app => return false,
+            .surface => |v| v.rt_surface.commandFinished(value),
+        },
+
         .open_url => openUrl(self.core_app.alloc, value.url),
 
         .config_change => switch (target) {

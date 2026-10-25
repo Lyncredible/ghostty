@@ -125,6 +125,9 @@ Notes:
 - [ ] Desktop notifications and progress reports (taskbar)
   - [x] OSC 9;4 progress on the active surface's taskbar button
   - [ ] Desktop notifications
+- [ ] Command-finished notifications
+  - [x] Configured bell action and duration/focus filtering
+  - [ ] Desktop notification action
 - [ ] Bell title/border indicators and custom audio
 - [ ] Shell integration for PowerShell
 - [ ] DirectWrite font discovery and rendering
@@ -241,3 +244,9 @@ Notes:
   uses that value when available; a remove report discards it. A second
   native ConPTY fixture confirmed a pause without a percentage and logged
   the 15-second expiration; its child exited with status 0.
+- OSC 133 command completion now reaches the Win32 configured bell action.
+  It respects `notify-on-command-finish`, the duration threshold, and
+  `bell-features`; config reload updates these settings. A native fixture logged
+  a 509 ms command and its bell with `always`/`0ms`, while a `10s` threshold
+  suppressed the bell for the same command. Desktop notifications and
+  visual indicators for inactive splits remain to do.
