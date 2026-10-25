@@ -30,6 +30,14 @@ pub const Backend = union(Kind) {
         }
     }
 
+    /// The WSL distribution the backend runs in, if any. The caller owns
+    /// the returned memory.
+    pub fn wslDistribution(self: *const Backend, alloc: Allocator) ?[]u8 {
+        return switch (self.*) {
+            .exec => |*exec| exec.wslDistribution(alloc),
+        };
+    }
+
     pub fn initTerminal(self: *Backend, t: *terminal.Terminal) void {
         switch (self.*) {
             .exec => |*exec| exec.initTerminal(t),

@@ -31,6 +31,7 @@ pub const macos = @import("macos.zig");
 pub const shell = @import("shell.zig");
 pub const stderr = @import("stderr.zig");
 pub const uri = @import("uri.zig");
+pub const wsl = @import("wsl.zig");
 
 // Functions and types
 pub const CFReleaseThread = @import("cf_release_thread.zig");
@@ -66,6 +67,7 @@ test {
     _ = path;
     _ = uri;
     _ = shell;
+    _ = wsl;
 
     if (comptime builtin.target.os.tag == .linux) {
         _ = kernel_info;
