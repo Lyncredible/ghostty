@@ -167,7 +167,7 @@ pub fn close(self: *Surface, process_active: bool) void {
         "A process is still running in this terminal. Closing it will kill the process.",
     )) return;
 
-    self.window.destroy();
+    self.window.closeSurface(self);
 }
 
 pub fn getTitle(self: *Surface) ?[:0]const u8 {
@@ -178,10 +178,16 @@ pub fn setTitle(self: *Surface, title: [:0]const u8) void {
     const alloc = self.app.core_app.alloc;
     if (self.title) |v| alloc.free(v);
     self.title = alloc.dupeSentinel(u8, title, 0) catch null;
+    self.window.surfaceTitleChanged(self);
+}
 
-    const title16 = util.utf16Alloc(alloc, title) catch return;
-    defer alloc.free(title16);
-    self.window.setTitle(title16);
+/// Called by the window when this surface is shown or hidden, such as
+/// when switching tabs.
+pub fn setVisible(self: *Surface, visible: bool) void {
+    if (!self.core_initialized) return;
+    self.core_surface.occlusionCallback(visible) catch |err| {
+        log.err("error in occlusion callback err={}", .{err});
+    };
 }
 
 pub fn getContentScale(self: *const Surface) !apprt.ContentScale {
