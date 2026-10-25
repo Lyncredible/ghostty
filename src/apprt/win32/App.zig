@@ -19,6 +19,7 @@ const TabBar = @import("TabBar.zig");
 const Window = @import("Window.zig");
 const DimOverlay = @import("DimOverlay.zig");
 const BellBorder = @import("BellBorder.zig");
+const LinkPreview = @import("LinkPreview.zig");
 const Taskbar = @import("Taskbar.zig");
 const Notifier = @import("Notifier.zig");
 const BellAudio = @import("BellAudio.zig");
@@ -225,6 +226,20 @@ fn registerClasses(hinstance: c.HINSTANCE) !void {
         .{
             .cbSize = @sizeOf(c.WNDCLASSEXW),
             .style = 0,
+            .lpfnWndProc = LinkPreview.wndProc,
+            .cbClsExtra = 0,
+            .cbWndExtra = 0,
+            .hInstance = hinstance,
+            .hIcon = null,
+            .hCursor = null,
+            .hbrBackground = null,
+            .lpszMenuName = null,
+            .lpszClassName = LinkPreview.class_name,
+            .hIconSm = null,
+        },
+        .{
+            .cbSize = @sizeOf(c.WNDCLASSEXW),
+            .style = 0,
             .lpfnWndProc = msgWndProc,
             .cbClsExtra = 0,
             .cbWndExtra = 0,
@@ -252,6 +267,7 @@ fn unregisterClasses(hinstance: c.HINSTANCE) void {
     _ = c.UnregisterClassW(tab_bar_class, hinstance);
     _ = c.UnregisterClassW(DimOverlay.class_name, hinstance);
     _ = c.UnregisterClassW(BellBorder.class_name, hinstance);
+    _ = c.UnregisterClassW(LinkPreview.class_name, hinstance);
     _ = c.UnregisterClassW(message_class, hinstance);
 }
 
@@ -629,6 +645,11 @@ pub fn performAction(
         .mouse_shape => switch (target) {
             .app => return false,
             .surface => |v| v.rt_surface.setMouseShape(value),
+        },
+
+        .mouse_over_link => switch (target) {
+            .app => return false,
+            .surface => |v| v.rt_surface.setMouseOverLink(value.url),
         },
 
         .mouse_visibility => switch (target) {

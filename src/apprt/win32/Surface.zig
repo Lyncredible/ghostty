@@ -20,6 +20,7 @@ const Window = @import("Window.zig");
 const DimOverlay = @import("DimOverlay.zig");
 const BellBorder = @import("BellBorder.zig");
 const TitleDialog = @import("TitleDialog.zig");
+const LinkPreview = @import("LinkPreview.zig");
 
 const log = std.log.scoped(.win32);
 
@@ -75,6 +76,7 @@ progress_expires_at: u64 = 0,
 
 dim_overlay: DimOverlay = .{},
 bell_border: BellBorder = .{},
+link_preview: LinkPreview = .{},
 
 /// An explicitly selected command, owned by this surface and inherited by splits.
 shell: ?configpkg.Command = null,
@@ -197,6 +199,8 @@ pub fn init(self: *Surface, app: *App, window: *Window, opts: Options) !void {
     try self.bell_border.init(hwnd, app.hinstance);
     errdefer self.bell_border.deinit();
     self.bell_border.resize(@intCast(self.size.width), @intCast(self.size.height));
+    try self.link_preview.init(hwnd, app.hinstance, &config);
+    errdefer self.link_preview.deinit(alloc);
 
     // Initialize our surface now that we have the stable pointer.
     try self.core_surface.init(
@@ -227,6 +231,7 @@ pub fn deinit(self: *Surface) void {
     _ = c.SetWindowLongPtrW(self.hwnd, util.GWLP_USERDATA, 0);
     self.dim_overlay.deinit();
     self.bell_border.deinit();
+    self.link_preview.deinit(alloc);
 
     if (self.title) |v| alloc.free(v);
     if (self.title_override) |v| alloc.free(v);
@@ -318,6 +323,14 @@ pub fn promptTitle(self: *Surface, kind: apprt.action.PromptTitle) !void {
     }
 }
 
+/// Show the URL under the mouse, or hide it if empty.
+pub fn setMouseOverLink(self: *Surface, url: []const u8) void {
+    self.link_preview.setUrl(self.app.core_app.alloc, url, .{
+        .x = @intFromFloat(self.cursor_pos.x),
+        .y = @intFromFloat(self.cursor_pos.y),
+    });
+}
+
 /// Copy the effective title to the clipboard.
 pub fn copyTitleToClipboard(self: *Surface) !bool {
     const title = self.effectiveTitle() orelse return false;
@@ -339,6 +352,7 @@ pub fn configChanged(self: *Surface, config: *const configpkg.Config) void {
     self.notify_on_command_finish_after = config.@"notify-on-command-finish-after";
     self.progress_style = config.@"progress-style";
     self.window.updateTaskbarProgress();
+    self.link_preview.updateConfig(config);
     self.dim_overlay.updateConfig(config) catch |err| {
         log.err("error updating split dimming err={}", .{err});
     };
@@ -729,6 +743,7 @@ pub fn wndProc(
                 self.size = size;
                 self.dim_overlay.resize(@intCast(size.width), @intCast(size.height));
                 self.bell_border.resize(@intCast(size.width), @intCast(size.height));
+                self.link_preview.parentResized();
                 self.core_surface.sizeCallback(size) catch |err| {
                     log.err("error in size callback err={}", .{err});
                 };
@@ -869,6 +884,7 @@ fn cursorPosEvent(self: *Surface, pos: apprt.CursorPos) void {
     // actually moving, which we don't want to report.
     if (pos.x == self.cursor_pos.x and pos.y == self.cursor_pos.y) return;
     self.cursor_pos = pos;
+    self.link_preview.cursorMoved(.{ .x = @intFromFloat(pos.x), .y = @intFromFloat(pos.y) });
     self.core_surface.cursorPosCallback(pos, key.currentMods()) catch |err| {
         log.err("error in cursor pos callback err={}", .{err});
     };
