@@ -538,6 +538,7 @@ pub fn performAction(
             .app => if (value.config.clone(self.core_app.alloc)) |config| {
                 self.config.deinit();
                 self.config = config;
+                for (self.windows.items) |window| window.configChanged();
             } else |err| {
                 log.err("error updating app config err={}", .{err});
             },
