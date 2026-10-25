@@ -167,7 +167,9 @@ Notes:
 - [x] Global keybinds (`RegisterHotKey`)
   - [x] Titles: `set_tab_title`, `set_window_title`,
         `copy_title_to_clipboard`, `prompt_title`
-  - [ ] Hover link preview (`mouse_over_link`) and `show_child_exited`
+  - [x] Hover link preview (`mouse_over_link`)
+  - [x] `show_child_exited`: not needed; the core's fallback prints
+        "Process exited" in the terminal
   - [ ] `readonly` and `renderer_health` indicators
   - [ ] Search UI (`start_search`, `end_search`, `search_total`,
         `search_selected`)
@@ -409,3 +411,10 @@ Reviewed the branch against this file and discussion #2563.
   active, otherwise show them and activate the previously active one.
   Native test: `global:ctrl+alt+shift+g=toggle_visibility` hid, showed
   (in the foreground), and hid the window on three presses.
+- `mouse_over_link` shows the URL in a GTK-style box in the surface's
+  bottom-left corner (terminal colors, 1px #555 outline, system message
+  font), moving to the bottom right while the mouse is over it.
+  Overlays above the surface must be layered windows: the surface's
+  flip-model swap chain covers plain child windows. Native test with
+  `link-previews=true`: hovering a URL with Ctrl showed the preview and
+  leaving the link hid it. The move-to-right case is untested.
