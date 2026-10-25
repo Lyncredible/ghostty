@@ -186,7 +186,10 @@ Notes:
         `search_selected`); needs a manual UI test
   - [x] Scrollbar (`scrollbar`)
   - [x] Key table / sequence indicators (`key_table`, `key_sequence`)
-  - [ ] Command palette and quick terminal
+  - [x] Quick terminal (`toggle_quick_terminal`, `+toggle-quick-terminal`)
+    - [ ] Slide animation (`quick-terminal-animation-duration`)
+  - [ ] Command palette
+  - [ ] `toggle_background_opacity` (needs the renderer's alpha to change)
 - [x] Share built-in compiled shader bytecode across surfaces
 - [x] Cache compiled custom shader bytecode across surfaces
 
@@ -539,3 +542,16 @@ Reviewed the branch against this file and discussion #2563.
   overlay still above the terminal, and the desktop visible through 60%
   opacity with and without blur. Not yet tested: splits, the scrollbar
   and other overlays over a translucent terminal, and Windows 10.
+- Quick terminal: a `WS_POPUP` + `WS_EX_TOOLWINDOW` + topmost window,
+  so it has no frame or taskbar button. It's placed in the work area of
+  the primary monitor (or the mouse's, with `quick-terminal-screen = mouse`)
+  using the core's `QuickTerminalSize.calculate`, with pixel sizes and
+  defaults scaled by the monitor DPI. Toggling hides it when it's in
+  front, otherwise places and focuses it; `quick-terminal-autohide` (off
+  by default on Windows, as on Linux) hides it on deactivation. Closing
+  its last tab destroys it. Popup windows start out 0x0, which gave the
+  first shell a one-column pty, so the window is placed before its first
+  surface is created. `+toggle-quick-terminal` works over IPC. Tests: a
+  `quickRect` unit test, and native IPC toggles that showed it
+  (full-width, 30% tall, in front), hid it, and showed it again with the
+  cmd banner laid out correctly.
