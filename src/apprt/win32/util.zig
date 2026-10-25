@@ -40,6 +40,19 @@ pub extern "user32" fn SetWindowPos(
 pub const HWND_TOPMOST: isize = -1;
 pub const HWND_NOTOPMOST: isize = -2;
 
+/// RegGetValueW with an integer key, so we can pass the predefined keys
+/// such as HKEY_CURRENT_USER, which aren't valid pointers in Zig.
+pub extern "advapi32" fn RegGetValueW(
+    key: usize,
+    sub_key: ?[*:0]const u16,
+    value: ?[*:0]const u16,
+    flags: c.DWORD,
+    type: ?*c.DWORD,
+    data: ?*anyopaque,
+    size: ?*c.DWORD,
+) callconv(.winapi) c.LONG;
+pub const HKEY_CURRENT_USER: usize = @bitCast(@as(isize, @as(i32, @bitCast(@as(u32, 0x80000001)))));
+
 // Predefined cursor IDs (MAKEINTRESOURCE values).
 pub const IDC_ARROW = 32512;
 pub const IDC_IBEAM = 32513;
