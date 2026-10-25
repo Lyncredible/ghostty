@@ -116,6 +116,7 @@ pub fn focus(self: *Tab, surface: *Surface) void {
     self.focused = surface;
     self.updateDimming();
     _ = c.SetFocus(surface.hwnd);
+    self.window.surfaceFocused(surface);
 }
 
 /// Dim all other splits even when the top-level window loses focus.
