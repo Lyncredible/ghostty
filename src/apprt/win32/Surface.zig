@@ -54,6 +54,10 @@ title: ?[:0]const u8 = null,
 /// A pending high surrogate from a standalone WM_CHAR.
 high_surrogate: ?u16 = null,
 
+/// The number of split trees referencing this surface. The surface is
+/// destroyed when the last reference is released. See `ref`.
+ref_count: usize = 0,
+
 pub const Options = struct {
     /// The surface to inherit properties from, if any.
     parent: ?*CoreSurface = null,
@@ -61,6 +65,43 @@ pub const Options = struct {
     /// The context the surface is being created in.
     context: apprt.surface.NewSurfaceContext = .window,
 };
+
+/// Allocate and initialize a new surface in the given window. The
+/// surface starts with no references; it's destroyed when the last
+/// split tree holding it releases it, or with `destroy`.
+pub fn create(window: *Window, opts: Options) !*Surface {
+    const alloc = window.app.core_app.alloc;
+    const self = try alloc.create(Surface);
+    errdefer alloc.destroy(self);
+    try self.init(window.app, window, opts);
+    return self;
+}
+
+/// Deinitialize and free the surface, and destroy its window.
+pub fn destroy(self: *Surface) void {
+    const alloc = self.app.core_app.alloc;
+    const hwnd = self.hwnd;
+    self.deinit();
+    _ = c.DestroyWindow(hwnd);
+    alloc.destroy(self);
+}
+
+// The functions below implement the view interface for SplitTree.
+
+pub fn ref(self: *Surface) *Surface {
+    self.ref_count += 1;
+    return self;
+}
+
+pub fn unref(self: *Surface) void {
+    std.debug.assert(self.ref_count > 0);
+    self.ref_count -= 1;
+    if (self.ref_count == 0) self.destroy();
+}
+
+pub fn eql(self: *const Surface, other: *const Surface) bool {
+    return self == other;
+}
 
 pub fn init(self: *Surface, app: *App, window: *Window, opts: Options) !void {
     const alloc = app.core_app.alloc;
@@ -494,6 +535,7 @@ pub fn wndProc(
         },
 
         c.WM_SETFOCUS, c.WM_KILLFOCUS => {
+            if (msg == c.WM_SETFOCUS) self.window.surfaceFocused(self);
             self.core_surface.focusCallback(msg == c.WM_SETFOCUS) catch |err| {
                 log.err("error in focus callback err={}", .{err});
             };
@@ -609,8 +651,12 @@ fn mouseButtonEvent(
 ) c.LRESULT {
     // Capture the mouse while a button is held so that we keep getting
     // events (e.g. while selecting) if the cursor leaves the window.
+    // Clicking a surface (e.g. another split) also focuses it.
     switch (action) {
-        .press => _ = c.SetCapture(self.hwnd),
+        .press => {
+            _ = c.SetCapture(self.hwnd);
+            if (c.GetFocus() != self.hwnd) _ = c.SetFocus(self.hwnd);
+        },
         .release => {
             const buttons = c.MK_LBUTTON | c.MK_RBUTTON | c.MK_MBUTTON | c.MK_XBUTTON1 | c.MK_XBUTTON2;
             const held = (if (down(c.VK_LBUTTON)) @as(c_int, c.MK_LBUTTON) else 0) |

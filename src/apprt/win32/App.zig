@@ -398,6 +398,47 @@ pub fn performAction(
             .surface => |v| return v.rt_surface.window.moveTab(value.amount),
         },
 
+        .new_split => switch (target) {
+            .app => return false,
+            .surface => |v| {
+                const tab = v.rt_surface.window.tabOf(v.rt_surface) orelse return false;
+                try tab.split(v.rt_surface, value);
+            },
+        },
+
+        .goto_split => switch (target) {
+            .app => return false,
+            .surface => |v| {
+                const tab = v.rt_surface.window.tabOf(v.rt_surface) orelse return false;
+                return tab.gotoSplit(v.rt_surface, value);
+            },
+        },
+
+        .resize_split => switch (target) {
+            .app => return false,
+            .surface => |v| {
+                const window = v.rt_surface.window;
+                const tab = window.tabOf(v.rt_surface) orelse return false;
+                return try tab.resizeSplit(v.rt_surface, value, window.surfaceArea());
+            },
+        },
+
+        .equalize_splits => switch (target) {
+            .app => return false,
+            .surface => |v| {
+                const tab = v.rt_surface.window.tabOf(v.rt_surface) orelse return false;
+                try tab.equalize();
+            },
+        },
+
+        .toggle_split_zoom => switch (target) {
+            .app => return false,
+            .surface => |v| {
+                const tab = v.rt_surface.window.tabOf(v.rt_surface) orelse return false;
+                return tab.toggleZoom(v.rt_surface);
+            },
+        },
+
         .quit_timer => switch (value) {
             .start => self.armQuitTimer(),
             .stop => _ = c.KillTimer(self.msg_hwnd, quit_timer_id),
