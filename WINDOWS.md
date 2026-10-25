@@ -150,7 +150,12 @@ Notes:
   unchanged. Empty executable names are rejected.
   `zig build test -Dtarget=x86_64-windows-gnu -Dtest-filter="execCommand windows"`
   passes, including ownership and quoting regression cases.
-- Follow-up: audit close confirmation dialogs for reentrancy when a shell
+- Close confirmation callbacks now verify their window/surface still exists
+  after the modal dialog returns. Multi-tab close also ignores tabs that
+  disappeared while the dialog was open. A native test with a short-lived
+  child confirmed the close dialog appears and the window closes cleanly
+  when that child exits before the user answers.
+- Follow-up: audit clipboard confirmation dialogs for reentrancy when a shell
   exits while the dialog is open.
 - Bell handling now copies each surface's `bell-features` (including on
   reload), gates `MessageBeep` on `system`, and requests taskbar attention

@@ -226,11 +226,15 @@ pub fn rtApp(self: *const Surface) *App {
 /// Close this surface. If `process_active` is true then the user is
 /// asked for confirmation first.
 pub fn close(self: *Surface, process_active: bool) void {
+    const hwnd = self.hwnd;
+    const identity = c.GetWindowLongPtrW(hwnd, util.GWLP_USERDATA);
     if (process_active and !Window.confirm(
         self.window,
         "Close terminal?",
         "A process is still running in this terminal. Closing it will kill the process.",
     )) return;
+
+    if (c.GetWindowLongPtrW(hwnd, util.GWLP_USERDATA) != identity) return;
 
     self.window.closeSurface(self);
 }
