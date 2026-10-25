@@ -268,7 +268,7 @@ pub fn configChanged(self: *Surface, config: *const configpkg.Config) void {
     self.bell_features = config.@"bell-features";
     if (!self.bell_features.title and self.bell_pending) {
         self.bell_pending = false;
-        self.window.tab_bar.invalidate();
+        self.window.updateBellIndicators();
     }
     self.notify_on_command_finish = config.@"notify-on-command-finish";
     self.notify_on_command_finish_action = config.@"notify-on-command-finish-action";
