@@ -19,6 +19,7 @@ const App = @import("App.zig");
 const Window = @import("Window.zig");
 const DimOverlay = @import("DimOverlay.zig");
 const BellBorder = @import("BellBorder.zig");
+const TitleDialog = @import("TitleDialog.zig");
 
 const log = std.log.scoped(.win32);
 
@@ -291,6 +292,30 @@ pub fn setTitleOverride(self: *Surface, title: ?[]const u8) void {
         self.title_override = alloc.dupeSentinel(u8, v, 0) catch null;
     };
     self.window.surfaceTitleChanged(self);
+}
+
+/// Prompt for a new surface, tab or window title override.
+pub fn promptTitle(self: *Surface, kind: apprt.action.PromptTitle) !void {
+    const alloc = self.app.core_app.alloc;
+    const window = self.window;
+    const initial: []const u8 = switch (kind) {
+        .surface => self.effectiveTitle() orelse "",
+        .tab => (window.tabOf(self) orelse return).title(),
+        .window => window.title_override orelse window.activeTab().title(),
+    };
+
+    const hwnd = self.hwnd;
+    const identity = c.GetWindowLongPtrW(hwnd, util.GWLP_USERDATA);
+    const title = try TitleDialog.prompt(alloc, window.hwnd, kind, initial) orelse return;
+    defer alloc.free(title);
+
+    // We may have been closed while the dialog was open.
+    if (c.GetWindowLongPtrW(hwnd, util.GWLP_USERDATA) != identity) return;
+    switch (kind) {
+        .surface => self.setTitleOverride(title),
+        .tab => if (self.window.tabOf(self)) |tab| tab.setTitleOverride(title),
+        .window => self.window.setTitleOverride(title),
+    }
 }
 
 /// Copy the effective title to the clipboard.
