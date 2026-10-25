@@ -174,11 +174,11 @@ Notes:
   - [x] Hover link preview (`mouse_over_link`)
   - [x] `show_child_exited`: not needed; the core's fallback prints
         "Process exited" in the terminal
-  - [ ] `readonly` and `renderer_health` indicators
+  - [x] `readonly` and `renderer_health` indicators
   - [ ] Search UI (`start_search`, `end_search`, `search_total`,
         `search_selected`)
   - [x] Scrollbar (`scrollbar`)
-  - [ ] Key table / sequence indicators (`key_table`, `key_sequence`)
+  - [x] Key table / sequence indicators (`key_table`, `key_sequence`)
   - [ ] Command palette and quick terminal
 - [x] Share built-in compiled shader bytecode across surfaces
 - [x] Cache compiled custom shader bytecode across surfaces
@@ -469,3 +469,11 @@ Reviewed the branch against this file and discussion #2563.
   drag scrolled to line 1, and it hid afterwards. Note for test scripts:
   `SetCursorPos` from another process didn't produce `WM_MOUSEMOVE` during
   a captured drag; absolute `mouse_event` moves do.
+- A reusable `Badge` overlay (layered, click-through, terminal colors,
+  system message font) shows "🔒 Read-only" in the top right, the active
+  key tables and pending sequence in the bottom center (GTK's
+  "table > inner › ctrl+a b" format), and a centered message when the
+  renderer reports itself unhealthy. Native test: `toggle_readonly` showed
+  and hid the read-only badge; activating a `resize` table and pressing
+  the first key of a `ctrl+a>b` sequence showed "resize › ctrl+a", and
+  Escape cleared it. The renderer health badge is untested.

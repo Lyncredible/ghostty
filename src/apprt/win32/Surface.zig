@@ -22,6 +22,7 @@ const BellBorder = @import("BellBorder.zig");
 const TitleDialog = @import("TitleDialog.zig");
 const LinkPreview = @import("LinkPreview.zig");
 const Scrollbar = @import("Scrollbar.zig");
+const Badge = @import("Badge.zig");
 
 const log = std.log.scoped(.win32);
 
@@ -79,6 +80,17 @@ dim_overlay: DimOverlay = .{},
 bell_border: BellBorder = .{},
 link_preview: LinkPreview = .{},
 scrollbar: Scrollbar = .{},
+
+/// Indicators for read-only mode, active key tables and sequences, and
+/// renderer failures.
+readonly_badge: Badge = .{},
+key_badge: Badge = .{},
+health_badge: Badge = .{},
+
+/// Active key tables (innermost last) and the pending key sequence, as
+/// display labels.
+key_tables: std.ArrayList([:0]const u8) = .empty,
+key_sequence: std.ArrayList([:0]const u8) = .empty,
 
 /// An explicitly selected command, owned by this surface and inherited by splits.
 shell: ?configpkg.Command = null,
@@ -205,6 +217,12 @@ pub fn init(self: *Surface, app: *App, window: *Window, opts: Options) !void {
     errdefer self.link_preview.deinit(alloc);
     try self.scrollbar.init(hwnd, app.hinstance, &config, self, scrollToRow);
     errdefer self.scrollbar.deinit();
+    try self.readonly_badge.init(hwnd, app.hinstance, &config, .top_right);
+    errdefer self.readonly_badge.deinit(alloc);
+    try self.key_badge.init(hwnd, app.hinstance, &config, .bottom_center);
+    errdefer self.key_badge.deinit(alloc);
+    try self.health_badge.init(hwnd, app.hinstance, &config, .center);
+    errdefer self.health_badge.deinit(alloc);
 
     // Initialize our surface now that we have the stable pointer.
     try self.core_surface.init(
@@ -237,6 +255,13 @@ pub fn deinit(self: *Surface) void {
     self.bell_border.deinit();
     self.link_preview.deinit(alloc);
     self.scrollbar.deinit();
+    self.readonly_badge.deinit(alloc);
+    self.key_badge.deinit(alloc);
+    self.health_badge.deinit(alloc);
+    clearLabels(alloc, &self.key_tables);
+    self.key_tables.deinit(alloc);
+    clearLabels(alloc, &self.key_sequence);
+    self.key_sequence.deinit(alloc);
 
     if (self.title) |v| alloc.free(v);
     if (self.title_override) |v| alloc.free(v);
@@ -328,6 +353,73 @@ pub fn promptTitle(self: *Surface, kind: apprt.action.PromptTitle) !void {
     }
 }
 
+pub fn setReadonly(self: *Surface, value: apprt.action.Readonly) void {
+    self.readonly_badge.set(self.app.core_app.alloc, switch (value) {
+        .on => "\u{1F512} Read-only",
+        .off => null,
+    });
+}
+
+pub fn setRendererHealth(self: *Surface, health: renderer.Health) void {
+    self.health_badge.set(self.app.core_app.alloc, switch (health) {
+        .healthy => null,
+        .unhealthy => "Unable to render this terminal. The graphics device may have been reset.",
+    });
+}
+
+pub fn keySequence(self: *Surface, value: apprt.action.KeySequence) !void {
+    const alloc = self.app.core_app.alloc;
+    switch (value) {
+        .trigger => |trigger| {
+            const label = try std.fmt.allocPrintSentinel(alloc, "{f}", .{trigger}, 0);
+            errdefer alloc.free(label);
+            try self.key_sequence.append(alloc, label);
+        },
+        .end => clearLabels(alloc, &self.key_sequence),
+    }
+    self.updateKeyBadge();
+}
+
+pub fn keyTable(self: *Surface, value: apprt.action.KeyTable) !void {
+    const alloc = self.app.core_app.alloc;
+    switch (value) {
+        .activate => |name| {
+            const label = try alloc.dupeSentinel(u8, name, 0);
+            errdefer alloc.free(label);
+            try self.key_tables.append(alloc, label);
+        },
+        .deactivate => if (self.key_tables.pop()) |label| alloc.free(label),
+        .deactivate_all => clearLabels(alloc, &self.key_tables),
+    }
+    self.updateKeyBadge();
+}
+
+fn clearLabels(alloc: Allocator, labels: *std.ArrayList([:0]const u8)) void {
+    for (labels.items) |label| alloc.free(label);
+    labels.clearRetainingCapacity();
+}
+
+/// Show the active key tables and pending sequence, like GTK:
+/// "table > inner › ctrl+a b".
+fn updateKeyBadge(self: *Surface) void {
+    const alloc = self.app.core_app.alloc;
+    var text: std.Io.Writer.Allocating = .init(alloc);
+    defer text.deinit();
+    const w = &text.writer;
+    for (self.key_tables.items, 0..) |label, i| {
+        if (i > 0) w.writeAll(" > ") catch return;
+        w.writeAll(label) catch return;
+    }
+    if (self.key_tables.items.len > 0 and self.key_sequence.items.len > 0) {
+        w.writeAll(" \u{203A} ") catch return;
+    }
+    for (self.key_sequence.items, 0..) |label, i| {
+        if (i > 0) w.writeByte(' ') catch return;
+        w.writeAll(label) catch return;
+    }
+    self.key_badge.set(alloc, text.written());
+}
+
 /// Called by the scrollbar while dragging its thumb.
 fn scrollToRow(ctx: *anyopaque, row: usize) void {
     const self: *Surface = @ptrCast(@alignCast(ctx));
@@ -368,6 +460,9 @@ pub fn configChanged(self: *Surface, config: *const configpkg.Config) void {
     self.window.updateTaskbarProgress();
     self.link_preview.updateConfig(config);
     self.scrollbar.updateConfig(config);
+    self.readonly_badge.updateConfig(config);
+    self.key_badge.updateConfig(config);
+    self.health_badge.updateConfig(config);
     self.dim_overlay.updateConfig(config) catch |err| {
         log.err("error updating split dimming err={}", .{err});
     };
@@ -760,6 +855,9 @@ pub fn wndProc(
                 self.bell_border.resize(@intCast(size.width), @intCast(size.height));
                 self.link_preview.parentResized();
                 self.scrollbar.parentResized();
+                self.readonly_badge.parentResized();
+                self.key_badge.parentResized();
+                self.health_badge.parentResized();
                 self.core_surface.sizeCallback(size) catch |err| {
                     log.err("error in size callback err={}", .{err});
                 };
