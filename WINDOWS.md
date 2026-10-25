@@ -132,7 +132,9 @@ Notes:
 - [x] Verify IME with Microsoft Pinyin, Japanese IME, and others
 - [x] Fix tab-header close crashing the window when there are multiple
       tabs (active index and split focus must be valid during teardown)
-- [ ] Shell integration for wsl
+- [x] Shell integration for wsl
+  - [ ] Map WSL Linux paths (`/home/...`) to `\wsl.localhost\<distro>\...`
+        so new tabs can start there
 - [x] Choose a registered WSL distribution by name from the shell menu
 - [x] Choose Command Prompt, Windows PowerShell, PowerShell, WSL, or
       the configured command when opening a new tab from the tab bar
@@ -439,3 +441,20 @@ Reviewed the branch against this file and discussion #2563.
   and cwd/command titles worked; command-finished notifications reported
   success/failure for `Get-Date`, `cmd /c exit 3`, `Get-Item nope`, and
   `cmd /c exit 0`, and nothing for an empty line.
+- WSL shell integration: `wsl.exe` with only `-d`/`--distribution`,
+  `-u`/`--user`, `--cd`, or `~` runs
+  `--exec /bin/sh -c '. "$GHOSTTY_RESOURCES_DIR/shell-integration/wsl/ghostty.sh"'`.
+  `WSLENV` passes `GHOSTTY_RESOURCES_DIR` (translated with `/p`), the
+  features, `TERM_PROGRAM*`, and `COLORTERM`. The POSIX sh launcher reads
+  the login shell from passwd and applies the native injection for bash
+  (`ENV`/`--posix`), zsh (`ZDOTDIR`), and fish/elvish/nushell
+  (`XDG_DATA_DIRS`), then execs it as a login shell. OSC 7 now maps
+  `/mnt/c/...` (and MSYS2's `/c/...`) to `C:\...`; other Linux paths reset
+  the pwd instead of producing a bogus Windows directory.
+- Found that `core.autocrlf=true` checked out the zsh/bash/fish/elvish/nu
+  scripts with CRLF, which breaks them in WSL (zsh: `command not found: ^M`).
+  Git Bash's `grep` hides the CRs; `git ls-files --eol` shows them.
+  `.gitattributes` now forces LF under `src/shell-integration/`. Native
+  test with Ubuntu (zsh with a custom theme): no startup errors;
+  `cd /mnt/c/Windows` was inherited by a new tab; `false`/`pwd` produced
+  failed/succeeded notifications; `cd ~` reset the pwd.

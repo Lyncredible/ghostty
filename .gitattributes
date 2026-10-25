@@ -28,6 +28,10 @@ Makefile text eol=lf
 # Text data files - always LF (embedded in Zig, parsed with \n split)
 *.txt text eol=lf
 
+# Shell integration scripts - always LF, since Windows builds run them
+# in WSL, and many don't have a recognizable extension.
+src/shell-integration/** text eol=lf
+
 # Windows resource files - preserve as-is (native Windows tooling)
 *.rc -text
 *.manifest -text
