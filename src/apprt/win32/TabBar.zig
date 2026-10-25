@@ -5,6 +5,8 @@ const TabBar = @This();
 
 const std = @import("std");
 const Allocator = std.mem.Allocator;
+const global = @import("../../global.zig");
+const path = @import("../../os/path.zig");
 
 const util = @import("util.zig");
 const c = util.c;
@@ -32,6 +34,7 @@ const Hit = union(enum) {
     tab: usize,
     close: usize,
     new_tab,
+    shell_menu,
 
     fn eql(a: ?Hit, b: ?Hit) bool {
         const x = a orelse return b == null;
@@ -113,6 +116,7 @@ const Layout = struct {
 
     /// The rectangle of the new tab button.
     new_tab: c.RECT,
+    shell_menu: c.RECT,
 
     fn tabRect(self: Layout, idx: usize, h: c_int) c.RECT {
         const left = @as(c_int, @intCast(idx)) * self.tab_width;
@@ -128,13 +132,14 @@ fn layout(self: *const TabBar) Layout {
 
     // Tabs share the width (less the new tab button) up to a maximum.
     const button = h;
-    const available = @max(0, client.right - button);
+    const available = @max(0, client.right - button * 2);
     const tab_width = @min(self.scale(240), @divTrunc(available, n));
 
     const new_left = tab_width * n;
     return .{
         .tab_width = tab_width,
         .new_tab = .{ .left = new_left, .top = 0, .right = new_left + button, .bottom = h },
+        .shell_menu = .{ .left = new_left + button, .top = 0, .right = new_left + button * 2, .bottom = h },
     };
 }
 
@@ -158,6 +163,7 @@ fn hitTest(self: *const TabBar, x: c_int, y: c_int) ?Hit {
     const pt: c.POINT = .{ .x = x, .y = y };
 
     if (c.PtInRect(&l.new_tab, pt) != 0) return .new_tab;
+    if (c.PtInRect(&l.shell_menu, pt) != 0) return .shell_menu;
     for (0..self.window.tabs.items.len) |i| {
         const rect = l.tabRect(i, client.bottom);
         if (c.PtInRect(&rect, pt) == 0) continue;
@@ -290,6 +296,63 @@ fn paint(self: *TabBar, hdc: c.HDC, client: c.RECT) void {
     // New tab button
     if (Hit.eql(self.hover, .new_tab)) fill(hdc, &l.new_tab, col.hover);
     self.drawPlus(hdc, l.new_tab, col.text_inactive);
+    if (Hit.eql(self.hover, .shell_menu)) fill(hdc, &l.shell_menu, col.hover);
+    self.drawChevron(hdc, l.shell_menu, col.text_inactive);
+}
+
+fn drawChevron(self: *const TabBar, hdc: c.HDC, rect: c.RECT, color: Rgb) void {
+    const size = self.scale(4);
+    const cx = @divTrunc(rect.left + rect.right, 2);
+    const cy = @divTrunc(rect.top + rect.bottom, 2);
+    const pen = c.CreatePen(c.PS_SOLID, @max(1, self.scale(1)), colorref(color));
+    defer _ = c.DeleteObject(pen);
+    const old = c.SelectObject(hdc, pen);
+    defer _ = c.SelectObject(hdc, old);
+    _ = c.MoveToEx(hdc, cx - size, cy - @divTrunc(size, 2), null);
+    _ = c.LineTo(hdc, cx, cy + @divTrunc(size, 2));
+    _ = c.LineTo(hdc, cx + size, cy - @divTrunc(size, 2));
+}
+
+/// This native menu pumps messages: the window may close while it is open.
+fn showShellMenu(self: *TabBar) void {
+    const hwnd = self.hwnd;
+    const owner = self.window.hwnd;
+    const identity = c.GetWindowLongPtrW(hwnd, util.GWLP_USERDATA);
+    var arena: std.heap.ArenaAllocator = .init(self.window.app.core_app.alloc);
+    defer arena.deinit();
+    const alloc = arena.allocator();
+    const menu = c.CreatePopupMenu() orelse return;
+    defer _ = c.DestroyMenu(menu);
+
+    const candidates = .{
+        .{ "Command Prompt", "cmd.exe" },
+        .{ "Windows PowerShell", "powershell.exe" },
+        .{ "PowerShell", "pwsh.exe" },
+        .{ "WSL (default distribution)", "wsl.exe" },
+    };
+    var shells: [candidates.len]?[:0]const u8 = @splat(null);
+    _ = c.AppendMenuW(menu, c.MF_STRING, 1, std.unicode.utf8ToUtf16LeStringLiteral("Configured default"));
+    _ = c.AppendMenuW(menu, c.MF_SEPARATOR, 0, null);
+    var env = global.environMap() catch return;
+    defer env.deinit();
+    inline for (candidates, 0..) |candidate, i| {
+        if (path.expand(global.io(), alloc, &env, candidate[1]) catch null) |exe| {
+            shells[i] = alloc.dupeSentinel(u8, exe, 0) catch return;
+            _ = c.AppendMenuW(menu, c.MF_STRING, i + 2, std.unicode.utf8ToUtf16LeStringLiteral(candidate[0]));
+        }
+    }
+
+    const rect = self.layout().shell_menu;
+    var pt: c.POINT = .{ .x = rect.left, .y = rect.bottom };
+    _ = c.ClientToScreen(hwnd, &pt);
+    self.setHover(null);
+    const selected = c.TrackPopupMenu(menu, c.TPM_RETURNCMD | c.TPM_NONOTIFY, pt.x, pt.y, 0, owner, null);
+    // Never dereference self after the nested loop unless it still owns HWND.
+    if (selected == 0 or c.GetWindowLongPtrW(hwnd, util.GWLP_USERDATA) != identity) return;
+    const shell = if (selected == 1) null else shells[@intCast(selected - 2)];
+    _ = self.window.addTabWithShell(&self.window.activeSurface().core_surface, shell) catch |err| {
+        log.err("error creating shell tab err={}", .{err});
+    };
 }
 
 fn drawCross(self: *const TabBar, hdc: c.HDC, rect: c.RECT, color: Rgb) void {
@@ -386,6 +449,7 @@ pub fn wndProc(
                 .tab => |i| self.window.selectTab(i),
                 .close => |i| self.window.closeTabAt(i),
                 .new_tab => _ = self.window.newTab(),
+                .shell_menu => self.showShellMenu(),
             }
             return 0;
         },
@@ -394,7 +458,7 @@ pub fn wndProc(
             const hit = self.hitTest(util.loword(lparam), util.hiword(lparam)) orelse return 0;
             switch (hit) {
                 .tab, .close => |i| self.window.closeTabAt(i),
-                .new_tab => {},
+                .new_tab, .shell_menu => {},
             }
             return 0;
         },

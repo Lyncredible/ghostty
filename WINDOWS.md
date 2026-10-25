@@ -109,7 +109,8 @@ Notes:
 - [x] Fix tab-header close crashing the window when there are multiple
       tabs (active index and split focus must be valid during teardown)
 - [ ] Shell integration for wsl
-- [ ] Supporting choosing different shells when opening new tab
+- [x] Choose Command Prompt, Windows PowerShell, PowerShell, WSL, or
+      the configured command when opening a new tab from the tab bar
 - [x] `unfocused-split-opacity` and `unfocused-split-fill`
 - [ ] Tab drag to reorder, and moving a tab to a new window
 - [ ] Background opacity/blur (needs a DirectComposition swap chain)
@@ -180,3 +181,15 @@ Notes:
   Also verified custom fill, disabling with opacity 1, re-enabling via
   live config reload, and closing the focused split without a crash.
   Performance with heavy custom shaders and images still needs profiling.
+- The tab bar now has a shell dropdown next to the new-tab button. It lists
+  shells whose executables are found in PATH and always offers the configured
+  default. An explicit choice uses the resolved executable path and is
+  inherited by splits; the normal new-tab action still uses the configured
+  command. Verified in the native UI that selecting PowerShell 7 starts it,
+  splitting that tab starts PowerShell again, and selecting the configured
+  default opens cmd.exe. The tab bar uses `window-show-tab-bar=auto` by
+  default, so the dropdown appears after opening a second tab; `always`
+  makes it available from the first tab.
+- Follow-up: discover WSL distributions, only offer WSL when a distribution
+  is installed, and integrate shell features instead of launching bare
+  `wsl.exe`.
