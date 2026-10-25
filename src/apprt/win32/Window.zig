@@ -53,7 +53,17 @@ destroying: bool = false,
 /// Explorer sends TaskbarButtonCreated after the window's button exists.
 taskbar_ready: bool = false,
 
-pub fn init(self: *Window, app: *App, parent: ?*CoreSurface) !void {
+/// What a new window starts with.
+pub const Initial = union(enum) {
+    /// A new tab, inheriting from the parent surface if given.
+    parent: ?*CoreSurface,
+
+    /// An existing tab moved from another window. The caller removes
+    /// it from its old window once this succeeds.
+    tab: *Tab,
+};
+
+pub fn init(self: *Window, app: *App, initial: Initial) !void {
     self.* = .{
         .app = app,
         .hwnd = undefined,
@@ -85,7 +95,10 @@ pub fn init(self: *Window, app: *App, parent: ?*CoreSurface) !void {
     try self.tab_bar.init(self);
     errdefer self.tab_bar.deinit();
 
-    _ = try self.addTab(parent);
+    switch (initial) {
+        .parent => |parent| _ = try self.addTab(parent),
+        .tab => |tab| try self.adoptTab(tab),
+    }
 
     // Only now that we're fully initialized do we attach ourselves to
     // the window, so our window procedure (in particular WM_DESTROY)
@@ -168,6 +181,40 @@ pub fn addTabWithShell(self: *Window, parent: ?*CoreSurface, shell: ?configpkg.C
     try self.tabs.insert(alloc, idx, tab);
     self.selectTab(idx);
     return tab;
+}
+
+/// Take ownership of a tab from another window and select it. This
+/// reparents its surfaces to this window.
+fn adoptTab(self: *Window, tab: *Tab) !void {
+    try self.tabs.append(self.app.core_app.alloc, tab);
+    tab.window = self;
+    var it = tab.tree.iterator();
+    while (it.next()) |entry| {
+        entry.view.window = self;
+        _ = c.SetParent(entry.view.hwnd, self.hwnd);
+    }
+    self.selectTab(self.tabs.items.len - 1);
+}
+
+/// Move the tab containing the given surface to a new window. Like GTK,
+/// this does nothing if it's the only tab.
+pub fn moveTabToNewWindow(self: *Window, surface: *Surface) !bool {
+    if (self.tabs.items.len <= 1) return false;
+    const tab = self.tabOf(surface) orelse return false;
+    const idx = self.tabIndex(tab) orelse return false;
+
+    const window = try self.app.newWindow(.{ .tab = tab });
+
+    _ = self.tabs.orderedRemove(idx);
+    if (idx < self.active) self.active -= 1;
+    self.active = @min(self.active, self.tabs.items.len - 1);
+    self.dragging = null;
+    self.selectTab(self.active);
+
+    // Selecting our remaining tab focuses it, which activates this window
+    // again. The moved tab should end up in front.
+    window.present(tab.focused);
+    return true;
 }
 
 /// Open a new tab from the tab bar, inheriting from the active surface.
