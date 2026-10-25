@@ -119,8 +119,6 @@ pub const Shaders = struct {
         device: *c.ID3D11Device,
         post_shaders: []const [:0]const u8,
     ) !Shaders {
-        _ = alloc;
-
         var pipelines: PipelineCollection = undefined;
 
         var initialized_pipelines: usize = 0;
@@ -136,15 +134,25 @@ pub const Shaders = struct {
             initialized_pipelines += 1;
         }
 
-        // TODO: custom shaders. These need the shadertoy pipeline to
-        // produce HLSL via spirv-cross.
-        if (post_shaders.len > 0) {
-            log.warn("custom shaders are not yet supported with Direct3D 11", .{});
-        }
+        const post_pipelines: []const Pipeline = initPostPipelines(
+            alloc,
+            device,
+            post_shaders,
+        ) catch |err| err: {
+            // If an error happens while building postprocess shaders we
+            // want to just not use any postprocess shaders since we don't
+            // want to block Ghostty from working.
+            log.warn("error initializing postprocess shaders err={}", .{err});
+            break :err &.{};
+        };
+        errdefer if (post_pipelines.len > 0) {
+            for (post_pipelines) |pipeline| pipeline.deinit();
+            alloc.free(post_pipelines);
+        };
 
         return .{
             .pipelines = pipelines,
-            .post_pipelines = &.{},
+            .post_pipelines = post_pipelines,
         };
     }
 
@@ -166,6 +174,51 @@ pub const Shaders = struct {
         }
     }
 };
+
+/// Initialize our custom shader pipelines. The shaders argument is a
+/// set of HLSL shader source code, not file paths.
+fn initPostPipelines(
+    alloc: Allocator,
+    device: *c.ID3D11Device,
+    post_shaders: []const [:0]const u8,
+) ![]const Pipeline {
+    // If we have no shaders, do nothing.
+    if (post_shaders.len == 0) return &.{};
+
+    // Keeps track of how many shaders we successfully wrote.
+    var i: usize = 0;
+
+    // Initialize our result set. If any error happens, we undo everything.
+    var pipelines = try alloc.alloc(Pipeline, post_shaders.len);
+    errdefer {
+        for (pipelines[0..i]) |pipeline| {
+            pipeline.deinit();
+        }
+        alloc.free(pipelines);
+    }
+
+    // All of our post shaders use the same vertex shader.
+    const vs = try compile(source, "full_screen_vertex", "vs_5_0");
+    defer com.release(vs);
+
+    // Build each shader. Note we don't use "0.." to build our index
+    // because we need to keep track of our length to clean up above.
+    for (post_shaders) |post_source| {
+        // spirv-cross keeps the GLSL entry point name.
+        const ps = try compile(post_source, "main", "ps_5_0");
+        defer com.release(ps);
+
+        pipelines[i] = try .init(null, .{
+            .device = device,
+            .vertex_bytecode = blobBytes(vs),
+            .fragment_bytecode = blobBytes(ps),
+            .blending_enabled = false,
+        });
+        i += 1;
+    }
+
+    return pipelines;
+}
 
 /// Compile the entry point `entry` of the HLSL source `src` with the
 /// given target profile (e.g. "vs_5_0"). The caller owns the blob.

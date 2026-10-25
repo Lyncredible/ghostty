@@ -42,7 +42,7 @@ pub const Uniforms = extern struct {
 };
 
 /// The target to load shaders for.
-pub const Target = enum { glsl, msl };
+pub const Target = enum { glsl, msl, hlsl };
 
 /// Load a set of shaders from files and convert them to the target
 /// format. The shader order is preserved.
@@ -137,6 +137,7 @@ pub fn loadFromFile(
         // is the final result that will be returned to the caller.
         .glsl => try glslFromSpv(alloc_gpa, spirv),
         .msl => try mslFromSpv(alloc_gpa, spirv),
+        .hlsl => try hlslFromSpv(alloc_gpa, spirv),
     };
 }
 
@@ -250,6 +251,29 @@ pub fn mslFromSpv(alloc: Allocator, spv: []const u8) ![:0]const u8 {
                 options,
                 c.SPVC_COMPILER_OPTION_MSL_ENABLE_DECORATION_BINDING,
                 c.SPVC_TRUE,
+            ) != c.SPVC_SUCCESS) {
+                return error.SpvcFailed;
+            }
+        }
+    }).setOptions);
+}
+
+/// Convert SPIR-V binary to HLSL.
+///
+/// Bindings carry over to registers of the same index, so the uniform
+/// block is `register(b1)` and the input channel is `register(t0)` with
+/// its sampler at `register(s0)`. The entry point is `main`.
+pub fn hlslFromSpv(alloc: Allocator, spv: []const u8) ![:0]const u8 {
+    // Shader model 5.0, which is what Direct3D 11 supports.
+    const SHADER_MODEL = 50;
+
+    const c = spvcross.c;
+    return try spvCross(alloc, c.SPVC_BACKEND_HLSL, spv, (struct {
+        fn setOptions(options: c.spvc_compiler_options) error{SpvcFailed}!void {
+            if (c.spvc_compiler_options_set_uint(
+                options,
+                c.SPVC_COMPILER_OPTION_HLSL_SHADER_MODEL,
+                SHADER_MODEL,
             ) != c.SPVC_SUCCESS) {
                 return error.SpvcFailed;
             }
@@ -487,6 +511,34 @@ test "shadertoy to glsl" {
     defer alloc.free(glsl);
 
     // log.warn("glsl={s}", .{glsl});
+}
+
+test "shadertoy to hlsl" {
+    // The HLSL backend is only built for Windows.
+    if (comptime builtin.target.os.tag != .windows) return error.SkipZigTest;
+
+    const testing = std.testing;
+    const alloc = testing.allocator;
+
+    const src = try testGlslZ(alloc, test_crt);
+    defer alloc.free(src);
+
+    var buf: std.Io.Writer.Allocating = .init(alloc);
+    defer buf.deinit();
+    try spirvFromGlsl(&buf.writer, null, src);
+
+    // TODO: Replace this with an aligned version of Writer.Allocating
+    var spvlist: std.ArrayListAligned(u8, .of(u32)) = .empty;
+    defer spvlist.deinit(alloc);
+    try spvlist.appendSlice(alloc, buf.written());
+
+    const hlsl = try hlslFromSpv(alloc, spvlist.items);
+    defer alloc.free(hlsl);
+
+    // The Direct3D 11 renderer relies on these bindings.
+    try testing.expect(std.mem.indexOf(u8, hlsl, "register(b1)") != null);
+    try testing.expect(std.mem.indexOf(u8, hlsl, "register(t0)") != null);
+    try testing.expect(std.mem.indexOf(u8, hlsl, "register(s0)") != null);
 }
 
 const test_crt = @embedFile("shaders/test_shadertoy_crt.glsl");
