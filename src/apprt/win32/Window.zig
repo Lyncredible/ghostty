@@ -50,6 +50,9 @@ initial_size_applied: bool = false,
 /// used by reset_window_size.
 default_size: ?struct { width: u32, height: u32 } = null,
 
+/// Overrides `window-decoration` after toggle_window_decorations.
+decorated_override: ?bool = null,
+
 /// The minimum terminal size in pixels, from the size_limit action.
 min_size: ?struct { width: u32, height: u32 } = null,
 
@@ -101,6 +104,7 @@ pub fn init(self: *Window, app: *App, initial: Initial) !void {
     self.hwnd = hwnd;
 
     self.updateTheme();
+    self.updateDecorations();
 
     try self.tab_bar.init(self);
     errdefer self.tab_bar.deinit();
@@ -556,7 +560,62 @@ fn rgb(r: u8, g: u8, b: u8) c.COLORREF {
 /// visibility and the window theme.
 pub fn configChanged(self: *Window) void {
     self.updateTheme();
+    self.updateDecorations();
     self.layout();
+}
+
+/// Toggle the title bar, like GTK: back to the config's setting if we
+/// had toggled it, otherwise to the opposite of the config's setting.
+pub fn toggleDecorations(self: *Window) void {
+    self.decorated_override = if (self.decorated_override) |_|
+        null
+    else
+        self.app.config.@"window-decoration" == .none;
+    self.updateDecorations();
+}
+
+/// Show or hide the title bar. The resize border stays either way.
+fn updateDecorations(self: *Window) void {
+    // Fullscreen has no frame; we're called again when it's restored.
+    if (self.fullscreen != null) return;
+    const decorated = self.decorated_override orelse
+        (self.app.config.@"window-decoration" != .none);
+
+    const style = c.GetWindowLongPtrW(self.hwnd, c.GWL_STYLE);
+    const caption: c.LONG_PTR = c.WS_CAPTION;
+    const new_style = if (decorated) style | caption else style & ~caption;
+    if (new_style == style) return;
+    _ = c.SetWindowLongPtrW(self.hwnd, c.GWL_STYLE, new_style);
+    _ = c.SetWindowPos(
+        self.hwnd,
+        null,
+        0,
+        0,
+        0,
+        0,
+        c.SWP_NOMOVE | c.SWP_NOSIZE | c.SWP_NOZORDER |
+            c.SWP_NOACTIVATE | c.SWP_FRAMECHANGED,
+    );
+}
+
+/// Keep this window above other windows, or stop doing so.
+pub fn setFloating(self: *Window, mode: apprt.action.FloatWindow) void {
+    const ex_style = c.GetWindowLongPtrW(self.hwnd, c.GWL_EXSTYLE);
+    const floating = ex_style & c.WS_EX_TOPMOST != 0;
+    const float = switch (mode) {
+        .on => true,
+        .off => false,
+        .toggle => !floating,
+    };
+    _ = util.SetWindowPos(
+        self.hwnd,
+        if (float) util.HWND_TOPMOST else util.HWND_NOTOPMOST,
+        0,
+        0,
+        0,
+        0,
+        c.SWP_NOMOVE | c.SWP_NOSIZE | c.SWP_NOACTIVATE,
+    );
 }
 
 /// Use a light or dark title bar according to `window-theme`. This
@@ -651,6 +710,7 @@ pub fn toggleFullscreen(self: *Window) void {
                 c.SWP_NOOWNERZORDER | c.SWP_FRAMECHANGED,
         );
         self.fullscreen = null;
+        self.updateDecorations();
         return;
     }
 
