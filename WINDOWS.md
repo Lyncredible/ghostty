@@ -111,6 +111,7 @@ Notes:
 - [x] Fix tab-header close crashing the window when there are multiple
       tabs (active index and split focus must be valid during teardown)
 - [ ] Shell integration for wsl
+- [x] Choose a registered WSL distribution by name from the shell menu
 - [x] Choose Command Prompt, Windows PowerShell, PowerShell, WSL, or
       the configured command when opening a new tab from the tab bar
 - [x] `unfocused-split-opacity` and `unfocused-split-fill`
@@ -202,11 +203,12 @@ Notes:
   default opens cmd.exe. The tab bar uses `window-show-tab-bar=auto` by
   default, so the dropdown appears after opening a second tab; `always`
   makes it available from the first tab.
-- The WSL entry now checks the current user's registered distributions,
-  so an installed `wsl.exe` alone does not produce a dead-end menu item.
-  The native menu still showed WSL with Ubuntu registered here. Follow-up:
-  enumerate distributions by name, let users choose one, and integrate
-  shell features instead of launching bare `wsl.exe`.
+- The WSL entry checks the current user's registered distributions, so an
+  installed `wsl.exe` alone does not produce a dead-end menu item. The menu
+  now enumerates those distributions by name. The selected command and its
+  arguments are cloned into the surface and inherited by splits. Verified
+  `WSL: Ubuntu` launches `wsl.exe -d Ubuntu`, including in a new split.
+  Shell integration still needs work beyond launching bare `wsl.exe`.
 - The WSL menu entry launched the installed Ubuntu distribution in the
   native UI, and splitting that tab launched another Ubuntu shell. Both
   inherited the Windows working directory as `/mnt/c/Users/Yuan` on this
@@ -220,3 +222,7 @@ Notes:
   creates its own device-specific shader objects. Native build passes and
   multiple tabs and splits rendered correctly in the UI. Custom shader
   bytecode remains uncached; startup timing has not been benchmarked.
+- The documented plain `zig build` selects the MSVC ABI and fails on this
+  machine with `WindowsSdkNotFound`. The GNU target build succeeds with Zig
+  alone. Keep the explicit `-Dtarget=x86_64-windows-gnu` command in the
+  local development instructions; MSVC CI has its own SDK.
