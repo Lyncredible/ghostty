@@ -12,8 +12,30 @@ https://github.com/ghostty-org/ghostty/discussions/2563
 - Rendering goes through a Direct3D backend for the existing generic
   renderer (`src/renderer/generic.zig`), at parity with Metal and OpenGL.
 - Windows 10 and 11 only.
-- Keep C++ to a minimum. This port is pure Zig plus Win32 and COM.
+- Keep C++ to a minimum. This port is pure Zig plus Win32 and COM. The
+  only new C++ is spirv-cross's existing HLSL backend (`spirv_hlsl.cpp`)
+  for custom shaders.
 - Land small, reviewable, incremental changes.
+- Follow Windows' own design language and interaction patterns where the
+  frontend allows it.
+- Don't use Ghostty branding for unofficial builds of this branch.
+
+As of October 2026 the team says porting the full desktop app to Windows
+is on hiatus, and the discussion is closed. They still welcome
+contributions that improve Ghostty internals on Windows (for example
+libghostty-vt), but "no +10k diff PRs". This branch is about 7.4k lines
+and must not go upstream as one PR. Candidates to upstream separately,
+roughly in order:
+
+1. Core compile and test fixes (`posix_c`, `Dmabuf`, tinyio symlink
+   skips, translate-c MinGW fix).
+2. ConPTY shutdown fix (`pty.zig`, `termio/Exec.zig`) and the Windows
+   command-line quoting fixes (`Command.zig`, `execCommand`).
+3. Small platform helpers (`os/mouse.zig` double-click interval).
+4. The Direct3D 11 renderer and HLSL shaders, with the embedded
+   `GHOSTTY_PLATFORM_WINDOWS` platform.
+5. The Win32 apprt, which has no upstream home while the app port is on
+   hiatus.
 
 ## Architecture
 
@@ -263,3 +285,26 @@ Notes:
   prefix and tab marker appear together after a timed BEL in an inactive
   tab, then clear together when that tab was selected. The GNU Debug build
   passes.
+
+## Review log (2026-10-25)
+
+Reviewed the branch against this file and discussion #2563.
+
+- The title bar was always dark, contrary to its comment. It now follows
+  `window-theme` like the GTK apprt: `auto` and `ghostty` use the
+  background luminance, `system` reads the Windows app mode (and updates
+  on `WM_SETTINGCHANGE`), and `light`/`dark` force it. App config
+  reloads now also re-apply the theme, tab bar colors, and tab bar
+  visibility to open windows.
+- Pending bells now use the documented `bell-features` `title` behavior:
+  a 🔔 prefix on the tab title and window title, replacing the `[!]`
+  prefix and the amber tab dot.
+- The tab bar's `CS_DBLCLKS` swallowed quick second clicks on the
+  new-tab button, tabs, and close buttons. Double clicks on those now act
+  as clicks; only empty space opens a tab on double click.
+- The D3D11 debug layer was requested in ReleaseSafe builds too. It's
+  now limited to Debug builds.
+- The GNU Debug build, `zig fmt`, and targeted tests (`physicalKey`,
+  `shadertoy to hlsl`, `execCommand windows`,
+  `windowsCreateCommandLine`) pass. UI behavior of these changes wasn't
+  tested in this review.
