@@ -2196,7 +2196,9 @@ keybind: Keybinds = .{},
 /// This only applies to terminal windows. This setting will still apply to
 /// non-terminal windows within Ghostty.
 ///
-/// This is currently only supported on macOS and Linux.
+/// This is currently only supported on macOS, Linux and Windows. On Windows,
+/// this only selects a light or dark title bar, and `ghostty` behaves like
+/// `auto`.
 @"window-theme": WindowTheme = .auto,
 
 /// The color space to use when interpreting terminal colors. "Terminal colors"

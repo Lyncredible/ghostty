@@ -80,18 +80,7 @@ pub fn init(self: *Window, app: *App, parent: ?*CoreSurface) !void {
     errdefer _ = c.DestroyWindow(hwnd);
     self.hwnd = hwnd;
 
-    // Use a dark title bar if the system is in dark mode, to match
-    // the typically dark terminal background.
-    {
-        const DWMWA_USE_IMMERSIVE_DARK_MODE = 20;
-        const dark: c.BOOL = c.TRUE;
-        _ = c.DwmSetWindowAttribute(
-            hwnd,
-            DWMWA_USE_IMMERSIVE_DARK_MODE,
-            &dark,
-            @sizeOf(c.BOOL),
-        );
-    }
+    self.updateTheme();
 
     try self.tab_bar.init(self);
     errdefer self.tab_bar.deinit();
@@ -493,6 +482,57 @@ fn rgb(r: u8, g: u8, b: u8) c.COLORREF {
 //----------------------------------------------------------------------------
 // Window state
 
+/// Apply app-level config changes, such as the tab bar colors and
+/// visibility and the window theme.
+pub fn configChanged(self: *Window) void {
+    self.updateTheme();
+    self.layout();
+}
+
+/// Use a light or dark title bar according to `window-theme`. This
+/// matches the GTK apprt: `auto` and `ghostty` follow the luminance of
+/// the terminal background.
+fn updateTheme(self: *Window) void {
+    const config = &self.app.config;
+    const dark = switch (config.@"window-theme") {
+        .auto, .ghostty => config.background.toTerminalRGB().perceivedLuminance() <= 0.5,
+        .system => systemUsesDarkTheme(),
+        .dark => true,
+        .light => false,
+    };
+
+    const DWMWA_USE_IMMERSIVE_DARK_MODE = 20;
+    const value: c.BOOL = @intFromBool(dark);
+    _ = c.DwmSetWindowAttribute(
+        self.hwnd,
+        DWMWA_USE_IMMERSIVE_DARK_MODE,
+        &value,
+        @sizeOf(c.BOOL),
+    );
+}
+
+/// Whether the user chose the dark app mode in the Windows settings.
+fn systemUsesDarkTheme() bool {
+    // HKEY_CURRENT_USER isn't a validly aligned pointer for Zig, so we
+    // open the current user's key instead.
+    var current_user: c.HKEY = null;
+    if (c.RegOpenCurrentUser(c.KEY_READ, &current_user) != c.ERROR_SUCCESS) return false;
+    defer _ = c.RegCloseKey(current_user);
+
+    var value: c.DWORD = 1;
+    var size: c.DWORD = @sizeOf(c.DWORD);
+    if (c.RegGetValueW(
+        current_user,
+        std.unicode.utf8ToUtf16LeStringLiteral("Software\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize"),
+        std.unicode.utf8ToUtf16LeStringLiteral("AppsUseLightTheme"),
+        c.RRF_RT_REG_DWORD,
+        null,
+        &value,
+        &size,
+    ) != c.ERROR_SUCCESS) return false;
+    return value == 0;
+}
+
 /// Request attention without moving keyboard focus. Windows stops the
 /// taskbar flash automatically when this window comes to the foreground.
 pub fn requestAttention(self: *Window) void {
@@ -639,6 +679,12 @@ pub fn wndProc(
         c.WM_SIZE => {
             self.layout();
             return 0;
+        },
+
+        // Sent when the system light/dark mode changes, among others.
+        c.WM_SETTINGCHANGE => {
+            self.updateTheme();
+            return c.DefWindowProcW(hwnd, msg, wparam, lparam);
         },
 
         // We paint everything in WM_PAINT. Note that we can't use the
