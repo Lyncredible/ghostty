@@ -112,7 +112,8 @@ Notes:
 - [x] Choose Command Prompt, Windows PowerShell, PowerShell, WSL, or
       the configured command when opening a new tab from the tab bar
 - [x] `unfocused-split-opacity` and `unfocused-split-fill`
-- [ ] Tab drag to reorder, and moving a tab to a new window
+- [x] Drag tabs to reorder within a window
+- [ ] Move a tab to a new window
 - [ ] Background opacity/blur (needs a DirectComposition swap chain)
 - [ ] Single instance and IPC (`+new-window`)
 - [ ] Terminal inspector (needs a Dear ImGui D3D11 backend)
@@ -202,3 +203,7 @@ Notes:
 - Follow-up: discover WSL distributions, only offer WSL when a distribution
   is installed, and integrate shell features instead of launching bare
   `wsl.exe`.
+- Tabs can be dragged within the tab bar. A drag starts only after the
+  system drag threshold and uses the existing tab-move path, preserving the
+  active terminal. Verified moving a PowerShell tab from last to first and
+  a cmd.exe tab from middle to last in the native UI.
