@@ -162,8 +162,9 @@ Notes:
   - [ ] Window management: `goto_window`, `present_terminal`,
         `toggle_visibility`, `float_window`, `toggle_window_decorations`,
         `reset_window_size`, `resize_window`, `size_limit`
-  - [ ] Titles: `set_tab_title`, `set_window_title`, `prompt_title`,
-        `copy_title_to_clipboard`
+  - [ ] Titles
+    - [x] `set_tab_title`, `set_window_title`, `copy_title_to_clipboard`
+    - [ ] `prompt_title` (needs a text input dialog)
   - [ ] Hover link preview (`mouse_over_link`) and `show_child_exited`
   - [ ] `readonly` and `renderer_health` indicators
   - [ ] Search UI (`start_search`, `end_search`, `search_total`,
@@ -364,3 +365,10 @@ Reviewed the branch against this file and discussion #2563.
   output stayed in the moved tab, the new window was in front, the
   single-tab case did nothing, and exiting the moved shell closed only the
   new window.
+- Title overrides follow GTK: a surface override beats the terminal title,
+  a tab override beats its focused surface's title, and a window override
+  beats the active tab's title. Empty values clear them.
+  `copy_title_to_clipboard` copies the surface's effective title. Native
+  test with keybinds: the tab and window overrides showed in the tab bar
+  and title bar, clearing each restored the previous title, and the
+  clipboard received the cmd.exe title.

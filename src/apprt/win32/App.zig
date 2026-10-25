@@ -543,6 +543,24 @@ pub fn performAction(
             .surface => |v| v.rt_surface.setTitle(value.title),
         },
 
+        .set_tab_title => switch (target) {
+            .app => return false,
+            .surface => |v| {
+                const tab = v.rt_surface.window.tabOf(v.rt_surface) orelse return false;
+                tab.setTitleOverride(value.title);
+            },
+        },
+
+        .set_window_title => switch (target) {
+            .app => return false,
+            .surface => |v| v.rt_surface.window.setTitleOverride(value.title),
+        },
+
+        .copy_title_to_clipboard => switch (target) {
+            .app => return false,
+            .surface => |v| return try v.rt_surface.copyTitleToClipboard(),
+        },
+
         .mouse_shape => switch (target) {
             .app => return false,
             .surface => |v| v.rt_surface.setMouseShape(value),
