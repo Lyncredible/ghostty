@@ -11,6 +11,7 @@ const path = @import("../../os/path.zig");
 const util = @import("util.zig");
 const c = util.c;
 const App = @import("App.zig");
+const Tab = @import("Tab.zig");
 const Window = @import("Window.zig");
 
 const log = std.log.scoped(.win32);
@@ -28,6 +29,11 @@ hover: ?Hit = null,
 
 /// Whether we're tracking the mouse to get WM_MOUSELEAVE.
 tracking_mouse: bool = false,
+
+/// The tab under an in-progress left-button drag, if still present.
+drag_tab: ?*Tab = null,
+drag_start_x: c_int = 0,
+dragging: bool = false,
 
 /// The parts of the tab bar the mouse can be over.
 const Hit = union(enum) {
@@ -390,6 +396,27 @@ fn setHover(self: *TabBar, hit: ?Hit) void {
     self.invalidate();
 }
 
+fn dragMove(self: *TabBar, x: c_int) void {
+    const tab = self.drag_tab orelse return;
+    if (self.window.tabs.items[self.window.active] != tab) {
+        self.drag_tab = null;
+        return;
+    }
+    if (!self.dragging) {
+        const threshold = @max(1, c.GetSystemMetrics(c.SM_CXDRAG));
+        if (@abs(x - self.drag_start_x) < threshold) return;
+        self.dragging = true;
+    }
+    const width = self.layout().tab_width;
+    if (width <= 0) return;
+    const to: usize = @min(
+        @as(usize, @intCast(@divTrunc(@max(0, x), width))),
+        self.window.tabs.items.len - 1,
+    );
+    const from = self.window.active;
+    if (to != from) _ = self.window.moveTab(@as(isize, @intCast(to)) - @as(isize, @intCast(from)));
+}
+
 pub fn wndProc(
     hwnd: c.HWND,
     msg: c.UINT,
@@ -424,6 +451,9 @@ pub fn wndProc(
         },
 
         c.WM_MOUSEMOVE => {
+            if (self.drag_tab != null and (wparam & c.MK_LBUTTON) != 0) {
+                self.dragMove(util.loword(lparam));
+            }
             if (!self.tracking_mouse) {
                 var tme: c.TRACKMOUSEEVENT = .{
                     .cbSize = @sizeOf(c.TRACKMOUSEEVENT),
@@ -446,11 +476,32 @@ pub fn wndProc(
         c.WM_LBUTTONDOWN => {
             const hit = self.hitTest(util.loword(lparam), util.hiword(lparam)) orelse return 0;
             switch (hit) {
-                .tab => |i| self.window.selectTab(i),
+                .tab => |i| {
+                    self.window.selectTab(i);
+                    self.drag_tab = self.window.tabs.items[i];
+                    self.drag_start_x = util.loword(lparam);
+                    self.dragging = false;
+                    _ = c.SetCapture(hwnd);
+                },
                 .close => |i| self.window.closeTabAt(i),
                 .new_tab => _ = self.window.newTab(),
                 .shell_menu => self.showShellMenu(),
             }
+            return 0;
+        },
+
+        c.WM_LBUTTONUP => {
+            if (self.drag_tab != null) {
+                self.drag_tab = null;
+                self.dragging = false;
+                if (c.GetCapture() == hwnd) _ = c.ReleaseCapture();
+            }
+            return 0;
+        },
+
+        c.WM_CAPTURECHANGED => {
+            self.drag_tab = null;
+            self.dragging = false;
             return 0;
         },
 
