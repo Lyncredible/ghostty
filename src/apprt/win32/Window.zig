@@ -308,6 +308,8 @@ pub fn closeTabs(self: *Window, surface: *Surface, mode: apprt.action.CloseTabMo
         return;
     }
 
+    const hwnd = self.hwnd;
+    const identity = c.GetWindowLongPtrW(hwnd, util.GWLP_USERDATA);
     for (targets.items) |tab| {
         if (tab.needsConfirmQuit()) {
             if (!confirm(
@@ -315,11 +317,16 @@ pub fn closeTabs(self: *Window, surface: *Surface, mode: apprt.action.CloseTabMo
                 "Close tabs?",
                 "A process is still running in at least one of the terminals. Closing them will kill the processes.",
             )) return;
+            // MessageBox pumps messages. A child can exit and close the
+            // window while the confirmation is open.
+            if (c.GetWindowLongPtrW(hwnd, util.GWLP_USERDATA) != identity) return;
             break;
         }
     }
 
-    for (targets.items) |tab| self.closeTab(tab);
+    for (targets.items) |tab| {
+        if (self.tabIndex(tab) != null) self.closeTab(tab);
+    }
 }
 
 /// Called by a surface when it gains focus.
@@ -643,11 +650,13 @@ pub fn wndProc(
 
             for (self.tabs.items) |tab| {
                 if (tab.needsConfirmQuit()) {
+                    const identity = c.GetWindowLongPtrW(hwnd, util.GWLP_USERDATA);
                     if (!confirm(
                         self,
                         "Close window?",
                         "A process is still running in at least one of the terminals. Closing the window will kill the processes.",
                     )) return 0;
+                    if (c.GetWindowLongPtrW(hwnd, util.GWLP_USERDATA) != identity) return 0;
                     break;
                 }
             }
