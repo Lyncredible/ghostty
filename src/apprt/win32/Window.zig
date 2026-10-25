@@ -6,6 +6,7 @@ const Window = @This();
 const std = @import("std");
 const Allocator = std.mem.Allocator;
 const apprt = @import("../../apprt.zig");
+const configpkg = @import("../../config.zig");
 const CoreSurface = @import("../../Surface.zig");
 
 const util = @import("util.zig");
@@ -157,7 +158,7 @@ pub fn addTab(self: *Window, parent: ?*CoreSurface) !*Tab {
 }
 
 /// Open a tab with an explicit shell, or the configured command when null.
-pub fn addTabWithShell(self: *Window, parent: ?*CoreSurface, shell: ?[:0]const u8) !*Tab {
+pub fn addTabWithShell(self: *Window, parent: ?*CoreSurface, shell: ?configpkg.Command) !*Tab {
     const alloc = self.app.core_app.alloc;
 
     const tab = try Tab.create(self, parent, self.tabs.items.len == 0, shell);

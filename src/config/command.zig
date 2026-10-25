@@ -159,7 +159,15 @@ pub const Command = union(enum) {
             .shell => |v| .{ .shell = try alloc.dupeSentinel(u8, v, 0) },
             .direct => |v| direct: {
                 const copy = try alloc.alloc([:0]const u8, v.len);
-                for (v, 0..) |arg, i| copy[i] = try alloc.dupeSentinel(u8, arg, 0);
+                var initialized: usize = 0;
+                errdefer {
+                    for (copy[0..initialized]) |arg| alloc.free(arg);
+                    alloc.free(copy);
+                }
+                for (v, 0..) |arg, i| {
+                    copy[i] = try alloc.dupeSentinel(u8, arg, 0);
+                    initialized += 1;
+                }
                 break :direct .{ .direct = copy };
             },
         };

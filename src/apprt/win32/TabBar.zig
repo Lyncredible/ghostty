@@ -6,6 +6,7 @@ const TabBar = @This();
 const std = @import("std");
 const Allocator = std.mem.Allocator;
 const global = @import("../../global.zig");
+const configpkg = @import("../../config.zig");
 const path = @import("../../os/path.zig");
 
 const util = @import("util.zig");
@@ -319,11 +320,9 @@ fn drawChevron(self: *const TabBar, hdc: c.HDC, rect: c.RECT, color: Rgb) void {
     _ = c.LineTo(hdc, cx + size, cy - @divTrunc(size, 2));
 }
 
-/// WSL may be installed without a registered distribution. In that case
-/// launching bare wsl.exe only displays an error instead of a shell.
-fn hasWslDistribution() bool {
+fn openWslRegistry() ?c.HKEY {
     var current_user: c.HKEY = null;
-    if (c.RegOpenCurrentUser(c.KEY_READ, &current_user) != c.ERROR_SUCCESS) return false;
+    if (c.RegOpenCurrentUser(c.KEY_READ, &current_user) != c.ERROR_SUCCESS) return null;
     defer _ = c.RegCloseKey(current_user);
 
     var key: c.HKEY = null;
@@ -333,12 +332,69 @@ fn hasWslDistribution() bool {
         0,
         c.KEY_READ,
         &key,
-    ) != c.ERROR_SUCCESS) return false;
+    ) != c.ERROR_SUCCESS) return null;
+    return key;
+}
+
+/// WSL may be installed without a registered distribution. In that case
+/// launching bare wsl.exe only displays an error instead of a shell.
+fn hasWslDistribution() bool {
+    const key = openWslRegistry() orelse return false;
     defer _ = c.RegCloseKey(key);
 
     var name: [256]u16 = undefined;
     var name_len: c.DWORD = name.len;
     return c.RegEnumKeyExW(key, 0, &name, &name_len, null, null, null, null) == c.ERROR_SUCCESS;
+}
+
+/// Add each registered WSL distribution as its own shell choice.
+fn appendWslDistributions(
+    menu: c.HMENU,
+    alloc: Allocator,
+    wsl_exe: [:0]const u8,
+    commands: *std.ArrayList(configpkg.Command),
+) void {
+    const root = openWslRegistry() orelse return;
+    defer _ = c.RegCloseKey(root);
+
+    var index: c.DWORD = 0;
+    while (true) : (index += 1) {
+        var key_name: [256]u16 = undefined;
+        var key_len: c.DWORD = key_name.len;
+        const result = c.RegEnumKeyExW(root, index, &key_name, &key_len, null, null, null, null);
+        if (result == c.ERROR_NO_MORE_ITEMS) break;
+        if (result != c.ERROR_SUCCESS) continue;
+        key_name[key_len] = 0;
+
+        var distro_key: c.HKEY = null;
+        if (c.RegOpenKeyExW(root, &key_name, 0, c.KEY_READ, &distro_key) != c.ERROR_SUCCESS) continue;
+        defer _ = c.RegCloseKey(distro_key);
+
+        var value_type: c.DWORD = 0;
+        var value: [2048]u16 = undefined;
+        var value_len: c.DWORD = @sizeOf(@TypeOf(value));
+        if (c.RegQueryValueExW(
+            distro_key,
+            std.unicode.utf8ToUtf16LeStringLiteral("DistributionName"),
+            null,
+            &value_type,
+            @ptrCast(&value),
+            &value_len,
+        ) != c.ERROR_SUCCESS or value_type != c.REG_SZ) continue;
+        const units = @min(@as(usize, @intCast(value_len / 2)), value.len - 1);
+        value[units] = 0;
+        const name = util.utf8Alloc(alloc, std.mem.sliceTo(value[0 .. units + 1], 0)) catch return;
+        if (name.len == 0) continue;
+
+        const label = std.fmt.allocPrint(alloc, "WSL: {s}", .{name}) catch return;
+        const label16 = util.utf16Alloc(alloc, label) catch return;
+        const argv = alloc.alloc([:0]const u8, 3) catch return;
+        argv[0] = wsl_exe;
+        argv[1] = "-d";
+        argv[2] = name;
+        commands.append(alloc, .{ .direct = argv }) catch return;
+        _ = c.AppendMenuW(menu, c.MF_STRING, commands.items.len + 1, label16.ptr);
+    }
 }
 
 /// This native menu pumps messages: the window may close while it is open.
@@ -358,23 +414,28 @@ fn showShellMenu(self: *TabBar) void {
         .{ "PowerShell", "pwsh.exe" },
         .{ "WSL (default distribution)", "wsl.exe" },
     };
-    var shells: [candidates.len]?[:0]const u8 = @splat(null);
+    var commands: std.ArrayList(configpkg.Command) = .empty;
+    var wsl_exe: ?[:0]const u8 = null;
     _ = c.AppendMenuW(menu, c.MF_STRING, 1, std.unicode.utf8ToUtf16LeStringLiteral("Configured default"));
     _ = c.AppendMenuW(menu, c.MF_SEPARATOR, 0, null);
     var env = global.environMap() catch return;
     defer env.deinit();
-    inline for (candidates, 0..) |candidate, i| {
+    inline for (candidates) |candidate| {
         const available = if (comptime std.mem.eql(u8, candidate[1], "wsl.exe"))
             hasWslDistribution()
         else
             true;
         if (available) {
             if (path.expand(global.io(), alloc, &env, candidate[1]) catch null) |exe| {
-                shells[i] = alloc.dupeSentinel(u8, exe, 0) catch return;
-                _ = c.AppendMenuW(menu, c.MF_STRING, i + 2, std.unicode.utf8ToUtf16LeStringLiteral(candidate[0]));
+                const argv = alloc.alloc([:0]const u8, 1) catch return;
+                argv[0] = alloc.dupeSentinel(u8, exe, 0) catch return;
+                commands.append(alloc, .{ .direct = argv }) catch return;
+                _ = c.AppendMenuW(menu, c.MF_STRING, commands.items.len + 1, std.unicode.utf8ToUtf16LeStringLiteral(candidate[0]));
+                if (comptime std.mem.eql(u8, candidate[1], "wsl.exe")) wsl_exe = argv[0];
             }
         }
     }
+    if (wsl_exe) |exe| appendWslDistributions(menu, alloc, exe, &commands);
 
     const rect = self.layout().shell_menu;
     var pt: c.POINT = .{ .x = rect.left, .y = rect.bottom };
@@ -383,7 +444,7 @@ fn showShellMenu(self: *TabBar) void {
     const selected = c.TrackPopupMenu(menu, c.TPM_RETURNCMD | c.TPM_NONOTIFY, pt.x, pt.y, 0, owner, null);
     // Never dereference self after the nested loop unless it still owns HWND.
     if (selected == 0 or c.GetWindowLongPtrW(hwnd, util.GWLP_USERDATA) != identity) return;
-    const shell = if (selected == 1) null else shells[@intCast(selected - 2)];
+    const shell = if (selected == 1) null else commands.items[@intCast(selected - 2)];
     _ = self.window.addTabWithShell(&self.window.activeSurface().core_surface, shell) catch |err| {
         log.err("error creating shell tab err={}", .{err});
     };
