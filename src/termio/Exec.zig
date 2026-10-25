@@ -217,6 +217,12 @@ pub fn threadExit(self: *Exec, td: *termio.Termio.ThreadData) void {
     }
 
     if (comptime builtin.target.os.tag == .windows) {
+        // Close the pseudoconsole. Once it has flushed its output it
+        // closes the output pipe, which ends the read thread's blocking
+        // read. The pseudoconsole stays alive after the child exits, so
+        // without this the read below would block forever.
+        if (self.subprocess.pty) |*pty| pty.closeConsole();
+
         // Interrupt the blocking read so the thread can see the quit message
         if (windows.exp.kernel32.CancelIoEx(exec.read_thread_fd, null) == windows.FALSE) {
             switch (windows.GetLastError()) {
@@ -1795,6 +1801,13 @@ pub const ReadThread = struct {
                     switch (err) {
                         // Check for a quit signal
                         .OPERATION_ABORTED => break,
+
+                        // The pseudoconsole was closed and all of its
+                        // output has been read.
+                        .BROKEN_PIPE => {
+                            log.info("read thread got end of stream", .{});
+                            return;
+                        },
 
                         else => {
                             log.err("io reader error err={}", .{err});
