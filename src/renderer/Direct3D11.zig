@@ -85,6 +85,8 @@ pub fn init(
             else => return error.UnsupportedPlatform,
         },
 
+        apprt.win32 => @ptrCast(@alignCast(opts.rt_surface.hwnd)),
+
         else => return error.UnsupportedApprt,
     };
 
