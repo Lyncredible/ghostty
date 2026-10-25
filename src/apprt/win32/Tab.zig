@@ -43,12 +43,13 @@ pub const Divider = struct {
     split_rect: c.RECT,
 };
 
-pub fn create(window: *Window, parent: ?*CoreSurface, first: bool) !*Tab {
+pub fn create(window: *Window, parent: ?*CoreSurface, first: bool, shell: ?[:0]const u8) !*Tab {
     const alloc = window.app.core_app.alloc;
 
     const surface = try Surface.create(window, .{
         .parent = parent,
         .context = if (first) .window else .tab,
+        .shell = shell,
     });
     errdefer surface.destroy();
 
@@ -145,6 +146,7 @@ pub fn split(
     const surface = try Surface.create(self.window, .{
         .parent = &from.core_surface,
         .context = .split,
+        .shell = from.shell,
     });
     var insert: Tree = Tree.init(alloc, surface) catch |err| {
         surface.destroy();
