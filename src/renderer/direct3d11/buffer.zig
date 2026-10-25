@@ -78,7 +78,8 @@ pub fn Buffer(comptime T: type) type {
         /// than the buffer length, the buffer will be reallocated.
         ///
         /// If the amount of data is smaller than the buffer length, the
-        /// remaining data in the buffer is left untouched.
+        /// remaining data in the buffer is undefined, since the buffer is
+        /// mapped with D3D11_MAP_WRITE_DISCARD.
         pub fn sync(self: *Self, data: []const T) !void {
             try self.ensureCapacity(data.len);
             const dst = try self.map();
