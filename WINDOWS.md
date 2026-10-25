@@ -162,9 +162,8 @@ Notes:
   - [ ] Window management: `goto_window`, `present_terminal`,
         `toggle_visibility`, `float_window`, `toggle_window_decorations`,
         `reset_window_size`, `resize_window`, `size_limit`
-  - [ ] Titles
-    - [x] `set_tab_title`, `set_window_title`, `copy_title_to_clipboard`
-    - [ ] `prompt_title` (needs a text input dialog)
+  - [x] Titles: `set_tab_title`, `set_window_title`,
+        `copy_title_to_clipboard`, `prompt_title`
   - [ ] Hover link preview (`mouse_over_link`) and `show_child_exited`
   - [ ] `readonly` and `renderer_health` indicators
   - [ ] Search UI (`start_search`, `end_search`, `search_total`,
@@ -372,3 +371,9 @@ Reviewed the branch against this file and discussion #2563.
   test with keybinds: the tab and window overrides showed in the tab bar
   and title bar, clearing each restored the previous title, and the
   clipboard received the cmd.exe title.
+- `prompt_title` shows a modal dialog built from an in-memory
+  `DLGTEMPLATE` (no resource script): GTK's "Change … Title" caption and
+  hint, an edit box with the current title selected, and OK/Cancel. An
+  empty title clears the override. Native test: the dialog rendered with
+  visual styles; typing a tab title and pressing Enter applied it; Esc on
+  the surface prompt left it unchanged and returned focus to the window.
