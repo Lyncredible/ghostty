@@ -250,7 +250,7 @@ pub fn run(self: *App) !void {
     // Create our initial window, if requested. Otherwise we start the
     // quit timer, as if the last window was just closed.
     if (self.config.@"initial-window") {
-        _ = try self.newWindow(null);
+        _ = try self.newWindow(.{ .parent = null });
     } else {
         self.armQuitTimer();
     }
@@ -334,19 +334,20 @@ fn msgWndProc(
 
 /// Create a new window. If a parent surface is given, the new
 /// window inherits relevant properties from it (font size, cwd).
-fn newWindow(self: *App, parent: ?*CoreSurface) !*Window {
+pub fn newWindow(self: *App, initial: Window.Initial) !*Window {
     const alloc = self.core_app.alloc;
+
+    // Reserve space first: once a window adopts a moved tab, destroying
+    // it on failure would also destroy that tab.
+    try self.windows.ensureUnusedCapacity(alloc, 1);
     const window = try alloc.create(Window);
-    window.init(self, parent) catch |err| {
+    window.init(self, initial) catch |err| {
         alloc.destroy(window);
         return err;
     };
 
     // From here on the window owns itself: destroying it frees it.
-    self.windows.append(alloc, window) catch |err| {
-        window.destroy();
-        return err;
-    };
+    self.windows.appendAssumeCapacity(window);
     window.show();
     return window;
 }
@@ -446,10 +447,10 @@ pub fn performAction(
             self.quit();
         },
 
-        .new_window => _ = try self.newWindow(switch (target) {
+        .new_window => _ = try self.newWindow(.{ .parent = switch (target) {
             .app => null,
             .surface => |v| v,
-        }),
+        } }),
 
         .close_all_windows => self.closeAllWindows(),
 
@@ -465,7 +466,7 @@ pub fn performAction(
                 if (self.activeWindow()) |window| {
                     _ = try window.addTab(null);
                 } else {
-                    _ = try self.newWindow(null);
+                    _ = try self.newWindow(.{ .parent = null });
                 }
             },
             .surface => |v| _ = try v.rt_surface.window.addTab(v),
@@ -484,6 +485,11 @@ pub fn performAction(
         .move_tab => switch (target) {
             .app => return false,
             .surface => |v| return v.rt_surface.window.moveTab(value.amount),
+        },
+
+        .move_tab_to_new_window => switch (target) {
+            .app => return false,
+            .surface => |v| return try v.rt_surface.window.moveTabToNewWindow(v.rt_surface),
         },
 
         .new_split => switch (target) {
