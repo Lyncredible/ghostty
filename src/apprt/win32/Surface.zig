@@ -21,6 +21,7 @@ const DimOverlay = @import("DimOverlay.zig");
 const BellBorder = @import("BellBorder.zig");
 const TitleDialog = @import("TitleDialog.zig");
 const LinkPreview = @import("LinkPreview.zig");
+const Scrollbar = @import("Scrollbar.zig");
 
 const log = std.log.scoped(.win32);
 
@@ -77,6 +78,7 @@ progress_expires_at: u64 = 0,
 dim_overlay: DimOverlay = .{},
 bell_border: BellBorder = .{},
 link_preview: LinkPreview = .{},
+scrollbar: Scrollbar = .{},
 
 /// An explicitly selected command, owned by this surface and inherited by splits.
 shell: ?configpkg.Command = null,
@@ -201,6 +203,8 @@ pub fn init(self: *Surface, app: *App, window: *Window, opts: Options) !void {
     self.bell_border.resize(@intCast(self.size.width), @intCast(self.size.height));
     try self.link_preview.init(hwnd, app.hinstance, &config);
     errdefer self.link_preview.deinit(alloc);
+    try self.scrollbar.init(hwnd, app.hinstance, &config, self, scrollToRow);
+    errdefer self.scrollbar.deinit();
 
     // Initialize our surface now that we have the stable pointer.
     try self.core_surface.init(
@@ -232,6 +236,7 @@ pub fn deinit(self: *Surface) void {
     self.dim_overlay.deinit();
     self.bell_border.deinit();
     self.link_preview.deinit(alloc);
+    self.scrollbar.deinit();
 
     if (self.title) |v| alloc.free(v);
     if (self.title_override) |v| alloc.free(v);
@@ -323,6 +328,15 @@ pub fn promptTitle(self: *Surface, kind: apprt.action.PromptTitle) !void {
     }
 }
 
+/// Called by the scrollbar while dragging its thumb.
+fn scrollToRow(ctx: *anyopaque, row: usize) void {
+    const self: *Surface = @ptrCast(@alignCast(ctx));
+    if (!self.core_initialized) return;
+    _ = self.core_surface.performBindingAction(.{ .scroll_to_row = row }) catch |err| {
+        log.warn("error scrolling err={}", .{err});
+    };
+}
+
 /// Show the URL under the mouse, or hide it if empty.
 pub fn setMouseOverLink(self: *Surface, url: []const u8) void {
     self.link_preview.setUrl(self.app.core_app.alloc, url, .{
@@ -353,6 +367,7 @@ pub fn configChanged(self: *Surface, config: *const configpkg.Config) void {
     self.progress_style = config.@"progress-style";
     self.window.updateTaskbarProgress();
     self.link_preview.updateConfig(config);
+    self.scrollbar.updateConfig(config);
     self.dim_overlay.updateConfig(config) catch |err| {
         log.err("error updating split dimming err={}", .{err});
     };
@@ -744,6 +759,7 @@ pub fn wndProc(
                 self.dim_overlay.resize(@intCast(size.width), @intCast(size.height));
                 self.bell_border.resize(@intCast(size.width), @intCast(size.height));
                 self.link_preview.parentResized();
+                self.scrollbar.parentResized();
                 self.core_surface.sizeCallback(size) catch |err| {
                     log.err("error in size callback err={}", .{err});
                 };
@@ -819,11 +835,13 @@ pub fn wndProc(
                 .x = @floatFromInt(util.loword(lparam)),
                 .y = @floatFromInt(util.hiword(lparam)),
             });
+            self.scrollbar.updateHover();
             return 0;
         },
 
         c.WM_MOUSELEAVE => {
             self.tracking_mouse = false;
+            self.scrollbar.updateHover();
 
             // While we have the mouse captured (a button is held) we keep
             // getting mouse events, so the mouse hasn't really left us.
