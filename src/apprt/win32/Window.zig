@@ -793,7 +793,7 @@ fn paintDividers(self: *Window, hdc: c.HDC) void {
 /// as a solid color since Windows 8.
 fn updateBackdrop(self: *Window) void {
     const config = &self.app.config;
-    const translucent = config.@"background-opacity" < 1;
+    const translucent = self.app.translucent();
     const blur = translucent and switch (config.@"background-blur") {
         .false => false,
         .radius => |r| r > 0,

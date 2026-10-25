@@ -894,14 +894,21 @@ pub fn wndProc(
 
         c.WM_PAINT => {
             // Our content is the renderer's composition visual, above
-            // this. Fill with black, which GDI writes with zero alpha, so
-            // that only the terminal's own alpha shows through it when the
-            // window is translucent.
+            // this. When the window is translucent, fill with black, which
+            // GDI writes with zero alpha, so that only the terminal's own
+            // alpha shows through. Otherwise fill with the background
+            // color, so a translucent terminal made opaque with
+            // toggle_background_opacity looks like an opaque one.
             var ps: c.PAINTSTRUCT = undefined;
             const hdc = c.BeginPaint(hwnd, &ps);
-            const black = c.CreateSolidBrush(0);
-            _ = c.FillRect(hdc, &ps.rcPaint, black);
-            _ = c.DeleteObject(black);
+            const bg = self.app.config.background;
+            const color: c.COLORREF = if (self.app.translucent())
+                0
+            else
+                @as(c.COLORREF, bg.r) | (@as(c.COLORREF, bg.g) << 8) | (@as(c.COLORREF, bg.b) << 16);
+            const brush = c.CreateSolidBrush(color);
+            _ = c.FillRect(hdc, &ps.rcPaint, brush);
+            _ = c.DeleteObject(brush);
             _ = c.EndPaint(hwnd, &ps);
             self.core_surface.refreshCallback() catch |err| {
                 log.err("error in refresh callback err={}", .{err});
