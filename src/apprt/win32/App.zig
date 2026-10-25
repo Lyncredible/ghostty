@@ -22,6 +22,7 @@ const BellBorder = @import("BellBorder.zig");
 const Taskbar = @import("Taskbar.zig");
 const Notifier = @import("Notifier.zig");
 const BellAudio = @import("BellAudio.zig");
+const GlobalKeys = @import("GlobalKeys.zig");
 
 const log = std.log.scoped(.win32);
 
@@ -62,6 +63,12 @@ notifier: Notifier,
 
 /// The custom bell sound, for the `audio` bell feature.
 bell_audio: BellAudio = .{},
+
+/// System-wide (`global:`) keybinds.
+global_keys: GlobalKeys,
+
+/// The window to activate when toggle_visibility shows our windows.
+hidden_active: ?*Window = null,
 
 /// All of our open top-level windows.
 windows: std.ArrayList(*Window) = .empty,
@@ -130,9 +137,11 @@ pub fn init(
         .taskbar = taskbar,
         .taskbar_button_created = taskbar_button_created,
         .notifier = .init(msg_hwnd, util.loadIcon(hinstance, 1)),
+        .global_keys = .init(alloc, msg_hwnd),
     };
 
     _ = c.SetWindowLongPtrW(msg_hwnd, util.GWLP_USERDATA, @bitCast(@intFromPtr(self)));
+    self.global_keys.update(&self.config);
 }
 
 fn registerClasses(hinstance: c.HINSTANCE) !void {
@@ -282,6 +291,7 @@ pub fn terminate(self: *App) void {
     self.taskbar.deinit();
     self.notifier.deinit();
     self.bell_audio.deinit(self.core_app.alloc);
+    self.global_keys.deinit();
 
     _ = c.DestroyWindow(self.msg_hwnd);
     unregisterClasses(self.hinstance);
@@ -308,6 +318,15 @@ fn msgWndProc(
                 self.core_app.tick(self) catch |err| {
                     log.err("error ticking app err={}", .{err});
                 };
+                return 0;
+            },
+
+            c.WM_HOTKEY => {
+                if (self.global_keys.action(wparam)) |action| {
+                    self.core_app.performAllAction(self, action) catch |err| {
+                        log.warn("error performing global keybind err={}", .{err});
+                    };
+                }
                 return 0;
             },
 
@@ -393,8 +412,34 @@ fn gotoWindow(self: *App, from: *Window, direction: apprt.action.GotoWindow) boo
     return true;
 }
 
+/// Like macOS: hide all windows if one of them is active, otherwise
+/// show them all and activate the one that was active.
+fn toggleVisibility(self: *App) void {
+    const fg = c.GetForegroundWindow();
+    const active = for (self.windows.items) |window| {
+        if (window.hwnd == fg) break window;
+    } else null;
+
+    log.debug("toggle visibility hide={}", .{active != null});
+    if (active) |window| {
+        self.hidden_active = window;
+        for (self.windows.items) |w| _ = c.ShowWindow(w.hwnd, c.SW_HIDE);
+        return;
+    }
+
+    for (self.windows.items) |w| _ = c.ShowWindow(w.hwnd, c.SW_SHOWNA);
+    const target = if (self.hidden_active) |hidden|
+        if (std.mem.indexOfScalar(*Window, self.windows.items, hidden) != null) hidden else null
+    else
+        null;
+    self.hidden_active = null;
+    const window = target orelse self.activeWindow() orelse return;
+    window.present(window.activeSurface());
+}
+
 /// Called by a window when it's destroyed, to remove it from our list.
 pub fn windowDestroyed(self: *App, window: *Window) void {
+    if (self.hidden_active == window) self.hidden_active = null;
     for (self.windows.items, 0..) |w, i| {
         if (w == window) {
             // Keep the creation order for goto_window.
@@ -591,6 +636,8 @@ pub fn performAction(
             .surface => |v| v.rt_surface.setMouseVisibility(value == .visible),
         },
 
+        .toggle_visibility => self.toggleVisibility(),
+
         .goto_window => switch (target) {
             .app => return false,
             .surface => |v| return self.gotoWindow(v.rt_surface.window, value),
@@ -671,6 +718,7 @@ pub fn performAction(
             .app => if (value.config.clone(self.core_app.alloc)) |config| {
                 self.config.deinit();
                 self.config = config;
+                self.global_keys.update(&self.config);
                 for (self.windows.items) |window| window.configChanged();
             } else |err| {
                 log.err("error updating app config err={}", .{err});

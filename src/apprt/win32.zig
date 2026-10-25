@@ -11,4 +11,5 @@ test {
     _ = @import("win32/key.zig");
     _ = @import("win32/Notifier.zig");
     _ = @import("win32/TitleDialog.zig");
+    _ = @import("win32/GlobalKeys.zig");
 }
