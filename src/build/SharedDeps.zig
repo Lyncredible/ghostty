@@ -216,8 +216,16 @@ pub fn add(
     // POSIX C imports that are used throughout Ghostty on a general basis.
     // (note: errno is C stdlib but we just include it here because that's
     // where it's generally included otherwise)
+    //
+    // Windows has no pwd.h. Nothing uses the passwd APIs on Windows
+    // (see os/passwd.zig) so we just leave it out.
     try translate_c.addImportToModule(b, "posix_c", step.root_module, .{
-        .source = .{ .includes = .{ .files = &.{
+        .source = .{ .includes = .{ .files = if (target.result.os.tag == .windows) &.{
+            .{ .path = "errno.h" },
+            .{ .path = "signal.h" },
+            .{ .path = "sys/types.h" },
+            .{ .path = "unistd.h" },
+        } else &.{
             .{ .path = "errno.h" },
             .{ .path = "pwd.h" },
             .{ .path = "signal.h" },
