@@ -110,6 +110,10 @@ pub fn init(
     // per-monitor DPI awareness for that is set by our application
     // manifest (dist/windows/ghostty.manifest).
 
+    // For util.paintOpaque.
+    _ = c.BufferedPaintInit();
+    errdefer _ = c.BufferedPaintUnInit();
+
     const hinstance: c.HINSTANCE = @ptrCast(c.GetModuleHandleW(null));
     try registerClasses(hinstance);
     errdefer unregisterClasses(hinstance);
@@ -364,6 +368,7 @@ pub fn terminate(self: *App) void {
 
     _ = c.DestroyWindow(self.msg_hwnd);
     unregisterClasses(self.hinstance);
+    _ = c.BufferedPaintUnInit();
     self.config.deinit();
 }
 

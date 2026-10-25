@@ -893,8 +893,15 @@ pub fn wndProc(
         c.WM_ERASEBKGND => return 1,
 
         c.WM_PAINT => {
+            // Our content is the renderer's composition visual, above
+            // this. Fill with black, which GDI writes with zero alpha, so
+            // that only the terminal's own alpha shows through it when the
+            // window is translucent.
             var ps: c.PAINTSTRUCT = undefined;
-            _ = c.BeginPaint(hwnd, &ps);
+            const hdc = c.BeginPaint(hwnd, &ps);
+            const black = c.CreateSolidBrush(0);
+            _ = c.FillRect(hdc, &ps.rcPaint, black);
+            _ = c.DeleteObject(black);
             _ = c.EndPaint(hwnd, &ps);
             self.core_surface.refreshCallback() catch |err| {
                 log.err("error in refresh callback err={}", .{err});

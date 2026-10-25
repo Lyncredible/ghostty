@@ -68,6 +68,34 @@ pub const IDC_HAND = 32649;
 pub const IDC_APPSTARTING = 32650;
 pub const IDC_HELP = 32651;
 
+/// Paint with a buffered paint DC whose alpha channel is made opaque
+/// afterwards. GDI leaves alpha at zero, which shows through as glass
+/// where the window's frame extends into its client area (for
+/// `background-opacity`). This also double buffers the painting.
+pub fn paintOpaque(
+    hdc: c.HDC,
+    rect: c.RECT,
+    ctx: anytype,
+    comptime paint: fn (@TypeOf(ctx), c.HDC) void,
+) void {
+    var params: c.BP_PAINTPARAMS = .{
+        .cbSize = @sizeOf(c.BP_PAINTPARAMS),
+        .dwFlags = 0,
+        .prcExclude = null,
+        .pBlendFunction = null,
+    };
+    var mem: c.HDC = null;
+    const buffer = c.BeginBufferedPaint(hdc, &rect, c.BPBF_TOPDOWNDIB, &params, &mem);
+    if (buffer == 0 or mem == null) {
+        // Paint directly if buffering isn't available.
+        paint(ctx, hdc);
+        return;
+    }
+    paint(ctx, mem);
+    _ = c.BufferedPaintSetAlpha(buffer, null, 255);
+    _ = c.EndBufferedPaint(buffer, c.TRUE);
+}
+
 /// The low and high words of an LPARAM/WPARAM as signed values. These are
 /// equivalent to GET_X_LPARAM and GET_Y_LPARAM.
 pub fn loword(v: anytype) i16 {
