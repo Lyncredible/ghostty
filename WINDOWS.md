@@ -133,7 +133,7 @@ Notes:
 - [x] Fix tab-header close crashing the window when there are multiple
       tabs (active index and split focus must be valid during teardown)
 - [x] Shell integration for wsl
-  - [ ] Map WSL Linux paths (`/home/...`) to `\wsl.localhost\<distro>\...`
+  - [ ] Map WSL Linux paths (`/home/...`) to `\\wsl.localhost\<distro>\...`
         so new tabs can start there
 - [x] Choose a registered WSL distribution by name from the shell menu
 - [x] Choose Command Prompt, Windows PowerShell, PowerShell, WSL, or
