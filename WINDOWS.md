@@ -175,8 +175,8 @@ Notes:
   - [x] `show_child_exited`: not needed; the core's fallback prints
         "Process exited" in the terminal
   - [x] `readonly` and `renderer_health` indicators
-  - [ ] Search UI (`start_search`, `end_search`, `search_total`,
-        `search_selected`)
+  - [x] Search UI (`start_search`, `end_search`, `search_total`,
+        `search_selected`); needs a manual UI test
   - [x] Scrollbar (`scrollbar`)
   - [x] Key table / sequence indicators (`key_table`, `key_sequence`)
   - [ ] Command palette and quick terminal
@@ -477,3 +477,11 @@ Reviewed the branch against this file and discussion #2563.
   and hid the read-only badge; activating a `resize` table and pressing
   the first key of a `ctrl+a>b` sequence showed "resize › ctrl+a", and
   Escape cleared it. The renderer health badge is untested.
+- Search: a Windows Terminal style find box in the surface's top right.
+  It's a layered child window (so it shows above the swap chain and takes
+  focus without deactivating the window) with an EDIT control, a
+  "selected/total" count like GTK, and previous/next/close buttons using
+  Segoe Fluent Icons (or Segoe MDL2 Assets on Windows 10). Typing searches
+  live; Enter/Shift+Enter navigate; Escape ends the search and refocuses
+  the terminal. Builds; the live UI test was stopped before it ran, so
+  it hasn't been exercised in the app yet.

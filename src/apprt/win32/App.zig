@@ -22,6 +22,7 @@ const BellBorder = @import("BellBorder.zig");
 const LinkPreview = @import("LinkPreview.zig");
 const Scrollbar = @import("Scrollbar.zig");
 const Badge = @import("Badge.zig");
+const SearchBar = @import("SearchBar.zig");
 const Taskbar = @import("Taskbar.zig");
 const Notifier = @import("Notifier.zig");
 const BellAudio = @import("BellAudio.zig");
@@ -270,6 +271,20 @@ fn registerClasses(hinstance: c.HINSTANCE) !void {
         .{
             .cbSize = @sizeOf(c.WNDCLASSEXW),
             .style = 0,
+            .lpfnWndProc = SearchBar.wndProc,
+            .cbClsExtra = 0,
+            .cbWndExtra = 0,
+            .hInstance = hinstance,
+            .hIcon = null,
+            .hCursor = util.loadSystemCursor(util.IDC_ARROW),
+            .hbrBackground = null,
+            .lpszMenuName = null,
+            .lpszClassName = SearchBar.class_name,
+            .hIconSm = null,
+        },
+        .{
+            .cbSize = @sizeOf(c.WNDCLASSEXW),
+            .style = 0,
             .lpfnWndProc = msgWndProc,
             .cbClsExtra = 0,
             .cbWndExtra = 0,
@@ -300,6 +315,7 @@ fn unregisterClasses(hinstance: c.HINSTANCE) void {
     _ = c.UnregisterClassW(LinkPreview.class_name, hinstance);
     _ = c.UnregisterClassW(Scrollbar.class_name, hinstance);
     _ = c.UnregisterClassW(Badge.class_name, hinstance);
+    _ = c.UnregisterClassW(SearchBar.class_name, hinstance);
     _ = c.UnregisterClassW(message_class, hinstance);
 }
 
@@ -677,6 +693,26 @@ pub fn performAction(
         .mouse_shape => switch (target) {
             .app => return false,
             .surface => |v| v.rt_surface.setMouseShape(value),
+        },
+
+        .start_search => switch (target) {
+            .app => return false,
+            .surface => |v| v.rt_surface.startSearch(value.needle),
+        },
+
+        .end_search => switch (target) {
+            .app => return false,
+            .surface => |v| v.rt_surface.endSearch(),
+        },
+
+        .search_total => switch (target) {
+            .app => return false,
+            .surface => |v| v.rt_surface.setSearchTotal(value.total),
+        },
+
+        .search_selected => switch (target) {
+            .app => return false,
+            .surface => |v| v.rt_surface.setSearchSelected(value.selected),
         },
 
         .readonly => switch (target) {
