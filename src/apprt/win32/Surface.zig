@@ -55,6 +55,11 @@ title: ?[:0]const u8 = null,
 /// Bell behavior from this surface's config, including conditional config.
 bell_features: configpkg.Config.BellFeatures = .{},
 
+/// The most recent terminal progress report, expiring after 15 seconds.
+progress_style: bool = true,
+progress_report: ?terminal.osc.Command.ProgressReport = null,
+progress_expires_at: u64 = 0,
+
 dim_overlay: DimOverlay = .{},
 
 /// An explicitly selected command, owned by this surface and inherited by splits.
@@ -168,6 +173,7 @@ pub fn init(self: *Surface, app: *App, window: *Window, opts: Options) !void {
         config.@"initial-command" = null;
     }
     self.bell_features = config.@"bell-features";
+    self.progress_style = config.@"progress-style";
     try self.dim_overlay.init(hwnd, app.hinstance, &config);
     errdefer self.dim_overlay.deinit();
     self.dim_overlay.resize(@intCast(self.size.width), @intCast(self.size.height));
@@ -252,6 +258,8 @@ pub fn setTitle(self: *Surface, title: [:0]const u8) void {
 /// Apply runtime settings that aren't handled by the core surface.
 pub fn configChanged(self: *Surface, config: *const configpkg.Config) void {
     self.bell_features = config.@"bell-features";
+    self.progress_style = config.@"progress-style";
+    self.window.updateTaskbarProgress();
     self.dim_overlay.updateConfig(config) catch |err| {
         log.err("error updating split dimming err={}", .{err});
     };
@@ -260,6 +268,19 @@ pub fn configChanged(self: *Surface, config: *const configpkg.Config) void {
 pub fn ringBell(self: *Surface) void {
     if (self.bell_features.system) _ = c.MessageBeep(c.MB_OK);
     if (self.bell_features.attention) self.window.requestAttention();
+}
+
+pub fn setProgressReport(self: *Surface, report: terminal.osc.Command.ProgressReport) void {
+    log.debug("progress report state={} value={?}", .{ report.state, report.progress });
+    if (report.state == .remove) {
+        self.progress_report = null;
+    } else {
+        self.progress_report = report;
+        self.progress_expires_at = c.GetTickCount64() + 15_000;
+    }
+    if (self.window.tabs.items.len > 0 and self.window.activeSurface() == self) {
+        self.window.updateTaskbarProgress();
+    }
 }
 
 /// Called by the window when this surface is shown or hidden, such as

@@ -18,6 +18,7 @@ const Surface = @import("Surface.zig");
 const TabBar = @import("TabBar.zig");
 const Window = @import("Window.zig");
 const DimOverlay = @import("DimOverlay.zig");
+const Taskbar = @import("Taskbar.zig");
 
 const log = std.log.scoped(.win32);
 
@@ -48,6 +49,10 @@ hinstance: c.HINSTANCE,
 /// isn't a validly aligned pointer for Zig. A window that is never
 /// shown works just as well for posted messages.
 msg_hwnd: c.HWND,
+
+/// Taskbar COM interface and the Explorer notification message.
+taskbar: Taskbar,
+taskbar_button_created: c.UINT,
 
 /// All of our open top-level windows.
 windows: std.ArrayList(*Window) = .empty,
@@ -103,11 +108,18 @@ pub fn init(
     ) orelse return error.CreateWindowFailed;
     errdefer _ = c.DestroyWindow(msg_hwnd);
 
+    const taskbar = Taskbar.init();
+    const taskbar_button_created = c.RegisterWindowMessageW(
+        std.unicode.utf8ToUtf16LeStringLiteral("TaskbarButtonCreated"),
+    );
+
     self.* = .{
         .core_app = core_app,
         .config = config,
         .hinstance = hinstance,
         .msg_hwnd = msg_hwnd,
+        .taskbar = taskbar,
+        .taskbar_button_created = taskbar_button_created,
     };
 
     _ = c.SetWindowLongPtrW(msg_hwnd, util.GWLP_USERDATA, @bitCast(@intFromPtr(self)));
@@ -242,6 +254,8 @@ pub fn terminate(self: *App) void {
         self.windows.items[self.windows.items.len - 1].destroy();
     }
     self.windows.deinit(self.core_app.alloc);
+
+    self.taskbar.deinit();
 
     _ = c.DestroyWindow(self.msg_hwnd);
     unregisterClasses(self.hinstance);
@@ -502,6 +516,11 @@ pub fn performAction(
         .ring_bell => switch (target) {
             .app => return false,
             .surface => |v| v.rt_surface.ringBell(),
+        },
+
+        .progress_report => switch (target) {
+            .app => return false,
+            .surface => |v| v.rt_surface.setProgressReport(value),
         },
 
         .open_url => openUrl(self.core_app.alloc, value.url),

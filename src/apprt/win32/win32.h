@@ -8,3 +8,4 @@
 #include <dwmapi.h>
 #include <imm.h>
 #include <shellapi.h>
+#include <shobjidl.h>
