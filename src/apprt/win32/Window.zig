@@ -13,6 +13,7 @@ const c = util.c;
 const App = @import("App.zig");
 const Surface = @import("Surface.zig");
 const Tab = @import("Tab.zig");
+const TabBar = @import("TabBar.zig");
 
 const log = std.log.scoped(.win32);
 
@@ -21,11 +22,8 @@ app: *App,
 /// The top-level window handle.
 hwnd: c.HWND,
 
-/// The tab bar control.
-tab_hwnd: c.HWND,
-
-/// The font used by the tab bar, scaled for our DPI.
-tab_font: ?c.HFONT = null,
+/// The tab bar.
+tab_bar: TabBar,
 
 /// The tabs in this window, in order.
 tabs: std.ArrayList(*Tab) = .empty,
@@ -53,7 +51,7 @@ pub fn init(self: *Window, app: *App, parent: ?*CoreSurface) !void {
     self.* = .{
         .app = app,
         .hwnd = undefined,
-        .tab_hwnd = undefined,
+        .tab_bar = undefined,
     };
 
     const hwnd = c.CreateWindowExW(
@@ -89,27 +87,8 @@ pub fn init(self: *Window, app: *App, parent: ?*CoreSurface) !void {
         );
     }
 
-    self.tab_hwnd = c.CreateWindowExW(
-        0,
-        std.unicode.utf8ToUtf16LeStringLiteral("SysTabControl32"),
-        null,
-        c.WS_CHILD | c.WS_CLIPSIBLINGS | c.TCS_FOCUSNEVER,
-        0,
-        0,
-        0,
-        0,
-        hwnd,
-        null,
-        app.hinstance,
-        null,
-    ) orelse {
-        log.err("failed to create tab bar err={}", .{c.GetLastError()});
-        return error.CreateWindowFailed;
-    };
-    self.updateTabFont();
-    errdefer if (self.tab_font) |f| {
-        _ = c.DeleteObject(f);
-    };
+    try self.tab_bar.init(self);
+    errdefer self.tab_bar.deinit();
 
     _ = try self.addTab(parent);
 
@@ -126,7 +105,7 @@ pub fn deinit(self: *Window) void {
     const alloc = self.app.core_app.alloc;
     for (self.tabs.items) |tab| tab.destroy();
     self.tabs.deinit(alloc);
-    if (self.tab_font) |f| _ = c.DeleteObject(f);
+    self.tab_bar.deinit();
 }
 
 /// Show the window for the first time.
@@ -186,20 +165,16 @@ pub fn addTab(self: *Window, parent: ?*CoreSurface) !*Tab {
         .end => self.tabs.items.len,
     };
     try self.tabs.insert(alloc, idx, tab);
-    errdefer _ = self.tabs.orderedRemove(idx);
-
-    var item: c.TCITEMW = std.mem.zeroes(c.TCITEMW);
-    item.mask = c.TCIF_TEXT;
-    item.pszText = @constCast(std.unicode.utf8ToUtf16LeStringLiteral("Ghostty"));
-    if (c.SendMessageW(
-        self.tab_hwnd,
-        c.TCM_INSERTITEMW,
-        idx,
-        @bitCast(@intFromPtr(&item)),
-    ) < 0) return error.InsertTabFailed;
-
     self.selectTab(idx);
     return tab;
+}
+
+/// Open a new tab from the tab bar, inheriting from the active surface.
+pub fn newTab(self: *Window) ?*Tab {
+    return self.addTab(&self.activeSurface().core_surface) catch |err| {
+        log.err("error creating tab err={}", .{err});
+        return null;
+    };
 }
 
 /// Make the tab at the given index active.
@@ -207,7 +182,7 @@ pub fn selectTab(self: *Window, idx: usize) void {
     if (idx >= self.tabs.items.len) return;
 
     self.active = idx;
-    _ = c.SendMessageW(self.tab_hwnd, c.TCM_SETCURSEL, idx, 0);
+    self.tab_bar.invalidate();
 
     // Hide all other tabs, and show and lay out the active one.
     for (self.tabs.items, 0..) |tab, i| {
@@ -255,15 +230,6 @@ pub fn moveTab(self: *Window, amount: isize) bool {
 
     const tab = self.tabs.orderedRemove(from);
     self.tabs.insertAssumeCapacity(to, tab);
-
-    // Move the tab item, its title is restored below.
-    _ = c.SendMessageW(self.tab_hwnd, c.TCM_DELETEITEM, from, 0);
-    var item: c.TCITEMW = std.mem.zeroes(c.TCITEMW);
-    item.mask = c.TCIF_TEXT;
-    item.pszText = @constCast(std.unicode.utf8ToUtf16LeStringLiteral(""));
-    _ = c.SendMessageW(self.tab_hwnd, c.TCM_INSERTITEMW, to, @bitCast(@intFromPtr(&item)));
-    self.updateTabTitle(tab);
-
     self.selectTab(to);
     return true;
 }
@@ -280,7 +246,6 @@ fn closeTab(self: *Window, tab: *Tab) void {
     }
 
     _ = self.tabs.orderedRemove(idx);
-    _ = c.SendMessageW(self.tab_hwnd, c.TCM_DELETEITEM, idx, 0);
     tab.destroy();
 
     // Keep the same tab active. If the active tab was closed, the tab
@@ -302,6 +267,12 @@ pub fn closeSurface(self: *Window, surface: *Surface) void {
     tab.remove(surface) catch |err| {
         log.err("error removing split err={}", .{err});
     };
+}
+
+/// Close the tab at the given index, asking for confirmation if needed.
+pub fn closeTabAt(self: *Window, idx: usize) void {
+    if (idx >= self.tabs.items.len) return;
+    self.closeTabs(self.tabs.items[idx].focused, .this);
 }
 
 /// Close tabs relative to the tab of the given surface, asking for
@@ -349,7 +320,7 @@ pub fn surfaceFocused(self: *Window, surface: *Surface) void {
     const tab = self.tabOf(surface) orelse return;
     if (tab.focused == surface) return;
     tab.focused = surface;
-    self.updateTabTitle(tab);
+    self.tab_bar.invalidate();
     if (tab == self.activeTab()) self.updateWindowTitle();
 }
 
@@ -357,20 +328,8 @@ pub fn surfaceFocused(self: *Window, surface: *Surface) void {
 pub fn surfaceTitleChanged(self: *Window, surface: *Surface) void {
     const tab = self.tabOf(surface) orelse return;
     if (tab.focused != surface) return;
-    self.updateTabTitle(tab);
+    self.tab_bar.invalidate();
     if (tab == self.activeTab()) self.updateWindowTitle();
-}
-
-fn updateTabTitle(self: *Window, tab: *Tab) void {
-    const idx = self.tabIndex(tab) orelse return;
-    const alloc = self.app.core_app.alloc;
-    const title16 = util.utf16Alloc(alloc, tab.focused.title orelse "Ghostty") catch return;
-    defer alloc.free(title16);
-
-    var item: c.TCITEMW = std.mem.zeroes(c.TCITEMW);
-    item.mask = c.TCIF_TEXT;
-    item.pszText = title16.ptr;
-    _ = c.SendMessageW(self.tab_hwnd, c.TCM_SETITEMW, idx, @bitCast(@intFromPtr(&item)));
 }
 
 fn updateWindowTitle(self: *Window) void {
@@ -394,11 +353,7 @@ fn showTabBar(self: *const Window) bool {
 pub fn surfaceArea(self: *const Window) c.RECT {
     var client: c.RECT = undefined;
     if (c.GetClientRect(self.hwnd, &client) == 0) return std.mem.zeroes(c.RECT);
-    if (self.showTabBar()) {
-        var rect = client;
-        _ = c.SendMessageW(self.tab_hwnd, c.TCM_ADJUSTRECT, c.FALSE, @bitCast(@intFromPtr(&rect)));
-        client.top = @max(0, rect.top - 2);
-    }
+    if (self.showTabBar()) client.top = self.tab_bar.height();
     return client;
 }
 
@@ -407,35 +362,17 @@ pub fn surfaceArea(self: *const Window) c.RECT {
 pub fn layout(self: *Window) void {
     const area = self.surfaceArea();
     if (self.showTabBar()) {
-        _ = c.MoveWindow(self.tab_hwnd, 0, 0, area.right, area.top, c.TRUE);
-        _ = c.ShowWindow(self.tab_hwnd, c.SW_SHOWNA);
+        _ = c.MoveWindow(self.tab_bar.hwnd, 0, 0, area.right, area.top, c.TRUE);
+        _ = c.ShowWindow(self.tab_bar.hwnd, c.SW_SHOWNA);
+        self.tab_bar.invalidate();
     } else {
-        _ = c.ShowWindow(self.tab_hwnd, c.SW_HIDE);
+        _ = c.ShowWindow(self.tab_bar.hwnd, c.SW_HIDE);
     }
 
     if (self.tabs.items.len > 0) self.activeTab().layout(area);
 
     // Repaint the split dividers.
     _ = c.InvalidateRect(self.hwnd, null, c.TRUE);
-}
-
-/// Set the font of the tab bar to the system UI font for our DPI.
-fn updateTabFont(self: *Window) void {
-    const dpi = c.GetDpiForWindow(self.hwnd);
-    var metrics: c.NONCLIENTMETRICSW = undefined;
-    metrics.cbSize = @sizeOf(c.NONCLIENTMETRICSW);
-    if (c.SystemParametersInfoForDpi(
-        c.SPI_GETNONCLIENTMETRICS,
-        metrics.cbSize,
-        &metrics,
-        0,
-        dpi,
-    ) == 0) return;
-
-    const font = c.CreateFontIndirectW(&metrics.lfMessageFont) orelse return;
-    _ = c.SendMessageW(self.tab_hwnd, c.WM_SETFONT, @intFromPtr(font), c.TRUE);
-    if (self.tab_font) |old| _ = c.DeleteObject(old);
-    self.tab_font = font;
 }
 
 /// The color of the dividers between splits.
@@ -657,20 +594,11 @@ pub fn wndProc(
             return c.DefWindowProcW(hwnd, msg, wparam, lparam);
         },
 
-        c.WM_NOTIFY => {
-            const hdr: *const c.NMHDR = @ptrFromInt(@as(usize, @bitCast(lparam)));
-            if (hdr.hwndFrom == self.tab_hwnd and hdr.code == util.TCN_SELCHANGE) {
-                const sel = c.SendMessageW(self.tab_hwnd, c.TCM_GETCURSEL, 0, 0);
-                if (sel >= 0) self.selectTab(@intCast(sel));
-                return 0;
-            }
-        },
-
         c.WM_DPICHANGED => {
             // Windows suggests a new size and position for our window
             // that keeps it at the same physical size on the new monitor.
             const rect: *const c.RECT = @ptrFromInt(@as(usize, @bitCast(lparam)));
-            self.updateTabFont();
+            self.tab_bar.updateFont();
             _ = c.SetWindowPos(
                 hwnd,
                 null,

@@ -15,6 +15,7 @@ const internal_os = @import("../../os/main.zig");
 const util = @import("util.zig");
 const c = util.c;
 const Surface = @import("Surface.zig");
+const TabBar = @import("TabBar.zig");
 const Window = @import("Window.zig");
 
 const log = std.log.scoped(.win32);
@@ -28,6 +29,7 @@ const quit_timer_id = 1;
 /// The window class names we register.
 pub const window_class = std.unicode.utf8ToUtf16LeStringLiteral("GhosttyWindow");
 pub const surface_class = std.unicode.utf8ToUtf16LeStringLiteral("GhosttySurface");
+pub const tab_bar_class = std.unicode.utf8ToUtf16LeStringLiteral("GhosttyTabBar");
 const message_class = std.unicode.utf8ToUtf16LeStringLiteral("GhosttyMessage");
 
 core_app: *CoreApp,
@@ -79,15 +81,6 @@ pub fn init(
     // Note: we render at the native resolution of each monitor. The
     // per-monitor DPI awareness for that is set by our application
     // manifest (dist/windows/ghostty.manifest).
-
-    // Our tab bar is a common control.
-    const icc: c.INITCOMMONCONTROLSEX = .{
-        .dwSize = @sizeOf(c.INITCOMMONCONTROLSEX),
-        .dwICC = c.ICC_TAB_CLASSES,
-    };
-    if (c.InitCommonControlsEx(&icc) == 0) {
-        log.warn("failed to initialize common controls", .{});
-    }
 
     const hinstance: c.HINSTANCE = @ptrCast(c.GetModuleHandleW(null));
     try registerClasses(hinstance);
@@ -157,6 +150,21 @@ fn registerClasses(hinstance: c.HINSTANCE) !void {
         },
         .{
             .cbSize = @sizeOf(c.WNDCLASSEXW),
+            // Double clicking empty space in the tab bar opens a tab.
+            .style = c.CS_DBLCLKS,
+            .lpfnWndProc = TabBar.wndProc,
+            .cbClsExtra = 0,
+            .cbWndExtra = 0,
+            .hInstance = hinstance,
+            .hIcon = null,
+            .hCursor = util.loadSystemCursor(util.IDC_ARROW),
+            .hbrBackground = null,
+            .lpszMenuName = null,
+            .lpszClassName = tab_bar_class,
+            .hIconSm = null,
+        },
+        .{
+            .cbSize = @sizeOf(c.WNDCLASSEXW),
             .style = 0,
             .lpfnWndProc = msgWndProc,
             .cbClsExtra = 0,
@@ -182,6 +190,7 @@ fn registerClasses(hinstance: c.HINSTANCE) !void {
 fn unregisterClasses(hinstance: c.HINSTANCE) void {
     _ = c.UnregisterClassW(window_class, hinstance);
     _ = c.UnregisterClassW(surface_class, hinstance);
+    _ = c.UnregisterClassW(tab_bar_class, hinstance);
     _ = c.UnregisterClassW(message_class, hinstance);
 }
 
