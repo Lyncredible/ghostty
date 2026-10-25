@@ -51,6 +51,9 @@ cursor_hidden: bool = false,
 /// The current title, if one was set.
 title: ?[:0]const u8 = null,
 
+/// Bell behavior from this surface's config, including conditional config.
+bell_features: configpkg.Config.BellFeatures = .{},
+
 /// A pending high surrogate from a standalone WM_CHAR.
 high_surrogate: ?u16 = null,
 
@@ -150,6 +153,7 @@ pub fn init(self: *Surface, app: *App, window: *Window, opts: Options) !void {
     // Get our new surface config
     var config = try apprt.surface.newConfig(app.core_app, &app.config, opts.context);
     defer config.deinit();
+    self.bell_features = config.@"bell-features";
 
     // Initialize our surface now that we have the stable pointer.
     try self.core_surface.init(
@@ -220,6 +224,16 @@ pub fn setTitle(self: *Surface, title: [:0]const u8) void {
     if (self.title) |v| alloc.free(v);
     self.title = alloc.dupeSentinel(u8, title, 0) catch null;
     self.window.surfaceTitleChanged(self);
+}
+
+/// Apply runtime settings that aren't handled by the core surface.
+pub fn configChanged(self: *Surface, config: *const configpkg.Config) void {
+    self.bell_features = config.@"bell-features";
+}
+
+pub fn ringBell(self: *Surface) void {
+    if (self.bell_features.system) _ = c.MessageBeep(c.MB_OK);
+    if (self.bell_features.attention) self.window.requestAttention();
 }
 
 /// Called by the window when this surface is shown or hidden, such as
