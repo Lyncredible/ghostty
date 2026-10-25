@@ -18,6 +18,10 @@ pub const Shell = enum {
     nushell,
     powershell,
     zsh,
+
+    /// Not a shell: the integration for the user's shell in a WSL
+    /// distribution, started from Windows with wsl.exe.
+    wsl,
 };
 
 /// The result of setting up a shell integration.
@@ -74,6 +78,13 @@ pub fn setup(
         ),
 
         .zsh => try setupZsh(
+            alloc_arena,
+            command,
+            resource_dir,
+            env,
+        ),
+
+        .wsl => try setupWsl(
             alloc_arena,
             command,
             resource_dir,
@@ -148,6 +159,7 @@ fn detectShell(alloc: Allocator, command: config.Command) !?Shell {
         const args = try commandArgs(alloc, command);
         defer freeArgs(alloc, command, args);
         if (args.len > 0 and isPowerShell(args[0])) return .powershell;
+        if (args.len > 0 and isWsl(args[0])) return .wsl;
     }
 
     var arg_iter = try command.argIterator(alloc);
@@ -203,6 +215,8 @@ test detectShell {
     try testing.expectEqual(.powershell, try detectShell(alloc, .{ .shell = "pwsh -NoLogo" }));
     try testing.expectEqual(.powershell, try detectShell(alloc, .{ .shell = "PowerShell.exe" }));
     try testing.expect(try detectShell(alloc, .{ .shell = "pwshx" }) == null);
+    try testing.expectEqual(.wsl, try detectShell(alloc, .{ .shell = "wsl.exe -d Ubuntu" }));
+    try testing.expectEqual(.wsl, try detectShell(alloc, .{ .shell = "WSL" }));
     if (comptime builtin.target.os.tag == .windows) {
         try testing.expectEqual(.powershell, try detectShell(alloc, .{
             .shell = "\"C:\\Program Files\\PowerShell\\7\\pwsh.exe\" -NoLogo",
@@ -216,6 +230,13 @@ fn isPowerShell(arg0: []const u8) bool {
     if (std.ascii.endsWithIgnoreCase(exe, ".exe")) exe = exe[0 .. exe.len - 4];
     return std.ascii.eqlIgnoreCase(exe, "pwsh") or
         std.ascii.eqlIgnoreCase(exe, "powershell");
+}
+
+/// Whether the executable is the WSL launcher.
+fn isWsl(arg0: []const u8) bool {
+    var exe = std.fs.path.basename(arg0);
+    if (std.ascii.endsWithIgnoreCase(exe, ".exe")) exe = exe[0 .. exe.len - 4];
+    return std.ascii.eqlIgnoreCase(exe, "wsl");
 }
 
 /// The arguments of a command. Shell commands use the Windows quoting
@@ -395,6 +416,137 @@ test "powershell: missing script" {
     var res: TmpResourcesDir = try .init(.bash);
     defer res.deinit();
     try testing.expect(try setupPowerShell(alloc, .{ .shell = "pwsh" }, res.path) == null);
+}
+
+/// Start the default shell of a WSL distribution through our launcher
+/// script, which sets up the integration for that shell inside WSL.
+/// WSLENV passes our environment variables into WSL, translating the
+/// resources directory to a Linux path.
+///
+/// We skip automatic integration if wsl.exe is given a command or any
+/// option other than those that choose the distribution, user, or
+/// working directory.
+fn setupWsl(
+    alloc: Allocator,
+    command: config.Command,
+    resource_dir: []const u8,
+    env: *EnvMap,
+) !?config.Command {
+    const script_path = try std.fmt.allocPrint(
+        alloc,
+        "{s}/shell-integration/wsl/ghostty.sh",
+        .{resource_dir},
+    );
+    if (std.Io.Dir.openFileAbsolute(global.io(), script_path, .{})) |file| {
+        file.close(global.io());
+    } else |err| {
+        log.warn("unable to open {s}: {}", .{ script_path, err });
+        return null;
+    }
+
+    const args = try commandArgs(alloc, command);
+    defer freeArgs(alloc, command, args);
+    if (args.len == 0) return null;
+
+    var result: std.ArrayList([:0]const u8) = .empty;
+    try result.append(alloc, try alloc.dupeSentinel(u8, args[0], 0));
+
+    // Options and whether they take a value.
+    const options = [_]struct { []const u8, bool }{
+        .{ "~", false },
+        .{ "-d", true },
+        .{ "--distribution", true },
+        .{ "--distribution-id", true },
+        .{ "-u", true },
+        .{ "--user", true },
+        .{ "--cd", true },
+    };
+    var i: usize = 1;
+    while (i < args.len) : (i += 1) {
+        const arg = args[i];
+        const option = for (options) |option| {
+            if (std.mem.eql(u8, arg, option[0])) break option;
+        } else return null;
+        try result.append(alloc, try alloc.dupeSentinel(u8, arg, 0));
+        if (option[1]) {
+            i += 1;
+            if (i >= args.len) return null;
+            try result.append(alloc, try alloc.dupeSentinel(u8, args[i], 0));
+        }
+    }
+
+    try env.put("GHOSTTY_RESOURCES_DIR", resource_dir);
+    const shared = "GHOSTTY_RESOURCES_DIR/p:GHOSTTY_SHELL_FEATURES:" ++
+        "TERM_PROGRAM:TERM_PROGRAM_VERSION:COLORTERM";
+    try env.put("WSLENV", if (env.get("WSLENV")) |existing|
+        if (existing.len > 0)
+            try std.fmt.allocPrint(alloc, "{s}:{s}", .{ existing, shared })
+        else
+            shared
+    else
+        shared);
+
+    try result.appendSlice(alloc, &.{
+        "--exec",
+        "/bin/sh",
+        "-c",
+        ". \"$GHOSTTY_RESOURCES_DIR/shell-integration/wsl/ghostty.sh\"",
+    });
+    return .{ .direct = try result.toOwnedSlice(alloc) };
+}
+
+test "wsl" {
+    const testing = std.testing;
+    var arena = ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const alloc = arena.allocator();
+
+    var res: TmpResourcesDir = try .init(.wsl);
+    defer res.deinit();
+
+    var env = EnvMap.init(alloc);
+    defer env.deinit();
+    try env.put("WSLENV", "FOO/u");
+
+    const command = try setupWsl(alloc, .{ .direct = &.{ "wsl.exe", "-d", "Ubuntu", "~" } }, res.path, &env);
+    const args = command.?.direct;
+    try testing.expectEqual(8, args.len);
+    try testing.expectEqualStrings("wsl.exe", args[0]);
+    try testing.expectEqualStrings("-d", args[1]);
+    try testing.expectEqualStrings("Ubuntu", args[2]);
+    try testing.expectEqualStrings("~", args[3]);
+    try testing.expectEqualStrings("--exec", args[4]);
+    try testing.expectEqualStrings("/bin/sh", args[5]);
+    try testing.expectEqualStrings(
+        "FOO/u:GHOSTTY_RESOURCES_DIR/p:GHOSTTY_SHELL_FEATURES:TERM_PROGRAM:TERM_PROGRAM_VERSION:COLORTERM",
+        env.get("WSLENV").?,
+    );
+    try testing.expectEqualStrings(res.path, env.get("GHOSTTY_RESOURCES_DIR").?);
+}
+
+test "wsl: unsupported options" {
+    const testing = std.testing;
+    var arena = ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const alloc = arena.allocator();
+
+    var res: TmpResourcesDir = try .init(.wsl);
+    defer res.deinit();
+
+    var env = EnvMap.init(alloc);
+    defer env.deinit();
+
+    for ([_][:0]const u8{
+        "wsl ls",
+        "wsl -e bash",
+        "wsl --exec bash",
+        "wsl -- ls",
+        "wsl -d",
+        "wsl --shutdown",
+    }) |cmd| {
+        try testing.expect(try setupWsl(alloc, .{ .shell = cmd }, res.path, &env) == null);
+    }
+    try testing.expect(env.get("WSLENV") == null);
 }
 
 /// Set up the shell integration features environment variable.
@@ -1255,6 +1407,10 @@ const TmpResourcesDir = struct {
             }),
             .powershell => try tmp_dir.dir.writeFile(std.testing.io, .{
                 .sub_path = "shell-integration/powershell/ghostty.ps1",
+                .data = "",
+            }),
+            .wsl => try tmp_dir.dir.writeFile(std.testing.io, .{
+                .sub_path = "shell-integration/wsl/ghostty.sh",
                 .data = "",
             }),
             else => {},
