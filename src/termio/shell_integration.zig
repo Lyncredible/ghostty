@@ -159,7 +159,7 @@ fn detectShell(alloc: Allocator, command: config.Command) !?Shell {
         const args = try commandArgs(alloc, command);
         defer freeArgs(alloc, command, args);
         if (args.len > 0 and isPowerShell(args[0])) return .powershell;
-        if (args.len > 0 and isWsl(args[0])) return .wsl;
+        if (args.len > 0 and internal_os.wsl.isWsl(args[0])) return .wsl;
     }
 
     var arg_iter = try command.argIterator(alloc);
@@ -230,13 +230,6 @@ fn isPowerShell(arg0: []const u8) bool {
     if (std.ascii.endsWithIgnoreCase(exe, ".exe")) exe = exe[0 .. exe.len - 4];
     return std.ascii.eqlIgnoreCase(exe, "pwsh") or
         std.ascii.eqlIgnoreCase(exe, "powershell");
-}
-
-/// Whether the executable is the WSL launcher.
-fn isWsl(arg0: []const u8) bool {
-    var exe = std.fs.path.basename(arg0);
-    if (std.ascii.endsWithIgnoreCase(exe, ".exe")) exe = exe[0 .. exe.len - 4];
-    return std.ascii.eqlIgnoreCase(exe, "wsl");
 }
 
 /// The arguments of a command. Shell commands use the Windows quoting
