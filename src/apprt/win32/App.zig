@@ -379,11 +379,26 @@ fn presentSurface(self: *App, surface: *CoreSurface) void {
     }
 }
 
+/// Activate the window before or after the given one, in creation order.
+fn gotoWindow(self: *App, from: *Window, direction: apprt.action.GotoWindow) bool {
+    const len = self.windows.items.len;
+    if (len <= 1) return false;
+    const idx = std.mem.indexOfScalar(*Window, self.windows.items, from) orelse return false;
+    const next = switch (direction) {
+        .next => (idx + 1) % len,
+        .previous => (idx + len - 1) % len,
+    };
+    const window = self.windows.items[next];
+    window.present(window.activeSurface());
+    return true;
+}
+
 /// Called by a window when it's destroyed, to remove it from our list.
 pub fn windowDestroyed(self: *App, window: *Window) void {
     for (self.windows.items, 0..) |w, i| {
         if (w == window) {
-            _ = self.windows.swapRemove(i);
+            // Keep the creation order for goto_window.
+            _ = self.windows.orderedRemove(i);
             break;
         }
     }
@@ -574,6 +589,26 @@ pub fn performAction(
         .mouse_visibility => switch (target) {
             .app => return false,
             .surface => |v| v.rt_surface.setMouseVisibility(value == .visible),
+        },
+
+        .goto_window => switch (target) {
+            .app => return false,
+            .surface => |v| return self.gotoWindow(v.rt_surface.window, value),
+        },
+
+        .present_terminal => switch (target) {
+            .app => return false,
+            .surface => |v| v.rt_surface.window.present(v.rt_surface),
+        },
+
+        .float_window => switch (target) {
+            .app => return false,
+            .surface => |v| v.rt_surface.window.setFloating(value),
+        },
+
+        .toggle_window_decorations => switch (target) {
+            .app => return false,
+            .surface => |v| v.rt_surface.window.toggleDecorations(),
         },
 
         .toggle_maximize => switch (target) {
