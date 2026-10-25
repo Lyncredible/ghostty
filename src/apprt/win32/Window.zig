@@ -67,6 +67,10 @@ taskbar_ready: bool = false,
 /// A title set by the user, which takes precedence over the active tab's.
 title_override: ?[:0]const u8 = null,
 
+/// Whether this is the quick terminal: a borderless, topmost window
+/// without a taskbar button that's toggled into view.
+quick: bool = false,
+
 /// What a new window starts with.
 pub const Initial = union(enum) {
     /// A new tab, inheriting from the parent surface if given.
@@ -78,20 +82,28 @@ pub const Initial = union(enum) {
 
     /// A new tab with overrides from +new-window.
     overrides: Overrides,
+
+    /// The quick terminal, with a new tab.
+    quick,
 };
 
 pub fn init(self: *Window, app: *App, initial: Initial) !void {
+    const quick = initial == .quick;
     self.* = .{
         .app = app,
         .hwnd = undefined,
         .tab_bar = undefined,
+        .quick = quick,
     };
 
     const hwnd = c.CreateWindowExW(
-        0,
+        if (quick) c.WS_EX_TOOLWINDOW | c.WS_EX_TOPMOST else 0,
         App.window_class,
         std.unicode.utf8ToUtf16LeStringLiteral("Ghostty"),
-        c.WS_OVERLAPPEDWINDOW | c.WS_CLIPCHILDREN,
+        if (quick)
+            c.WS_POPUP | c.WS_CLIPCHILDREN
+        else
+            c.WS_OVERLAPPEDWINDOW | c.WS_CLIPCHILDREN,
         util.CW_USEDEFAULT,
         util.CW_USEDEFAULT,
         util.CW_USEDEFAULT,
@@ -118,6 +130,12 @@ pub fn init(self: *Window, app: *App, initial: Initial) !void {
         .parent => |parent| _ = try self.addTab(parent),
         .tab => |tab| try self.adoptTab(tab),
         .overrides => |overrides| _ = try self.addTabWith(null, null, overrides),
+        .quick => {
+            // Size the window first, since popup windows start out empty
+            // and the first surface's size sets the initial pty size.
+            self.placeQuick(false);
+            _ = try self.addTab(null);
+        },
     }
 
     // Only now that we're fully initialized do we attach ourselves to
@@ -140,8 +158,128 @@ pub fn deinit(self: *Window) void {
 
 /// Show the window for the first time.
 pub fn show(self: *Window) void {
+    if (self.quick) {
+        self.showQuick();
+        return;
+    }
     _ = c.ShowWindow(self.hwnd, c.SW_SHOWDEFAULT);
     _ = c.UpdateWindow(self.hwnd);
+}
+
+/// Place the quick terminal according to its config, then show and
+/// focus it. The screen is chosen each time, so it follows the mouse with
+/// `quick-terminal-screen = mouse`.
+pub fn showQuick(self: *Window) void {
+    self.placeQuick(true);
+    _ = c.ShowWindow(self.hwnd, c.SW_SHOW);
+    self.present(self.activeSurface());
+}
+
+/// Move and size the quick terminal according to its config.
+fn placeQuick(self: *Window, visible: bool) void {
+    const config = &self.app.config;
+    const monitor = switch (config.@"quick-terminal-screen") {
+        .mouse => monitor: {
+            var pt: c.POINT = undefined;
+            _ = c.GetCursorPos(&pt);
+            break :monitor c.MonitorFromPoint(pt, c.MONITOR_DEFAULTTOPRIMARY);
+        },
+        .main, .@"macos-menu-bar" => c.MonitorFromPoint(.{ .x = 0, .y = 0 }, c.MONITOR_DEFAULTTOPRIMARY),
+    };
+    var info: c.MONITORINFO = undefined;
+    info.cbSize = @sizeOf(c.MONITORINFO);
+    if (c.GetMonitorInfoW(monitor, &info) != 0) {
+        const work = info.rcWork;
+        var dpi_x: c.UINT = util.USER_DEFAULT_SCREEN_DPI;
+        var dpi_y: c.UINT = util.USER_DEFAULT_SCREEN_DPI;
+        _ = c.GetDpiForMonitor(monitor, c.MDT_EFFECTIVE_DPI, &dpi_x, &dpi_y);
+        const rect = quickRect(
+            config.@"quick-terminal-position",
+            config.@"quick-terminal-size",
+            work,
+            dpi_x,
+        );
+        _ = util.SetWindowPos(
+            self.hwnd,
+            util.HWND_TOPMOST,
+            rect.left,
+            rect.top,
+            rect.right - rect.left,
+            rect.bottom - rect.top,
+            if (visible) c.SWP_SHOWWINDOW else c.SWP_NOACTIVATE,
+        );
+    }
+}
+
+/// The quick terminal's rectangle within a monitor's work area. Pixel
+/// sizes are in points, scaled by the monitor's DPI.
+fn quickRect(
+    position: configpkg.Config.QuickTerminalPosition,
+    size: configpkg.Config.QuickTerminalSize,
+    work: c.RECT,
+    dpi: c.UINT,
+) c.RECT {
+    const work_w: u32 = @intCast(work.right - work.left);
+    const work_h: u32 = @intCast(work.bottom - work.top);
+    var scaled = size;
+    inline for (.{ &scaled.primary, &scaled.secondary }) |s| {
+        if (s.*) |v| switch (v) {
+            .pixels => |px| s.* = .{ .pixels = @intCast(@as(u64, px) * dpi / util.USER_DEFAULT_SCREEN_DPI) },
+            .percentage => {},
+        };
+    }
+    var dims = scaled.calculate(position, .{ .width = work_w, .height = work_h });
+    if (size.primary == null) {
+        // The defaults are in points too.
+        switch (position) {
+            .left, .right => dims.width = @intCast(@as(u64, dims.width) * dpi / util.USER_DEFAULT_SCREEN_DPI),
+            .top, .bottom => dims.height = @intCast(@as(u64, dims.height) * dpi / util.USER_DEFAULT_SCREEN_DPI),
+            .center => {
+                dims.width = @intCast(@as(u64, dims.width) * dpi / util.USER_DEFAULT_SCREEN_DPI);
+                dims.height = @intCast(@as(u64, dims.height) * dpi / util.USER_DEFAULT_SCREEN_DPI);
+            },
+        }
+    }
+    const w: c_int = @intCast(@min(dims.width, work_w));
+    const h: c_int = @intCast(@min(dims.height, work_h));
+    const center_x = work.left + @divTrunc(@as(c_int, @intCast(work_w)) - w, 2);
+    const center_y = work.top + @divTrunc(@as(c_int, @intCast(work_h)) - h, 2);
+    const x: c_int, const y: c_int = switch (position) {
+        .top => .{ center_x, work.top },
+        .bottom => .{ center_x, work.bottom - h },
+        .left => .{ work.left, center_y },
+        .right => .{ work.right - w, center_y },
+        .center => .{ center_x, center_y },
+    };
+    return .{ .left = x, .top = y, .right = x + w, .bottom = y + h };
+}
+
+test quickRect {
+    const testing = std.testing;
+    const work: c.RECT = .{ .left = 0, .top = 40, .right = 2000, .bottom = 1040 };
+
+    // Top, default size at 200% scale: full width, 400pt tall.
+    try testing.expectEqual(
+        c.RECT{ .left = 0, .top = 40, .right = 2000, .bottom = 840 },
+        quickRect(.top, .{}, work, 192),
+    );
+
+    // Bottom, half the height and 1000px (500pt) wide, centered.
+    try testing.expectEqual(
+        c.RECT{ .left = 500, .top = 540, .right = 1500, .bottom = 1040 },
+        quickRect(.bottom, .{ .primary = .{ .percentage = 50 }, .secondary = .{ .pixels = 500 } }, work, 192),
+    );
+
+    // Right, 25% wide, full height.
+    try testing.expectEqual(
+        c.RECT{ .left = 1500, .top = 40, .right = 2000, .bottom = 1040 },
+        quickRect(.right, .{ .primary = .{ .percentage = 25 } }, work, 96),
+    );
+}
+
+/// Hide the quick terminal.
+pub fn hideQuick(self: *Window) void {
+    _ = c.ShowWindow(self.hwnd, c.SW_HIDE);
 }
 
 /// Request to close the window. This goes through the same path as the
@@ -594,7 +732,8 @@ pub fn toggleDecorations(self: *Window) void {
 /// Show or hide the title bar. The resize border stays either way.
 fn updateDecorations(self: *Window) void {
     // Fullscreen has no frame; we're called again when it's restored.
-    if (self.fullscreen != null) return;
+    // The quick terminal never has one.
+    if (self.fullscreen != null or self.quick) return;
     const decorated = self.decorated_override orelse
         (self.app.config.@"window-decoration" != .none);
 
@@ -1019,6 +1158,9 @@ pub fn wndProc(
         c.WM_ACTIVATE => {
             const active = (wparam & 0xFFFF) != c.WA_INACTIVE;
             self.app.core_app.focusEvent(active);
+            if (!active and self.quick and self.app.config.@"quick-terminal-autohide") {
+                self.hideQuick();
+            }
             return c.DefWindowProcW(hwnd, msg, wparam, lparam);
         },
 

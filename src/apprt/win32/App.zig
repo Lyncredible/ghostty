@@ -76,6 +76,9 @@ global_keys: GlobalKeys,
 /// The window to activate when toggle_visibility shows our windows.
 hidden_active: ?*Window = null,
 
+/// The quick terminal, once it's been opened.
+quick_terminal: ?*Window = null,
+
 /// All of our open top-level windows.
 windows: std.ArrayList(*Window) = .empty,
 
@@ -495,6 +498,11 @@ fn handleIpc(self: *App, data: []const u8) bool {
             window.present(window.activeSurface());
         },
 
+        .toggle_quick_terminal => self.toggleQuickTerminal() catch |err| {
+            log.warn("error toggling the quick terminal from IPC err={}", .{err});
+            return false;
+        },
+
         .new_tab => {
             // The window of the given surface, or the active window.
             const window = window: {
@@ -542,6 +550,20 @@ fn gotoWindow(self: *App, from: *Window, direction: apprt.action.GotoWindow) boo
     return true;
 }
 
+/// Show the quick terminal, creating it if needed, or hide it if it's
+/// in front.
+fn toggleQuickTerminal(self: *App) !void {
+    const window = self.quick_terminal orelse {
+        self.quick_terminal = try self.newWindow(.quick);
+        return;
+    };
+    if (c.IsWindowVisible(window.hwnd) != 0 and c.GetForegroundWindow() == window.hwnd) {
+        window.hideQuick();
+    } else {
+        window.showQuick();
+    }
+}
+
 /// Like macOS: hide all windows if one of them is active, otherwise
 /// show them all and activate the one that was active.
 fn toggleVisibility(self: *App) void {
@@ -570,6 +592,7 @@ fn toggleVisibility(self: *App) void {
 /// Called by a window when it's destroyed, to remove it from our list.
 pub fn windowDestroyed(self: *App, window: *Window) void {
     if (self.hidden_active == window) self.hidden_active = null;
+    if (self.quick_terminal == window) self.quick_terminal = null;
     for (self.windows.items, 0..) |w, i| {
         if (w == window) {
             // Keep the creation order for goto_window.
@@ -818,6 +841,8 @@ pub fn performAction(
 
         .toggle_visibility => self.toggleVisibility(),
 
+        .toggle_quick_terminal => try self.toggleQuickTerminal(),
+
         .goto_window => switch (target) {
             .app => return false,
             .surface => |v| return self.gotoWindow(v.rt_surface.window, value),
@@ -980,7 +1005,7 @@ pub fn performIpc(
             .surface_id = value.surface_id,
             .arguments = toConst(value.arguments),
         }),
-        .toggle_quick_terminal => false,
+        .toggle_quick_terminal => try Ipc.send(alloc, target, .{ .kind = .toggle_quick_terminal }),
     };
 }
 

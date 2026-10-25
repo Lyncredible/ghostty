@@ -14,4 +14,5 @@ test {
     _ = @import("win32/GlobalKeys.zig");
     _ = @import("win32/Ipc.zig");
     _ = @import("win32/Overrides.zig");
+    _ = @import("win32/Window.zig");
 }
