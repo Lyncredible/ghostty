@@ -555,8 +555,27 @@ pub fn wndProc(
             return 0;
         },
 
+        c.WM_IME_SETCONTEXT => {
+            // We draw the composition (preedit) text ourselves, so hide
+            // the IME's composition window. Its candidate window is kept.
+            const l: usize = @bitCast(lparam);
+            const without: usize = l & ~@as(usize, c.ISC_SHOWUICOMPOSITIONWINDOW);
+            return c.DefWindowProcW(hwnd, msg, wparam, @bitCast(without));
+        },
+
         c.WM_IME_STARTCOMPOSITION => {
             self.updateImePosition();
+            return 0;
+        },
+
+        c.WM_IME_COMPOSITION => {
+            self.imeComposition(lparam);
+            self.updateImePosition();
+            return 0;
+        },
+
+        c.WM_IME_ENDCOMPOSITION => {
+            self.preedit(null);
             return c.DefWindowProcW(hwnd, msg, wparam, lparam);
         },
 
@@ -798,20 +817,77 @@ fn charEvent(self: *Surface, unit: u16) void {
     };
 }
 
-/// Move the IME composition window to our cursor.
+/// Handle a change to the IME composition. The in-progress composition
+/// is shown as preedit text, and the result is sent as text input.
+fn imeComposition(self: *Surface, lparam: c.LPARAM) void {
+    const himc = c.ImmGetContext(self.hwnd) orelse return;
+    defer _ = c.ImmReleaseContext(self.hwnd, himc);
+
+    const flags: c.DWORD = @truncate(@as(usize, @bitCast(lparam)));
+    const alloc = self.app.core_app.alloc;
+
+    if (flags & c.GCS_RESULTSTR != 0) {
+        if (imeString(alloc, himc, c.GCS_RESULTSTR)) |result| {
+            defer alloc.free(result);
+            self.preedit(null);
+            if (result.len > 0) {
+                _ = self.core_surface.textCallback(result) catch |err| {
+                    log.err("error in text callback err={}", .{err});
+                };
+            }
+        }
+    }
+
+    if (flags & c.GCS_COMPSTR != 0) {
+        if (imeString(alloc, himc, c.GCS_COMPSTR)) |comp| {
+            defer alloc.free(comp);
+            self.preedit(if (comp.len > 0) comp else null);
+        }
+    }
+}
+
+/// Get one of the IME composition strings as UTF-8.
+fn imeString(alloc: Allocator, himc: c.HIMC, index: c.DWORD) ?[:0]u8 {
+    // The length is in bytes.
+    const len = c.ImmGetCompositionStringW(himc, index, null, 0);
+    if (len < 0) return null;
+    const buf = alloc.alloc(u16, @as(usize, @intCast(len)) / 2) catch return null;
+    defer alloc.free(buf);
+    if (buf.len > 0) _ = c.ImmGetCompositionStringW(himc, index, buf.ptr, @intCast(len));
+    return util.utf8Alloc(alloc, buf) catch null;
+}
+
+fn preedit(self: *Surface, text: ?[]const u8) void {
+    self.core_surface.preeditCallback(text) catch |err| {
+        log.err("error in preedit callback err={}", .{err});
+    };
+}
+
+/// Move the IME windows to our cursor.
 fn updateImePosition(self: *Surface) void {
     const himc = c.ImmGetContext(self.hwnd) orelse return;
     defer _ = c.ImmReleaseContext(self.hwnd, himc);
 
-    // Win32 wants physical pixels, not scaled points.
+    // Win32 wants physical pixels, not scaled points. The point is the
+    // horizontal middle and bottom of the cursor cell.
     const pos = self.core_surface.imePointScaled(.{ .x = 1, .y = 1 });
+    const x: c_int = @intFromFloat(pos.x);
+    const y: c_int = @intFromFloat(pos.y);
+    const height: c_int = @intFromFloat(pos.height);
+
     var form: c.COMPOSITIONFORM = .{
         .dwStyle = c.CFS_POINT,
-        .ptCurrentPos = .{
-            .x = @intFromFloat(pos.x),
-            .y = @intFromFloat(pos.y),
-        },
+        .ptCurrentPos = .{ .x = x, .y = y - height },
         .rcArea = std.mem.zeroes(c.RECT),
     };
     _ = c.ImmSetCompositionWindow(himc, &form);
+
+    // Place the candidate window below the cursor, never covering it.
+    var candidate: c.CANDIDATEFORM = .{
+        .dwIndex = 0,
+        .dwStyle = c.CFS_EXCLUDE,
+        .ptCurrentPos = .{ .x = x, .y = y },
+        .rcArea = .{ .left = x, .top = y - height, .right = x + 1, .bottom = y },
+    };
+    _ = c.ImmSetCandidateWindow(himc, &candidate);
 }
