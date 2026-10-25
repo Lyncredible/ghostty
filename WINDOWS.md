@@ -34,6 +34,8 @@ https://github.com/ghostty-org/ghostty/discussions/2563
 - **Shaders:** `src/renderer/shaders/shaders.hlsl` is a hand port of the
   GLSL shaders. It's compiled at runtime with `D3DCompile`
   (`d3dcompiler_47.dll` ships with Windows).
+  - Built-in shader bytecode is compiled once per process and reused when
+    creating pipelines for each surface's D3D device.
   - Custom shaders go GLSL → SPIR-V → HLSL via spirv-cross.
 - **PTY:** ConPTY (`src/pty.zig`, `src/termio/Exec.zig`).
 - **Fonts:** the existing `freetype_windows` backend.
@@ -124,8 +126,8 @@ Notes:
 - [ ] Shell integration for PowerShell
 - [ ] DirectWrite font discovery and rendering
 - [ ] Packaging (installer and MSIX) and release builds
-- [ ] Share compiled shader bytecode across surfaces (each surface
-      currently compiles its shaders)
+- [x] Share built-in compiled shader bytecode across surfaces
+- [ ] Cache compiled custom shader bytecode across surfaces
 
 ## Development log (2026-10-24)
 
@@ -207,3 +209,8 @@ Notes:
   system drag threshold and uses the existing tab-move path, preserving the
   active terminal. Verified moving a PowerShell tab from last to first and
   a cmd.exe tab from middle to last in the native UI.
+- The D3D11 renderer now keeps one copy of each built-in compiled shader
+  blob for the process, guarded across render threads. Each surface still
+  creates its own device-specific shader objects. Native build passes and
+  multiple tabs and splits rendered correctly in the UI. Custom shader
+  bytecode remains uncached; startup timing has not been benchmarked.

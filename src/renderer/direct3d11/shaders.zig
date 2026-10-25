@@ -1,6 +1,7 @@
 const std = @import("std");
 const Allocator = std.mem.Allocator;
 const builtin = @import("builtin");
+const global = @import("../../global.zig");
 
 const com = @import("com.zig");
 const c = com.c;
@@ -11,6 +12,39 @@ const log = std.log.scoped(.direct3d11);
 /// The HLSL source for all of our shaders. Each shader stage is a
 /// separate entry point within this source.
 const source = @embedFile("../shaders/shaders.hlsl");
+
+/// Built-in bytecode is independent of the D3D device. Keep one copy for
+/// the process and create device-specific shader objects from it as needed.
+const BuiltinEntry = enum {
+    full_screen_vertex,
+    cell_text_vertex,
+    image_vertex,
+    bg_image_vertex,
+    bg_color_fragment,
+    cell_bg_fragment,
+    cell_text_fragment,
+    image_fragment,
+    bg_image_fragment,
+    _count,
+};
+var builtin_lock: std.Io.Mutex = .init;
+var builtin_blobs: [@backingInt(BuiltinEntry._count)]?*c.ID3DBlob = @splat(null);
+
+fn compileBuiltin(entry: [:0]const u8, profile: [:0]const u8) !*c.ID3DBlob {
+    const known = std.meta.stringToEnum(BuiltinEntry, entry) orelse
+        return compile(source, entry, profile);
+    if (known == ._count) return compile(source, entry, profile);
+    const index = @backingInt(known);
+    builtin_lock.lockUncancelable(global.io());
+    defer builtin_lock.unlock(global.io());
+    const blob = builtin_blobs[index] orelse blob: {
+        const compiled = try compile(source, entry, profile);
+        builtin_blobs[index] = compiled;
+        break :blob compiled;
+    };
+    _ = com.call(blob, "AddRef", .{});
+    return blob;
+}
 
 const pipeline_descs: []const struct { [:0]const u8, PipelineDescription } =
     &.{
@@ -60,9 +94,9 @@ const PipelineDescription = struct {
         self: PipelineDescription,
         device: *c.ID3D11Device,
     ) !Pipeline {
-        const vs = try compile(source, self.vertex_fn, "vs_5_0");
+        const vs = try compileBuiltin(self.vertex_fn, "vs_5_0");
         defer com.release(vs);
-        const ps = try compile(source, self.fragment_fn, "ps_5_0");
+        const ps = try compileBuiltin(self.fragment_fn, "ps_5_0");
         defer com.release(ps);
 
         return try .init(self.vertex_attributes, .{
@@ -198,7 +232,7 @@ fn initPostPipelines(
     }
 
     // All of our post shaders use the same vertex shader.
-    const vs = try compile(source, "full_screen_vertex", "vs_5_0");
+    const vs = try compileBuiltin("full_screen_vertex", "vs_5_0");
     defer com.release(vs);
 
     // Build each shader. Note we don't use "0.." to build our index
