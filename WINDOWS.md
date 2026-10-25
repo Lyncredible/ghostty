@@ -105,7 +105,11 @@ Notes:
 
 ### Next
 
-- [ ] Verify IME with Microsoft Pinyin, Japanese IME, and others
+- [x] Verify IME with Microsoft Pinyin, Japanese IME, and others
+- [x] Fix tab-header close crashing the window when there are multiple
+      tabs (active index and split focus must be valid during teardown)
+- [ ] Shell integration for wsl
+- [ ] Supporting choosing different shells when opening new tab
 - [ ] `unfocused-split-opacity`
 - [ ] Tab drag to reorder, and moving a tab to a new window
 - [ ] Background opacity/blur (needs a DirectComposition swap chain)
@@ -118,3 +122,22 @@ Notes:
 - [ ] Packaging (installer and MSIX) and release builds
 - [ ] Share compiled shader bytecode across surfaces (each surface
       currently compiles its shaders)
+
+## Development log (2026-10-24)
+
+- Reproduced the tab-header close crash with two tabs in the existing
+  Debug build. Closing the active last tab leaves `Window.active` outside
+  the shortened tab array during synchronous Win32 focus callbacks.
+  Select the surviving tab before destroying the old tab. Also publish
+  the replacement focused split before releasing its old tree.
+  Verified the fix through the UI: active last-tab close and inactive
+  tab middle-click leave the remaining terminal open and focused.
+  `zig build test -Dtarget=x86_64-windows-gnu -Dtest-filter=split_tree`
+  passes.
+- Native GNU Debug build passes with Zig 0.17.0. The first build hit a
+  transient MinGW dependency-file parse failure; rerunning succeeded.
+- Follow-up: Windows `command` values currently split on whitespace, so
+  quoted executable paths and arguments with spaces fail. Reuse Zig's
+  Windows argument parser and add regression tests.
+- Follow-up: audit close confirmation dialogs for reentrancy when a shell
+  exits while the dialog is open.
