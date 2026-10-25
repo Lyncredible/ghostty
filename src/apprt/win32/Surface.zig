@@ -58,6 +58,7 @@ bell_features: configpkg.Config.BellFeatures = .{},
 /// The most recent terminal progress report, expiring after 15 seconds.
 progress_style: bool = true,
 progress_report: ?terminal.osc.Command.ProgressReport = null,
+progress_value: ?u8 = null,
 progress_expires_at: u64 = 0,
 
 dim_overlay: DimOverlay = .{},
@@ -274,8 +275,10 @@ pub fn setProgressReport(self: *Surface, report: terminal.osc.Command.ProgressRe
     log.debug("progress report state={} value={?}", .{ report.state, report.progress });
     if (report.state == .remove) {
         self.progress_report = null;
+        self.progress_value = null;
     } else {
         self.progress_report = report;
+        if (report.progress) |value| self.progress_value = value;
         self.progress_expires_at = c.GetTickCount64() + 15_000;
     }
     if (self.window.tabs.items.len > 0 and self.window.activeSurface() == self) {

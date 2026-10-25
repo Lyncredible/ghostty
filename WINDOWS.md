@@ -234,5 +234,10 @@ Notes:
   seconds. The GNU Debug build passes. A native ConPTY PowerShell fixture
   delivered normal 45%, error 70%, indeterminate, paused 80%, and remove
   reports; the window received `TaskbarButtonCreated`, and the COM calls
-  reported no failures. Visual verification of taskbar states, timeout,
-  and switching surfaces is pending.
+  reported no failures. Visual verification of taskbar states and switching
+  surfaces is pending.
+- A paused report without a percentage keeps the last reported value,
+  matching the GTK progress behavior. An error without a percentage also
+  uses that value when available; a remove report discards it. A second
+  native ConPTY fixture confirmed a pause without a percentage and logged
+  the 15-second expiration; its child exited with status 0.
