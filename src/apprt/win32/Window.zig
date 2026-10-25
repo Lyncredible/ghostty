@@ -153,9 +153,14 @@ fn tabIndex(self: *const Window, tab: *const Tab) ?usize {
 /// Create a new tab, inheriting from the parent surface if given, and
 /// select it.
 pub fn addTab(self: *Window, parent: ?*CoreSurface) !*Tab {
+    return self.addTabWithShell(parent, null);
+}
+
+/// Open a tab with an explicit shell, or the configured command when null.
+pub fn addTabWithShell(self: *Window, parent: ?*CoreSurface, shell: ?[:0]const u8) !*Tab {
     const alloc = self.app.core_app.alloc;
 
-    const tab = try Tab.create(self, parent, self.tabs.items.len == 0);
+    const tab = try Tab.create(self, parent, self.tabs.items.len == 0, shell);
     errdefer tab.destroy();
 
     const idx: usize = if (self.tabs.items.len == 0)
