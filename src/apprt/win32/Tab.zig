@@ -84,11 +84,12 @@ pub fn isSingle(self: *const Tab) bool {
     return !self.tree.isSplit();
 }
 
-/// Whether any split in this tab has an unread bell.
+/// Whether any split in this tab shows a pending bell in its title.
 pub fn hasBell(self: *const Tab) bool {
     var it = self.tree.iterator();
     while (it.next()) |entry| {
-        if (entry.view.bell_pending) return true;
+        const view = entry.view;
+        if (view.bell_pending and view.bell_features.title) return true;
     }
     return false;
 }
