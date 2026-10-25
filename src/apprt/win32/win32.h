@@ -11,3 +11,4 @@
 #include <shellapi.h>
 #include <shobjidl.h>
 #include <uxtheme.h>
+#include <shellscalingapi.h>
