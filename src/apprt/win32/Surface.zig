@@ -620,12 +620,12 @@ pub fn wndProc(
             return 0;
         },
 
-        c.WM_LBUTTONDOWN => return self.mouseButtonEvent(.press, .left),
-        c.WM_LBUTTONUP => return self.mouseButtonEvent(.release, .left),
-        c.WM_RBUTTONDOWN => return self.mouseButtonEvent(.press, .right),
-        c.WM_RBUTTONUP => return self.mouseButtonEvent(.release, .right),
-        c.WM_MBUTTONDOWN => return self.mouseButtonEvent(.press, .middle),
-        c.WM_MBUTTONUP => return self.mouseButtonEvent(.release, .middle),
+        c.WM_LBUTTONDOWN => return self.mouseButtonEvent(.press, .left, wparam),
+        c.WM_LBUTTONUP => return self.mouseButtonEvent(.release, .left, wparam),
+        c.WM_RBUTTONDOWN => return self.mouseButtonEvent(.press, .right, wparam),
+        c.WM_RBUTTONUP => return self.mouseButtonEvent(.release, .right, wparam),
+        c.WM_MBUTTONDOWN => return self.mouseButtonEvent(.press, .middle, wparam),
+        c.WM_MBUTTONUP => return self.mouseButtonEvent(.release, .middle, wparam),
         c.WM_XBUTTONDOWN, c.WM_XBUTTONUP => {
             const button: input.MouseButton = switch (util.hiword(wparam)) {
                 c.XBUTTON1 => .four,
@@ -635,6 +635,7 @@ pub fn wndProc(
             _ = self.mouseButtonEvent(
                 if (msg == c.WM_XBUTTONDOWN) .press else .release,
                 button,
+                wparam,
             );
             // XBUTTON messages must return TRUE.
             return 1;
@@ -681,6 +682,7 @@ fn mouseButtonEvent(
     self: *Surface,
     action: input.MouseButtonState,
     button: input.MouseButton,
+    wparam: c.WPARAM,
 ) c.LRESULT {
     // Capture the mouse while a button is held so that we keep getting
     // events (e.g. while selecting) if the cursor leaves the window.
@@ -691,11 +693,10 @@ fn mouseButtonEvent(
             if (c.GetFocus() != self.hwnd) _ = c.SetFocus(self.hwnd);
         },
         .release => {
+            // The message contains the buttons still down, including
+            // both side buttons. Keep capture until the last is released.
             const buttons = c.MK_LBUTTON | c.MK_RBUTTON | c.MK_MBUTTON | c.MK_XBUTTON1 | c.MK_XBUTTON2;
-            const held = (if (down(c.VK_LBUTTON)) @as(c_int, c.MK_LBUTTON) else 0) |
-                (if (down(c.VK_RBUTTON)) @as(c_int, c.MK_RBUTTON) else 0) |
-                (if (down(c.VK_MBUTTON)) @as(c_int, c.MK_MBUTTON) else 0);
-            if (held & buttons == 0) _ = c.ReleaseCapture();
+            if (wparam & buttons == 0) _ = c.ReleaseCapture();
         },
     }
 
@@ -703,10 +704,6 @@ fn mouseButtonEvent(
         log.err("error in mouse button callback err={}", .{err});
     };
     return 0;
-}
-
-fn down(vk: c_int) bool {
-    return c.GetKeyState(vk) < 0;
 }
 
 /// Handle a key message. Returns true if the message was handled and

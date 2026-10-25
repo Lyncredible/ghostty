@@ -163,3 +163,7 @@ Notes:
   The rebuilt app passed a real ConPTY launch: all four argv entries
   (including the empty one) matched exactly, and the child and Ghostty
   exited with status 0. Targeted `windowsCreateCommandLine` tests pass.
+- Mouse capture now uses the button state carried by each mouse message,
+  including XBUTTON1/XBUTTON2, so releasing one button during a multi-button
+  drag doesn't prematurely release capture. Native Debug build passes;
+  physical side-button testing remains pending.
