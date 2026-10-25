@@ -4,6 +4,7 @@ const Tab = @This();
 const std = @import("std");
 const Allocator = std.mem.Allocator;
 const apprt = @import("../../apprt.zig");
+const configpkg = @import("../../config.zig");
 const CoreSurface = @import("../../Surface.zig");
 const SplitTree = @import("../../datastruct/split_tree.zig").SplitTree;
 
@@ -43,7 +44,7 @@ pub const Divider = struct {
     split_rect: c.RECT,
 };
 
-pub fn create(window: *Window, parent: ?*CoreSurface, first: bool, shell: ?[:0]const u8) !*Tab {
+pub fn create(window: *Window, parent: ?*CoreSurface, first: bool, shell: ?configpkg.Command) !*Tab {
     const alloc = window.app.core_app.alloc;
 
     const surface = try Surface.create(window, .{

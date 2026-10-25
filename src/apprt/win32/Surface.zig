@@ -57,8 +57,8 @@ bell_features: configpkg.Config.BellFeatures = .{},
 
 dim_overlay: DimOverlay = .{},
 
-/// An explicitly selected shell, owned by this surface and inherited by splits.
-shell: ?[:0]const u8 = null,
+/// An explicitly selected command, owned by this surface and inherited by splits.
+shell: ?configpkg.Command = null,
 
 /// A pending high surrogate from a standalone WM_CHAR.
 high_surrogate: ?u16 = null,
@@ -74,7 +74,7 @@ pub const Options = struct {
     /// The context the surface is being created in.
     context: apprt.surface.NewSurfaceContext = .window,
 
-    shell: ?[:0]const u8 = null,
+    shell: ?configpkg.Command = null,
 };
 
 /// Allocate and initialize a new surface in the given window. The
@@ -161,11 +161,10 @@ pub fn init(self: *Surface, app: *App, window: *Window, opts: Options) !void {
     // Get our new surface config
     var config = try apprt.surface.newConfig(app.core_app, &app.config, opts.context);
     defer config.deinit();
-    self.shell = if (opts.shell) |shell| try alloc.dupeSentinel(u8, shell, 0) else null;
-    errdefer if (self.shell) |shell| alloc.free(shell);
-    const argv = [_][:0]const u8{self.shell orelse ""};
-    if (self.shell != null) {
-        config.command = .{ .direct = &argv };
+    self.shell = if (opts.shell) |shell| try shell.clone(alloc) else null;
+    errdefer if (self.shell) |shell| shell.deinit(alloc);
+    if (self.shell) |shell| {
+        config.command = shell;
         config.@"initial-command" = null;
     }
     self.bell_features = config.@"bell-features";
@@ -212,7 +211,7 @@ pub fn deinit(self: *Surface) void {
         self.core_initialized = false;
         self.core_surface.deinit();
     }
-    if (self.shell) |shell| alloc.free(shell);
+    if (self.shell) |shell| shell.deinit(alloc);
 }
 
 pub fn core(self: *Surface) *CoreSurface {
