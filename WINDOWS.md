@@ -578,3 +578,21 @@ Reviewed the branch against this file and discussion #2563.
   relative to the executable, so the folder is portable. Verified: an
   18 MB zip whose extracted `ghostty.exe +list-themes` finds its bundled
   themes.
+
+## Next steps (2026-10-25)
+
+- Single instance, always on (decided with the user): in `App.init`, take
+  a named mutex for the app class, and if another instance's message
+  window exists, forward this launch's arguments (plus its working
+  directory) as a `new_window` IPC request and exit without a window.
+  A different `class` still gets its own instance.
+- UI tests that type need a focus guard. Twice, `SetForegroundWindow`
+  from the test script failed, and the synthetic keys ("line 3") went to
+  the Claude Code terminal instead, interrupting the session. Before
+  sending keys, check that `GetForegroundWindow()` is the Ghostty window
+  (activate it with a title bar click if needed) and abort otherwise.
+- Pending manual UI tests: search bar, `toggle_background_opacity`,
+  WSL `\wsl$` working directory inheritance through the UI,
+  PowerShell 7.
+- Not started: command palette, terminal inspector (ImGui D3D11/Win32
+  backends), quick terminal animation, Windows 10 blur.
