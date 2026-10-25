@@ -615,8 +615,13 @@ pub fn add(
             step.root_module.linkSystemLibrary("d3d11", dynamic_link_opts);
             step.root_module.linkSystemLibrary("dxgi", dynamic_link_opts);
             // d3dcompiler_47.dll ships with Windows 10 and later, so we can
-            // compile our HLSL at runtime without the Windows SDK at build time.
-            step.root_module.linkSystemLibrary("d3dcompiler_47", dynamic_link_opts);
+            // compile our HLSL at runtime without the Windows SDK shader
+            // compilers at build time. The Windows SDK and MinGW name its
+            // import library differently.
+            step.root_module.linkSystemLibrary(switch (target.result.abi) {
+                .msvc => "d3dcompiler",
+                else => "d3dcompiler_47",
+            }, dynamic_link_opts);
         }
     }
 

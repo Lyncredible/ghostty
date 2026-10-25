@@ -100,6 +100,7 @@ jobs:
       - build-libghostty-vt-android
       - build-libghostty-vt-macos
       - build-libghostty-vt-windows
+      - build-windows
       - build-linux
       - build-linux-libghostty
       - build-nix
@@ -932,6 +933,23 @@ jobs:
             -Dtarget=${{ matrix.target }}
         env:
           ANDROID_NDK_HOME: ${{ steps.setup-ndk.outputs.ndk-path }}
+
+  build-windows:
+    runs-on: namespace-profile-ghostty-windows
+    timeout-minutes: 60
+    needs: test
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Setup Zig
+        uses: mlugg/setup-zig@d1434d08867e3ee9daa34448df10607b98908d29 # v2.2.1
+
+      - name: Test
+        run: zig build test
+
+      - name: Build
+        run: zig build
 
   build-libghostty-vt-windows:
     runs-on: namespace-profile-ghostty-windows
