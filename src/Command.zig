@@ -622,7 +622,9 @@ fn windowsCreateCommandLine(allocator: mem.Allocator, argv: []const []const u8) 
 
     for (argv, 0..) |arg, arg_i| {
         if (arg_i != 0) try writer.writeByte(' ');
-        if (mem.indexOfAny(u8, arg, " \t\n\"") == null) {
+        // Empty arguments need quotes too, otherwise they disappear
+        // when the child process parses its command line.
+        if (arg.len > 0 and mem.indexOfAny(u8, arg, " \t\n\"") == null) {
             try writer.writeAll(arg);
             continue;
         }
@@ -648,6 +650,28 @@ fn windowsCreateCommandLine(allocator: mem.Allocator, argv: []const []const u8) 
     }
 
     return buf.toOwnedSliceSentinel(0);
+}
+
+test "windowsCreateCommandLine preserves arguments" {
+    const cases = [_][]const []const u8{
+        &.{ "cmd.exe", "" },
+        &.{ "program.exe", "", "", "last", "" },
+        &.{ "C:\\Program Files\\shell.exe", "argument with spaces", "", "C:\\trailing dir\\" },
+        &.{ "program.exe", "say \"hello\"", "\\", "a\tb", "日本語" },
+    };
+    for (cases) |args| {
+        const line = try windowsCreateCommandLine(testing.allocator, args);
+        defer testing.allocator.free(line);
+        const wide = try std.unicode.wtf8ToWtf16LeAllocZ(testing.allocator, line);
+        defer testing.allocator.free(wide);
+        var it = try std.process.Args.Iterator.Windows.init(testing.allocator, wide);
+        defer it.deinit();
+        for (args) |arg| {
+            const actual = it.next() orelse return error.MissingArgument;
+            try testing.expectEqualStrings(arg, actual);
+        }
+        try testing.expect(it.next() == null);
+    }
 }
 
 test "createNullDelimitedEnvMap" {
