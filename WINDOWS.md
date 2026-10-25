@@ -155,7 +155,9 @@ Notes:
   - [x] Window title indicator while any surface has a pending bell
   - [x] Border indicator
   - [x] Custom audio
-- [ ] Shell integration for PowerShell
+- [x] Shell integration for PowerShell (5.1 tested; PowerShell 7 isn't
+      installed on the dev machine)
+- [x] OSC 7 working directory reports on Windows
 - [ ] DirectWrite font discovery and rendering
 - [ ] Packaging (installer and MSIX) and release builds
 - [ ] Unimplemented apprt actions (as of 2026-10-25)
@@ -418,3 +420,22 @@ Reviewed the branch against this file and discussion #2563.
   flip-model swap chain covers plain child windows. Native test with
   `link-previews=true`: hovering a URL with Ctrl showed the preview and
   leaving the link hid it. The move-to-right case is untested.
+- OSC 7 was stubbed out on Windows. It now converts file URI paths
+  (`/C:/Users/me`) to Windows paths and compares the hostname
+  case-insensitively. New tabs and splits inherit the reported directory.
+- PowerShell shell integration (`shell-integration=detect` or
+  `powershell`): `pwsh`/`powershell` (with or without `.exe`, quoted
+  paths parsed with Windows rules) start as
+  `-NoExit -Command ". ([ScriptBlock]::Create([IO.File]::ReadAllText('…')))"`
+  so the script loads after the profile under any execution policy. The
+  script reports OSC 133 A/B/C/D, OSC 7 (`kitty-shell-cwd`), and the
+  `title` and `cursor` features. PSReadLine's `PSConsoleHostReadLine` is
+  wrapped to emit 133;C (the user's Enter binding is untouched); without
+  PSReadLine new history entries are used. Exit codes come from `$?`, and
+  from `$LASTEXITCODE` only if it changed during the command, so a native
+  command failing twice in a row with the same code reports 1 the second
+  time. Native test with Windows PowerShell 5.1: integration injected;
+  `cd C:\Windows` was reported and inherited by a new tab; the bar cursor
+  and cwd/command titles worked; command-finished notifications reported
+  success/failure for `Get-Date`, `cmd /c exit 3`, `Get-Item nope`, and
+  `cmd /c exit 0`, and nothing for an empty line.
