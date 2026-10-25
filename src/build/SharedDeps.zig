@@ -605,6 +605,10 @@ pub fn add(
 
     // Windows Stuff
     if (step.rootModuleTarget().os.tag == .windows) {
+        // Used throughout for system settings (e.g. the double-click
+        // interval), not only by the Win32 apprt.
+        step.root_module.linkSystemLibrary("user32", dynamic_link_opts);
+
         if (self.config.renderer == .direct3d11) {
             try translate_c.addImportToModule(b, "d3d11_c", step.root_module, .{
                 .source = .{ .file = b.path("src/renderer/direct3d11/d3d11.h") },

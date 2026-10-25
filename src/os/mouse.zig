@@ -20,6 +20,11 @@ pub fn clickInterval() ?u32 {
             break :macos ms;
         },
 
+        // On Windows, we can ask the system. This is in milliseconds.
+        .windows => GetDoubleClickTime(),
+
         else => null,
     };
 }
+
+extern "user32" fn GetDoubleClickTime() callconv(.winapi) u32;

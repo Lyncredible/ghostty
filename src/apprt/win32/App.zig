@@ -22,6 +22,9 @@ const log = std.log.scoped(.win32);
 /// Posted to our message window to wake up the event loop.
 const WM_GHOSTTY_WAKEUP = c.WM_APP + 1;
 
+/// The ID of the timer on our message window for the quit timer.
+const quit_timer_id = 1;
+
 /// The window class names we register.
 pub const window_class = std.unicode.utf8ToUtf16LeStringLiteral("GhosttyWindow");
 pub const surface_class = std.unicode.utf8ToUtf16LeStringLiteral("GhosttySurface");
@@ -183,14 +186,12 @@ fn unregisterClasses(hinstance: c.HINSTANCE) void {
 }
 
 pub fn run(self: *App) !void {
-    // Create our initial window, if requested.
+    // Create our initial window, if requested. Otherwise we start the
+    // quit timer, as if the last window was just closed.
     if (self.config.@"initial-window") {
         _ = try self.newWindow(null);
-    }
-
-    // If we have no windows at this point there's nothing to do.
-    if (self.windows.items.len == 0 and self.config.@"quit-after-last-window-closed") {
-        return;
+    } else {
+        self.armQuitTimer();
     }
 
     var msg: c.MSG = undefined;
@@ -235,12 +236,25 @@ fn msgWndProc(
     lparam: c.LPARAM,
 ) callconv(.c) c.LRESULT {
     const ptr = c.GetWindowLongPtrW(hwnd, util.GWLP_USERDATA);
-    if (ptr != 0 and msg == WM_GHOSTTY_WAKEUP) {
+    if (ptr != 0) {
         const self: *App = @ptrFromInt(@as(usize, @bitCast(ptr)));
-        self.core_app.tick(self) catch |err| {
-            log.err("error ticking app err={}", .{err});
-        };
-        return 0;
+        switch (msg) {
+            WM_GHOSTTY_WAKEUP => {
+                self.core_app.tick(self) catch |err| {
+                    log.err("error ticking app err={}", .{err});
+                };
+                return 0;
+            },
+
+            c.WM_TIMER => if (wparam == quit_timer_id) {
+                _ = c.KillTimer(hwnd, quit_timer_id);
+                // Only quit if no surfaces were opened in the meantime.
+                if (self.core_app.surfaces.items.len == 0) self.quit();
+                return 0;
+            },
+
+            else => {},
+        }
     }
 
     return c.DefWindowProcW(hwnd, msg, wparam, lparam);
@@ -283,6 +297,26 @@ pub fn windowDestroyed(self: *App, window: *Window) void {
             _ = self.windows.swapRemove(i);
             break;
         }
+    }
+}
+
+/// Start the quit timer, which quits the app (if configured to) once
+/// the last surface has been closed, possibly after a delay.
+///
+/// Note: this is deliberately not named `startQuitTimer`, which main
+/// calls before `run` if it exists. We handle having no windows at
+/// startup in `run` instead.
+fn armQuitTimer(self: *App) void {
+    if (!self.config.@"quit-after-last-window-closed") return;
+
+    const delay = self.config.@"quit-after-last-window-closed-delay" orelse {
+        self.quit();
+        return;
+    };
+
+    if (c.SetTimer(self.msg_hwnd, quit_timer_id, delay.asMilliseconds(), null) == 0) {
+        log.warn("failed to start quit timer, quitting now err={}", .{c.GetLastError()});
+        self.quit();
     }
 }
 
@@ -365,10 +399,8 @@ pub fn performAction(
         },
 
         .quit_timer => switch (value) {
-            // Quit timer delays aren't supported yet, so we quit
-            // immediately once the last surface is gone.
-            .start => if (self.config.@"quit-after-last-window-closed") self.quit(),
-            .stop => {},
+            .start => self.armQuitTimer(),
+            .stop => _ = c.KillTimer(self.msg_hwnd, quit_timer_id),
         },
 
         .set_title => switch (target) {
