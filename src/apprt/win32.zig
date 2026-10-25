@@ -1,0 +1,12 @@
+//! Application runtime for native Windows, built directly on the Win32 API.
+const internal_os = @import("../os/main.zig");
+
+// The required comptime API for any apprt.
+pub const App = @import("win32/App.zig");
+pub const Surface = @import("win32/Surface.zig");
+pub const resourcesDir = internal_os.resourcesDir;
+
+test {
+    @import("std").testing.refAllDecls(@This());
+    _ = @import("win32/key.zig");
+}
