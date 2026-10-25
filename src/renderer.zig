@@ -15,6 +15,7 @@ const size = @import("renderer/size.zig");
 pub const shadertoy = @import("renderer/shadertoy.zig");
 pub const Backend = @import("renderer/backend.zig").Backend;
 pub const GenericRenderer = @import("renderer/generic.zig").Renderer;
+pub const Direct3D11 = @import("renderer/Direct3D11.zig");
 pub const Metal = @import("renderer/Metal.zig");
 pub const OpenGL = @import("renderer/OpenGL.zig");
 pub const Options = @import("renderer/Options.zig");
@@ -39,6 +40,7 @@ pub const Renderer = GenericRenderer(GraphicsAPI);
 const GraphicsAPI = switch (build_config.renderer) {
     .metal => Metal,
     .opengl => OpenGL,
+    .direct3d11 => Direct3D11,
 };
 
 /// The app-scoped render device from which surface renderers are created.

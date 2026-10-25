@@ -603,6 +603,23 @@ pub fn add(
         }
     }
 
+    // Windows Stuff
+    if (step.rootModuleTarget().os.tag == .windows) {
+        if (self.config.renderer == .direct3d11) {
+            try translate_c.addImportToModule(b, "d3d11_c", step.root_module, .{
+                .source = .{ .file = b.path("src/renderer/direct3d11/d3d11.h") },
+                .target = target,
+                .optimize = optimize,
+            });
+
+            step.root_module.linkSystemLibrary("d3d11", dynamic_link_opts);
+            step.root_module.linkSystemLibrary("dxgi", dynamic_link_opts);
+            // d3dcompiler_47.dll ships with Windows 10 and later, so we can
+            // compile our HLSL at runtime without the Windows SDK at build time.
+            step.root_module.linkSystemLibrary("d3dcompiler_47", dynamic_link_opts);
+        }
+    }
+
     // cimgui
     if (b.lazyDependency("dcimgui", .{
         .target = target,

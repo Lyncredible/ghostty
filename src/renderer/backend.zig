@@ -5,6 +5,7 @@ const WasmTarget = @import("../os/wasm/target.zig").Target;
 pub const Backend = enum {
     opengl,
     metal,
+    direct3d11,
 
     pub fn default(
         target: std.Target,
@@ -12,6 +13,7 @@ pub const Backend = enum {
     ) Backend {
         _ = wasm_target;
         if (target.os.tag.isDarwin()) return .metal;
+        if (target.os.tag == .windows) return .direct3d11;
         return .opengl;
     }
 };

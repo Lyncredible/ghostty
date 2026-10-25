@@ -82,6 +82,7 @@ pub fn init(
             .view = switch (opts.rt_surface.platform) {
                 .macos => |v| v.nsview,
                 .ios => |v| v.uiview,
+                .windows => unreachable,
             },
         },
 
