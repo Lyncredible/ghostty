@@ -23,6 +23,8 @@ const LinkPreview = @import("LinkPreview.zig");
 const Scrollbar = @import("Scrollbar.zig");
 const Badge = @import("Badge.zig");
 const SearchBar = @import("SearchBar.zig");
+const Ipc = @import("Ipc.zig");
+const Overrides = @import("Overrides.zig");
 const Taskbar = @import("Taskbar.zig");
 const Notifier = @import("Notifier.zig");
 const BellAudio = @import("BellAudio.zig");
@@ -40,7 +42,7 @@ const quit_timer_id = 1;
 pub const window_class = std.unicode.utf8ToUtf16LeStringLiteral("GhosttyWindow");
 pub const surface_class = std.unicode.utf8ToUtf16LeStringLiteral("GhosttySurface");
 pub const tab_bar_class = std.unicode.utf8ToUtf16LeStringLiteral("GhosttyTabBar");
-const message_class = std.unicode.utf8ToUtf16LeStringLiteral("GhosttyMessage");
+const message_class = Ipc.message_class;
 
 core_app: *CoreApp,
 
@@ -112,10 +114,13 @@ pub fn init(
     try registerClasses(hinstance);
     errdefer unregisterClasses(hinstance);
 
+    // The message window's title is our class, so +new-window can find us.
+    var title_buf: [256]u16 = undefined;
+    const title = Ipc.windowTitle(&title_buf, config.class orelse Ipc.default_class);
     const msg_hwnd = c.CreateWindowExW(
         0,
         message_class,
-        null,
+        if (title) |t| t.ptr else null,
         0,
         0,
         0,
@@ -394,6 +399,13 @@ fn msgWndProc(
                 return 0;
             },
 
+            c.WM_COPYDATA => {
+                const copy: *const c.COPYDATASTRUCT = @ptrFromInt(@as(usize, @bitCast(lparam)));
+                if (copy.dwData != Ipc.magic) return 0;
+                const data: [*]const u8 = @ptrCast(copy.lpData orelse return 0);
+                return @intFromBool(self.handleIpc(data[0..copy.cbData]));
+            },
+
             Notifier.WM_NOTIFY_ICON => {
                 if (self.notifier.handleMessage(lparam)) |surface| {
                     self.presentSurface(surface);
@@ -450,6 +462,55 @@ fn activeWindow(self: *App) ?*Window {
 pub fn playBellAudio(self: *App) void {
     const path = self.config.@"bell-audio-path" orelse return;
     self.bell_audio.play(self.core_app.alloc, path, self.config.@"bell-audio-volume");
+}
+
+/// Handle a request from +new-window or +new-tab. The data is only valid
+/// during this call.
+fn handleIpc(self: *App, data: []const u8) bool {
+    var arena: std.heap.ArenaAllocator = .init(self.core_app.alloc);
+    defer arena.deinit();
+    const alloc = arena.allocator();
+
+    const request = Ipc.decode(alloc, data) catch |err| {
+        log.warn("invalid IPC request err={}", .{err});
+        return false;
+    };
+    const overrides: Overrides = if (request.arguments) |args|
+        Overrides.parse(alloc, args) catch return false
+    else
+        .none;
+    log.debug("IPC request kind={} surface={}", .{ request.kind, request.surface_id });
+
+    switch (request.kind) {
+        .new_window => {
+            const window = self.newWindow(.{ .overrides = overrides }) catch |err| {
+                log.warn("error opening window from IPC err={}", .{err});
+                return false;
+            };
+            window.present(window.activeSurface());
+        },
+
+        .new_tab => {
+            // The window of the given surface, or the active window.
+            const window = window: {
+                if (request.surface_id != 0) {
+                    for (self.core_app.surfaces.items) |rt_surface| {
+                        if (rt_surface.core().id == request.surface_id) break :window rt_surface.window;
+                    }
+                }
+                break :window self.activeWindow();
+            } orelse {
+                _ = self.newWindow(.{ .overrides = overrides }) catch return false;
+                return true;
+            };
+            const tab = window.addTabWith(null, null, overrides) catch |err| {
+                log.warn("error opening tab from IPC err={}", .{err});
+                return false;
+            };
+            window.present(tab.focused);
+        },
+    }
+    return true;
 }
 
 /// Bring the given surface to the front, if it still exists.
@@ -898,15 +959,29 @@ fn openUrl(alloc: Allocator, url: []const u8) void {
 
 /// Send the given IPC to a running Ghostty. Returns `true` if the action was
 /// able to be performed, `false` otherwise.
-///
-/// IPC is not supported on Windows yet.
 pub fn performIpc(
-    _: Allocator,
-    _: apprt.ipc.Target,
+    alloc: Allocator,
+    target: apprt.ipc.Target,
     comptime action: apprt.ipc.Action.Key,
-    _: apprt.ipc.Action.Value(action),
+    value: apprt.ipc.Action.Value(action),
 ) (Allocator.Error || apprt.ipc.Errors)!bool {
-    return false;
+    return switch (action) {
+        .new_window => try Ipc.send(alloc, target, .{
+            .kind = .new_window,
+            .arguments = toConst(value.arguments),
+        }),
+        .new_tab => try Ipc.send(alloc, target, .{
+            .kind = .new_tab,
+            .surface_id = value.surface_id,
+            .arguments = toConst(value.arguments),
+        }),
+        .toggle_quick_terminal => false,
+    };
+}
+
+fn toConst(args: ?[][:0]const u8) ?[]const []const u8 {
+    const v = args orelse return null;
+    return @ptrCast(v);
 }
 
 /// Redraw the inspector for the given surface. The inspector isn't

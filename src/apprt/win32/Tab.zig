@@ -12,6 +12,7 @@ const util = @import("util.zig");
 const c = util.c;
 const Surface = @import("Surface.zig");
 const Window = @import("Window.zig");
+const Overrides = @import("Overrides.zig");
 
 const log = std.log.scoped(.win32);
 
@@ -48,13 +49,20 @@ pub const Divider = struct {
     split_rect: c.RECT,
 };
 
-pub fn create(window: *Window, parent: ?*CoreSurface, first: bool, shell: ?configpkg.Command) !*Tab {
+pub fn create(
+    window: *Window,
+    parent: ?*CoreSurface,
+    first: bool,
+    shell: ?configpkg.Command,
+    overrides: Overrides,
+) !*Tab {
     const alloc = window.app.core_app.alloc;
 
     const surface = try Surface.create(window, .{
         .parent = parent,
         .context = if (first) .window else .tab,
         .shell = shell,
+        .overrides = overrides,
     });
     errdefer surface.destroy();
 

@@ -24,6 +24,7 @@ const LinkPreview = @import("LinkPreview.zig");
 const Scrollbar = @import("Scrollbar.zig");
 const Badge = @import("Badge.zig");
 const SearchBar = @import("SearchBar.zig");
+const Overrides = @import("Overrides.zig");
 
 const log = std.log.scoped(.win32);
 
@@ -116,6 +117,10 @@ pub const Options = struct {
     context: apprt.surface.NewSurfaceContext = .window,
 
     shell: ?configpkg.Command = null,
+
+    /// Overrides from +new-window or +new-tab. These only apply to this
+    /// surface, not to splits from it.
+    overrides: Overrides = .none,
 };
 
 /// Allocate and initialize a new surface in the given window. The
@@ -208,6 +213,7 @@ pub fn init(self: *Surface, app: *App, window: *Window, opts: Options) !void {
         config.command = shell;
         config.@"initial-command" = null;
     }
+    opts.overrides.apply(&config);
     self.bell_features = config.@"bell-features";
     self.notify_on_command_finish = config.@"notify-on-command-finish";
     self.notify_on_command_finish_action = config.@"notify-on-command-finish-action";
