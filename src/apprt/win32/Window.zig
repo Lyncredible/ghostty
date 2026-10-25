@@ -1,5 +1,6 @@
-//! A top-level window. A window hosts one or more surfaces as tabs. Each
-//! surface is a child window and only the active tab's surface is shown.
+//! A top-level window. A window hosts one or more tabs, and each tab is
+//! a tree of surfaces (splits). Each surface is a child window and only
+//! the surfaces of the active tab are shown.
 const Window = @This();
 
 const std = @import("std");
@@ -11,6 +12,7 @@ const util = @import("util.zig");
 const c = util.c;
 const App = @import("App.zig");
 const Surface = @import("Surface.zig");
+const Tab = @import("Tab.zig");
 
 const log = std.log.scoped(.win32);
 
@@ -25,11 +27,14 @@ tab_hwnd: c.HWND,
 /// The font used by the tab bar, scaled for our DPI.
 tab_font: ?c.HFONT = null,
 
-/// The surfaces in this window, in tab order.
-surfaces: std.ArrayList(*Surface) = .empty,
+/// The tabs in this window, in order.
+tabs: std.ArrayList(*Tab) = .empty,
 
 /// The index of the active tab.
 active: usize = 0,
+
+/// The split divider being dragged, if any.
+dragging: ?Tab.Divider = null,
 
 /// The saved window state while we're fullscreen, used to restore it.
 fullscreen: ?struct {
@@ -119,11 +124,8 @@ pub fn init(self: *Window, app: *App, parent: ?*CoreSurface) !void {
 /// handle; this is called while the window is being destroyed.
 pub fn deinit(self: *Window) void {
     const alloc = self.app.core_app.alloc;
-    for (self.surfaces.items) |surface| {
-        surface.deinit();
-        alloc.destroy(surface);
-    }
-    self.surfaces.deinit(alloc);
+    for (self.tabs.items) |tab| tab.destroy();
+    self.tabs.deinit(alloc);
     if (self.tab_font) |f| _ = c.DeleteObject(f);
 }
 
@@ -144,9 +146,26 @@ pub fn destroy(self: *Window) void {
     _ = c.DestroyWindow(self.hwnd);
 }
 
-/// The surface of the active tab.
+/// The active tab.
+pub fn activeTab(self: *const Window) *Tab {
+    return self.tabs.items[self.active];
+}
+
+/// The focused surface of the active tab.
 pub fn activeSurface(self: *const Window) *Surface {
-    return self.surfaces.items[self.active];
+    return self.activeTab().focused;
+}
+
+/// The tab that contains the given surface.
+pub fn tabOf(self: *const Window, surface: *const Surface) ?*Tab {
+    for (self.tabs.items) |tab| {
+        if (tab.contains(surface)) return tab;
+    }
+    return null;
+}
+
+fn tabIndex(self: *const Window, tab: *const Tab) ?usize {
+    return std.mem.indexOfScalar(*Tab, self.tabs.items, @constCast(tab));
 }
 
 //----------------------------------------------------------------------------
@@ -154,28 +173,20 @@ pub fn activeSurface(self: *const Window) *Surface {
 
 /// Create a new tab, inheriting from the parent surface if given, and
 /// select it.
-pub fn addTab(self: *Window, parent: ?*CoreSurface) !*Surface {
+pub fn addTab(self: *Window, parent: ?*CoreSurface) !*Tab {
     const alloc = self.app.core_app.alloc;
 
-    const surface = try alloc.create(Surface);
-    errdefer alloc.destroy(surface);
-    try surface.init(self.app, self, .{
-        .parent = parent,
-        .context = if (self.surfaces.items.len == 0) .window else .tab,
-    });
-    errdefer {
-        surface.deinit();
-        _ = c.DestroyWindow(surface.hwnd);
-    }
+    const tab = try Tab.create(self, parent, self.tabs.items.len == 0);
+    errdefer tab.destroy();
 
-    const idx: usize = if (self.surfaces.items.len == 0)
+    const idx: usize = if (self.tabs.items.len == 0)
         0
     else switch (self.app.config.@"window-new-tab-position") {
         .current => self.active + 1,
-        .end => self.surfaces.items.len,
+        .end => self.tabs.items.len,
     };
-    try self.surfaces.insert(alloc, idx, surface);
-    errdefer _ = self.surfaces.orderedRemove(idx);
+    try self.tabs.insert(alloc, idx, tab);
+    errdefer _ = self.tabs.orderedRemove(idx);
 
     var item: c.TCITEMW = std.mem.zeroes(c.TCITEMW);
     item.mask = c.TCIF_TEXT;
@@ -188,40 +199,30 @@ pub fn addTab(self: *Window, parent: ?*CoreSurface) !*Surface {
     ) < 0) return error.InsertTabFailed;
 
     self.selectTab(idx);
-    self.layout();
-    return surface;
+    return tab;
 }
 
 /// Make the tab at the given index active.
 pub fn selectTab(self: *Window, idx: usize) void {
-    if (idx >= self.surfaces.items.len) return;
+    if (idx >= self.tabs.items.len) return;
 
-    const prev = self.active;
     self.active = idx;
     _ = c.SendMessageW(self.tab_hwnd, c.TCM_SETCURSEL, idx, 0);
 
-    // Hide all other surfaces and show the active one.
-    for (self.surfaces.items, 0..) |surface, i| {
-        if (i == idx) continue;
-        if (c.IsWindowVisible(surface.hwnd) != 0) {
-            _ = c.ShowWindow(surface.hwnd, c.SW_HIDE);
-            surface.setVisible(false);
-        }
+    // Hide all other tabs, and show and lay out the active one.
+    for (self.tabs.items, 0..) |tab, i| {
+        if (i != idx) tab.setVisible(false);
     }
+    self.layout();
 
-    const surface = self.surfaces.items[idx];
-    _ = c.ShowWindow(surface.hwnd, c.SW_SHOW);
-    surface.setVisible(true);
-    if (c.GetForegroundWindow() == self.hwnd or prev != idx) {
-        _ = c.SetFocus(surface.hwnd);
-    }
-
+    const tab = self.tabs.items[idx];
+    tab.focus(tab.focused);
     self.updateWindowTitle();
 }
 
 /// Go to a tab, using the semantics of the goto_tab action.
 pub fn gotoTab(self: *Window, goto: apprt.action.GotoTab) bool {
-    const total = self.surfaces.items.len;
+    const total = self.tabs.items.len;
     if (total == 0) return false;
     const current = self.active;
 
@@ -244,7 +245,7 @@ pub fn gotoTab(self: *Window, goto: apprt.action.GotoTab) bool {
 
 /// Move the active tab by the given amount, wrapping around.
 pub fn moveTab(self: *Window, amount: isize) bool {
-    const total = self.surfaces.items.len;
+    const total = self.tabs.items.len;
     if (total <= 1) return false;
 
     const total_i: isize = @intCast(total);
@@ -252,97 +253,118 @@ pub fn moveTab(self: *Window, amount: isize) bool {
     const to: usize = @intCast(@mod(@as(isize, @intCast(from)) + amount, total_i));
     if (from == to) return false;
 
-    const surface = self.surfaces.orderedRemove(from);
-    self.surfaces.insertAssumeCapacity(to, surface);
+    const tab = self.tabs.orderedRemove(from);
+    self.tabs.insertAssumeCapacity(to, tab);
 
-    // Rebuild the tab items in the new order.
+    // Move the tab item, its title is restored below.
     _ = c.SendMessageW(self.tab_hwnd, c.TCM_DELETEITEM, from, 0);
     var item: c.TCITEMW = std.mem.zeroes(c.TCITEMW);
     item.mask = c.TCIF_TEXT;
     item.pszText = @constCast(std.unicode.utf8ToUtf16LeStringLiteral(""));
     _ = c.SendMessageW(self.tab_hwnd, c.TCM_INSERTITEMW, to, @bitCast(@intFromPtr(&item)));
-    self.updateTabTitle(surface);
+    self.updateTabTitle(tab);
 
     self.selectTab(to);
     return true;
 }
 
-/// Close the tab of the given surface without confirmation. If it's the
-/// last tab, the window is closed.
-pub fn closeSurface(self: *Window, surface: *Surface) void {
-    const idx = std.mem.indexOfScalar(*Surface, self.surfaces.items, surface) orelse return;
+/// Close the given tab without confirmation. If it's the last tab, the
+/// window is closed.
+fn closeTab(self: *Window, tab: *Tab) void {
+    const idx = self.tabIndex(tab) orelse return;
 
-    // The last tab closes the window, which deinitializes the surface.
-    if (self.surfaces.items.len == 1) {
+    // The last tab closes the window, which destroys the tab.
+    if (self.tabs.items.len == 1) {
         if (!self.destroying) self.destroy();
         return;
     }
 
-    _ = self.surfaces.orderedRemove(idx);
+    _ = self.tabs.orderedRemove(idx);
     _ = c.SendMessageW(self.tab_hwnd, c.TCM_DELETEITEM, idx, 0);
-
-    const alloc = self.app.core_app.alloc;
-    surface.deinit();
-    _ = c.DestroyWindow(surface.hwnd);
-    alloc.destroy(surface);
+    tab.destroy();
 
     // Keep the same tab active. If the active tab was closed, the tab
     // that took its place (or the new last tab) becomes active.
     if (idx < self.active) self.active -= 1;
-    self.active = @min(self.active, self.surfaces.items.len - 1);
+    self.active = @min(self.active, self.tabs.items.len - 1);
     self.selectTab(self.active);
-    self.layout();
 }
 
-/// Close tabs relative to the given surface, asking for confirmation if
-/// any of them have a running process.
-pub fn closeTabs(self: *Window, surface: *Surface, mode: apprt.action.CloseTabMode) void {
-    const idx = std.mem.indexOfScalar(*Surface, self.surfaces.items, surface) orelse return;
+/// Close the given surface without confirmation. This removes it from
+/// its split tree, closing the tab if it's the last surface in it.
+pub fn closeSurface(self: *Window, surface: *Surface) void {
+    const tab = self.tabOf(surface) orelse return;
+    if (tab.isSingle()) {
+        self.closeTab(tab);
+        return;
+    }
 
-    // Collect the surfaces to close.
+    tab.remove(surface) catch |err| {
+        log.err("error removing split err={}", .{err});
+    };
+}
+
+/// Close tabs relative to the tab of the given surface, asking for
+/// confirmation if any of them have a running process.
+pub fn closeTabs(self: *Window, surface: *Surface, mode: apprt.action.CloseTabMode) void {
+    const current = self.tabOf(surface) orelse return;
+    const idx = self.tabIndex(current) orelse return;
+
+    // Collect the tabs to close.
     const alloc = self.app.core_app.alloc;
-    var targets: std.ArrayList(*Surface) = .empty;
+    var targets: std.ArrayList(*Tab) = .empty;
     defer targets.deinit(alloc);
-    for (self.surfaces.items, 0..) |s, i| {
+    for (self.tabs.items, 0..) |tab, i| {
         const close_it = switch (mode) {
             .this => i == idx,
             .other => i != idx,
             .right => i > idx,
         };
-        if (close_it) targets.append(alloc, s) catch return;
+        if (close_it) targets.append(alloc, tab) catch return;
     }
     if (targets.items.len == 0) return;
 
-    // A single tab goes through the core so it confirms as usual.
-    if (targets.items.len == 1) {
-        targets.items[0].core_surface.close();
+    // A single surface goes through the core so it confirms as usual.
+    if (targets.items.len == 1 and targets.items[0].isSingle()) {
+        targets.items[0].focused.core_surface.close();
         return;
     }
 
-    for (targets.items) |s| {
-        if (s.core_surface.needsConfirmQuit()) {
+    for (targets.items) |tab| {
+        if (tab.needsConfirmQuit()) {
             if (!confirm(
                 self,
                 "Close tabs?",
-                "A process is still running in at least one of the tabs. Closing them will kill the processes.",
+                "A process is still running in at least one of the terminals. Closing them will kill the processes.",
             )) return;
             break;
         }
     }
 
-    for (targets.items) |s| self.closeSurface(s);
+    for (targets.items) |tab| self.closeTab(tab);
+}
+
+/// Called by a surface when it gains focus.
+pub fn surfaceFocused(self: *Window, surface: *Surface) void {
+    const tab = self.tabOf(surface) orelse return;
+    if (tab.focused == surface) return;
+    tab.focused = surface;
+    self.updateTabTitle(tab);
+    if (tab == self.activeTab()) self.updateWindowTitle();
 }
 
 /// Called by a surface when its title changes.
 pub fn surfaceTitleChanged(self: *Window, surface: *Surface) void {
-    self.updateTabTitle(surface);
-    if (surface == self.activeSurface()) self.updateWindowTitle();
+    const tab = self.tabOf(surface) orelse return;
+    if (tab.focused != surface) return;
+    self.updateTabTitle(tab);
+    if (tab == self.activeTab()) self.updateWindowTitle();
 }
 
-fn updateTabTitle(self: *Window, surface: *Surface) void {
-    const idx = std.mem.indexOfScalar(*Surface, self.surfaces.items, surface) orelse return;
+fn updateTabTitle(self: *Window, tab: *Tab) void {
+    const idx = self.tabIndex(tab) orelse return;
     const alloc = self.app.core_app.alloc;
-    const title16 = util.utf16Alloc(alloc, surface.title orelse "Ghostty") catch return;
+    const title16 = util.utf16Alloc(alloc, tab.focused.title orelse "Ghostty") catch return;
     defer alloc.free(title16);
 
     var item: c.TCITEMW = std.mem.zeroes(c.TCITEMW);
@@ -363,33 +385,38 @@ fn updateWindowTitle(self: *Window) void {
 fn showTabBar(self: *const Window) bool {
     return switch (self.app.config.@"window-show-tab-bar") {
         .always => true,
-        .auto => self.surfaces.items.len > 1,
+        .auto => self.tabs.items.len > 1,
         .never => false,
     };
 }
 
-/// Position the tab bar and surfaces within our client area.
-fn layout(self: *Window) void {
+/// The area of our client area that the active tab's surfaces fill.
+pub fn surfaceArea(self: *const Window) c.RECT {
     var client: c.RECT = undefined;
-    if (c.GetClientRect(self.hwnd, &client) == 0) return;
-
-    var top: c_int = 0;
+    if (c.GetClientRect(self.hwnd, &client) == 0) return std.mem.zeroes(c.RECT);
     if (self.showTabBar()) {
-        // Ask the tab control how much space its tabs need.
         var rect = client;
         _ = c.SendMessageW(self.tab_hwnd, c.TCM_ADJUSTRECT, c.FALSE, @bitCast(@intFromPtr(&rect)));
-        top = @max(0, rect.top - 2);
-        _ = c.MoveWindow(self.tab_hwnd, 0, 0, client.right, top, c.TRUE);
+        client.top = @max(0, rect.top - 2);
+    }
+    return client;
+}
+
+/// Position the tab bar and the active tab's surfaces within our
+/// client area.
+pub fn layout(self: *Window) void {
+    const area = self.surfaceArea();
+    if (self.showTabBar()) {
+        _ = c.MoveWindow(self.tab_hwnd, 0, 0, area.right, area.top, c.TRUE);
         _ = c.ShowWindow(self.tab_hwnd, c.SW_SHOWNA);
     } else {
         _ = c.ShowWindow(self.tab_hwnd, c.SW_HIDE);
     }
 
-    // All surfaces are kept at the same size so switching tabs doesn't
-    // need a resize.
-    for (self.surfaces.items) |surface| {
-        _ = c.MoveWindow(surface.hwnd, 0, top, client.right, @max(0, client.bottom - top), c.TRUE);
-    }
+    if (self.tabs.items.len > 0) self.activeTab().layout(area);
+
+    // Repaint the split dividers.
+    _ = c.InvalidateRect(self.hwnd, null, c.TRUE);
 }
 
 /// Set the font of the tab bar to the system UI font for our DPI.
@@ -409,6 +436,30 @@ fn updateTabFont(self: *Window) void {
     _ = c.SendMessageW(self.tab_hwnd, c.WM_SETFONT, @intFromPtr(font), c.TRUE);
     if (self.tab_font) |old| _ = c.DeleteObject(old);
     self.tab_font = font;
+}
+
+/// The color of the dividers between splits.
+fn dividerColor(self: *const Window) c.COLORREF {
+    const config = &self.app.config;
+    if (config.@"split-divider-color") |v| return rgb(v.r, v.g, v.b);
+
+    // By default, blend the background toward the foreground a little so
+    // the divider is visible but subtle in both light and dark themes.
+    const bg = config.background;
+    const fg = config.foreground;
+    return rgb(
+        mix(bg.r, fg.r),
+        mix(bg.g, fg.g),
+        mix(bg.b, fg.b),
+    );
+}
+
+fn mix(a: u8, b: u8) u8 {
+    return @intCast((@as(u16, a) * 3 + @as(u16, b)) / 4);
+}
+
+fn rgb(r: u8, g: u8, b: u8) c.COLORREF {
+    return @as(c.COLORREF, r) | (@as(c.COLORREF, g) << 8) | (@as(c.COLORREF, b) << 16);
 }
 
 //----------------------------------------------------------------------------
@@ -537,6 +588,64 @@ pub fn wndProc(
             return 0;
         },
 
+        // We paint everything in WM_PAINT. Note that we can't use the
+        // HDC passed in WPARAM here anyway: GDI handles aren't aligned
+        // pointers, which Zig checks when converting from an integer.
+        c.WM_ERASEBKGND => return 1,
+
+        c.WM_PAINT => {
+            // The only part of our client area not covered by child
+            // windows is the space between splits, which we fill with
+            // the divider color.
+            var ps: c.PAINTSTRUCT = undefined;
+            const hdc = c.BeginPaint(hwnd, &ps);
+            defer _ = c.EndPaint(hwnd, &ps);
+            const brush = c.CreateSolidBrush(self.dividerColor());
+            defer _ = c.DeleteObject(brush);
+            _ = c.FillRect(hdc, &ps.rcPaint, brush);
+            return 0;
+        },
+
+        c.WM_SETCURSOR => {
+            if (util.loword(lparam) == c.HTCLIENT) {
+                var pt: c.POINT = undefined;
+                _ = c.GetCursorPos(&pt);
+                _ = c.ScreenToClient(hwnd, &pt);
+                if (self.activeTab().dividerAt(pt.x, pt.y)) |d| {
+                    _ = c.SetCursor(util.loadSystemCursor(switch (d.layout) {
+                        .horizontal => util.IDC_SIZEWE,
+                        .vertical => util.IDC_SIZENS,
+                    }));
+                    return 1;
+                }
+            }
+        },
+
+        c.WM_LBUTTONDOWN => {
+            const x: c_int = util.loword(lparam);
+            const y: c_int = util.hiword(lparam);
+            if (self.activeTab().dividerAt(x, y)) |d| {
+                self.dragging = d;
+                _ = c.SetCapture(hwnd);
+            }
+            return 0;
+        },
+
+        c.WM_MOUSEMOVE => {
+            if (self.dragging) |d| {
+                self.activeTab().dragDivider(d, util.loword(lparam), util.hiword(lparam));
+            }
+            return 0;
+        },
+
+        c.WM_LBUTTONUP, c.WM_CAPTURECHANGED => {
+            if (self.dragging != null) {
+                self.dragging = null;
+                if (msg == c.WM_LBUTTONUP) _ = c.ReleaseCapture();
+            }
+            return 0;
+        },
+
         c.WM_SETFOCUS => {
             _ = c.SetFocus(self.activeSurface().hwnd);
             return 0;
@@ -575,19 +684,19 @@ pub fn wndProc(
         },
 
         c.WM_CLOSE => {
-            // With a single tab, go through the core so that it confirms
-            // as usual and calls back into Surface.close.
-            if (self.surfaces.items.len == 1) {
+            // With a single surface, go through the core so that it
+            // confirms as usual and calls back into Surface.close.
+            if (self.tabs.items.len == 1 and self.activeTab().isSingle()) {
                 self.activeSurface().core_surface.close();
                 return 0;
             }
 
-            for (self.surfaces.items) |s| {
-                if (s.core_surface.needsConfirmQuit()) {
+            for (self.tabs.items) |tab| {
+                if (tab.needsConfirmQuit()) {
                     if (!confirm(
                         self,
                         "Close window?",
-                        "A process is still running in at least one of the tabs. Closing the window will kill the processes.",
+                        "A process is still running in at least one of the terminals. Closing the window will kill the processes.",
                     )) return 0;
                     break;
                 }
