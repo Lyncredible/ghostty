@@ -246,13 +246,15 @@ fn closeTab(self: *Window, tab: *Tab) void {
     }
 
     _ = self.tabs.orderedRemove(idx);
-    tab.destroy();
 
     // Keep the same tab active. If the active tab was closed, the tab
     // that took its place (or the new last tab) becomes active.
+    // Do this before destroying the old tab: DestroyWindow can send
+    // WM_SETFOCUS to us synchronously, which reads activeSurface().
     if (idx < self.active) self.active -= 1;
     self.active = @min(self.active, self.tabs.items.len - 1);
     self.selectTab(self.active);
+    tab.destroy();
 }
 
 /// Close the given surface without confirmation. This removes it from
