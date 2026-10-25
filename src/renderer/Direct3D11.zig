@@ -31,8 +31,7 @@ pub const Sampler = @import("direct3d11/Sampler.zig");
 pub const Texture = @import("direct3d11/Texture.zig");
 pub const shaders = @import("direct3d11/shaders.zig");
 
-// TODO: custom shaders need an HLSL shadertoy target.
-pub const custom_shader_target: shadertoy.Target = .glsl;
+pub const custom_shader_target: shadertoy.Target = .hlsl;
 // The fragCoord for Direct3D shaders is +Y = down.
 pub const custom_shader_y_is_down = true;
 

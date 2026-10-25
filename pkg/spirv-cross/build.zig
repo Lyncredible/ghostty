@@ -84,6 +84,10 @@ fn buildSpirvCross(
         try flags.append(b.allocator, "-fPIC");
     }
 
+    // HLSL is only used by the Direct3D renderer on Windows.
+    const hlsl = target.result.os.tag == .windows;
+    if (hlsl) try flags.append(b.allocator, "-DSPIRV_CROSS_C_API_HLSL=1");
+
     if (b.lazyDependency("spirv_cross", .{})) |upstream| {
         lib.root_module.addIncludePath(upstream.path(""));
         module.addIncludePath(upstream.path(""));
@@ -106,6 +110,11 @@ fn buildSpirvCross(
                 // MSL
                 "spirv_msl.cpp",
             },
+        });
+        if (hlsl) lib.root_module.addCSourceFiles(.{
+            .root = upstream.path(""),
+            .flags = flags.items,
+            .files = &.{"spirv_hlsl.cpp"},
         });
 
         lib.installHeadersDirectory(
