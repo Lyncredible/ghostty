@@ -1529,11 +1529,6 @@ pub const StreamHandler = struct {
             return;
         }
 
-        if (builtin.target.os.tag == .windows) {
-            log.warn("reportPwd unimplemented on windows", .{});
-            return;
-        }
-
         // Attempt to parse this file-style URI using options appropriate
         // for this OSC 7 context (e.g. kitty-shell-cwd expects the full,
         // unencoded path).
@@ -1586,7 +1581,11 @@ pub const StreamHandler = struct {
         var stack_alloc_buf: [1024]u8 = undefined;
         var stack_alloc: std.heap.BufferFirstAllocator = .init(&stack_alloc_buf, arena_alloc.allocator());
         defer arena_alloc.deinit();
-        const path = try uri.path.toRawMaybeAlloc(stack_alloc.allocator());
+        const uri_path = try uri.path.toRawMaybeAlloc(stack_alloc.allocator());
+        const path = if (builtin.target.os.tag == .windows)
+            try internal_os.uri.windowsPath(stack_alloc.allocator(), uri_path)
+        else
+            uri_path;
 
         log.debug("terminal pwd: {s}", .{path});
         try self.terminal.setPwd(path);
