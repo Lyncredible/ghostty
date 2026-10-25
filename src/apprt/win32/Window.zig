@@ -53,6 +53,9 @@ destroying: bool = false,
 /// Explorer sends TaskbarButtonCreated after the window's button exists.
 taskbar_ready: bool = false,
 
+/// A title set by the user, which takes precedence over the active tab's.
+title_override: ?[:0]const u8 = null,
+
 /// What a new window starts with.
 pub const Initial = union(enum) {
     /// A new tab, inheriting from the parent surface if given.
@@ -112,6 +115,7 @@ pub fn init(self: *Window, app: *App, initial: Initial) !void {
 pub fn deinit(self: *Window) void {
     _ = c.KillTimer(self.hwnd, progress_timer_id);
     const alloc = self.app.core_app.alloc;
+    if (self.title_override) |v| alloc.free(v);
     for (self.tabs.items) |tab| tab.destroy();
     self.tabs.deinit(alloc);
     self.tab_bar.deinit();
@@ -450,9 +454,20 @@ pub fn surfaceTitleChanged(self: *Window, surface: *Surface) void {
     if (tab == self.activeTab()) self.updateWindowTitle();
 }
 
+/// Set or clear (with null or an empty title) the user's title override.
+pub fn setTitleOverride(self: *Window, value: ?[]const u8) void {
+    const alloc = self.app.core_app.alloc;
+    if (self.title_override) |v| alloc.free(v);
+    self.title_override = null;
+    if (value) |v| if (v.len > 0) {
+        self.title_override = alloc.dupeSentinel(u8, v, 0) catch null;
+    };
+    self.updateWindowTitle();
+}
+
 fn updateWindowTitle(self: *Window) void {
     const alloc = self.app.core_app.alloc;
-    const title = self.activeSurface().title orelse "Ghostty";
+    const title = self.title_override orelse self.activeTab().title();
     const pending = for (self.tabs.items) |tab| {
         if (tab.hasBell()) break true;
     } else false;

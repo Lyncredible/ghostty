@@ -25,6 +25,10 @@ tree: Tree,
 /// The surface in this tab that has (or last had) focus.
 focused: *Surface,
 
+/// A title set by the user, which takes precedence over the focused
+/// surface's title.
+title_override: ?[:0]const u8 = null,
+
 /// The dividers between splits from the last layout, used to resize
 /// splits with the mouse.
 dividers: std.ArrayList(Divider) = .empty,
@@ -69,9 +73,26 @@ pub fn create(window: *Window, parent: ?*CoreSurface, first: bool, shell: ?confi
 /// Destroy the tab, which closes all of its surfaces.
 pub fn destroy(self: *Tab) void {
     const alloc = self.window.app.core_app.alloc;
+    if (self.title_override) |v| alloc.free(v);
     self.dividers.deinit(alloc);
     self.tree.deinit();
     alloc.destroy(self);
+}
+
+/// The title to show for this tab.
+pub fn title(self: *const Tab) [:0]const u8 {
+    return self.title_override orelse self.focused.effectiveTitle() orelse "Ghostty";
+}
+
+/// Set or clear (with null or an empty title) the user's title override.
+pub fn setTitleOverride(self: *Tab, value: ?[]const u8) void {
+    const alloc = self.window.app.core_app.alloc;
+    if (self.title_override) |v| alloc.free(v);
+    self.title_override = null;
+    if (value) |v| if (v.len > 0) {
+        self.title_override = alloc.dupeSentinel(u8, v, 0) catch null;
+    };
+    self.window.surfaceTitleChanged(self.focused);
 }
 
 /// Returns whether this tab contains the given surface.

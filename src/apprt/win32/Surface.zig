@@ -53,6 +53,9 @@ cursor_hidden: bool = false,
 /// The current title, if one was set.
 title: ?[:0]const u8 = null,
 
+/// A title set by the user, which takes precedence over `title`.
+title_override: ?[:0]const u8 = null,
+
 /// Bell behavior from this surface's config, including conditional config.
 bell_features: configpkg.Config.BellFeatures = .{},
 
@@ -225,6 +228,7 @@ pub fn deinit(self: *Surface) void {
     self.bell_border.deinit();
 
     if (self.title) |v| alloc.free(v);
+    if (self.title_override) |v| alloc.free(v);
 
     // Remove ourselves from the list of known surfaces in the app.
     self.app.core_app.deleteSurface(self);
@@ -271,6 +275,30 @@ pub fn setTitle(self: *Surface, title: [:0]const u8) void {
     if (self.title) |v| alloc.free(v);
     self.title = alloc.dupeSentinel(u8, title, 0) catch null;
     self.window.surfaceTitleChanged(self);
+}
+
+/// The title to show: the user's override if set, else the terminal's.
+pub fn effectiveTitle(self: *const Surface) ?[:0]const u8 {
+    return self.title_override orelse self.title;
+}
+
+/// Set or clear (with null or an empty title) the user's title override.
+pub fn setTitleOverride(self: *Surface, title: ?[]const u8) void {
+    const alloc = self.app.core_app.alloc;
+    if (self.title_override) |v| alloc.free(v);
+    self.title_override = null;
+    if (title) |v| if (v.len > 0) {
+        self.title_override = alloc.dupeSentinel(u8, v, 0) catch null;
+    };
+    self.window.surfaceTitleChanged(self);
+}
+
+/// Copy the effective title to the clipboard.
+pub fn copyTitleToClipboard(self: *Surface) !bool {
+    const title = self.effectiveTitle() orelse return false;
+    if (title.len == 0) return false;
+    try writeClipboardText(self.app.core_app.alloc, self.hwnd, title);
+    return true;
 }
 
 /// Apply runtime settings that aren't handled by the core surface.
