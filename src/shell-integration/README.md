@@ -94,6 +94,25 @@ source /Applications/Ghostty.app/Contents/Resources/ghostty/shell-integration/nu
 use ghostty *
 ```
 
+### PowerShell
+
+For PowerShell 7+ (`pwsh`) and Windows PowerShell 5.1, Ghostty starts the
+shell with `-NoExit -Command`, which dot-sources `powershell/ghostty.ps1`
+after the user's profile has loaded. The script is loaded from a script
+block rather than as a file, so it works with any execution policy without
+changing it for the user's own scripts. Automatic integration is skipped
+if the command uses options other than a known set of interactive ones
+(for example `-Command` or `-File`).
+
+The script wraps the `prompt` function to report prompts, the working
+directory, and command exit codes, and wraps PSReadLine's
+`PSConsoleHostReadLine` to mark the start of command output. To load it
+manually, add this to your profile:
+
+```powershell
+. "$env:GHOSTTY_RESOURCES_DIR\shell-integration\powershell\ghostty.ps1"
+```
+
 ### Zsh
 
 Automatic [Zsh](https://www.zsh.org/) integration works by temporarily setting
