@@ -64,6 +64,21 @@ pub fn deinit(self: *Exec) void {
 /// This is called before any termio begins. This should not be called
 /// after termio begins because it may put the internal terminal state
 /// into a bad state.
+/// The WSL distribution our command runs in, if it's wsl.exe. The caller
+/// owns the returned memory.
+pub fn wslDistribution(self: *const Exec, alloc: Allocator) ?[]u8 {
+    if (comptime builtin.target.os.tag != .windows) return null;
+    const args = self.subprocess.args;
+    if (args.len == 0 or !internal_os.wsl.isWsl(args[0])) return null;
+    if (internal_os.wsl.distributionFromArgs(args)) |name| {
+        return alloc.dupe(u8, name) catch null;
+    }
+    return internal_os.wsl.defaultDistribution(alloc) catch |err| {
+        log.warn("error reading the default WSL distribution err={}", .{err});
+        return null;
+    };
+}
+
 pub fn initTerminal(self: *Exec, term: *terminal.Terminal) void {
     // If we have an initial pwd requested by the subprocess, then we
     // set that on the terminal now. This allows rapidly initializing

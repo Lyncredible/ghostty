@@ -133,8 +133,8 @@ Notes:
 - [x] Fix tab-header close crashing the window when there are multiple
       tabs (active index and split focus must be valid during teardown)
 - [x] Shell integration for wsl
-  - [ ] Map WSL Linux paths (`/home/...`) to `\\wsl.localhost\<distro>\...`
-        so new tabs can start there
+  - [x] Map WSL Linux paths (`/home/...`) to `\\wsl$\<distro>\...`
+        so new tabs can start there (end-to-end UI check pending)
 - [x] Choose a registered WSL distribution by name from the shell menu
 - [x] Choose Command Prompt, Windows PowerShell, PowerShell, WSL, or
       the configured command when opening a new tab from the tab bar
@@ -485,3 +485,14 @@ Reviewed the branch against this file and discussion #2563.
   live; Enter/Shift+Enter navigate; Escape ends the search and refocuses
   the terminal. Builds; the live UI test was stopped before it ran, so
   it hasn't been exercised in the app yet.
+- OSC 7 Linux paths from a WSL shell now map to `\\wsl$\<distro>\...`
+  (supported on Windows 10 and 11, unlike `\\wsl.localhost`). The exec
+  backend gets the distribution from `wsl.exe -d`/`--distribution`, or the
+  registry default (`HKCU\...\Lxss` `DefaultDistribution` →
+  `DistributionName`), and hands it to the stream handler. Other Linux
+  paths (MSYS2 outside its drive mounts) still reset the pwd. Tests: the
+  `os.wsl` unit tests (argument parsing, path building, registry smoke
+  test) and the uri and shell integration tests pass. On this machine the
+  registry gives `Ubuntu`, and `wsl.exe` started with the working directory
+  `\\wsl$\Ubuntu\home\yuan` reports `/home/yuan`. Not yet tested through
+  the Ghostty UI.

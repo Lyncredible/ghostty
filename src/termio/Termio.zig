@@ -325,6 +325,7 @@ pub fn init(self: *Termio, alloc: Allocator, opts: termio.Options) !void {
         .clipboard_write_limit = opts.config.clipboard_write_limit,
         .enquiry_response = opts.config.enquiry_response,
         .xt_checksum_report = opts.config.xt_checksum_report,
+        .wsl_distribution = backend.wslDistribution(alloc),
     };
 
     const thread_enter_state = try ThreadEnterState.create(

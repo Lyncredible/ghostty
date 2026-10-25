@@ -59,6 +59,10 @@ pub const StreamHandler = struct {
     /// and XTCHECKSUM may change how it's calculated.
     xt_checksum_report: bool,
 
+    /// The WSL distribution our shell runs in, if any, so we can map
+    /// Linux working directories to Windows paths. Owned by us.
+    wsl_distribution: ?[]const u8 = null,
+
     //---------------------------------------------------------------
     // Internal state
 
@@ -99,6 +103,7 @@ pub const StreamHandler = struct {
     pub const tmux_enabled = terminal.options.tmux_control_mode;
 
     pub fn deinit(self: *StreamHandler) void {
+        if (self.wsl_distribution) |v| self.alloc.free(v);
         self.apc.deinit();
         self.dcs.deinit();
         self.kittyClipboardWriteAbort();
@@ -1583,12 +1588,16 @@ pub const StreamHandler = struct {
         defer arena_alloc.deinit();
         const uri_path = try uri.path.toRawMaybeAlloc(stack_alloc.allocator());
         const path = if (builtin.target.os.tag == .windows)
-            try internal_os.uri.windowsPath(stack_alloc.allocator(), uri_path) orelse {
-                // For example, a Linux path from a shell in WSL. We can't
-                // start new terminals there, so forget the old pwd.
-                log.debug("OSC 7 path has no Windows path, ignoring path={s}", .{uri_path});
-                return self.reportPwd("");
-            }
+            try internal_os.uri.windowsPath(stack_alloc.allocator(), uri_path) orelse
+                if (self.wsl_distribution) |distribution|
+                    // A Linux path in WSL, through the \\wsl$ share.
+                    try internal_os.wsl.windowsPath(stack_alloc.allocator(), distribution, uri_path)
+                else {
+                    // For example, a Linux path from MSYS2. We can't start
+                    // new terminals there, so forget the old pwd.
+                    log.debug("OSC 7 path has no Windows path, ignoring path={s}", .{uri_path});
+                    return self.reportPwd("");
+                }
         else
             uri_path;
 
