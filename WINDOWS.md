@@ -155,8 +155,12 @@ Notes:
   disappeared while the dialog was open. A native test with a short-lived
   child confirmed the close dialog appears and the window closes cleanly
   when that child exits before the user answers.
-- Follow-up: audit clipboard confirmation dialogs for reentrancy when a shell
-  exits while the dialog is open.
+- Clipboard confirmation callbacks also verify that their surface survives
+  the modal dialog. Confirmed clipboard writes copy their text before opening
+  the dialog so a process exit cannot invalidate the payload. Native build
+  passes. A disposable child sent OSC 52 with `clipboard-write=ask`, then
+  exited while the permission dialog was open; Ghostty closed cleanly.
+  The unsafe-paste dialog still needs the same live race test.
 - Bell handling now copies each surface's `bell-features` (including on
   reload), gates `MessageBeep` on `system`, and requests taskbar attention
   only for background windows. `FLASHW_TIMERNOFG` stops the flash on

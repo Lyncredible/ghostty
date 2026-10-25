@@ -395,11 +395,17 @@ fn completeClipboardText(
         error.UnsafePaste,
         error.UnauthorizedPaste,
         => {
-            if (!confirmed and Window.confirm(
+            const hwnd = self.hwnd;
+            const identity = c.GetWindowLongPtrW(hwnd, util.GWLP_USERDATA);
+            const allowed = !confirmed and Window.confirm(
                 self.window,
                 "Warning: Potentially Unsafe Paste",
                 "Pasting this text into the terminal may be dangerous as it looks like some commands may be executed. Paste anyway?",
-            )) {
+            );
+            // The process can exit and destroy this surface while the
+            // confirmation dialog pumps messages.
+            if (c.GetWindowLongPtrW(hwnd, util.GWLP_USERDATA) != identity) return;
+            if (allowed) {
                 self.completeClipboardText(state, text, true);
             } else {
                 self.core_surface.denyClipboardRequest(state);
@@ -423,13 +429,21 @@ pub fn setClipboard(
         if (std.mem.eql(u8, content.mime, "text/plain")) break content.data;
     } else return;
 
+    const alloc = self.app.core_app.alloc;
+    const owned_text = if (confirm) try alloc.dupeSentinel(u8, text, 0) else null;
+    defer if (owned_text) |copy| alloc.free(copy);
+    const hwnd = self.hwnd;
+    const identity = c.GetWindowLongPtrW(hwnd, util.GWLP_USERDATA);
+
     if (confirm and !Window.confirm(
         self.window,
         "Allow clipboard access?",
         "An application is attempting to write to the clipboard. Allow it?",
     )) return;
 
-    try writeClipboardText(self.app.core_app.alloc, self.hwnd, text);
+    if (c.GetWindowLongPtrW(hwnd, util.GWLP_USERDATA) != identity) return;
+
+    try writeClipboardText(alloc, hwnd, owned_text orelse text);
 }
 
 /// Open the clipboard, retrying a few times since another application
