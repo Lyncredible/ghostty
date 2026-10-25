@@ -77,6 +77,15 @@ pub fn init(
     // per-monitor DPI awareness for that is set by our application
     // manifest (dist/windows/ghostty.manifest).
 
+    // Our tab bar is a common control.
+    const icc: c.INITCOMMONCONTROLSEX = .{
+        .dwSize = @sizeOf(c.INITCOMMONCONTROLSEX),
+        .dwICC = c.ICC_TAB_CLASSES,
+    };
+    if (c.InitCommonControlsEx(&icc) == 0) {
+        log.warn("failed to initialize common controls", .{});
+    }
+
     const hinstance: c.HINSTANCE = @ptrCast(c.GetModuleHandleW(null));
     try registerClasses(hinstance);
     errdefer unregisterClasses(hinstance);
@@ -256,6 +265,17 @@ fn newWindow(self: *App, parent: ?*CoreSurface) !*Window {
     return window;
 }
 
+/// The window that was most recently active, if any.
+fn activeWindow(self: *App) ?*Window {
+    const fg = c.GetForegroundWindow();
+    for (self.windows.items) |window| {
+        if (window.hwnd == fg) return window;
+    }
+    if (self.core_app.focusedSurface()) |surface| return surface.rt_surface.window;
+    if (self.windows.items.len > 0) return self.windows.items[self.windows.items.len - 1];
+    return null;
+}
+
 /// Called by a window when it's destroyed, to remove it from our list.
 pub fn windowDestroyed(self: *App, window: *Window) void {
     for (self.windows.items, 0..) |w, i| {
@@ -314,6 +334,34 @@ pub fn performAction(
         .close_window => switch (target) {
             .app => return false,
             .surface => |v| v.rt_surface.window.close(),
+        },
+
+        .new_tab => switch (target) {
+            .app => {
+                // Open a tab in the most recently active window, or a
+                // new window if we have none.
+                if (self.activeWindow()) |window| {
+                    _ = try window.addTab(null);
+                } else {
+                    _ = try self.newWindow(null);
+                }
+            },
+            .surface => |v| _ = try v.rt_surface.window.addTab(v),
+        },
+
+        .close_tab => switch (target) {
+            .app => return false,
+            .surface => |v| v.rt_surface.window.closeTabs(v.rt_surface, value),
+        },
+
+        .goto_tab => switch (target) {
+            .app => return false,
+            .surface => |v| return v.rt_surface.window.gotoTab(value),
+        },
+
+        .move_tab => switch (target) {
+            .app => return false,
+            .surface => |v| return v.rt_surface.window.moveTab(value.amount),
         },
 
         .quit_timer => switch (value) {
