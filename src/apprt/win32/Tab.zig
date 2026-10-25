@@ -112,7 +112,16 @@ fn isShown(self: *const Tab, handle: Tree.Node.Handle) bool {
 /// Focus the given surface in this tab.
 pub fn focus(self: *Tab, surface: *Surface) void {
     self.focused = surface;
+    self.updateDimming();
     _ = c.SetFocus(surface.hwnd);
+}
+
+/// Dim all other splits even when the top-level window loses focus.
+pub fn updateDimming(self: *Tab) void {
+    var it = self.tree.iterator();
+    while (it.next()) |entry| {
+        entry.view.dim_overlay.setDimmed(entry.view != self.focused);
+    }
 }
 
 /// Replace our tree with a new tree, freeing the old one. Any surfaces
@@ -285,6 +294,7 @@ pub fn layout(self: *Tab, area: c.RECT) void {
 
     // Visibility depends on the zoom state.
     self.setVisible(true);
+    self.updateDimming();
 }
 
 fn layoutLeaf(self: *Tab, handle: Tree.Node.Handle, rect: c.RECT) void {

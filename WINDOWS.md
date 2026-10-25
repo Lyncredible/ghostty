@@ -110,7 +110,7 @@ Notes:
       tabs (active index and split focus must be valid during teardown)
 - [ ] Shell integration for wsl
 - [ ] Supporting choosing different shells when opening new tab
-- [ ] `unfocused-split-opacity`
+- [x] `unfocused-split-opacity` and `unfocused-split-fill`
 - [ ] Tab drag to reorder, and moving a tab to a new window
 - [ ] Background opacity/blur (needs a DirectComposition swap chain)
 - [ ] Single instance and IPC (`+new-window`)
@@ -167,3 +167,16 @@ Notes:
   including XBUTTON1/XBUTTON2, so releasing one button during a multi-button
   drag doesn't prematurely release capture. Native Debug build passes;
   physical side-button testing remains pending.
+- Full native Debug test snapshot after the tab, command parsing, and
+  bell changes: 4,029 passed, 65 skipped, 0 failed. The suite is slow in
+  terminal/search tests; running its compiled executable directly gives
+  per-test progress. Later serializer changes have separate targeted
+  tests and real ConPTY validation.
+- Unfocused splits use a click-through layered child overlay, honoring
+  each surface's fill color and opacity. The manifest declares Windows
+  10/11 compatibility, required for layered child windows. Verified
+  default dimming, mouse focus transfer, nested splits, and zoom via the
+  native UI. The focused split stays undimmed when its window loses focus.
+  Also verified custom fill, disabling with opacity 1, re-enabling via
+  live config reload, and closing the focused split without a crash.
+  Performance with heavy custom shaders and images still needs profiling.

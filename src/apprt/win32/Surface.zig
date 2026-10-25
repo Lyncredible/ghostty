@@ -17,6 +17,7 @@ const c = util.c;
 const key = @import("key.zig");
 const App = @import("App.zig");
 const Window = @import("Window.zig");
+const DimOverlay = @import("DimOverlay.zig");
 
 const log = std.log.scoped(.win32);
 
@@ -53,6 +54,8 @@ title: ?[:0]const u8 = null,
 
 /// Bell behavior from this surface's config, including conditional config.
 bell_features: configpkg.Config.BellFeatures = .{},
+
+dim_overlay: DimOverlay = .{},
 
 /// A pending high surrogate from a standalone WM_CHAR.
 high_surrogate: ?u16 = null,
@@ -154,6 +157,9 @@ pub fn init(self: *Surface, app: *App, window: *Window, opts: Options) !void {
     var config = try apprt.surface.newConfig(app.core_app, &app.config, opts.context);
     defer config.deinit();
     self.bell_features = config.@"bell-features";
+    try self.dim_overlay.init(hwnd, app.hinstance, &config);
+    errdefer self.dim_overlay.deinit();
+    self.dim_overlay.resize(@intCast(self.size.width), @intCast(self.size.height));
 
     // Initialize our surface now that we have the stable pointer.
     try self.core_surface.init(
@@ -182,6 +188,7 @@ pub fn deinit(self: *Surface) void {
 
     // Detach from our window first so that no more messages reach us.
     _ = c.SetWindowLongPtrW(self.hwnd, util.GWLP_USERDATA, 0);
+    self.dim_overlay.deinit();
 
     if (self.title) |v| alloc.free(v);
 
@@ -229,6 +236,9 @@ pub fn setTitle(self: *Surface, title: [:0]const u8) void {
 /// Apply runtime settings that aren't handled by the core surface.
 pub fn configChanged(self: *Surface, config: *const configpkg.Config) void {
     self.bell_features = config.@"bell-features";
+    self.dim_overlay.updateConfig(config) catch |err| {
+        log.err("error updating split dimming err={}", .{err});
+    };
 }
 
 pub fn ringBell(self: *Surface) void {
@@ -533,6 +543,7 @@ pub fn wndProc(
             const size = self.querySize();
             if (size.width != self.size.width or size.height != self.size.height) {
                 self.size = size;
+                self.dim_overlay.resize(@intCast(size.width), @intCast(size.height));
                 self.core_surface.sizeCallback(size) catch |err| {
                     log.err("error in size callback err={}", .{err});
                 };

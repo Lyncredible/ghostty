@@ -322,6 +322,7 @@ pub fn surfaceFocused(self: *Window, surface: *Surface) void {
     const tab = self.tabOf(surface) orelse return;
     if (tab.focused == surface) return;
     tab.focused = surface;
+    tab.updateDimming();
     self.tab_bar.invalidate();
     if (tab == self.activeTab()) self.updateWindowTitle();
 }

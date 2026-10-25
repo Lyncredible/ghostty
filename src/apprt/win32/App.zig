@@ -17,6 +17,7 @@ const c = util.c;
 const Surface = @import("Surface.zig");
 const TabBar = @import("TabBar.zig");
 const Window = @import("Window.zig");
+const DimOverlay = @import("DimOverlay.zig");
 
 const log = std.log.scoped(.win32);
 
@@ -166,6 +167,20 @@ fn registerClasses(hinstance: c.HINSTANCE) !void {
         .{
             .cbSize = @sizeOf(c.WNDCLASSEXW),
             .style = 0,
+            .lpfnWndProc = DimOverlay.wndProc,
+            .cbClsExtra = 0,
+            .cbWndExtra = 0,
+            .hInstance = hinstance,
+            .hIcon = null,
+            .hCursor = null,
+            .hbrBackground = null,
+            .lpszMenuName = null,
+            .lpszClassName = DimOverlay.class_name,
+            .hIconSm = null,
+        },
+        .{
+            .cbSize = @sizeOf(c.WNDCLASSEXW),
+            .style = 0,
             .lpfnWndProc = msgWndProc,
             .cbClsExtra = 0,
             .cbWndExtra = 0,
@@ -191,6 +206,7 @@ fn unregisterClasses(hinstance: c.HINSTANCE) void {
     _ = c.UnregisterClassW(window_class, hinstance);
     _ = c.UnregisterClassW(surface_class, hinstance);
     _ = c.UnregisterClassW(tab_bar_class, hinstance);
+    _ = c.UnregisterClassW(DimOverlay.class_name, hinstance);
     _ = c.UnregisterClassW(message_class, hinstance);
 }
 
