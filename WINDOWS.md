@@ -159,9 +159,10 @@ Notes:
 - [ ] DirectWrite font discovery and rendering
 - [ ] Packaging (installer and MSIX) and release builds
 - [ ] Unimplemented apprt actions (as of 2026-10-25)
-  - [ ] Window management: `goto_window`, `present_terminal`,
-        `toggle_visibility`, `float_window`, `toggle_window_decorations`,
-        `reset_window_size`, `resize_window`, `size_limit`
+  - [ ] Window management
+    - [x] `reset_window_size`, `resize_window`, `size_limit`
+    - [ ] `goto_window`, `present_terminal`, `float_window`,
+          `toggle_window_decorations`, `toggle_visibility`
   - [x] Titles: `set_tab_title`, `set_window_title`,
         `copy_title_to_clipboard`, `prompt_title`
   - [ ] Hover link preview (`mouse_over_link`) and `show_child_exited`
@@ -377,3 +378,14 @@ Reviewed the branch against this file and discussion #2563.
   empty title clears the override. Native test: the dialog rendered with
   visual styles; typing a tab title and pressing Enter applied it; Esc on
   the surface prompt left it unchanged and returned focus to the window.
+- `initial_size` is in points, but was applied as pixels and without the
+  tab bar; it now scales by the window DPI and adds the tab bar. It's also
+  remembered for `reset_window_size` (restores a maximized window first).
+  `resize_window` follows GTK's restrictions (one unsplit tab, not
+  maximized or fullscreen; zero keeps a dimension). `size_limit`'s minimum
+  becomes the window's minimum track size. Native test at 200% scale:
+  `window-width=80`/`window-height=24` gave a 1540x1028 terminal, which
+  `reset_window_size` restored after a manual resize, and a 50x50
+  `SetWindowPos` was clamped to the 232x168 minimum. ConPTY consumes
+  CSI 8 t itself, so `resize_window` from a program isn't reachable
+  through ConPTY.
