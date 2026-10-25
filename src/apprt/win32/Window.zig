@@ -15,6 +15,7 @@ const App = @import("App.zig");
 const Surface = @import("Surface.zig");
 const Tab = @import("Tab.zig");
 const TabBar = @import("TabBar.zig");
+const Overrides = @import("Overrides.zig");
 
 const log = std.log.scoped(.win32);
 
@@ -74,6 +75,9 @@ pub const Initial = union(enum) {
     /// An existing tab moved from another window. The caller removes
     /// it from its old window once this succeeds.
     tab: *Tab,
+
+    /// A new tab with overrides from +new-window.
+    overrides: Overrides,
 };
 
 pub fn init(self: *Window, app: *App, initial: Initial) !void {
@@ -112,6 +116,7 @@ pub fn init(self: *Window, app: *App, initial: Initial) !void {
     switch (initial) {
         .parent => |parent| _ = try self.addTab(parent),
         .tab => |tab| try self.adoptTab(tab),
+        .overrides => |overrides| _ = try self.addTabWith(null, null, overrides),
     }
 
     // Only now that we're fully initialized do we attach ourselves to
@@ -182,9 +187,19 @@ pub fn addTab(self: *Window, parent: ?*CoreSurface) !*Tab {
 
 /// Open a tab with an explicit shell, or the configured command when null.
 pub fn addTabWithShell(self: *Window, parent: ?*CoreSurface, shell: ?configpkg.Command) !*Tab {
+    return self.addTabWith(parent, shell, .none);
+}
+
+/// Open a tab with an explicit shell and overrides for its surface.
+pub fn addTabWith(
+    self: *Window,
+    parent: ?*CoreSurface,
+    shell: ?configpkg.Command,
+    overrides: Overrides,
+) !*Tab {
     const alloc = self.app.core_app.alloc;
 
-    const tab = try Tab.create(self, parent, self.tabs.items.len == 0, shell);
+    const tab = try Tab.create(self, parent, self.tabs.items.len == 0, shell, overrides);
     errdefer tab.destroy();
 
     const idx: usize = if (self.tabs.items.len == 0)
