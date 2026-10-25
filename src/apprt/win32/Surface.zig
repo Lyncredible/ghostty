@@ -18,6 +18,7 @@ const key = @import("key.zig");
 const App = @import("App.zig");
 const Window = @import("Window.zig");
 const DimOverlay = @import("DimOverlay.zig");
+const BellBorder = @import("BellBorder.zig");
 
 const log = std.log.scoped(.win32);
 
@@ -54,6 +55,9 @@ title: ?[:0]const u8 = null,
 
 /// Bell behavior from this surface's config, including conditional config.
 bell_features: configpkg.Config.BellFeatures = .{},
+
+/// True from a bell until this surface is focused or receives key input.
+/// This drives the `title` and `border` bell features.
 bell_pending: bool = false,
 notify_on_command_finish: configpkg.Config.NotifyOnCommandFinish = .never,
 notify_on_command_finish_action: configpkg.Config.NotifyOnCommandFinishAction = .{},
@@ -66,6 +70,7 @@ progress_value: ?u8 = null,
 progress_expires_at: u64 = 0,
 
 dim_overlay: DimOverlay = .{},
+bell_border: BellBorder = .{},
 
 /// An explicitly selected command, owned by this surface and inherited by splits.
 shell: ?configpkg.Command = null,
@@ -185,6 +190,9 @@ pub fn init(self: *Surface, app: *App, window: *Window, opts: Options) !void {
     try self.dim_overlay.init(hwnd, app.hinstance, &config);
     errdefer self.dim_overlay.deinit();
     self.dim_overlay.resize(@intCast(self.size.width), @intCast(self.size.height));
+    try self.bell_border.init(hwnd, app.hinstance);
+    errdefer self.bell_border.deinit();
+    self.bell_border.resize(@intCast(self.size.width), @intCast(self.size.height));
 
     // Initialize our surface now that we have the stable pointer.
     try self.core_surface.init(
@@ -214,6 +222,7 @@ pub fn deinit(self: *Surface) void {
     // Detach from our window first so that no more messages reach us.
     _ = c.SetWindowLongPtrW(self.hwnd, util.GWLP_USERDATA, 0);
     self.dim_overlay.deinit();
+    self.bell_border.deinit();
 
     if (self.title) |v| alloc.free(v);
 
@@ -267,9 +276,10 @@ pub fn setTitle(self: *Surface, title: [:0]const u8) void {
 /// Apply runtime settings that aren't handled by the core surface.
 pub fn configChanged(self: *Surface, config: *const configpkg.Config) void {
     self.bell_features = config.@"bell-features";
-    if (!self.bell_features.title and self.bell_pending) {
-        self.bell_pending = false;
-        self.window.updateBellIndicators();
+    if (!self.bell_features.title and !self.bell_features.border and self.bell_pending) {
+        self.setBellPending(false);
+    } else {
+        self.updateBellBorder();
     }
     self.notify_on_command_finish = config.@"notify-on-command-finish";
     self.notify_on_command_finish_action = config.@"notify-on-command-finish-action";
@@ -284,7 +294,22 @@ pub fn configChanged(self: *Surface, config: *const configpkg.Config) void {
 pub fn ringBell(self: *Surface) void {
     if (self.bell_features.system) _ = c.MessageBeep(c.MB_OK);
     if (self.bell_features.attention) self.window.requestAttention();
-    if (self.bell_features.title) self.window.surfaceBell(self);
+    if (self.bell_features.title or self.bell_features.border) {
+        self.window.surfaceBell(self);
+    }
+}
+
+/// Set or clear the pending bell and update its indicators.
+pub fn setBellPending(self: *Surface, pending: bool) void {
+    if (self.bell_pending == pending) return;
+    self.bell_pending = pending;
+    self.updateBellBorder();
+    self.window.updateBellIndicators();
+}
+
+/// Show the bell border while a bell is pending, if enabled.
+pub fn updateBellBorder(self: *Surface) void {
+    self.bell_border.setVisible(self.bell_pending and self.bell_features.border);
 }
 
 pub fn commandFinished(self: *Surface, value: apprt.Action.Value(.command_finished)) void {
@@ -649,6 +674,7 @@ pub fn wndProc(
             if (size.width != self.size.width or size.height != self.size.height) {
                 self.size = size;
                 self.dim_overlay.resize(@intCast(size.width), @intCast(size.height));
+                self.bell_border.resize(@intCast(size.width), @intCast(size.height));
                 self.core_surface.sizeCallback(size) catch |err| {
                     log.err("error in size callback err={}", .{err});
                 };
@@ -908,6 +934,9 @@ fn keyEvent(
         log.err("error in key callback err={}", .{err});
         return true;
     };
+
+    // Like GTK, the bell stops ringing on any key the core uses.
+    if (effect == .consumed and action != .release) self.setBellPending(false);
 
     // Let Windows handle system keys we didn't use, such as alt+F4 to
     // close the window and alt+space for the system menu.
