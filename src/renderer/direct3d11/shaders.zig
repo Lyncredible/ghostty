@@ -46,6 +46,44 @@ fn compileBuiltin(entry: [:0]const u8, profile: [:0]const u8) !*c.ID3DBlob {
     return blob;
 }
 
+/// Compiled custom shader bytecode, keyed by a hash of the HLSL source,
+/// so that every surface (and config reload) with the same custom shaders
+/// doesn't compile them again. This is a small ring that replaces the
+/// oldest entry when full.
+const CustomEntry = struct {
+    hash: [Sha256.digest_length]u8,
+    blob: *c.ID3DBlob,
+};
+const Sha256 = std.crypto.hash.sha2.Sha256;
+var custom_lock: std.Io.Mutex = .init;
+var custom_blobs: [8]?CustomEntry = @splat(null);
+var custom_next: usize = 0;
+
+fn compileCustom(src: []const u8) !*c.ID3DBlob {
+    var hash: [Sha256.digest_length]u8 = undefined;
+    Sha256.hash(src, &hash, .{});
+
+    custom_lock.lockUncancelable(global.io());
+    defer custom_lock.unlock(global.io());
+    for (custom_blobs) |entry_| {
+        const entry = entry_ orelse continue;
+        if (std.mem.eql(u8, &entry.hash, &hash)) {
+            log.debug("reusing compiled custom shader", .{});
+            _ = com.call(entry.blob, "AddRef", .{});
+            return entry.blob;
+        }
+    }
+
+    // spirv-cross keeps the GLSL entry point name.
+    const blob = try compile(src, "main", "ps_5_0");
+    log.debug("compiled custom shader", .{});
+    if (custom_blobs[custom_next]) |old| com.release(old.blob);
+    _ = com.call(blob, "AddRef", .{});
+    custom_blobs[custom_next] = .{ .hash = hash, .blob = blob };
+    custom_next = (custom_next + 1) % custom_blobs.len;
+    return blob;
+}
+
 const pipeline_descs: []const struct { [:0]const u8, PipelineDescription } =
     &.{
         .{ "bg_color", .{
@@ -238,8 +276,7 @@ fn initPostPipelines(
     // Build each shader. Note we don't use "0.." to build our index
     // because we need to keep track of our length to clean up above.
     for (post_shaders) |post_source| {
-        // spirv-cross keeps the GLSL entry point name.
-        const ps = try compile(post_source, "main", "ps_5_0");
+        const ps = try compileCustom(post_source);
         defer com.release(ps);
 
         pipelines[i] = try .init(null, .{

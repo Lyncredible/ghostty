@@ -159,7 +159,7 @@ Notes:
 - [ ] DirectWrite font discovery and rendering
 - [ ] Packaging (installer and MSIX) and release builds
 - [x] Share built-in compiled shader bytecode across surfaces
-- [ ] Cache compiled custom shader bytecode across surfaces
+- [x] Cache compiled custom shader bytecode across surfaces
 
 ## Development log (2026-10-24)
 
@@ -339,3 +339,7 @@ Reviewed the branch against this file and discussion #2563.
   silent; a missing required path logs a warning. Native test: two BELs
   played `C:\Windows\Media\chord.wav` at volume 300/1000 with no MCI
   errors (audible output not verified from the session).
+- Custom shader bytecode is cached per process in an 8-entry ring keyed by
+  the SHA-256 of the translated HLSL, under a lock so concurrent surfaces
+  compile once. Native test with a custom shader: the first tab logged a
+  compile and two new tabs reused the bytecode.
