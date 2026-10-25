@@ -19,8 +19,10 @@ https://github.com/ghostty-org/ghostty/discussions/2563
 
 - **apprt:** a native `win32` runtime (`src/apprt/win32/`) written in Zig
   against raw Win32 APIs, bound with translate-c. It's the default runtime
-  on Windows. `Window` is a top-level window that hosts tabs, and each tab
-  is a `Surface` child window.
+  on Windows.
+  - `Window` is a top-level window with a custom-drawn `TabBar`.
+  - Each `Tab` is a `SplitTree` of `Surface` child windows, reusing the
+    core's `datastruct/split_tree.zig`.
 - **Renderer:** a `direct3d11` backend (`src/renderer/Direct3D11.zig`,
   `src/renderer/direct3d11/`). It implements the same GraphicsAPI contract
   as Metal and OpenGL, and is the default renderer on Windows.
@@ -42,6 +44,7 @@ You only need Zig. The GNU ABI uses the MinGW that ships with Zig:
 
     zig build -Dtarget=x86_64-windows-gnu          # zig-out/bin/ghostty.exe
     zig build test -Dtarget=x86_64-windows-gnu
+    zig build -Dtarget=x86_64-windows-gnu -Doptimize=ReleaseSafe
 
 The default MSVC ABI also needs Visual Studio Build Tools and the Windows
 SDK. CI uses it (the `build-windows` job).
@@ -53,6 +56,11 @@ Notes:
   `checking cache failed: file_open Unexpected`. Rerunning works.
 - `ghostty.exe` is a GUI app. To see its logs, redirect stderr
   (`Start-Process ... -RedirectStandardError log.txt`).
+- `-Doptimize=ReleaseFast` with the GNU ABI fails inside Zig 0.17 while
+  compiling MinGW's own CRT (`.seh_ directive must appear within an active
+  frame`). This is a Zig bug. Use ReleaseSafe, or the MSVC ABI.
+- When scripting input from a DPI-unaware process, Windows scales mouse
+  message coordinates for per-monitor-aware windows.
 
 ## Status
 
@@ -74,19 +82,23 @@ Notes:
   - [x] Titles, maximize, borderless fullscreen, and initial size.
   - [x] Close confirmation, open URL/config, and config reload.
   - [x] Tabs: new, close (this/other/right), goto, and move.
+  - [x] Custom tab bar themed from the terminal colors: close buttons,
+        middle-click close, and a new tab button.
+  - [x] Splits: new, goto (including spatial), resize, equalize, zoom, and
+        draggable dividers.
+  - [x] Inline IME preedit and candidate window placement (still needs
+        testing with a real IME).
+  - [x] Quit timer delay, `initial-window`, and the system double-click
+        interval.
 - [x] ConPTY: clean shutdown when the shell exits or the surface closes.
 - [x] CI job that builds and tests the app on Windows.
 
 ### Next
 
-- [ ] Splits (the GTK apprt uses `datastruct/split_tree.zig`, which is
-      reusable)
-- [ ] Custom-drawn tab bar that matches the terminal theme (the native tab
-      control is light-only)
-- [ ] Inline IME preedit (`WM_IME_COMPOSITION` → `preeditCallback`)
+- [ ] Verify IME with Microsoft Pinyin, Japanese IME, and others
+- [ ] `unfocused-split-opacity`
+- [ ] Tab drag to reorder, and moving a tab to a new window
 - [ ] Background opacity/blur (needs a DirectComposition swap chain)
-- [ ] Quit timer delay (`quit-after-last-window-closed-delay`)
-- [ ] `clickInterval` from `GetDoubleClickTime`
 - [ ] Single instance and IPC (`+new-window`)
 - [ ] Terminal inspector (needs a Dear ImGui D3D11 backend)
 - [ ] Desktop notifications, progress reports (taskbar), and the bell
