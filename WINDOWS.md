@@ -129,6 +129,8 @@ Notes:
   - [x] Configured bell action and duration/focus filtering
   - [ ] Desktop notification action
 - [ ] Bell title/border indicators and custom audio
+  - [x] Pending bell marker on tabs with an unfocused ringing surface
+  - [ ] Window title and border indicators, custom audio
 - [ ] Shell integration for PowerShell
 - [ ] DirectWrite font discovery and rendering
 - [ ] Packaging (installer and MSIX) and release builds
@@ -250,3 +252,8 @@ Notes:
   a 509 ms command and its bell with `always`/`0ms`, while a `10s` threshold
   suppressed the bell for the same command. Desktop notifications and
   visual indicators for inactive splits remain to do.
+- Tabs now show an amber marker when a surface in them rings while unfocused.
+  Selecting the ringing surface clears it, and disabling the title bell
+  feature on reload clears pending markers. A native UI test opened a second
+  tab before a timed BEL, saw the marker on the first tab, and confirmed it
+  disappeared when that tab was selected.

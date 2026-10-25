@@ -54,6 +54,7 @@ title: ?[:0]const u8 = null,
 
 /// Bell behavior from this surface's config, including conditional config.
 bell_features: configpkg.Config.BellFeatures = .{},
+bell_pending: bool = false,
 notify_on_command_finish: configpkg.Config.NotifyOnCommandFinish = .never,
 notify_on_command_finish_action: configpkg.Config.NotifyOnCommandFinishAction = .{},
 notify_on_command_finish_after: configpkg.Config.Duration = .{ .duration = 5 * std.time.ns_per_s },
@@ -265,6 +266,10 @@ pub fn setTitle(self: *Surface, title: [:0]const u8) void {
 /// Apply runtime settings that aren't handled by the core surface.
 pub fn configChanged(self: *Surface, config: *const configpkg.Config) void {
     self.bell_features = config.@"bell-features";
+    if (!self.bell_features.title and self.bell_pending) {
+        self.bell_pending = false;
+        self.window.tab_bar.invalidate();
+    }
     self.notify_on_command_finish = config.@"notify-on-command-finish";
     self.notify_on_command_finish_action = config.@"notify-on-command-finish-action";
     self.notify_on_command_finish_after = config.@"notify-on-command-finish-after";
@@ -278,6 +283,7 @@ pub fn configChanged(self: *Surface, config: *const configpkg.Config) void {
 pub fn ringBell(self: *Surface) void {
     if (self.bell_features.system) _ = c.MessageBeep(c.MB_OK);
     if (self.bell_features.attention) self.window.requestAttention();
+    if (self.bell_features.title) self.window.surfaceBell(self);
 }
 
 pub fn commandFinished(self: *Surface, value: apprt.Action.Value(.command_finished)) void {
