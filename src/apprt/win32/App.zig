@@ -483,12 +483,15 @@ pub fn performAction(
             .surface => |v| v.rt_surface.window.setInitialSize(value.width, value.height),
         },
 
-        .ring_bell => _ = c.MessageBeep(c.MB_OK),
+        .ring_bell => switch (target) {
+            .app => return false,
+            .surface => |v| v.rt_surface.ringBell(),
+        },
 
         .open_url => openUrl(self.core_app.alloc, value.url),
 
         .config_change => switch (target) {
-            .surface => {},
+            .surface => |v| v.rt_surface.configChanged(value.config),
 
             // For app updates, we update our core config. We need to
             // clone it because the caller owns the param.

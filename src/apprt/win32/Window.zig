@@ -404,6 +404,20 @@ fn rgb(r: u8, g: u8, b: u8) c.COLORREF {
 //----------------------------------------------------------------------------
 // Window state
 
+/// Request attention without moving keyboard focus. Windows stops the
+/// taskbar flash automatically when this window comes to the foreground.
+pub fn requestAttention(self: *Window) void {
+    if (c.GetForegroundWindow() == self.hwnd) return;
+    var info: c.FLASHWINFO = .{
+        .cbSize = @sizeOf(c.FLASHWINFO),
+        .hwnd = self.hwnd,
+        .dwFlags = c.FLASHW_TRAY | c.FLASHW_TIMERNOFG,
+        .uCount = 0,
+        .dwTimeout = 0,
+    };
+    _ = c.FlashWindowEx(&info);
+}
+
 pub fn toggleMaximize(self: *Window) void {
     _ = c.ShowWindow(
         self.hwnd,
