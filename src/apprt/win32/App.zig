@@ -591,6 +591,21 @@ pub fn performAction(
             .surface => |v| v.rt_surface.window.setInitialSize(value.width, value.height),
         },
 
+        .reset_window_size => switch (target) {
+            .app => return false,
+            .surface => |v| return v.rt_surface.window.resetSize(),
+        },
+
+        .resize_window => switch (target) {
+            .app => return false,
+            .surface => |v| return v.rt_surface.window.resizeTerminal(value),
+        },
+
+        .size_limit => switch (target) {
+            .app => return false,
+            .surface => |v| v.rt_surface.window.setSizeLimit(value),
+        },
+
         .ring_bell => switch (target) {
             .app => return false,
             .surface => |v| v.rt_surface.ringBell(),

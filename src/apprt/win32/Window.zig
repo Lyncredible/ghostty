@@ -46,6 +46,13 @@ fullscreen: ?struct {
 /// Whether we've applied the initial size. We only apply it once.
 initial_size_applied: bool = false,
 
+/// The default terminal size in points, from the initial_size action,
+/// used by reset_window_size.
+default_size: ?struct { width: u32, height: u32 } = null,
+
+/// The minimum terminal size in pixels, from the size_limit action.
+min_size: ?struct { width: u32, height: u32 } = null,
+
 /// True while we're being destroyed, so closing the last tab doesn't
 /// try to destroy us again.
 destroying: bool = false,
@@ -675,28 +682,74 @@ pub fn toggleFullscreen(self: *Window) void {
     );
 }
 
-/// Set the initial size of the window, given the size of the client
-/// area (the terminal surface) in pixels.
+/// Set the initial size of the window, given the size of the terminal
+/// in points. This is applied once, and remembered for
+/// reset_window_size.
 pub fn setInitialSize(self: *Window, width: u32, height: u32) void {
+    self.default_size = .{ .width = width, .height = height };
     if (self.initial_size_applied) return;
     self.initial_size_applied = true;
+    self.setTerminalSize(self.pointsToPixels(width), self.pointsToPixels(height));
+}
 
+/// Restore the default size from initial_size, if we have one.
+pub fn resetSize(self: *Window) bool {
+    const size = self.default_size orelse return false;
+    if (self.fullscreen != null) return false;
+    if (c.IsZoomed(self.hwnd) != 0) _ = c.ShowWindow(self.hwnd, c.SW_RESTORE);
+    self.setTerminalSize(self.pointsToPixels(size.width), self.pointsToPixels(size.height));
+    return true;
+}
+
+/// Resize the window so its terminal is the requested size in points. A zero dimension keeps the current size. Like GTK, this only
+/// applies to a window with a single unsplit tab that isn't maximized
+/// or fullscreen.
+pub fn resizeTerminal(self: *Window, size: apprt.action.ResizeWindow) bool {
+    if (self.fullscreen != null or c.IsZoomed(self.hwnd) != 0) return false;
+    if (self.tabs.items.len != 1 or !self.tabs.items[0].isSingle()) return false;
+
+    const area = self.surfaceArea();
+    self.setTerminalSize(
+        if (size.width == 0) @intCast(area.right - area.left) else self.pointsToPixels(size.width),
+        if (size.height == 0) @intCast(area.bottom - area.top) else self.pointsToPixels(size.height),
+    );
+    return true;
+}
+
+pub fn setSizeLimit(self: *Window, limit: apprt.action.SizeLimit) void {
+    // We have no use for a maximum size, which the core doesn't send.
+    self.min_size = .{ .width = limit.min_width, .height = limit.min_height };
+}
+
+fn pointsToPixels(self: *const Window, points: u32) u32 {
+    return @intCast(@divTrunc(@as(u64, points) * c.GetDpiForWindow(self.hwnd), util.USER_DEFAULT_SCREEN_DPI));
+}
+
+/// The window size for the given terminal area size in pixels,
+/// including the tab bar and the window frame.
+fn windowSizeFor(self: *const Window, width: u32, height: u32) struct { c_int, c_int } {
     const style: c.DWORD = @truncate(@as(usize, @bitCast(c.GetWindowLongPtrW(self.hwnd, c.GWL_STYLE))));
     const ex_style: c.DWORD = @truncate(@as(usize, @bitCast(c.GetWindowLongPtrW(self.hwnd, c.GWL_EXSTYLE))));
     var rect: c.RECT = .{
         .left = 0,
         .top = 0,
         .right = @intCast(width),
-        .bottom = @intCast(height),
+        .bottom = @as(c_int, @intCast(height)) + if (self.showTabBar()) self.tab_bar.height() else 0,
     };
     _ = c.AdjustWindowRectExForDpi(&rect, style, c.FALSE, ex_style, c.GetDpiForWindow(self.hwnd));
+    return .{ rect.right - rect.left, rect.bottom - rect.top };
+}
+
+/// Resize the window so the terminal area is the given size in pixels.
+fn setTerminalSize(self: *Window, width: u32, height: u32) void {
+    const w, const h = self.windowSizeFor(width, height);
     _ = c.SetWindowPos(
         self.hwnd,
         null,
         0,
         0,
-        rect.right - rect.left,
-        rect.bottom - rect.top,
+        w,
+        h,
         c.SWP_NOMOVE | c.SWP_NOZORDER | c.SWP_NOACTIVATE,
     );
 }
@@ -751,6 +804,14 @@ pub fn wndProc(
         },
         c.WM_SIZE => {
             self.layout();
+            return 0;
+        },
+
+        c.WM_GETMINMAXINFO => if (self.min_size) |min| {
+            const info: *c.MINMAXINFO = @ptrFromInt(@as(usize, @bitCast(lparam)));
+            const w, const h = self.windowSizeFor(min.width, min.height);
+            info.ptMinTrackSize.x = @max(info.ptMinTrackSize.x, w);
+            info.ptMinTrackSize.y = @max(info.ptMinTrackSize.y, h);
             return 0;
         },
 
