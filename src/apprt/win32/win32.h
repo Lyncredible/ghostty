@@ -10,3 +10,4 @@
 #include <mmsystem.h>
 #include <shellapi.h>
 #include <shobjidl.h>
+#include <uxtheme.h>

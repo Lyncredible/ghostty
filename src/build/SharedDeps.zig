@@ -759,6 +759,7 @@ fn addWin32(
     step.root_module.linkSystemLibrary("imm32", dynamic_link_opts);
     step.root_module.linkSystemLibrary("dwmapi", dynamic_link_opts);
     step.root_module.linkSystemLibrary("winmm", dynamic_link_opts);
+    step.root_module.linkSystemLibrary("uxtheme", dynamic_link_opts);
     step.root_module.linkSystemLibrary("shell32", dynamic_link_opts);
     step.root_module.linkSystemLibrary("ole32", dynamic_link_opts);
     step.root_module.linkSystemLibrary("uuid", dynamic_link_opts);

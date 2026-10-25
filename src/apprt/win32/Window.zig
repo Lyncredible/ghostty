@@ -109,6 +109,7 @@ pub fn init(self: *Window, app: *App, initial: Initial) !void {
 
     self.updateTheme();
     self.updateDecorations();
+    self.updateBackdrop();
 
     try self.tab_bar.init(self);
     errdefer self.tab_bar.deinit();
@@ -576,6 +577,7 @@ fn rgb(r: u8, g: u8, b: u8) c.COLORREF {
 pub fn configChanged(self: *Window) void {
     self.updateTheme();
     self.updateDecorations();
+    self.updateBackdrop();
     self.layout();
 }
 
@@ -636,6 +638,63 @@ pub fn setFloating(self: *Window, mode: apprt.action.FloatWindow) void {
 /// Use a light or dark title bar according to `window-theme`. This
 /// matches the GTK apprt: `auto` and `ghostty` follow the luminance of
 /// the terminal background.
+fn paintDividers(self: *Window, hdc: c.HDC) void {
+    var rect: c.RECT = undefined;
+    _ = c.GetClientRect(self.hwnd, &rect);
+    const brush = c.CreateSolidBrush(self.dividerColor());
+    defer _ = c.DeleteObject(brush);
+    _ = c.FillRect(hdc, &rect, brush);
+}
+
+/// For `background-opacity`, let the desktop show through wherever the
+/// terminal is translucent. With `background-blur`, this extends the window
+/// frame over the client area with the Windows 11 acrylic backdrop.
+/// Without blur, a blur-behind region that's empty gives us per-pixel
+/// alpha without the blur: extended frames without a backdrop are drawn
+/// as a solid color since Windows 8.
+fn updateBackdrop(self: *Window) void {
+    const config = &self.app.config;
+    const translucent = config.@"background-opacity" < 1;
+    const blur = translucent and switch (config.@"background-blur") {
+        .false => false,
+        .radius => |r| r > 0,
+        else => true,
+    };
+
+    const extend: c_int = if (blur) -1 else 0;
+    const margins: c.MARGINS = .{
+        .cxLeftWidth = extend,
+        .cxRightWidth = extend,
+        .cyTopHeight = extend,
+        .cyBottomHeight = extend,
+    };
+    _ = c.DwmExtendFrameIntoClientArea(self.hwnd, &margins);
+
+    const DWMWA_SYSTEMBACKDROP_TYPE = 38;
+    const DWMSBT_AUTO = 0;
+    const DWMSBT_TRANSIENTWINDOW = 3;
+    const backdrop: c.DWORD = if (blur) DWMSBT_TRANSIENTWINDOW else DWMSBT_AUTO;
+    _ = c.DwmSetWindowAttribute(
+        self.hwnd,
+        DWMWA_SYSTEMBACKDROP_TYPE,
+        &backdrop,
+        @sizeOf(c.DWORD),
+    );
+
+    const region = if (translucent and !blur) c.CreateRectRgn(0, 0, -1, -1) else null;
+    defer if (region != null) {
+        _ = c.DeleteObject(region);
+    };
+    var blur_behind: c.DWM_BLURBEHIND = .{
+        .dwFlags = c.DWM_BB_ENABLE | c.DWM_BB_BLURREGION,
+        .fEnable = @intFromBool(translucent and !blur),
+        .hRgnBlur = region,
+        .fTransitionOnMaximized = c.FALSE,
+    };
+    _ = c.DwmEnableBlurBehindWindow(self.hwnd, &blur_behind);
+    _ = c.InvalidateRect(self.hwnd, null, c.TRUE);
+}
+
 fn updateTheme(self: *Window) void {
     const config = &self.app.config;
     const dark = switch (config.@"window-theme") {
@@ -908,9 +967,7 @@ pub fn wndProc(
             var ps: c.PAINTSTRUCT = undefined;
             const hdc = c.BeginPaint(hwnd, &ps);
             defer _ = c.EndPaint(hwnd, &ps);
-            const brush = c.CreateSolidBrush(self.dividerColor());
-            defer _ = c.DeleteObject(brush);
-            _ = c.FillRect(hdc, &ps.rcPaint, brush);
+            util.paintOpaque(hdc, ps.rcPaint, self, paintDividers);
             return 0;
         },
 
