@@ -512,6 +512,12 @@ fn dragMove(self: *TabBar, x: c_int) void {
     if (to != from) _ = self.window.moveTab(@as(isize, @intCast(to)) - @as(isize, @intCast(from)));
 }
 
+fn paintClient(self: *TabBar, hdc: c.HDC) void {
+    var client: c.RECT = undefined;
+    _ = c.GetClientRect(self.hwnd, &client);
+    self.paint(hdc, client);
+}
+
 pub fn wndProc(
     hwnd: c.HWND,
     msg: c.UINT,
@@ -530,18 +536,9 @@ pub fn wndProc(
             const hdc = c.BeginPaint(hwnd, &ps);
             defer _ = c.EndPaint(hwnd, &ps);
 
-            // Draw into a memory bitmap to avoid flicker.
             var client: c.RECT = undefined;
             _ = c.GetClientRect(hwnd, &client);
-            const mem = c.CreateCompatibleDC(hdc);
-            defer _ = c.DeleteDC(mem);
-            const bmp = c.CreateCompatibleBitmap(hdc, client.right, client.bottom);
-            defer _ = c.DeleteObject(bmp);
-            const old = c.SelectObject(mem, bmp);
-            defer _ = c.SelectObject(mem, old);
-
-            self.paint(mem, client);
-            _ = c.BitBlt(hdc, 0, 0, client.right, client.bottom, mem, 0, 0, c.SRCCOPY);
+            util.paintOpaque(hdc, client, self, paintClient);
             return 0;
         },
 
