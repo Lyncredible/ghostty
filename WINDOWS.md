@@ -172,7 +172,9 @@ Notes:
       (`+list-fonts --family=Consolas` takes about 0.1 s here)
   - [ ] Consider DirectWrite (`IDWriteFontFallback`) for faster codepoint
         fallback across many fonts
-- [ ] Packaging (installer and MSIX) and release builds
+- [ ] Packaging and release builds
+  - [x] Portable zip (`dist/windows/package.ps1`)
+  - [ ] Installer or MSIX (needs signing and an app identity)
 - [ ] Unimplemented apprt actions (as of 2026-10-25)
   - [ ] Window management
     - [x] `reset_window_size`, `resize_window`, `size_limit`
@@ -569,3 +571,10 @@ Reviewed the branch against this file and discussion #2563.
   an opaque terminal. The translucent and default paths were rechecked
   with screenshots; the toggle itself needs a keybind, so it hasn't been
   tested in the app yet.
+- `dist/windows/package.ps1` builds a ReleaseSafe GNU build into a staging
+  prefix and zips `bin/ghostty.exe` and `share/` (themes, shell
+  integration, terminfo) as `ghostty-windows-unofficial-<describe>-<arch>.zip`
+  with a README saying it's an unofficial build. Resources are found
+  relative to the executable, so the folder is portable. Verified: an
+  18 MB zip whose extracted `ghostty.exe +list-themes` finds its bundled
+  themes.
