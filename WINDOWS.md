@@ -142,7 +142,13 @@ Notes:
 - [x] Drag tabs to reorder within a window
 - [x] Move a tab to a new window (`move_tab_to_new_window`)
 - [ ] Background opacity/blur (needs a DirectComposition swap chain)
-- [ ] Single instance and IPC (`+new-window`)
+- [ ] Single instance and IPC
+  - [x] `+new-window` and `+new-tab` (with `-e`, `--working-directory`,
+        `--title`, `--shell-integration`)
+  - [x] CLI action output in the parent console
+  - [ ] Launching `ghostty.exe` again opens a window in the running
+        instance (an opt-in, like `gtk-single-instance`)
+- [x] Global keybinds (`RegisterHotKey`)
 - [ ] Terminal inspector (needs a Dear ImGui D3D11 backend)
 - [x] Bell attention flash in the taskbar, honoring `bell-features`;
       system sound is now opt-in via `system`
@@ -168,7 +174,6 @@ Notes:
     - [x] `goto_window`, `present_terminal`, `float_window`,
           `toggle_window_decorations` (and `window-decoration=none`)
     - [x] `toggle_visibility`
-- [x] Global keybinds (`RegisterHotKey`)
   - [x] Titles: `set_tab_title`, `set_window_title`,
         `copy_title_to_clipboard`, `prompt_title`
   - [x] Hover link preview (`mouse_over_link`)
@@ -496,3 +501,20 @@ Reviewed the branch against this file and discussion #2563.
   registry gives `Ubuntu`, and `wsl.exe` started with the working directory
   `\\wsl$\Ubuntu\home\yuan` reports `/home/yuan`. Not yet tested through
   the Ghostty UI.
+- `+new-window` and `+new-tab`: each instance's hidden message window is
+  titled with its app class (`class`, default `ghostty`), so the CLI finds
+  it with `FindWindowW` (any instance for `detect`). It grants foreground
+  rights with `AllowSetForegroundWindow` and sends the request with
+  `WM_COPYDATA` (kind, surface ID, NUL-separated arguments). Arguments
+  become overrides for the new surface only, matching GTK. `+new-tab`
+  uses the surface ID's window, or the active window. Unit tests cover the
+  encoding and override parsing. Native test (no input): with a running
+  instance, `+new-window -e cmd.exe /k echo hi` opened a second window
+  running that command, `+new-tab` added a tab, and the log showed both
+  requests.
+- CLI actions (`+version`, `+new-window`, errors) printed nothing from
+  cmd or PowerShell, since `ghostty.exe` is a GUI program. They now attach
+  to the parent console when stdout/stderr aren't redirected; pipes and
+  files are unchanged. Verified that `+version` prints in a console
+  window. Console shells still don't wait for a GUI program, so the
+  output can appear after the next prompt.
