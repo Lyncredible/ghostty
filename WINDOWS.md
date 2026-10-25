@@ -141,7 +141,9 @@ Notes:
 - [x] `unfocused-split-opacity` and `unfocused-split-fill`
 - [x] Drag tabs to reorder within a window
 - [x] Move a tab to a new window (`move_tab_to_new_window`)
-- [ ] Background opacity/blur (needs a DirectComposition swap chain)
+- [x] Background opacity/blur (DirectComposition swap chain)
+  - [ ] `toggle_background_opacity`
+  - [ ] Blur on Windows 10 (the acrylic backdrop is Windows 11 only)
 - [ ] Single instance and IPC
   - [x] `+new-window` and `+new-tab` (with `-e`, `--working-directory`,
         `--title`, `--shell-integration`)
@@ -518,3 +520,22 @@ Reviewed the branch against this file and discussion #2563.
   files are unchanged. Verified that `+version` prints in a console
   window. Console shells still don't wait for a GUI program, so the
   output can appear after the next prompt.
+- The D3D11 renderer now presents through a composition swap chain
+  (`CreateSwapChainForComposition`, premultiplied alpha, stretch scaling)
+  shown on the surface `HWND` by a DirectComposition visual. That's needed
+  for transparency; the shaders already output premultiplied alpha.
+  `dcomp.h` is C++ only, so `direct3d11/dcomp.zig` declares the few
+  vtable slots we use (with comptime checks of their offsets). The visual
+  isn't topmost, so overlay child windows stay above it.
+- `background-opacity < 1`: without blur, an empty-region
+  `DwmEnableBlurBehindWindow` gives the window per-pixel alpha (an
+  extended frame without a backdrop is drawn as a solid color since
+  Windows 8). With `background-blur`, the frame extends over the client
+  area with the Windows 11 acrylic backdrop (`DWMSBT_TRANSIENTWINDOW`).
+  Surfaces paint black (zero alpha in GDI) beneath their visual; the tab
+  bar and dividers paint through `BufferedPaint` and set alpha to 255 so
+  they stay opaque. App config reloads re-apply this. Native test
+  (launch-only screenshots): opaque rendering unchanged, the bell border
+  overlay still above the terminal, and the desktop visible through 60%
+  opacity with and without blur. Not yet tested: splits, the scrollbar
+  and other overlays over a translucent terminal, and Windows 10.
