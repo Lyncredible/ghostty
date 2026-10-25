@@ -123,6 +123,8 @@ Notes:
 - [x] Bell attention flash in the taskbar, honoring `bell-features`;
       system sound is now opt-in via `system`
 - [ ] Desktop notifications and progress reports (taskbar)
+  - [x] OSC 9;4 progress on the active surface's taskbar button
+  - [ ] Desktop notifications
 - [ ] Bell title/border indicators and custom audio
 - [ ] Shell integration for PowerShell
 - [ ] DirectWrite font discovery and rendering
@@ -226,3 +228,11 @@ Notes:
   machine with `WindowsSdkNotFound`. The GNU target build succeeds with Zig
   alone. Keep the explicit `-Dtarget=x86_64-windows-gnu` command in the
   local development instructions; MSVC CI has its own SDK.
+- ConEmu OSC 9;4 reports now drive Windows taskbar progress through
+  `ITaskbarList3`. The active tab's focused split supplies the state;
+  `progress-style=false` hides it, and a stalled report clears after 15
+  seconds. The GNU Debug build passes. A native ConPTY PowerShell fixture
+  delivered normal 45%, error 70%, indeterminate, paused 80%, and remove
+  reports; the window received `TaskbarButtonCreated`, and the COM calls
+  reported no failures. Visual verification of taskbar states, timeout,
+  and switching surfaces is pending.

@@ -18,6 +18,8 @@ const TabBar = @import("TabBar.zig");
 
 const log = std.log.scoped(.win32);
 
+const progress_timer_id = 1;
+
 app: *App,
 
 /// The top-level window handle.
@@ -47,6 +49,9 @@ initial_size_applied: bool = false,
 /// True while we're being destroyed, so closing the last tab doesn't
 /// try to destroy us again.
 destroying: bool = false,
+
+/// Explorer sends TaskbarButtonCreated after the window's button exists.
+taskbar_ready: bool = false,
 
 pub fn init(self: *Window, app: *App, parent: ?*CoreSurface) !void {
     self.* = .{
@@ -103,6 +108,7 @@ pub fn init(self: *Window, app: *App, parent: ?*CoreSurface) !void {
 /// Free the resources of the window. This doesn't destroy the window
 /// handle; this is called while the window is being destroyed.
 pub fn deinit(self: *Window) void {
+    _ = c.KillTimer(self.hwnd, progress_timer_id);
     const alloc = self.app.core_app.alloc;
     for (self.tabs.items) |tab| tab.destroy();
     self.tabs.deinit(alloc);
@@ -199,6 +205,7 @@ pub fn selectTab(self: *Window, idx: usize) void {
     const tab = self.tabs.items[idx];
     tab.focus(tab.focused);
     self.updateWindowTitle();
+    self.updateTaskbarProgress();
 }
 
 /// Go to a tab, using the semantics of the goto_tab action.
@@ -333,11 +340,49 @@ pub fn closeTabs(self: *Window, surface: *Surface, mode: apprt.action.CloseTabMo
 /// Called by a surface when it gains focus.
 pub fn surfaceFocused(self: *Window, surface: *Surface) void {
     const tab = self.tabOf(surface) orelse return;
-    if (tab.focused == surface) return;
     tab.focused = surface;
     tab.updateDimming();
     self.tab_bar.invalidate();
-    if (tab == self.activeTab()) self.updateWindowTitle();
+    if (tab == self.activeTab()) {
+        self.updateWindowTitle();
+        self.updateTaskbarProgress();
+    }
+}
+
+/// Show the focused surface's live progress on this window's taskbar button.
+pub fn updateTaskbarProgress(self: *Window) void {
+    _ = c.KillTimer(self.hwnd, progress_timer_id);
+    if (!self.taskbar_ready) return;
+    const taskbar = &self.app.taskbar;
+    if (self.tabs.items.len == 0) {
+        taskbar.clear(self.hwnd);
+        return;
+    }
+
+    const surface = self.activeSurface();
+    const now = c.GetTickCount64();
+    if (!surface.progress_style or surface.progress_report == null or
+        surface.progress_expires_at <= now)
+    {
+        taskbar.clear(self.hwnd);
+        return;
+    }
+
+    const report = surface.progress_report.?;
+    const state: c.TBPFLAG = switch (report.state) {
+        .remove => c.TBPF_NOPROGRESS,
+        .set => if (report.progress == null) c.TBPF_INDETERMINATE else c.TBPF_NORMAL,
+        .@"error" => c.TBPF_ERROR,
+        .indeterminate => c.TBPF_INDETERMINATE,
+        .pause => c.TBPF_PAUSED,
+    };
+    taskbar.setState(self.hwnd, state);
+    if (state != c.TBPF_INDETERMINATE and state != c.TBPF_NOPROGRESS) {
+        taskbar.setValue(self.hwnd, report.progress orelse 100);
+    }
+
+    const remaining: c.UINT = @intCast(@min(surface.progress_expires_at - now, 15_000));
+    _ = c.SetTimer(self.hwnd, progress_timer_id, @max(remaining, 1), null);
 }
 
 /// Called by a surface when its title changes.
@@ -549,7 +594,18 @@ pub fn wndProc(
     if (ptr == 0) return c.DefWindowProcW(hwnd, msg, wparam, lparam);
     const self: *Window = @ptrFromInt(@as(usize, @bitCast(ptr)));
 
+    if (msg == self.app.taskbar_button_created) {
+        log.debug("taskbar button created", .{});
+        self.taskbar_ready = true;
+        self.updateTaskbarProgress();
+        return 0;
+    }
+
     switch (msg) {
+        c.WM_TIMER => if (wparam == progress_timer_id) {
+            self.updateTaskbarProgress();
+            return 0;
+        },
         c.WM_SIZE => {
             self.layout();
             return 0;
