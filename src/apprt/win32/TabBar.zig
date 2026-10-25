@@ -280,7 +280,7 @@ fn paint(self: *TabBar, hdc: c.HDC, client: c.RECT) void {
             .right = close.left - self.scale(4),
             .bottom = rect.bottom,
         };
-        const title = tab.focused.title orelse "Ghostty";
+        const title = tab.title();
         const title8 = if (tab.hasBell())
             std.fmt.allocPrint(alloc, "🔔 {s}", .{title}) catch continue
         else
