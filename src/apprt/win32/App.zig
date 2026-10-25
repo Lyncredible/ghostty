@@ -21,6 +21,7 @@ const DimOverlay = @import("DimOverlay.zig");
 const BellBorder = @import("BellBorder.zig");
 const Taskbar = @import("Taskbar.zig");
 const Notifier = @import("Notifier.zig");
+const BellAudio = @import("BellAudio.zig");
 
 const log = std.log.scoped(.win32);
 
@@ -58,6 +59,9 @@ taskbar_button_created: c.UINT,
 
 /// Desktop notifications.
 notifier: Notifier,
+
+/// The custom bell sound, for the `audio` bell feature.
+bell_audio: BellAudio = .{},
 
 /// All of our open top-level windows.
 windows: std.ArrayList(*Window) = .empty,
@@ -277,6 +281,7 @@ pub fn terminate(self: *App) void {
 
     self.taskbar.deinit();
     self.notifier.deinit();
+    self.bell_audio.deinit(self.core_app.alloc);
 
     _ = c.DestroyWindow(self.msg_hwnd);
     unregisterClasses(self.hinstance);
@@ -355,6 +360,12 @@ fn activeWindow(self: *App) ?*Window {
     if (self.core_app.focusedSurface()) |surface| return surface.rt_surface.window;
     if (self.windows.items.len > 0) return self.windows.items[self.windows.items.len - 1];
     return null;
+}
+
+/// Play the configured bell sound, if any.
+pub fn playBellAudio(self: *App) void {
+    const path = self.config.@"bell-audio-path" orelse return;
+    self.bell_audio.play(self.core_app.alloc, path, self.config.@"bell-audio-volume");
 }
 
 /// Bring the given surface to the front, if it still exists.

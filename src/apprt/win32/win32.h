@@ -7,5 +7,6 @@
 #include <windows.h>
 #include <dwmapi.h>
 #include <imm.h>
+#include <mmsystem.h>
 #include <shellapi.h>
 #include <shobjidl.h>
