@@ -202,9 +202,15 @@ Notes:
   default opens cmd.exe. The tab bar uses `window-show-tab-bar=auto` by
   default, so the dropdown appears after opening a second tab; `always`
   makes it available from the first tab.
-- Follow-up: discover WSL distributions, only offer WSL when a distribution
-  is installed, and integrate shell features instead of launching bare
-  `wsl.exe`.
+- The WSL entry now checks the current user's registered distributions,
+  so an installed `wsl.exe` alone does not produce a dead-end menu item.
+  The native menu still showed WSL with Ubuntu registered here. Follow-up:
+  enumerate distributions by name, let users choose one, and integrate
+  shell features instead of launching bare `wsl.exe`.
+- The WSL menu entry launched the installed Ubuntu distribution in the
+  native UI, and splitting that tab launched another Ubuntu shell. Both
+  inherited the Windows working directory as `/mnt/c/Users/Yuan` on this
+  machine. Consider offering the Linux home directory as a launch choice.
 - Tabs can be dragged within the tab bar. A drag starts only after the
   system drag threshold and uses the existing tab-move path, preserving the
   active terminal. Verified moving a PowerShell tab from last to first and
