@@ -535,6 +535,16 @@ fn systemUsesDarkTheme() bool {
     return value == 0;
 }
 
+/// Bring this window to the front and focus the given surface.
+pub fn present(self: *Window, surface: *Surface) void {
+    if (c.IsIconic(self.hwnd) != 0) _ = c.ShowWindow(self.hwnd, c.SW_RESTORE);
+    _ = c.SetForegroundWindow(self.hwnd);
+    const tab = self.tabOf(surface) orelse return;
+    const idx = self.tabIndex(tab) orelse return;
+    if (idx != self.active) self.selectTab(idx);
+    tab.focus(surface);
+}
+
 /// Request attention without moving keyboard focus. Windows stops the
 /// taskbar flash automatically when this window comes to the foreground.
 pub fn requestAttention(self: *Window) void {
