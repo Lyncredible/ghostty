@@ -376,3 +376,58 @@ pub fn ProcThreadAttributeValue(
         (if (input) PROC_THREAD_ATTRIBUTE_INPUT else 0) |
         (if (additive) PROC_THREAD_ATTRIBUTE_ADDITIVE else 0);
 }
+
+/// Ghostty is a GUI program on Windows, so it has no console of its own,
+/// and console shells don't connect its output to them. For CLI actions
+/// (such as +version) run from a console, attach to that console so the
+/// output is visible. Output that's already redirected (a pipe or file)
+/// is left alone.
+pub fn attachParentConsole() void {
+    const params = windows.peb().ProcessParameters;
+    const has_stdout = validHandle(params.hStdOutput);
+    const has_stderr = validHandle(params.hStdError);
+    if (has_stdout and has_stderr) return;
+    if (console.AttachConsole(console.ATTACH_PARENT_PROCESS) == FALSE) return;
+
+    const conout = std.unicode.utf8ToUtf16LeStringLiteral("CONOUT$");
+    const handle = console.CreateFileW(
+        conout,
+        console.GENERIC_READ | console.GENERIC_WRITE,
+        console.FILE_SHARE_READ | console.FILE_SHARE_WRITE,
+        null,
+        console.OPEN_EXISTING,
+        0,
+        null,
+    );
+    if (handle == windows.INVALID_HANDLE_VALUE) return;
+    if (!has_stdout) _ = console.SetStdHandle(console.STD_OUTPUT_HANDLE, handle);
+    if (!has_stderr) _ = console.SetStdHandle(console.STD_ERROR_HANDLE, handle);
+}
+
+fn validHandle(handle: HANDLE) bool {
+    const value = @intFromPtr(handle);
+    return value != 0 and value != @intFromPtr(windows.INVALID_HANDLE_VALUE);
+}
+
+const console = struct {
+    const ATTACH_PARENT_PROCESS: DWORD = @bitCast(@as(i32, -1));
+    const STD_OUTPUT_HANDLE: DWORD = @bitCast(@as(i32, -11));
+    const STD_ERROR_HANDLE: DWORD = @bitCast(@as(i32, -12));
+    const GENERIC_READ: DWORD = 0x80000000;
+    const GENERIC_WRITE: DWORD = 0x40000000;
+    const FILE_SHARE_READ: DWORD = 0x1;
+    const FILE_SHARE_WRITE: DWORD = 0x2;
+    const OPEN_EXISTING: DWORD = 3;
+
+    extern "kernel32" fn AttachConsole(process_id: DWORD) callconv(.winapi) BOOL;
+    extern "kernel32" fn SetStdHandle(std_handle: DWORD, handle: HANDLE) callconv(.winapi) BOOL;
+    extern "kernel32" fn CreateFileW(
+        name: [*:0]const u16,
+        access: DWORD,
+        share: DWORD,
+        security: ?*anyopaque,
+        disposition: DWORD,
+        flags: DWORD,
+        template: ?HANDLE,
+    ) callconv(.winapi) HANDLE;
+};
