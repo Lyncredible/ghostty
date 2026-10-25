@@ -84,6 +84,15 @@ pub fn isSingle(self: *const Tab) bool {
     return !self.tree.isSplit();
 }
 
+/// Whether any split in this tab has an unread bell.
+pub fn hasBell(self: *const Tab) bool {
+    var it = self.tree.iterator();
+    while (it.next()) |entry| {
+        if (entry.view.bell_pending) return true;
+    }
+    return false;
+}
+
 /// Returns true if closing this tab requires confirmation.
 pub fn needsConfirmQuit(self: *const Tab) bool {
     var it = self.tree.iterator();
