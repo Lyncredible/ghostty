@@ -18,7 +18,7 @@ pub const default_class = "ghostty";
 /// Identifies our WM_COPYDATA messages ("GHIP").
 pub const magic: usize = 0x47484950;
 
-pub const Kind = enum(u8) { new_window = 1, new_tab = 2 };
+pub const Kind = enum(u8) { new_window = 1, new_tab = 2, toggle_quick_terminal = 3 };
 
 /// A decoded request. Slices point into the encoded data.
 pub const Request = struct {
