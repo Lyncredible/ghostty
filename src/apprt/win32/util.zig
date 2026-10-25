@@ -25,6 +25,21 @@ pub fn loadIcon(hinstance: c.HINSTANCE, id: u16) c.HICON {
 extern "user32" fn LoadCursorW(hinstance: c.HINSTANCE, id: usize) callconv(.winapi) c.HCURSOR;
 extern "user32" fn LoadIconW(hinstance: c.HINSTANCE, id: usize) callconv(.winapi) c.HICON;
 
+/// SetWindowPos with an integer insert-after handle, so we can pass the
+/// special values HWND_TOPMOST (-1) and HWND_NOTOPMOST (-2), which aren't
+/// valid pointers in Zig.
+pub extern "user32" fn SetWindowPos(
+    hwnd: c.HWND,
+    insert_after: isize,
+    x: c_int,
+    y: c_int,
+    cx: c_int,
+    cy: c_int,
+    flags: c.UINT,
+) callconv(.winapi) c.BOOL;
+pub const HWND_TOPMOST: isize = -1;
+pub const HWND_NOTOPMOST: isize = -2;
+
 // Predefined cursor IDs (MAKEINTRESOURCE values).
 pub const IDC_ARROW = 32512;
 pub const IDC_IBEAM = 32513;
