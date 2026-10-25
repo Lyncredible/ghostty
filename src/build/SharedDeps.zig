@@ -716,6 +716,7 @@ pub fn add(
         switch (self.config.app_runtime) {
             .none => {},
             .gtk => try self.addGtk(step),
+            .win32 => try self.addWin32(step),
         }
     }
 
@@ -724,6 +725,29 @@ pub fn add(
     self.framedata.addImport(step);
 
     return static_libs;
+}
+
+/// Setup the dependencies for the Win32 apprt build.
+fn addWin32(
+    self: *const SharedDeps,
+    step: *std.Build.Step.Compile,
+) !void {
+    _ = self;
+    const b = step.step.owner;
+    const target = step.root_module.resolved_target.?;
+    const optimize = step.root_module.optimize.?;
+
+    try translate_c.addImportToModule(b, "win32_c", step.root_module, .{
+        .source = .{ .file = b.path("src/apprt/win32/win32.h") },
+        .target = target,
+        .optimize = optimize,
+    });
+
+    step.root_module.linkSystemLibrary("user32", dynamic_link_opts);
+    step.root_module.linkSystemLibrary("gdi32", dynamic_link_opts);
+    step.root_module.linkSystemLibrary("imm32", dynamic_link_opts);
+    step.root_module.linkSystemLibrary("dwmapi", dynamic_link_opts);
+    step.root_module.linkSystemLibrary("shell32", dynamic_link_opts);
 }
 
 /// Setup the dependencies for the GTK apprt build.
