@@ -1,9 +1,13 @@
 //! Graphics API wrapper for Direct3D 11.
 //!
 //! Each surface renderer has its own ID3D11Device and immediate context,
-//! and a DXGI flip model swap chain on the surface's HWND. Frames are
-//! rendered into an offscreen target which is copied into the swap
-//! chain's back buffer when presented.
+//! and a DXGI flip model swap chain shown on the surface's HWND with
+//! DirectComposition. Frames are rendered into an offscreen target which
+//! is copied into the swap chain's back buffer when presented.
+//!
+//! We use a composition swap chain, rather than one for the HWND, because
+//! only those support transparency: our frames have premultiplied alpha,
+//! which `background-opacity` makes translucent.
 pub const Direct3D11 = @This();
 
 const std = @import("std");
@@ -18,6 +22,7 @@ const shadertoy = @import("shadertoy.zig");
 
 const com = @import("direct3d11/com.zig");
 const c = com.c;
+const dcomp = @import("direct3d11/dcomp.zig");
 pub const Device = @import("direct3d11/Device.zig");
 
 pub const GraphicsAPI = Direct3D11;
@@ -59,6 +64,9 @@ context: *c.ID3D11DeviceContext,
 /// The window we present to, and its swap chain.
 hwnd: c.HWND,
 swap_chain: *c.IDXGISwapChain1,
+
+/// The DirectComposition tree that shows our swap chain on the window.
+composition: Composition,
 
 /// The current size of the swap chain buffers.
 swap_chain_width: u32,
@@ -111,8 +119,10 @@ pub fn init(
     }
 
     const size = clientSize(hwnd);
-    const swap_chain = try createSwapChain(created.device, hwnd, size.width, size.height);
+    const swap_chain = try createSwapChain(created.device, size.width, size.height);
     errdefer com.release(swap_chain);
+    const composition: Composition = try .init(created.device, hwnd, swap_chain);
+    errdefer composition.deinit();
 
     var rasterizer: ?*c.ID3D11RasterizerState = null;
     try com.check(com.call(created.device, "CreateRasterizerState", .{
@@ -148,6 +158,7 @@ pub fn init(
         .context = created.context,
         .hwnd = hwnd,
         .swap_chain = swap_chain,
+        .composition = composition,
         .swap_chain_width = size.width,
         .swap_chain_height = size.height,
         .rasterizer = rasterizer.?,
@@ -159,6 +170,7 @@ pub fn init(
 pub fn deinit(self: *Direct3D11) void {
     self.default_sampler.deinit();
     com.release(self.rasterizer);
+    self.composition.deinit();
     com.release(self.swap_chain);
     com.call(self.context, "ClearState", .{});
     com.release(self.context);
@@ -166,10 +178,9 @@ pub fn deinit(self: *Direct3D11) void {
     self.* = undefined;
 }
 
-/// Create a flip model swap chain for the given window.
+/// Create a flip model swap chain for composition.
 fn createSwapChain(
     device: *c.ID3D11Device,
-    hwnd: c.HWND,
     width: u32,
     height: u32,
 ) !*c.IDXGISwapChain1 {
@@ -201,31 +212,78 @@ fn createSwapChain(
         .SampleDesc = .{ .Count = 1, .Quality = 0 },
         .BufferUsage = c.DXGI_USAGE_RENDER_TARGET_OUTPUT,
         .BufferCount = dxgi_buffer_count,
-        .Scaling = c.DXGI_SCALING_NONE,
+        // Composition swap chains require stretch scaling.
+        .Scaling = c.DXGI_SCALING_STRETCH,
         .SwapEffect = c.DXGI_SWAP_EFFECT_FLIP_DISCARD,
-        .AlphaMode = c.DXGI_ALPHA_MODE_IGNORE,
+        .AlphaMode = c.DXGI_ALPHA_MODE_PREMULTIPLIED,
         .Flags = 0,
     };
 
     var swap_chain: ?*c.IDXGISwapChain1 = null;
-    try com.check(com.call(factory, "CreateSwapChainForHwnd", .{
+    try com.check(com.call(factory, "CreateSwapChainForComposition", .{
         @as(*c.IUnknown, @ptrCast(device)),
-        hwnd,
         &desc,
         null,
-        null,
         &swap_chain,
-    }), "IDXGIFactory2::CreateSwapChainForHwnd");
-
-    // We don't support DXGI's alt+enter fullscreen handling,
-    // the apprt is responsible for fullscreen.
-    _ = com.call(factory, "MakeWindowAssociation", .{
-        hwnd,
-        @as(c.UINT, c.DXGI_MWA_NO_ALT_ENTER),
-    });
+    }), "IDXGIFactory2::CreateSwapChainForComposition");
 
     return swap_chain.?;
 }
+
+/// A DirectComposition visual tree with our swap chain as its content,
+/// bound to the window.
+const Composition = struct {
+    device: *dcomp.Device,
+    target: *dcomp.Target,
+    visual: *dcomp.Visual,
+
+    fn init(
+        d3d: *c.ID3D11Device,
+        hwnd: c.HWND,
+        swap_chain: *c.IDXGISwapChain1,
+    ) !Composition {
+        const dxgi_device = try com.queryInterface(c.IDXGIDevice, d3d, &com.IID_IDXGIDevice);
+        defer com.release(dxgi_device);
+
+        var device_ptr: ?*anyopaque = null;
+        try com.check(
+            dcomp.DCompositionCreateDevice(dxgi_device, &dcomp.IID_IDCompositionDevice, &device_ptr),
+            "DCompositionCreateDevice",
+        );
+        const device: *dcomp.Device = @ptrCast(@alignCast(device_ptr.?));
+        errdefer device.release();
+
+        // Not topmost, so the surface's overlay child windows (such as
+        // split dimming) stay above the terminal.
+        var target: ?*dcomp.Target = null;
+        try com.check(
+            device.createTargetForHwnd(hwnd, false, &target),
+            "IDCompositionDevice::CreateTargetForHwnd",
+        );
+        errdefer target.?.release();
+
+        var visual: ?*dcomp.Visual = null;
+        try com.check(device.createVisual(&visual), "IDCompositionDevice::CreateVisual");
+        errdefer visual.?.release();
+
+        try com.check(
+            visual.?.setContent(@ptrCast(swap_chain)),
+            "IDCompositionVisual::SetContent",
+        );
+        try com.check(target.?.setRoot(visual.?), "IDCompositionTarget::SetRoot");
+        try com.check(device.commit(), "IDCompositionDevice::Commit");
+
+        return .{ .device = device, .target = target.?, .visual = visual.? };
+    }
+
+    fn deinit(self: Composition) void {
+        _ = self.target.setRoot(null);
+        _ = self.device.commit();
+        self.visual.release();
+        self.target.release();
+        self.device.release();
+    }
+};
 
 /// Get the size of the client area of a window, at least 1x1.
 fn clientSize(hwnd: c.HWND) struct { width: u32, height: u32 } {
