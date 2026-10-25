@@ -20,6 +20,7 @@ const Window = @import("Window.zig");
 const DimOverlay = @import("DimOverlay.zig");
 const BellBorder = @import("BellBorder.zig");
 const LinkPreview = @import("LinkPreview.zig");
+const Scrollbar = @import("Scrollbar.zig");
 const Taskbar = @import("Taskbar.zig");
 const Notifier = @import("Notifier.zig");
 const BellAudio = @import("BellAudio.zig");
@@ -240,6 +241,20 @@ fn registerClasses(hinstance: c.HINSTANCE) !void {
         .{
             .cbSize = @sizeOf(c.WNDCLASSEXW),
             .style = 0,
+            .lpfnWndProc = Scrollbar.wndProc,
+            .cbClsExtra = 0,
+            .cbWndExtra = 0,
+            .hInstance = hinstance,
+            .hIcon = null,
+            .hCursor = util.loadSystemCursor(util.IDC_ARROW),
+            .hbrBackground = null,
+            .lpszMenuName = null,
+            .lpszClassName = Scrollbar.class_name,
+            .hIconSm = null,
+        },
+        .{
+            .cbSize = @sizeOf(c.WNDCLASSEXW),
+            .style = 0,
             .lpfnWndProc = msgWndProc,
             .cbClsExtra = 0,
             .cbWndExtra = 0,
@@ -268,6 +283,7 @@ fn unregisterClasses(hinstance: c.HINSTANCE) void {
     _ = c.UnregisterClassW(DimOverlay.class_name, hinstance);
     _ = c.UnregisterClassW(BellBorder.class_name, hinstance);
     _ = c.UnregisterClassW(LinkPreview.class_name, hinstance);
+    _ = c.UnregisterClassW(Scrollbar.class_name, hinstance);
     _ = c.UnregisterClassW(message_class, hinstance);
 }
 
@@ -645,6 +661,11 @@ pub fn performAction(
         .mouse_shape => switch (target) {
             .app => return false,
             .surface => |v| v.rt_surface.setMouseShape(value),
+        },
+
+        .scrollbar => switch (target) {
+            .app => return false,
+            .surface => |v| v.rt_surface.scrollbar.update(value),
         },
 
         .mouse_over_link => switch (target) {

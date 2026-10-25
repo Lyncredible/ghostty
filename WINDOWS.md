@@ -177,7 +177,7 @@ Notes:
   - [ ] `readonly` and `renderer_health` indicators
   - [ ] Search UI (`start_search`, `end_search`, `search_total`,
         `search_selected`)
-  - [ ] Scrollbar (`scrollbar`)
+  - [x] Scrollbar (`scrollbar`)
   - [ ] Key table / sequence indicators (`key_table`, `key_sequence`)
   - [ ] Command palette and quick terminal
 - [x] Share built-in compiled shader bytecode across surfaces
@@ -458,3 +458,14 @@ Reviewed the branch against this file and discussion #2563.
   test with Ubuntu (zsh with a custom theme): no startup errors;
   `cd /mnt/c/Windows` was inherited by a new tab; `false`/`pwd` produced
   failed/succeeded notifications; `cd ~` reset the pwd.
+- The `scrollbar` action drives a Windows 11 style overlay scrollbar: a
+  thin rounded thumb in the foreground color that appears while scrolling
+  or with the mouse near the right edge, widens on hover, and can be
+  dragged (or the track clicked) to scroll via `scroll_to_row`. It hides
+  after 1.2 s unless "Always show scrollbars" is on (the `DynamicScrollbars`
+  accessibility setting); `scrollbar=never` disables it. The track is
+  color-keyed, so clicks there reach the terminal. Native test: 300 lines
+  of output, wheel scrolling showed the thumb, hovering widened it, a
+  drag scrolled to line 1, and it hid afterwards. Note for test scripts:
+  `SetCursorPos` from another process didn't produce `WM_MOUSEMOVE` during
+  a captured drag; absolute `mouse_event` moves do.
