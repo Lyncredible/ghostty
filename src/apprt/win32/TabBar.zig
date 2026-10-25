@@ -274,15 +274,19 @@ fn paint(self: *TabBar, hdc: c.HDC, client: c.RECT) void {
 
         // Title
         const close = self.closeRect(rect);
-        const bell = tab.hasBell();
-        if (bell) self.drawBell(hdc, rect);
         var text_rect: c.RECT = .{
-            .left = rect.left + self.scale(if (bell) 24 else 12),
+            .left = rect.left + self.scale(12),
             .top = rect.top,
             .right = close.left - self.scale(4),
             .bottom = rect.bottom,
         };
-        const title16 = util.utf16Alloc(alloc, tab.focused.title orelse "Ghostty") catch continue;
+        const title = tab.focused.title orelse "Ghostty";
+        const title8 = if (tab.hasBell())
+            std.fmt.allocPrint(alloc, "🔔 {s}", .{title}) catch continue
+        else
+            alloc.dupe(u8, title) catch continue;
+        defer alloc.free(title8);
+        const title16 = util.utf16Alloc(alloc, title8) catch continue;
         defer alloc.free(title16);
         _ = c.SetTextColor(hdc, colorref(if (active) col.text else col.text_inactive));
         _ = c.DrawTextW(
@@ -307,19 +311,6 @@ fn paint(self: *TabBar, hdc: c.HDC, client: c.RECT) void {
     self.drawPlus(hdc, l.new_tab, col.text_inactive);
     if (Hit.eql(self.hover, .shell_menu)) fill(hdc, &l.shell_menu, col.hover);
     self.drawChevron(hdc, l.shell_menu, col.text_inactive);
-}
-
-fn drawBell(self: *const TabBar, hdc: c.HDC, rect: c.RECT) void {
-    const size = @max(1, self.scale(7));
-    const left = rect.left + self.scale(10);
-    const top = rect.top + @divTrunc(rect.bottom - rect.top - size, 2);
-    const brush = c.CreateSolidBrush(colorref(.{ .r = 255, .g = 176, .b = 64 }));
-    defer _ = c.DeleteObject(brush);
-    const old_brush = c.SelectObject(hdc, brush);
-    defer _ = c.SelectObject(hdc, old_brush);
-    const old_pen = c.SelectObject(hdc, c.GetStockObject(c.NULL_PEN));
-    defer _ = c.SelectObject(hdc, old_pen);
-    _ = c.Ellipse(hdc, left, top, left + size, top + size);
 }
 
 fn drawChevron(self: *const TabBar, hdc: c.HDC, rect: c.RECT, color: Rgb) void {
