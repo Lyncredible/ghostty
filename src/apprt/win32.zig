@@ -10,4 +10,5 @@ test {
     @import("std").testing.refAllDecls(@This());
     _ = @import("win32/key.zig");
     _ = @import("win32/Notifier.zig");
+    _ = @import("win32/TitleDialog.zig");
 }

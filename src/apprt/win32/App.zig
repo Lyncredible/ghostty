@@ -556,6 +556,11 @@ pub fn performAction(
             .surface => |v| v.rt_surface.window.setTitleOverride(value.title),
         },
 
+        .prompt_title => switch (target) {
+            .app => return false,
+            .surface => |v| try v.rt_surface.promptTitle(value),
+        },
+
         .copy_title_to_clipboard => switch (target) {
             .app => return false,
             .surface => |v| return try v.rt_surface.copyTitleToClipboard(),
