@@ -168,7 +168,10 @@ Notes:
 - [x] Shell integration for PowerShell (5.1 tested; PowerShell 7 isn't
       installed on the dev machine)
 - [x] OSC 7 working directory reports on Windows
-- [ ] DirectWrite font discovery and rendering
+- [x] Font discovery: FreeType scans the system and user font folders
+      (`+list-fonts --family=Consolas` takes about 0.1 s here)
+  - [ ] Consider DirectWrite (`IDWriteFontFallback`) for faster codepoint
+        fallback across many fonts
 - [ ] Packaging (installer and MSIX) and release builds
 - [ ] Unimplemented apprt actions (as of 2026-10-25)
   - [ ] Window management
@@ -555,3 +558,7 @@ Reviewed the branch against this file and discussion #2563.
   `quickRect` unit test, and native IPC toggles that showed it
   (full-width, 30% tall, in front), hid it, and showed it again with the
   cmd banner laid out correctly.
+- Full native test run (GNU Debug, built after the WSL path mapping):
+  4,045 passed, 65 skipped, 0 failed. `zig build test` prints "failed
+  command" for the test step because a test writes `terminal-snapshot`
+  diagnostics to stderr, but the step and the test binary both exit 0.
