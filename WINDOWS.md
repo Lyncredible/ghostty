@@ -138,7 +138,7 @@ Notes:
       the configured command when opening a new tab from the tab bar
 - [x] `unfocused-split-opacity` and `unfocused-split-fill`
 - [x] Drag tabs to reorder within a window
-- [ ] Move a tab to a new window
+- [x] Move a tab to a new window (`move_tab_to_new_window`)
 - [ ] Background opacity/blur (needs a DirectComposition swap chain)
 - [ ] Single instance and IPC (`+new-window`)
 - [ ] Terminal inspector (needs a Dear ImGui D3D11 backend)
@@ -158,6 +158,19 @@ Notes:
 - [ ] Shell integration for PowerShell
 - [ ] DirectWrite font discovery and rendering
 - [ ] Packaging (installer and MSIX) and release builds
+- [ ] Unimplemented apprt actions (as of 2026-10-25)
+  - [ ] Window management: `goto_window`, `present_terminal`,
+        `toggle_visibility`, `float_window`, `toggle_window_decorations`,
+        `reset_window_size`, `resize_window`, `size_limit`
+  - [ ] Titles: `set_tab_title`, `set_window_title`, `prompt_title`,
+        `copy_title_to_clipboard`
+  - [ ] Hover link preview (`mouse_over_link`) and `show_child_exited`
+  - [ ] `readonly` and `renderer_health` indicators
+  - [ ] Search UI (`start_search`, `end_search`, `search_total`,
+        `search_selected`)
+  - [ ] Scrollbar (`scrollbar`)
+  - [ ] Key table / sequence indicators (`key_table`, `key_sequence`)
+  - [ ] Command palette and quick terminal
 - [x] Share built-in compiled shader bytecode across surfaces
 - [x] Cache compiled custom shader bytecode across surfaces
 
@@ -343,3 +356,11 @@ Reviewed the branch against this file and discussion #2563.
   the SHA-256 of the translated HLSL, under a lock so concurrent surfaces
   compile once. Native test with a custom shader: the first tab logged a
   compile and two new tabs reused the bytecode.
+- `move_tab_to_new_window` moves a tab into a new window by reparenting
+  its surface child windows; the renderers keep their swap chains since the
+  `HWND`s don't change. Like GTK it's a no-op for a window's only tab.
+  The new window is presented after the old window selects its next tab,
+  which would otherwise take activation back. Native test: a typed command's
+  output stayed in the moved tab, the new window was in front, the
+  single-tab case did nothing, and exiting the moved shell closed only the
+  new window.
