@@ -136,8 +136,14 @@ Notes:
   passes.
 - Native GNU Debug build passes with Zig 0.17.0. The first build hit a
   transient MinGW dependency-file parse failure; rerunning succeeded.
-- Follow-up: Windows `command` values currently split on whitespace, so
-  quoted executable paths and arguments with spaces fail. Reuse Zig's
-  Windows argument parser and add regression tests.
+- Windows `command` values now use Windows CRT quoting rules, including
+  executable paths with spaces, quoted arguments, empty arguments,
+  backslashes before quotes, and Unicode. For example, a command value
+  can contain `"C:\Program Files\PowerShell\7\pwsh.exe" -NoLogo`.
+  This launches the executable directly; shell operators such as `|`
+  still require explicitly invoking a shell. Direct argv commands are
+  unchanged. Empty executable names are rejected.
+  `zig build test -Dtarget=x86_64-windows-gnu -Dtest-filter="execCommand windows"`
+  passes, including ownership and quoting regression cases.
 - Follow-up: audit close confirmation dialogs for reentrancy when a shell
   exits while the dialog is open.
