@@ -161,8 +161,11 @@ Notes:
 - [ ] Unimplemented apprt actions (as of 2026-10-25)
   - [ ] Window management
     - [x] `reset_window_size`, `resize_window`, `size_limit`
-    - [ ] `goto_window`, `present_terminal`, `float_window`,
-          `toggle_window_decorations`, `toggle_visibility`
+    - [x] `goto_window`, `present_terminal`, `float_window`,
+          `toggle_window_decorations` (and `window-decoration=none`)
+    - [ ] `toggle_visibility` (needs global keybinds first, or hidden
+          windows can't be brought back)
+- [ ] Global keybinds (`RegisterHotKey`)
   - [x] Titles: `set_tab_title`, `set_window_title`,
         `copy_title_to_clipboard`, `prompt_title`
   - [ ] Hover link preview (`mouse_over_link`) and `show_child_exited`
@@ -389,3 +392,12 @@ Reviewed the branch against this file and discussion #2563.
   `SetWindowPos` was clamped to the 232x168 minimum. ConPTY consumes
   CSI 8 t itself, so `resize_window` from a program isn't reachable
   through ConPTY.
+- `window-decoration=none` and `toggle_window_decorations` remove the
+  caption but keep the resize border; toggling follows GTK (back to the
+  config, or the opposite of it). Fullscreen re-applies it on restore.
+  `float_window` uses `HWND_TOPMOST`; those special handles aren't valid
+  Zig pointers, so `util.SetWindowPos` takes an integer. `goto_window`
+  cycles windows in creation order (window removal is now ordered) and
+  `present_terminal` restores and focuses the surface. Native test: the
+  caption and topmost style bits toggled both ways, and `goto_window:next`
+  alternated the foreground between two windows.
