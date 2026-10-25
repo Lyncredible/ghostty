@@ -1995,29 +1995,41 @@ fn execCommand(
                 // (extra process in the tree, per-process cmd AutoRun
                 // state not reaching the user's actual shell).
                 //
-                // Values with arguments are split on whitespace. This
-                // does not honor Windows CLI quoting rules; users who
-                // need quoted arguments should use the direct command
-                // form, which takes an argv array as-is.
-                //
-                // Note we don't free any of the memory below since it is
-                // allocated in the arena.
-                if (std.mem.indexOfAny(u8, v, " \t") == null) {
+                // Use the Windows CRT quoting rules, including the
+                // special rules for argv[0], so paths such as
+                // "C:\Program Files\PowerShell\7\pwsh.exe" work.
+                // Trim leading whitespace because the CRT otherwise
+                // interprets it as an empty executable name.
+                const cmdline = std.unicode.wtf8ToWtf16LeAllocZ(
+                    alloc,
+                    std.mem.trimStart(u8, v, " \t"),
+                ) catch |err| switch (err) {
+                    error.InvalidWtf8 => return error.SystemError,
+                    error.OutOfMemory => return error.OutOfMemory,
+                };
+                defer alloc.free(cmdline);
+                var it = try std.process.Args.Iterator.Windows.init(alloc, cmdline);
+                defer it.deinit();
+                while (it.next()) |arg| {
+                    // The iterator owns its strings; the returned argv
+                    // must survive both it and the original config.
+                    try args.append(alloc, try alloc.dupeSentinel(u8, arg, 0));
+                }
+                if (args.items.len == 0 or args.items[0].len == 0) return error.SystemError;
+
+                if (args.items.len == 1 and std.ascii.eqlIgnoreCase(args.items[0], "cmd.exe")) {
                     // No arguments. If the shell is literally "cmd.exe"
                     // (the default), resolve via %COMSPEC% which is the
                     // documented path to the current command processor.
                     // Other values are passed as-is and resolved by
                     // `internal_os.path.expand` in Command.startWindows.
-                    const argv0 = if (std.ascii.eqlIgnoreCase(v, "cmd.exe"))
-                        global.environ().getAlloc(alloc, "COMSPEC") catch
-                            try alloc.dupe(u8, v)
-                    else
-                        try alloc.dupe(u8, v);
-                    try args.append(alloc, try alloc.dupeSentinel(u8, argv0, 0));
-                } else {
-                    var it = std.mem.tokenizeAny(u8, v, " \t");
-                    while (it.next()) |tok| {
-                        try args.append(alloc, try alloc.dupeSentinel(u8, tok, 0));
+                    if (global.environ().getAlloc(alloc, "COMSPEC")) |comspec| {
+                        defer alloc.free(comspec);
+                        alloc.free(args.items[0]);
+                        args.items[0] = try alloc.dupeSentinel(u8, comspec, 0);
+                    } else |err| switch (err) {
+                        error.OutOfMemory => return error.OutOfMemory,
+                        else => {},
                     }
                 }
                 break :shell try args.toOwnedSlice(alloc);
@@ -2258,8 +2270,12 @@ test "execCommand windows: bare cmd.exe resolves via COMSPEC" {
 
     // Expect COMSPEC if available, otherwise the documented fallback.
     const expected = testing.environ.getAlloc(alloc, "COMSPEC") catch
-        try alloc.dupe(u8, "C:\\Windows\\System32\\cmd.exe");
+        try alloc.dupe(u8, "cmd.exe");
     try testing.expectEqualStrings(expected, result[0]);
+
+    const quoted = try execCommand(alloc, .{ .shell = " \t\"cmd.exe\" " }, void);
+    try testing.expectEqual(1, quoted.len);
+    try testing.expectEqualStrings(expected, quoted[0]);
 }
 
 test "execCommand windows: bare non-cmd shell is passed through" {
@@ -2280,7 +2296,7 @@ test "execCommand windows: bare non-cmd shell is passed through" {
     try testing.expectEqualStrings("pwsh.exe", result[0]);
 }
 
-test "execCommand windows: shell with args is split on whitespace" {
+test "execCommand windows: shell with args" {
     if (comptime builtin.target.os.tag != .windows) return error.SkipZigTest;
 
     const testing = std.testing;
@@ -2297,6 +2313,66 @@ test "execCommand windows: shell with args is split on whitespace" {
     try testing.expectEqual(2, result.len);
     try testing.expectEqualStrings("wsl", result[0]);
     try testing.expectEqualStrings("~", result[1]);
+}
+
+test "execCommand windows: quoted paths and arguments" {
+    if (comptime builtin.target.os.tag != .windows) return error.SkipZigTest;
+
+    const cases = [_]struct { command: [:0]const u8, expected: []const []const u8 }{
+        .{
+            .command = "\"C:\\Program Files\\PowerShell\\7\\pwsh.exe\" -NoLogo",
+            .expected = &.{ "C:\\Program Files\\PowerShell\\7\\pwsh.exe", "-NoLogo" },
+        },
+        .{
+            .command = "\"C:\\Program Files\\PowerShell\\7\\pwsh.exe\"",
+            .expected = &.{"C:\\Program Files\\PowerShell\\7\\pwsh.exe"},
+        },
+        .{
+            .command = "wsl.exe --cd \"/home/test user\" --exec bash -l",
+            .expected = &.{ "wsl.exe", "--cd", "/home/test user", "--exec", "bash", "-l" },
+        },
+        .{
+            .command = " \t pwsh.exe \t-NoLogo \"\" \"hello world\"  ",
+            .expected = &.{ "pwsh.exe", "-NoLogo", "", "hello world" },
+        },
+        .{
+            .command = "\"C:\\工具\\my shell.exe\" \"日本語 test\"",
+            .expected = &.{ "C:\\工具\\my shell.exe", "日本語 test" },
+        },
+        .{
+            .command = "pwsh.exe \"C:\\some dir\\\\\" \"say \\\"hello\\\"\"",
+            .expected = &.{ "pwsh.exe", "C:\\some dir\\", "say \"hello\"" },
+        },
+    };
+    for (cases) |case| {
+        var arena = ArenaAllocator.init(std.testing.allocator);
+        defer arena.deinit();
+
+        // Free the input before inspecting the result to catch borrowed
+        // config strings (as well as strings owned by the iterator).
+        const command = try std.testing.allocator.dupeSentinel(u8, case.command, 0);
+        const result = result: {
+            defer std.testing.allocator.free(command);
+            break :result try execCommand(arena.allocator(), .{ .shell = command }, void);
+        };
+        try std.testing.expectEqual(case.expected.len, result.len);
+        for (case.expected, result) |expected, actual| {
+            try std.testing.expectEqualStrings(expected, actual);
+        }
+    }
+}
+
+test "execCommand windows: reject empty executable" {
+    if (comptime builtin.target.os.tag != .windows) return error.SkipZigTest;
+
+    for ([_][:0]const u8{ "", " \t ", "\"\" -NoLogo" }) |command| {
+        var arena = ArenaAllocator.init(std.testing.allocator);
+        defer arena.deinit();
+        try std.testing.expectError(
+            error.SystemError,
+            execCommand(arena.allocator(), .{ .shell = command }, void),
+        );
+    }
 }
 
 test "execCommand windows: direct command is passed through unchanged" {
