@@ -258,6 +258,13 @@ Notes:
       text, with control characters shown as dots. Checked: pasting
       "echo one / echo two" showed both lines under the warning. Unit
       test: `writePreview`.
+- [x] Logs: a GUI program's stderr usually isn't visible, so logs (info
+      and above) also go to `OutputDebugStringW`, which debuggers and
+      DebugView show. It's a new `GHOSTTY_LOG` destination, `windows`, on
+      by default on Windows (documented in HACKING.md and ghostty(1)).
+      Checked with a small DBWIN listener: 24 lines from a launch, starting
+      with "ghostty info: ghostty version=...", and none from Ghostty with
+      `GHOSTTY_LOG=no-windows`.
 - [x] Crash reports: Ghostty is a GUI program on Windows, so a panic's
       message and stack trace went to an invisible standard error and the
       window just vanished (Sentry isn't built for Windows, as on Linux).

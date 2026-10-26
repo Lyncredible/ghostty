@@ -151,6 +151,28 @@ fn logFn(
         );
     }
 
+    // On Windows, the debug output is where a GUI program's logs can be
+    // seen (with a debugger or DebugView). Debug messages are left out,
+    // since debug builds log a lot of them.
+    windows: {
+        if (comptime builtin.target.os.tag != .windows) break :windows;
+        if (level == .debug) break :windows;
+        if (!global.logging().windows) break :windows;
+
+        const level_txt = comptime level.asText();
+        const prefix = if (scope == .default) ": " else "(" ++ @tagName(scope) ++ "): ";
+        var buf: [2048]u8 = undefined;
+        const line = std.fmt.bufPrint(&buf, "ghostty " ++ level_txt ++ prefix ++ format ++ "\n", args) catch line: {
+            // Too long: show what fits.
+            buf[buf.len - 4 ..].* = "...\n".*;
+            break :line buf[0..];
+        };
+        var line16: [2048:0]u16 = undefined;
+        const len = std.unicode.utf8ToUtf16Le(&line16, line) catch break :windows;
+        line16[len] = 0;
+        OutputDebugStringW(line16[0..len :0]);
+    }
+
     stderr: {
         // don't log debug messages to stderr unless we are a debug build
         if (comptime builtin.mode != .debug and level == .debug) break :stderr;
@@ -169,6 +191,8 @@ fn logFn(
         nosuspend stderr.file_writer.interface.flush() catch break :stderr;
     }
 }
+
+extern "kernel32" fn OutputDebugStringW(text: [*:0]const u16) callconv(.winapi) void;
 
 /// Returns the macOS unified logging logger for the given scope. The
 /// logger is created once per scope and cached for the lifetime of the
