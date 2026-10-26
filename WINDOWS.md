@@ -246,6 +246,13 @@ Notes:
     "Potentially Unsafe Paste" dialog open, Quit from the menu still
     exited. So that run was most likely waiting on a confirmation dialog,
     which is expected.
+- [x] Clipboard confirmations show the text, like GTK: the unsafe paste
+      warning, a program reading the clipboard (OSC 52; this used the
+      unsafe paste wording before), and a program writing it each say
+      what's happening, followed by up to 12 lines (800 bytes) of the
+      text, with control characters shown as dots. Checked: pasting
+      "echo one / echo two" showed both lines under the warning. Unit
+      test: `writePreview`.
 - [x] CLI actions on Windows: `+version`, `+list-fonts`, `+list-themes`,
       `+list-keybinds`, `+list-colors`, `+list-actions`, `+show-config`,
       `+validate-config`, `+help`, `+show-face`, `+explain-config`, and
