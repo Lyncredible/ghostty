@@ -2546,17 +2546,18 @@ keybind: Keybinds = .{},
 ///   primary selection that middle-click pastes. On macOS this is a separate
 ///   pasteboard private to Ghostty that the `paste_from_selection` action
 ///   (Paste Selection in the Edit menu) reads, so selecting text does not
-///   replace the contents of the system clipboard. (Available since: 1.4.0)
+///   replace the contents of the system clipboard. Windows has no selection
+///   clipboard, so there this copies nothing. (Available since: 1.4.0)
 ///
 /// * `clipboard` - Copy text to the system clipboard only. Before 1.4.0 this
 ///   value copied to the selection clipboard as well; use `both` for that.
 ///
-/// * `both` - Copy to both the selection clipboard and the system clipboard.
-///   (Available since: 1.4.0)
+/// * `both` - Copy to both the selection clipboard and the system clipboard
+///   (only the system clipboard on Windows). (Available since: 1.4.0)
 ///
 /// For backward compatibility and convenience, a value of `true` is the same
-/// as `primary` on Linux, FreeBSD, and macOS and `clipboard` elsewhere, and
-/// `false` is an alias for `none`.
+/// as `primary` on Linux, FreeBSD, and macOS and `clipboard` elsewhere
+/// (including Windows), and `false` is an alias for `none`.
 ///
 /// The default value is `primary` on Linux and macOS and `none` otherwise.
 @"copy-on-select": CopyOnSelect = switch (builtin.target.os.tag) {
@@ -2581,7 +2582,8 @@ keybind: Keybinds = .{},
 ///
 /// Valid values:
 ///   * `primary-paste` - Paste from the selection clipboard on Linux.
-///      Does nothing on macOS.
+///      Does nothing on macOS and Windows, which have no selection
+///      clipboard.
 ///   * `clipboard-paste` - Paste from the system clipboard.
 ///   * `ignore` - Do nothing, ignore the middle click.
 ///
