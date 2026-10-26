@@ -895,6 +895,11 @@ pub fn performAction(
             .surface => |v| v.rt_surface.setMouseShape(value),
         },
 
+        .cell_size => switch (target) {
+            .app => return false,
+            .surface => |v| v.rt_surface.cell_size = value,
+        },
+
         .color_change => switch (target) {
             .app => return false,
             .surface => |v| v.rt_surface.colorChanged(value),

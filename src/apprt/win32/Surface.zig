@@ -105,6 +105,9 @@ health_badge: Badge = .{},
 
 /// A short message that hides itself, like GTK's toasts.
 toast_badge: Badge = .{},
+
+/// The size of a cell in pixels, from the core, for window-step-resize.
+cell_size: ?apprt.action.CellSize = null,
 search_bar: SearchBar = .{},
 command_palette: CommandPalette = .{},
 
