@@ -860,6 +860,9 @@ Reviewed the branch against this file and discussion #2563.
   drop, resize overlay, toasts, jump list, and HTML copy: 4,073 passed,
   61 skipped, 0 failed, exit 0. `package.ps1` then built a ReleaseSafe zip
   with `install.ps1`, the README, and a 31 MB `ghostty.exe`.
+- Fourth full native test run, after the config errors dialog, MSIX
+  tool, and UI Automation (value, notifications, text pattern): 4,076
+  passed, 61 skipped, 0 failed, exit 0.
 - The inspector's buttons can't be clicked with posted messages: ImGui's
   Win32 backend calls `TrackMouseEvent` on mouse moves, and with the real
   cursor elsewhere Windows sends `WM_MOUSELEAVE` right away, so clicks
