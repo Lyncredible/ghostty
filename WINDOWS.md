@@ -315,6 +315,11 @@ Notes:
         When the last window closes because its shell exited, the state
         is cleared. Checked: a split plus a second tab saved and restored
         as three terminals with their directories and focus.
+  - [x] `resize-overlay`, `resize-overlay-position`, and
+        `resize-overlay-duration`: "columns x rows" when the grid changes,
+        like GTK; with `after-first`, not while a new window is being
+        sized before it's shown. Checked: nothing at startup, "82 x 21"
+        after a resize, hidden after the duration.
   - [x] `window-step-resize`: dragging a window edge resizes the active
         terminal in whole cells (`WM_SIZING`, with the cell size from the
         `cell_size` action), keeping the leftover padding. Unit tested;

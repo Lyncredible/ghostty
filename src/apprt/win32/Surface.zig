@@ -106,6 +106,14 @@ health_badge: Badge = .{},
 /// A short message that hides itself, like GTK's toasts.
 toast_badge: Badge = .{},
 
+/// The terminal size shown while resizing, per resize-overlay.
+resize_badge: Badge = .{},
+resize_overlay: configpkg.Config.ResizeOverlay = .@"after-first",
+resize_overlay_ms: u32 = 750,
+
+/// The grid size from the last resize, null before the first.
+last_grid: ?struct { columns: u32, rows: u32 } = null,
+
 /// The size of a cell in pixels, from the core, for window-step-resize.
 cell_size: ?apprt.action.CellSize = null,
 search_bar: SearchBar = .{},
@@ -266,6 +274,9 @@ pub fn init(self: *Surface, app: *App, window: *Window, opts: Options) !void {
     errdefer self.health_badge.deinit(alloc);
     try self.toast_badge.init(hwnd, app.hinstance, &config, .bottom_center);
     errdefer self.toast_badge.deinit(alloc);
+    try self.resize_badge.init(hwnd, app.hinstance, &config, .center);
+    errdefer self.resize_badge.deinit(alloc);
+    self.updateResizeOverlay(&config);
     c.DragAcceptFiles(hwnd, c.TRUE);
     try self.search_bar.init(hwnd, app.hinstance, &config, self, searchEvent);
     errdefer self.search_bar.deinit();
@@ -285,6 +296,7 @@ pub fn init(self: *Surface, app: *App, window: *Window, opts: Options) !void {
         self.core_initialized = false;
         self.core_surface.deinit();
     }
+    self.showResizeOverlay();
 
     // Inherit the font size of our parent if configured.
     if (opts.parent) |parent| {
@@ -308,6 +320,8 @@ pub fn deinit(self: *Surface) void {
     self.health_badge.deinit(alloc);
     _ = c.KillTimer(self.hwnd, toast_timer_id);
     self.toast_badge.deinit(alloc);
+    _ = c.KillTimer(self.hwnd, resize_timer_id);
+    self.resize_badge.deinit(alloc);
     self.closeInspector();
     self.search_bar.deinit();
     self.command_palette.deinit();
@@ -748,6 +762,8 @@ pub fn configChanged(self: *Surface, config: *const configpkg.Config) void {
     self.key_badge.updateConfig(config);
     self.health_badge.updateConfig(config);
     self.toast_badge.updateConfig(config);
+    self.resize_badge.updateConfig(config);
+    self.updateResizeOverlay(config);
     self.search_bar.updateConfig(config);
     self.command_palette.updateConfig(config);
     self.dim_overlay.updateConfig(config) catch |err| {
@@ -1014,6 +1030,44 @@ pub fn setClipboard(
 }
 
 const toast_timer_id = 1;
+const resize_timer_id = 2;
+
+fn updateResizeOverlay(self: *Surface, config: *const configpkg.Config) void {
+    self.resize_overlay = config.@"resize-overlay";
+    self.resize_overlay_ms = @intCast(@min(config.@"resize-overlay-duration".asMilliseconds(), std.math.maxInt(u32)));
+    self.resize_badge.anchor = switch (config.@"resize-overlay-position") {
+        .center => .center,
+        .@"top-left" => .top_left,
+        .@"top-center" => .top_center,
+        .@"top-right" => .top_right,
+        .@"bottom-left" => .bottom_left,
+        .@"bottom-center" => .bottom_center,
+        .@"bottom-right" => .bottom_right,
+    };
+}
+
+/// Show the terminal's size after a resize, like GTK, if its grid changed.
+fn showResizeOverlay(self: *Surface) void {
+    if (!self.core_initialized) return;
+    const grid = self.core_surface.size.grid();
+    const first = self.last_grid == null;
+    if (self.last_grid) |last| {
+        if (last.columns == grid.columns and last.rows == grid.rows) return;
+    }
+    self.last_grid = .{ .columns = grid.columns, .rows = grid.rows };
+
+    // Sizing a new window before it's shown counts as being created.
+    const creating = first or c.IsWindowVisible(self.window.hwnd) == 0;
+    switch (self.resize_overlay) {
+        .never => return,
+        .@"after-first" => if (creating) return,
+        .always => {},
+    }
+    var buf: [32]u8 = undefined;
+    const text = std.fmt.bufPrint(&buf, "{d} x {d}", .{ grid.columns, grid.rows }) catch return;
+    self.resize_badge.set(self.app.core_app.alloc, text);
+    _ = c.SetTimer(self.hwnd, resize_timer_id, @max(1, self.resize_overlay_ms), null);
+}
 const toast_ms = 2000;
 
 /// Show a short message for a couple of seconds.
@@ -1168,11 +1222,13 @@ pub fn wndProc(
                 self.key_badge.parentResized();
                 self.health_badge.parentResized();
                 self.toast_badge.parentResized();
+                self.resize_badge.parentResized();
                 self.search_bar.parentResized();
                 self.command_palette.parentResized();
                 self.core_surface.sizeCallback(size) catch |err| {
                     log.err("error in size callback err={}", .{err});
                 };
+                self.showResizeOverlay();
             }
             return 0;
         },
@@ -1256,6 +1312,10 @@ pub fn wndProc(
         c.WM_TIMER => if (wparam == toast_timer_id) {
             _ = c.KillTimer(hwnd, toast_timer_id);
             self.toast_badge.set(self.app.core_app.alloc, null);
+            return 0;
+        } else if (wparam == resize_timer_id) {
+            _ = c.KillTimer(hwnd, resize_timer_id);
+            self.resize_badge.set(self.app.core_app.alloc, null);
             return 0;
         },
 
