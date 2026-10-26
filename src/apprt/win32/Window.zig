@@ -667,7 +667,7 @@ pub fn tabOf(self: *const Window, surface: *const Surface) ?*Tab {
     return null;
 }
 
-fn tabIndex(self: *const Window, tab: *const Tab) ?usize {
+pub fn tabIndex(self: *const Window, tab: *const Tab) ?usize {
     return std.mem.indexOfScalar(*Tab, self.tabs.items, @constCast(tab));
 }
 
@@ -804,6 +804,7 @@ pub fn selectTab(self: *Window, idx: usize) void {
     tab.focus(tab.focused);
     self.updateWindowTitle();
     self.updateTaskbarProgress();
+    self.tab_bar.tabSelected(tab);
 }
 
 /// Go to a tab, using the semantics of the goto_tab action.
