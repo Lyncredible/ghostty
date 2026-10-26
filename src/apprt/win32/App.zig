@@ -1125,6 +1125,13 @@ fn reloadConfig(
         .app => try self.core_app.updateConfig(self, &config),
         .surface => |core_surface| try core_surface.updateConfig(&config),
     }
+
+    // Like GTK, tell each window.
+    if (config.@"app-notifications".@"config-reload") {
+        for (self.windows.items) |window| {
+            if (window.tabs.items.len > 0) window.activeSurface().showToast("Reloaded the configuration");
+        }
+    }
 }
 
 /// Open a URL or path with the default handler.

@@ -3372,7 +3372,7 @@ keybind: Keybinds = .{},
 /// A value of "false" will disable all notifications. A value of "true" will
 /// enable all notifications.
 ///
-/// This configuration only applies to GTK.
+/// This configuration only applies to GTK and Windows.
 ///
 /// Available since: 1.1.0
 @"app-notifications": AppNotifications = .{},
