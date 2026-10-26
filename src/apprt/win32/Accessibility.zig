@@ -52,6 +52,13 @@ pub fn detach(self: *Accessibility) void {
     _ = release(self);
 }
 
+/// Release the references UI Automation still holds to our providers,
+/// such as ones handed to clients that haven't released them. Called when
+/// the app exits, so that they're freed.
+pub fn disconnectAll() void {
+    _ = UiaDisconnectAllProviders();
+}
+
 /// Answer WM_GETOBJECT for UI Automation.
 pub fn getObject(self: *Accessibility, hwnd: c.HWND, wparam: c.WPARAM, lparam: c.LPARAM) ?c.LRESULT {
     const UiaRootObjectId: c.LPARAM = -25;
@@ -205,6 +212,7 @@ const UIA_DocumentControlTypeId = 50030;
 extern "uiautomationcore" fn UiaReturnRawElementProvider(hwnd: c.HWND, wparam: c.WPARAM, lparam: c.LPARAM, provider: *Interface) callconv(.winapi) c.LRESULT;
 extern "uiautomationcore" fn UiaHostProviderFromHwnd(hwnd: c.HWND, provider: *?*anyopaque) callconv(.winapi) HRESULT;
 extern "uiautomationcore" fn UiaDisconnectProvider(provider: *Interface) callconv(.winapi) HRESULT;
+extern "uiautomationcore" fn UiaDisconnectAllProviders() callconv(.winapi) HRESULT;
 extern "oleaut32" fn SysAllocStringLen(s: ?[*]const u16, len: u32) callconv(.winapi) ?[*:0]u16;
 extern "oleaut32" fn SysFreeString(s: ?[*:0]u16) callconv(.winapi) void;
 extern "oleaut32" fn SafeArrayCreateVector(vt: u16, lower: i32, count: u32) callconv(.winapi) ?*anyopaque;
