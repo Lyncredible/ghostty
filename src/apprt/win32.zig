@@ -19,4 +19,5 @@ test {
     _ = @import("win32/CommandPalette.zig");
     _ = @import("win32/drop.zig");
     _ = @import("win32/SaveState.zig");
+    _ = @import("win32/SplitDrag.zig");
 }

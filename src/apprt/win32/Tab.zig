@@ -408,6 +408,48 @@ pub fn layout(self: *Tab, area: c.RECT) void {
     // Visibility depends on the zoom state.
     self.setVisible(true);
     self.updateDimming();
+    self.updateDragHandles();
+}
+
+/// Show the drag handles per the drag-handle config: with `auto`, only
+/// when there's more than one split to rearrange.
+pub fn updateDragHandles(self: *Tab) void {
+    const show = switch (self.window.app.config.@"drag-handle") {
+        .always => true,
+        .auto => !self.isSingle() and self.tree.zoomed == null,
+        .never => false,
+    };
+    var it = self.tree.iterator();
+    while (it.next()) |entry| entry.view.drag_handle.setShown(show);
+}
+
+/// The terminal at a point on the screen, if any.
+pub fn surfaceAt(self: *const Tab, pt: c.POINT) ?*Surface {
+    var it = self.tree.iterator();
+    while (it.next()) |entry| {
+        var rect: c.RECT = undefined;
+        if (c.GetWindowRect(entry.view.hwnd, &rect) == 0) continue;
+        if (c.PtInRect(&rect, pt) != 0) return entry.view;
+    }
+    return null;
+}
+
+/// Move a terminal next to another in this tab, like GTK's moveSplit.
+pub fn moveSplit(self: *Tab, source: *Surface, target: *Surface, direction: Tree.Split.Direction) !void {
+    if (source == target) return;
+    const alloc = self.window.app.core_app.alloc;
+    const target_handle = self.tree.locate(target) orelse return;
+    const source_handle = self.tree.locate(source) orelse return;
+
+    var branch: Tree = try .init(alloc, source);
+    defer branch.deinit();
+    var after_split = try self.tree.split(alloc, target_handle, direction, 0.5, &branch);
+    defer after_split.deinit();
+    const after_remove = try after_split.remove(alloc, source_handle);
+    self.replaceTree(after_remove);
+
+    self.window.layout();
+    self.focus(source);
 }
 
 fn layoutLeaf(self: *Tab, handle: Tree.Node.Handle, rect: c.RECT) void {

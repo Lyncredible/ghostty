@@ -29,6 +29,7 @@ const Menu = @import("Menu.zig");
 const CommandPalette = @import("CommandPalette.zig");
 const InspectorWindow = @import("InspectorWindow.zig");
 const drop = @import("drop.zig");
+const SplitDrag = @import("SplitDrag.zig");
 const internal_os = @import("../../os/main.zig");
 
 const log = std.log.scoped(.win32);
@@ -105,6 +106,11 @@ health_badge: Badge = .{},
 
 /// A short message that hides itself, like GTK's toasts.
 toast_badge: Badge = .{},
+
+/// The handle to drag this split elsewhere, and the highlight where a
+/// dragged split would drop on us.
+drag_handle: SplitDrag.Handle = .{},
+drop_zone: SplitDrag.DropZone = .{},
 
 /// The terminal size shown while resizing, per resize-overlay.
 resize_badge: Badge = .{},
@@ -276,6 +282,10 @@ pub fn init(self: *Surface, app: *App, window: *Window, opts: Options) !void {
     errdefer self.toast_badge.deinit(alloc);
     try self.resize_badge.init(hwnd, app.hinstance, &config, .center);
     errdefer self.resize_badge.deinit(alloc);
+    try self.drop_zone.init(hwnd, app.hinstance, &config);
+    errdefer self.drop_zone.deinit();
+    try self.drag_handle.init(self, app.hinstance, &config);
+    errdefer self.drag_handle.deinit();
     self.updateResizeOverlay(&config);
     c.DragAcceptFiles(hwnd, c.TRUE);
     try self.search_bar.init(hwnd, app.hinstance, &config, self, searchEvent);
@@ -322,6 +332,8 @@ pub fn deinit(self: *Surface) void {
     self.toast_badge.deinit(alloc);
     _ = c.KillTimer(self.hwnd, resize_timer_id);
     self.resize_badge.deinit(alloc);
+    self.drag_handle.deinit();
+    self.drop_zone.deinit();
     self.closeInspector();
     self.search_bar.deinit();
     self.command_palette.deinit();
@@ -763,6 +775,8 @@ pub fn configChanged(self: *Surface, config: *const configpkg.Config) void {
     self.health_badge.updateConfig(config);
     self.toast_badge.updateConfig(config);
     self.resize_badge.updateConfig(config);
+    self.drag_handle.updateConfig(config);
+    self.drop_zone.updateConfig(config);
     self.updateResizeOverlay(config);
     self.search_bar.updateConfig(config);
     self.command_palette.updateConfig(config);
@@ -1223,6 +1237,7 @@ pub fn wndProc(
                 self.health_badge.parentResized();
                 self.toast_badge.parentResized();
                 self.resize_badge.parentResized();
+                self.drag_handle.parentResized();
                 self.search_bar.parentResized();
                 self.command_palette.parentResized();
                 self.core_surface.sizeCallback(size) catch |err| {

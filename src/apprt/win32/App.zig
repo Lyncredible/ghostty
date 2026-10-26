@@ -29,6 +29,7 @@ const CommandPalette = @import("CommandPalette.zig");
 const InspectorWindow = @import("InspectorWindow.zig");
 const SaveState = @import("SaveState.zig");
 const JumpList = @import("JumpList.zig");
+const SplitDrag = @import("SplitDrag.zig");
 const shell = @import("shell.zig");
 const Ipc = @import("Ipc.zig");
 const Overrides = @import("Overrides.zig");
@@ -380,6 +381,34 @@ fn registerClasses(hinstance: c.HINSTANCE) !void {
         .{
             .cbSize = @sizeOf(c.WNDCLASSEXW),
             .style = 0,
+            .lpfnWndProc = SplitDrag.Handle.wndProc,
+            .cbClsExtra = 0,
+            .cbWndExtra = 0,
+            .hInstance = hinstance,
+            .hIcon = null,
+            .hCursor = null,
+            .hbrBackground = null,
+            .lpszMenuName = null,
+            .lpszClassName = SplitDrag.Handle.class_name,
+            .hIconSm = null,
+        },
+        .{
+            .cbSize = @sizeOf(c.WNDCLASSEXW),
+            .style = 0,
+            .lpfnWndProc = SplitDrag.DropZone.wndProc,
+            .cbClsExtra = 0,
+            .cbWndExtra = 0,
+            .hInstance = hinstance,
+            .hIcon = null,
+            .hCursor = null,
+            .hbrBackground = null,
+            .lpszMenuName = null,
+            .lpszClassName = SplitDrag.DropZone.class_name,
+            .hIconSm = null,
+        },
+        .{
+            .cbSize = @sizeOf(c.WNDCLASSEXW),
+            .style = 0,
             .lpfnWndProc = InspectorWindow.wndProc,
             .cbClsExtra = 0,
             .cbWndExtra = 0,
@@ -427,6 +456,8 @@ fn unregisterClasses(hinstance: c.HINSTANCE) void {
     _ = c.UnregisterClassW(SearchBar.class_name, hinstance);
     _ = c.UnregisterClassW(CommandPalette.class_name, hinstance);
     _ = c.UnregisterClassW(InspectorWindow.class_name, hinstance);
+    _ = c.UnregisterClassW(SplitDrag.Handle.class_name, hinstance);
+    _ = c.UnregisterClassW(SplitDrag.DropZone.class_name, hinstance);
     _ = c.UnregisterClassW(message_class, hinstance);
 }
 
