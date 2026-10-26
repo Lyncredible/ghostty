@@ -212,6 +212,15 @@ Notes:
       cmd banner (pixels brighter than half): 6,463 normally, 6,850 at
       strength 0, and 8,403 at 255; the text stays crisp.
 - [x] `window-show-tab-bar` is documented as working on Windows.
+- [x] Stress test: a script posts random operations to a debug build
+      (new windows, tabs, and splits; closing splits and windows; undo and
+      redo; the command palette; dragging tabs out; typing; resizing; and
+      shells exiting) and checks the log for panics.
+  - [x] Found: `redo` bound to a key could close the terminal handling
+        that key, and the core then used the freed surface to finish the
+        key event (only the close actions may do that). Redo now closes
+        from a posted message. Afterwards, seeds 1, 3, and 4 (400 steps
+        each) ran without a panic or fault.
 - [x] CLI actions on Windows: `+version`, `+list-fonts`, `+list-themes`,
       `+list-keybinds`, `+list-colors`, `+list-actions`, `+show-config`,
       `+validate-config`, `+help`, `+show-face`, `+explain-config`, and
