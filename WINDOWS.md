@@ -444,6 +444,13 @@ Notes:
       the configured command when opening a new tab from the tab bar
 - [x] `unfocused-split-opacity` and `unfocused-split-fill`
 - [x] Drag tabs to reorder within a window
+- [x] Tab bar tooltips: a tab's full title (useful when it's cut off),
+      "Close Tab", "New Tab", "New Tab With a Shell", and "Menu", from one
+      common controls tooltip over the tab bar that asks for its text
+      (`TTN_GETDISPINFOW`) based on what's under the mouse. Checked that
+      the tooltip is created; it follows the real cursor, so showing it
+      needs a manual check.
+  - [ ] Manual check: hover a tab and the buttons
 - [x] Move a tab to a new window (`move_tab_to_new_window`)
 - [x] Drag a tab out of the tab bar, like in browsers: dropped well
       above or below the tab bar, it moves to the Ghostty window under

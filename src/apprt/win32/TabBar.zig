@@ -32,6 +32,11 @@ hover: ?Hit = null,
 /// Whether we're tracking the mouse to get WM_MOUSELEAVE.
 tracking_mouse: bool = false,
 
+/// The tooltip for the element under the mouse, such as a tab's full
+/// title when it's cut off, and the text we give it.
+tooltip: c.HWND = null,
+tooltip_text: [256:0]u16 = undefined,
+
 /// The tab under an in-progress left-button drag, if still present.
 drag_tab: ?*Tab = null,
 drag_start_x: c_int = 0,
@@ -75,9 +80,64 @@ pub fn init(self: *TabBar, window: *Window) !void {
     self.* = .{ .window = window, .hwnd = hwnd };
     _ = c.SetWindowLongPtrW(hwnd, util.GWLP_USERDATA, @bitCast(@intFromPtr(self)));
     self.updateFont();
+    self.createTooltip();
+}
+
+/// Create our tooltip, which covers the whole tab bar and asks us for its
+/// text (TTN_GETDISPINFO) based on what's under the mouse.
+fn createTooltip(self: *TabBar) void {
+    var icc: c.INITCOMMONCONTROLSEX = .{
+        .dwSize = @sizeOf(c.INITCOMMONCONTROLSEX),
+        .dwICC = c.ICC_BAR_CLASSES,
+    };
+    _ = c.InitCommonControlsEx(&icc);
+
+    const tooltip = c.CreateWindowExW(
+        c.WS_EX_TOPMOST,
+        std.unicode.utf8ToUtf16LeStringLiteral("tooltips_class32"),
+        null,
+        c.WS_POPUP | c.TTS_NOPREFIX | c.TTS_ALWAYSTIP,
+        c.CW_USEDEFAULT,
+        c.CW_USEDEFAULT,
+        c.CW_USEDEFAULT,
+        c.CW_USEDEFAULT,
+        self.hwnd,
+        null,
+        self.window.app.hinstance,
+        null,
+    ) orelse {
+        log.warn("failed to create the tab bar tooltip err={}", .{c.GetLastError()});
+        return;
+    };
+
+    var info = std.mem.zeroes(c.TTTOOLINFOW);
+    info.cbSize = @sizeOf(c.TTTOOLINFOW);
+    info.uFlags = c.TTF_IDISHWND | c.TTF_SUBCLASS;
+    info.hwnd = self.hwnd;
+    info.uId = @intFromPtr(self.hwnd);
+    // LPSTR_TEXTCALLBACKW is the pointer -1, which isn't a validly aligned
+    // pointer for Zig, so we set the field's bits.
+    @as(*usize, @ptrCast(&info.lpszText)).* = std.math.maxInt(usize);
+    _ = c.SendMessageW(tooltip, c.TTM_ADDTOOLW, 0, @bitCast(@intFromPtr(&info)));
+    self.tooltip = tooltip;
+}
+
+/// TTN_FIRST - 10, which translate-c can't evaluate (it's negative).
+const TTN_GETDISPINFOW: c.UINT = @bitCast(@as(i32, -530));
+
+/// The tooltip text for an element of the tab bar.
+fn tooltipText(self: *TabBar, hit: Hit) []const u8 {
+    return switch (hit) {
+        .tab => |i| if (i < self.window.tabs.items.len) self.window.tabs.items[i].title() else "",
+        .close => "Close Tab",
+        .new_tab => "New Tab",
+        .shell_menu => "New Tab With a Shell",
+        .main_menu => "Menu",
+    };
 }
 
 pub fn deinit(self: *TabBar) void {
+    if (self.tooltip) |tooltip| _ = c.DestroyWindow(tooltip);
     _ = c.SetWindowLongPtrW(self.hwnd, util.GWLP_USERDATA, 0);
     if (self.font) |f| _ = c.DeleteObject(f);
 }
@@ -539,6 +599,15 @@ fn setHover(self: *TabBar, hit: ?Hit) void {
     if (Hit.eql(self.hover, hit)) return;
     self.hover = hit;
     self.invalidate();
+
+    // Show the new element's text, or hide the tooltip between them.
+    if (self.tooltip) |tooltip| {
+        if (hit == null) {
+            _ = c.SendMessageW(tooltip, c.TTM_POP, 0, 0);
+        } else {
+            _ = c.SendMessageW(tooltip, c.TTM_UPDATE, 0, 0);
+        }
+    }
 }
 
 fn dragMove(self: *TabBar, x: c_int, y: c_int) void {
@@ -654,6 +723,21 @@ pub fn wndProc(
             }
             self.setHover(self.hitTest(util.loword(lparam), util.hiword(lparam)));
             return 0;
+        },
+
+        c.WM_NOTIFY => {
+            const header: *const c.NMHDR = @ptrFromInt(@as(usize, @bitCast(lparam)));
+            if (self.tooltip != null and header.hwndFrom == self.tooltip and
+                header.code == TTN_GETDISPINFOW)
+            {
+                const info: *c.NMTTDISPINFOW = @ptrFromInt(@as(usize, @bitCast(lparam)));
+                const text = if (self.hover) |hit| self.tooltipText(hit) else "";
+                const n = std.unicode.utf8ToUtf16Le(self.tooltip_text[0 .. self.tooltip_text.len - 1], text) catch 0;
+                self.tooltip_text[n] = 0;
+                info.lpszText = &self.tooltip_text;
+                return 0;
+            }
+            return c.DefWindowProcW(hwnd, msg, wparam, lparam);
         },
 
         c.WM_MOUSELEAVE => {
