@@ -444,6 +444,11 @@ Notes:
       the configured command when opening a new tab from the tab bar
 - [x] `unfocused-split-opacity` and `unfocused-split-fill`
 - [x] Drag tabs to reorder within a window
+- [x] Default tab keys match Windows conventions (reviewed with
+      `+list-keybinds --default`): Ctrl+Tab and Ctrl+Shift+Tab,
+      Ctrl+PageUp/PageDown, Alt+1..9, Ctrl+Shift+T and Ctrl+Shift+W. No
+      default binding uses Ctrl+Alt with a character key, which would
+      collide with AltGr (Windows reports AltGr as Ctrl+Alt).
 - [x] Tab bar tooltips: a tab's full title (useful when it's cut off),
       "Close Tab", "New Tab", "New Tab With a Shell", and "Menu", from one
       common controls tooltip over the tab bar that asks for its text
