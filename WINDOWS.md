@@ -218,8 +218,14 @@ Notes:
       whose Value is the visible text, served from `WM_GETOBJECT`.
       Checked with the .NET UI Automation client: control type, name,
       read-only, and the cmd banner and prompt as the value.
-  - [ ] Text pattern (ranges, selection, caret) and text change events,
-        so screen readers follow new output like in Windows Terminal
+  - [x] New output is announced like Windows Terminal does, with UI
+        Automation notification events: while a terminal has focus and a
+        UIA client listens, its visible lines are compared every 500 ms,
+        and what was added (after scrolling or on the last line) is
+        announced, except for typing echo on the cursor line. The diff is
+        unit tested; hearing it in Narrator needs a manual check.
+  - [ ] Text pattern (ranges, selection, caret) for reviewing the screen
+        by line or word
 - [x] Taskbar jump list with a "New Window" task, which starts
       `ghostty.exe` again (single instance opens the window in the running
       app). Checked: the shell wrote the custom destinations file with the
