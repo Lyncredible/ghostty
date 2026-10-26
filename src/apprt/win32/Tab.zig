@@ -428,9 +428,11 @@ pub fn gotoSplit(self: *Tab, from: *Surface, to: apprt.action.GotoSplit) bool {
     if (target == from) return false;
 
     // Moving focus out of a zoomed split unzooms it, otherwise we'd
-    // focus a hidden surface.
+    // focus a hidden surface. With `split-preserve-zoom = navigation`,
+    // like GTK, the target is zoomed instead.
     if (self.tree.zoomed != null) {
-        self.tree.zoom(null);
+        const preserve = self.window.app.config.@"split-preserve-zoom".navigation;
+        self.tree.zoom(if (preserve) handle else null);
         self.window.layout();
     }
 
