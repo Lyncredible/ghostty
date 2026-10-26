@@ -286,6 +286,13 @@ Notes:
   - `ghostty +crash-report` lists them: on Windows the crash directory
     is the same `%LOCALAPPDATA%\ghostty\crash`. Checked: after a
     `crash:main`, it listed "crash-66322625.txt (5s ago)".
+- [x] Config, cache, and state directories: with `XDG_CONFIG_HOME` (and
+      the others) set but empty, the empty value won over `LOCALAPPDATA`,
+      so the config went under `%USERPROFILE%\.config`. Empty now counts
+      as unset, as the XDG spec says. Unit test: `windows: LOCALAPPDATA
+      when xdg env unset or empty` (the POSIX fallback tests are skipped
+      on Windows). Note: `-Dtest-filter` runs always report 78 extra
+      tests; 79 means one test matched.
 - [x] Opening the config:
   - Open Config (menu, `open_config`) did nothing visible: `.ghostty`
     files have no associated app, and ShellExecute "open" then only asks
