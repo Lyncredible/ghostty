@@ -225,8 +225,10 @@ Notes:
   - Items run keybind actions and show their shortcuts ("Ctrl+Shift+T").
     Copy shows Ctrl+Ins because ctrl+shift+c is a performable binding,
     which the reverse map skips (same as GTK).
-  - [ ] Dark menus to match a dark theme (needs the undocumented
-        `SetPreferredAppMode` from uxtheme, or owner-drawn menus)
+  - [x] Dark menus to match a dark window theme, through uxtheme's
+        undocumented `SetPreferredAppMode`/`FlushMenuThemes` (ordinals
+        135/136, Windows 10 1903+), set with the title bar theme.
+        Verified with a screenshot of the context menu.
   - [ ] Command palette and inspector items, once those exist
   - [ ] Keyboard access to the context menu (Shift+F10 / Menu key)
 - [x] Don't ask for exit confirmation if there is no active progress other than
