@@ -106,8 +106,9 @@ pub fn expandHome(
     return switch (builtin.target.os.tag) {
         .linux, .freebsd, .macos => try expandHomeUnix(io, environ_map, path, buf),
 
-        // `~/` is not an idiom generally used on Windows
-        .windows => return path,
+        // `~/` isn't a Windows idiom, but PowerShell understands it and
+        // configs are shared between platforms.
+        .windows => try expandHomeWindows(environ_map, path, buf),
 
         // iOS doesn't have a user-writable home directory
         .ios => return path,
@@ -134,6 +135,48 @@ fn expandHomeUnix(
     @memcpy(buf[home_dir.len..expanded_len], rest);
 
     return buf[0..expanded_len];
+}
+
+/// Like expandHomeUnix, for `~/` or `~\`, with the rest of the path's
+/// separators made backslashes.
+fn expandHomeWindows(
+    environ_map: *const std.process.Environ.Map,
+    path: []const u8,
+    buf: []u8,
+) ExpandError![]const u8 {
+    if (!std.mem.startsWith(u8, path, "~/") and !std.mem.startsWith(u8, path, "~\\")) return path;
+    const home_dir = (homeWindows(environ_map, buf) catch return error.BufferTooSmall) orelse
+        return error.HomeDetectionFailed;
+    const rest = path[1..]; // Skip the ~
+    const expanded_len = home_dir.len + rest.len;
+    if (expanded_len > buf.len) return error.BufferTooSmall;
+    @memcpy(buf[home_dir.len..expanded_len], rest);
+    std.mem.replaceScalar(u8, buf[home_dir.len..expanded_len], '/', '\\');
+    return buf[0..expanded_len];
+}
+
+test expandHomeWindows {
+    const testing = std.testing;
+    var environ_map = try testing.environ.createMap(testing.allocator);
+    defer environ_map.deinit();
+    try environ_map.put("HOMEDRIVE", "C:");
+    try environ_map.put("HOMEPATH", "\\Users\\me");
+    var buf: [std.Io.Dir.max_path_bytes]u8 = undefined;
+
+    try testing.expectEqualStrings(
+        "C:\\Users\\me\\.config\\ghostty\\extra",
+        try expandHomeWindows(&environ_map, "~/.config/ghostty/extra", &buf),
+    );
+    try testing.expectEqualStrings(
+        "C:\\Users\\me\\themes\\mine",
+        try expandHomeWindows(&environ_map, "~\\themes\\mine", &buf),
+    );
+    try testing.expectEqualStrings("~", try expandHomeWindows(&environ_map, "~", &buf));
+    try testing.expectEqualStrings("~abc/", try expandHomeWindows(&environ_map, "~abc/", &buf));
+    try testing.expectEqualStrings("D:\\x", try expandHomeWindows(&environ_map, "D:\\x", &buf));
+
+    var small: [8]u8 = undefined;
+    try testing.expectError(error.BufferTooSmall, expandHomeWindows(&environ_map, "~/Downloads", &small));
 }
 
 test "expandHomeUnix" {

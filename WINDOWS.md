@@ -325,6 +325,14 @@ Notes:
       `sub\other.ghostty` and an absolute `C:\...\other.ghostty` (setting
       `font-size = 23`) both applied, giving the same 37x81 cells as
       setting it directly (19x42 by default at this DPI).
+  - [x] `~/` paths weren't expanded on Windows (home expansion was a
+        no-op there), so `config-file = ~/x/other.ghostty` failed as a
+        relative path. `~/` and `~\` now expand to the home directory
+        (HOMEDRIVE + HOMEPATH) with backslashes, for config files, themes,
+        shaders, and `+new-window`/`+new-tab` paths. Optional includes
+        (`?missing.ghostty`) were already ignored. Unit test:
+        `expandHomeWindows`; checked live: the `~/` include applied
+        (37x81 cells).
 - [x] Working directories with spaces and non-ASCII names: launched with
       `--working-directory` set to a folder named "dir 中文 é", the first
       tab's cmd prompt and a new tab's (inherited through OSC 7) both
