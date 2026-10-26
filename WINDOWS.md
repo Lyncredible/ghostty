@@ -288,7 +288,9 @@ Notes:
         Verified with a screenshot of the context menu.
   - [x] Command palette item in the main menu
   - [x] Terminal inspector item
-  - [ ] Keyboard access to the context menu (Shift+F10 / Menu key)
+  - Not planned: opening the context menu from the keyboard (Shift+F10,
+    the Menu key). Terminal programs use those keys, and with win32 input
+    mode console programs receive them.
 - [x] Don't ask for exit confirmation if there is no active progress other than
       the shell itself. This is the behavior on macOS and Linux.
   - The core already skips confirmation when the cursor is at a prompt
@@ -699,6 +701,12 @@ Reviewed the branch against this file and discussion #2563.
   with curl, extract it (stripping a single top-level folder), and
   `zig fetch <dir>`. `zig fetch <file>` repacks a local tarball with the
   extra folder and gets the wrong hash.
+- Full native test run (GNU Debug, test binary run directly so it prints
+  progress): 4,064 passed, 61 skipped, 0 failed, but the runner exited 1
+  because two HarfBuzz shaper tests (Devanagari, Bengali) leaked their
+  discovered `DeferredFace`; fixed. The run takes about 40 minutes here,
+  most of it in the debug-build PageList compression tests, which can
+  look like a hang.
 - Single instance, checked natively: with one instance running, a second
   plain launch logged "opened this launch in the running instance",
   exited, and the first instance showed a second window; a launch with
