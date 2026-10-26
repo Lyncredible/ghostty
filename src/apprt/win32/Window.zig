@@ -18,6 +18,7 @@ const TabBar = @import("TabBar.zig");
 const Overrides = @import("Overrides.zig");
 const Menu = @import("Menu.zig");
 const SaveState = @import("SaveState.zig");
+const SplitDrag = @import("SplitDrag.zig");
 
 const log = std.log.scoped(.win32);
 
@@ -40,6 +41,9 @@ active: usize = 0,
 
 /// The split divider being dragged, if any.
 dragging: ?Tab.Divider = null,
+
+/// The terminal showing where a dragged split would drop, if any.
+drop_target: ?*Surface = null,
 
 /// Whether a restored window was maximized when its state was saved.
 restore_maximized: bool = false,
@@ -513,6 +517,41 @@ pub fn destroy(self: *Window) void {
         if (self.closing_by_user) SaveState.save(self.app) else SaveState.clear(self.app);
     }
     _ = c.DestroyWindow(self.hwnd);
+}
+
+/// A split's drag handle moved to a point on the screen: highlight where
+/// it would drop.
+pub fn splitDragMove(self: *Window, source: *Surface, pt: c.POINT) void {
+    const tab = self.tabOf(source) orelse return;
+    const target = tab.surfaceAt(pt);
+    if (self.drop_target != target) {
+        if (self.drop_target) |old| old.drop_zone.set(null);
+        self.drop_target = target;
+    }
+    const t = target orelse return;
+    if (t == source) return t.drop_zone.set(null);
+    var rect: c.RECT = undefined;
+    _ = c.GetWindowRect(t.hwnd, &rect);
+    t.drop_zone.set(SplitDrag.dropDirection(rect, pt));
+}
+
+/// A split's drag handle was released at a point: move it there.
+pub fn splitDragEnd(self: *Window, source: *Surface, pt: c.POINT) void {
+    self.splitDragCancel();
+    const tab = self.tabOf(source) orelse return;
+    const target = tab.surfaceAt(pt) orelse return;
+    if (target == source) return;
+    var rect: c.RECT = undefined;
+    _ = c.GetWindowRect(target.hwnd, &rect);
+    tab.moveSplit(source, target, SplitDrag.dropDirection(rect, pt)) catch |err| {
+        log.warn("error moving split err={}", .{err});
+    };
+}
+
+/// Stop showing where a dragged split would drop.
+pub fn splitDragCancel(self: *Window) void {
+    if (self.drop_target) |t| t.drop_zone.set(null);
+    self.drop_target = null;
 }
 
 /// Close the window because the user asked to.
