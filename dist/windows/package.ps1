@@ -49,7 +49,7 @@ It isn't supported by the Ghostty project.
 Run bin\ghostty.exe from this folder, or install it for the current user
 (Start menu shortcut, and uninstall from Settings > Apps):
 
-    powershell -ExecutionPolicy Bypass -File install.ps1 [-AddToPath]
+    powershell -ExecutionPolicy Bypass -File install.ps1 [-AddToPath] [-ExplorerMenu]
 "@ | Set-Content -Encoding utf8 (Join-Path $package "README.txt")
 
 New-Item -ItemType Directory -Force $OutDir | Out-Null
