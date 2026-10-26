@@ -29,6 +29,16 @@ pub const Choice = union(enum) {
     surface: *CoreSurface,
 };
 
+/// What the palette lists.
+pub const Contents = enum {
+    /// The configured commands, then every terminal.
+    commands,
+
+    /// Only the given terminals, for the tab overview. Their titles are
+    /// shown as they are.
+    terminals,
+};
+
 /// A terminal that can be focused from the palette.
 pub const Target = struct {
     surface: *CoreSurface,
@@ -69,6 +79,9 @@ foreground: c.COLORREF = 0xFFFFFF,
 dim: c.COLORREF = 0xAAAAAA,
 background_brush: c.HBRUSH = null,
 field_brush: c.HBRUSH = null,
+
+/// What the palette lists while it's open.
+contents: Contents = .commands,
 
 /// The entries while the palette is open, allocated in the arena.
 arena: ?std.heap.ArenaAllocator = null,
@@ -115,10 +128,6 @@ pub fn init(
         instance,
         null,
     ) orelse return error.CreateWindowFailed;
-    _ = c.SendMessageW(self.edit, c.EM_SETCUEBANNER, c.TRUE, @bitCast(@intFromPtr(
-        std.unicode.utf8ToUtf16LeStringLiteral("Execute a command…").ptr,
-    )));
-
     self.list = c.CreateWindowExW(
         0,
         std.unicode.utf8ToUtf16LeStringLiteral("LISTBOX"),
@@ -190,20 +199,27 @@ pub fn visible(self: *const CommandPalette) bool {
         c.GetWindowLongPtrW(self.hwnd, c.GWL_STYLE) & c.WS_VISIBLE != 0;
 }
 
-/// Open the palette with the configured commands and the given terminals.
+/// Open the palette with the given contents.
 pub fn show(
     self: *CommandPalette,
     alloc: Allocator,
     config: *const Config,
+    contents: Contents,
     targets: []const Target,
 ) void {
     if (self.arena) |*arena| arena.deinit();
     self.arena = .init(alloc);
-    self.entries = buildEntries(self.arena.?.allocator(), config, targets) catch |err| entries: {
+    self.contents = contents;
+    self.entries = buildEntries(self.arena.?.allocator(), config, contents, targets) catch |err| entries: {
         log.warn("error building command palette err={}", .{err});
         break :entries &.{};
     };
 
+    const cue = switch (contents) {
+        .commands => std.unicode.utf8ToUtf16LeStringLiteral("Execute a command…"),
+        .terminals => std.unicode.utf8ToUtf16LeStringLiteral("Switch to a tab…"),
+    };
+    _ = c.SendMessageW(self.edit, c.EM_SETCUEBANNER, c.TRUE, @bitCast(@intFromPtr(cue.ptr)));
     _ = c.SetWindowTextW(self.edit, std.unicode.utf8ToUtf16LeStringLiteral(""));
     self.filter();
     self.layout();
@@ -232,10 +248,11 @@ pub fn parentResized(self: *CommandPalette) void {
 fn buildEntries(
     alloc: Allocator,
     config: *const Config,
+    contents: Contents,
     targets: []const Target,
 ) ![]Entry {
     var entries: std.ArrayList(Entry) = .empty;
-    for (config.@"command-palette-entry".value.items) |command| {
+    if (contents == .commands) for (config.@"command-palette-entry".value.items) |command| {
         if (!supported(command.action)) continue;
 
         var shortcut_buf: [64]u8 = undefined;
@@ -251,10 +268,13 @@ fn buildEntries(
             .search = try searchText(alloc, &.{ command.title, action_key }),
             .choice = .{ .action = try command.action.clone(alloc) },
         });
-    }
+    };
 
     for (targets) |target| {
-        const title = try std.fmt.allocPrint(alloc, "Focus: {s}", .{target.title});
+        const title = switch (contents) {
+            .commands => try std.fmt.allocPrint(alloc, "Focus: {s}", .{target.title}),
+            .terminals => target.title,
+        };
 
         // The working directory, unless the title already shows it.
         const description = if (target.pwd) |pwd|

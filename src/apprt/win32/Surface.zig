@@ -737,9 +737,11 @@ pub fn queueInspectorRender(self: *Surface) void {
 
 /// Show the command palette, or hide it if it's open.
 pub fn toggleCommandPalette(self: *Surface) void {
+    // From the tab overview, we switch to the commands.
     if (self.command_palette.visible()) {
+        const overview = self.command_palette.contents == .terminals;
         self.command_palette.hide();
-        return;
+        if (!overview) return;
     }
 
     // Every terminal can be focused from the palette.
@@ -755,7 +757,33 @@ pub fn toggleCommandPalette(self: *Surface) void {
             .pwd = surface.core_surface.pwd(alloc) catch null,
         }) catch break;
     }
-    self.command_palette.show(self.app.core_app.alloc, &self.app.config, targets.items);
+    self.command_palette.show(self.app.core_app.alloc, &self.app.config, .commands, targets.items);
+}
+
+/// Show the tabs of our window to switch between, like the GTK tab
+/// overview, or hide them if they're shown. It's the command palette
+/// listing only the focused terminal of each tab.
+pub fn toggleTabOverview(self: *Surface) void {
+    if (self.command_palette.visible()) {
+        const overview = self.command_palette.contents == .terminals;
+        self.command_palette.hide();
+        if (overview) return;
+    }
+
+    var arena: std.heap.ArenaAllocator = .init(self.app.core_app.alloc);
+    defer arena.deinit();
+    const alloc = arena.allocator();
+    var targets: std.ArrayList(CommandPalette.Target) = .empty;
+    for (self.window.tabs.items, 1..) |tab, i| {
+        const surface = tab.focused;
+        if (!surface.core_initialized) continue;
+        targets.append(alloc, .{
+            .surface = &surface.core_surface,
+            .title = std.fmt.allocPrint(alloc, "Tab {d}: {s}", .{ i, tab.title() }) catch break,
+            .pwd = surface.core_surface.pwd(alloc) catch null,
+        }) catch break;
+    }
+    self.command_palette.show(self.app.core_app.alloc, &self.app.config, .terminals, targets.items);
 }
 
 /// Called by the command palette when the user chooses an entry.
