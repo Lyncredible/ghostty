@@ -212,6 +212,17 @@ Notes:
       cmd banner (pixels brighter than half): 6,463 normally, 6,850 at
       strength 0, and 8,403 at 255; the text stays crisp.
 - [x] `window-show-tab-bar` is documented as working on Windows.
+- [x] CLI actions on Windows: `+version`, `+list-fonts`, `+list-themes`,
+      `+list-keybinds`, `+list-colors`, `+list-actions`, `+show-config`,
+      `+validate-config`, `+help`, `+show-face`, `+explain-config`, and
+      `+boo` all ran and exited 0.
+  - [x] `+list-fonts` printed family names as raw UTF-16BE (a NUL before
+        each letter): FreeType faces took the first family name in the
+        name table, and only decoded Microsoft BMP names, while Windows
+        fonts list a Unicode-platform name first. Now the US English
+        Microsoft name is preferred, then any UTF-16 name, decoded
+        without assuming alignment. The family name fallback in font
+        discovery uses the same function.
 - [x] Output throughput (2026-10-26, ReleaseFast, 20 MB of text):
   - `cmd /c type` is slow everywhere: 19-27 s in Ghostty, 27-38 s in a
     conhost window. cmd writes line by line through the console API.
