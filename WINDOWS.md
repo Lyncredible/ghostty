@@ -515,6 +515,14 @@ Notes:
         attributes. Checked with the .NET UIA client: document text, the
         cursor's line ("C:\Code\ghostty>"), moving a line, finding text,
         and the cursor line's rectangle.
+  - [x] The tab bar (which we draw ourselves) for screen readers
+        (`TabBarAccessibility.zig`): a Tab control named "Tabs" whose
+        children are TabItems named by the tabs' titles, with bounding
+        rectangles and the SelectionItem pattern (Select switches tabs),
+        and an ElementSelected event when the active tab changes. Checked
+        with the .NET UIA client: two TabItems with their titles and
+        rectangles, the second selected; selecting the first made it the
+        active tab.
   - [x] The text pattern's selection is the terminal's selection (its
         visible part), or else the cursor as a caret, and selection
         changes raise `TextSelectionChanged` (posted from
