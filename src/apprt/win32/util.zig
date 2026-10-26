@@ -145,3 +145,31 @@ pub fn utf16Alloc(alloc: Allocator, utf8: []const u8) Allocator.Error![:0]u16 {
 pub fn utf8Alloc(alloc: Allocator, utf16: []const u16) Allocator.Error![:0]u8 {
     return std.unicode.wtf16LeToWtf8AllocZ(alloc, utf16);
 }
+
+/// The Windows build number, for example 22631, or 0 if unknown.
+pub fn windowsBuild() u32 {
+    const windows = std.os.windows;
+    var info: windows.RTL_OSVERSIONINFOW = undefined;
+    info.dwOSVersionInfoSize = @sizeOf(windows.RTL_OSVERSIONINFOW);
+    if (windows.ntdll.RtlGetVersion(&info) != .SUCCESS) return 0;
+    return info.dwBuildNumber;
+}
+
+/// Make the menus of this process (popup menus and the system menu) dark
+/// or light, to match our windows rather than the system's app theme.
+///
+/// This uses SetPreferredAppMode and FlushMenuThemes, which uxtheme only
+/// exports by ordinal (135 and 136) from Windows 10 1903 (build 18362).
+/// They're undocumented, but widely used for this. On older systems the
+/// menus keep the system's theme.
+pub fn setMenuTheme(dark: bool) void {
+    if (windowsBuild() < 18362) return;
+    const uxtheme = c.GetModuleHandleW(std.unicode.utf8ToUtf16LeStringLiteral("uxtheme.dll")) orelse return;
+    const PreferredAppMode = enum(c_int) { force_dark = 2, force_light = 3 };
+    const SetPreferredAppMode = *const fn (PreferredAppMode) callconv(.winapi) PreferredAppMode;
+    const FlushMenuThemes = *const fn () callconv(.winapi) void;
+    const set_mode: SetPreferredAppMode = @ptrCast(c.GetProcAddress(uxtheme, @ptrFromInt(135)) orelse return);
+    const flush: FlushMenuThemes = @ptrCast(c.GetProcAddress(uxtheme, @ptrFromInt(136)) orelse return);
+    _ = set_mode(if (dark) .force_dark else .force_light);
+    flush();
+}
