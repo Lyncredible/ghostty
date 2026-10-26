@@ -149,6 +149,10 @@ Notes:
       `[Console]::ReadKey` behind ConPTY: Numpad 5 arrives as `NumPad5`
       (the VT fallback can only send a plain `5`), Up as `UpArrow`.
 - [x] CI job that builds and tests the app on Windows.
+- [x] Windows on ARM: `zig build -Dtarget=aarch64-windows-gnu` builds
+      after casting `GetProcAddress` results with `@alignCast` (function
+      pointers are 4-byte aligned on ARM64).
+  - [ ] Run it on an ARM64 machine
 
 ### Known limitations
 
