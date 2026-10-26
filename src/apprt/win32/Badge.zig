@@ -13,7 +13,7 @@ const c = util.c;
 pub const class_name = std.unicode.utf8ToUtf16LeStringLiteral("GhosttyBadge");
 
 /// Where the badge is placed within the surface.
-pub const Anchor = enum { top_right, bottom_center, center };
+pub const Anchor = enum { top_left, top_center, top_right, bottom_left, bottom_center, bottom_right, center };
 
 hwnd: c.HWND = null,
 anchor: Anchor = .top_right,
@@ -111,8 +111,12 @@ fn layout(self: *Badge) void {
     const width = @min(size.cx + 2 * scale(10, dpi), parent.right);
     const height = size.cy + 2 * scale(5, dpi);
     const x: c_int, const y: c_int = switch (self.anchor) {
+        .top_left => .{ margin, margin },
+        .top_center => .{ @divTrunc(parent.right - width, 2), margin },
         .top_right => .{ parent.right - width - margin, margin },
+        .bottom_left => .{ margin, parent.bottom - height - margin },
         .bottom_center => .{ @divTrunc(parent.right - width, 2), parent.bottom - height - margin },
+        .bottom_right => .{ parent.right - width - margin, parent.bottom - height - margin },
         .center => .{ @divTrunc(parent.right - width, 2), @divTrunc(parent.bottom - height, 2) },
     };
 
