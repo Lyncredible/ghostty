@@ -39,6 +39,7 @@ fn report(msg: []const u8, first_trace_addr: usize) void {
         .{ .first_address = first_trace_addr },
         .{ .writer = &writer, .mode = .no_color },
     ) catch {};
+    writeAddresses(&writer) catch {};
 
     var path_buf: [512]u16 = undefined;
     const path = writeReport(&path_buf, writer.buffered()) orelse return;
@@ -59,6 +60,24 @@ fn report(msg: []const u8, first_trace_addr: usize) void {
         std.unicode.utf8ToUtf16LeStringLiteral("Ghostty"),
         MB_OK | MB_ICONERROR | MB_SETFOREGROUND,
     );
+}
+
+/// Release builds have no debug info to print a stack trace with, so we
+/// also write the raw return addresses as offsets into ghostty.exe, which
+/// the build's PDB can resolve.
+fn writeAddresses(writer: *std.Io.Writer) !void {
+    var frames: [48]?*anyopaque = undefined;
+    const count = RtlCaptureStackBackTrace(0, frames.len, &frames, null);
+    const base = @intFromPtr(GetModuleHandleW(null));
+    try writer.print("\r\nReturn addresses (ghostty.exe base 0x{x}):\r\n", .{base});
+    for (frames[0..count]) |frame| {
+        const addr = @intFromPtr(frame);
+        if (addr >= base) {
+            try writer.print("  0x{x} (ghostty.exe+0x{x})\r\n", .{ addr, addr - base });
+        } else {
+            try writer.print("  0x{x}\r\n", .{addr});
+        }
+    }
 }
 
 /// Write the report to the crash directory, returning its path.
@@ -150,6 +169,8 @@ const MB_OK: u32 = 0x0;
 const MB_ICONERROR: u32 = 0x10;
 const MB_SETFOREGROUND: u32 = 0x10000;
 
+extern "kernel32" fn RtlCaptureStackBackTrace(skip: DWORD, count: DWORD, frames: [*]?*anyopaque, hash: ?*DWORD) callconv(.winapi) u16;
+extern "kernel32" fn GetModuleHandleW(name: ?[*:0]const u16) callconv(.winapi) ?*anyopaque;
 extern "kernel32" fn GetConsoleWindow() callconv(.winapi) ?HANDLE;
 extern "kernel32" fn GetEnvironmentVariableW(name: [*:0]const u16, buf: [*]u16, size: DWORD) callconv(.winapi) DWORD;
 extern "kernel32" fn CreateDirectoryW(path: [*:0]const u16, security: ?*anyopaque) callconv(.winapi) BOOL;
