@@ -1124,6 +1124,9 @@ Reviewed the branch against this file and discussion #2563.
   4,081 passed, 61 skipped, 0 failed, exit 0.
 - Thirteenth full native test run, after opening the config in an
   editor: 4,081 passed, 61 skipped, 0 failed, exit 0.
+- Fourteenth full native test run, after the Windows crash reports (with
+  the `Utf16Buf` test): 4,082 passed, 61 skipped, 0 failed, exit 0. A
+  ReleaseFast build also succeeded.
 - The inspector's buttons can't be clicked with posted messages: ImGui's
   Win32 backend calls `TrackMouseEvent` on mouse moves, and with the real
   cursor elsewhere Windows sends `WM_MOUSELEAVE` right away, so clicks
