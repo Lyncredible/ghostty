@@ -21,6 +21,7 @@ const Menu = @import("Menu.zig");
 const log = std.log.scoped(.win32);
 
 const progress_timer_id = 1;
+const quick_slide_timer_id = 2;
 
 app: *App,
 
@@ -75,6 +76,21 @@ title_override: ?[:0]const u8 = null,
 /// Whether this is the quick terminal: a borderless, topmost window
 /// without a taskbar button that's toggled into view.
 quick: bool = false,
+
+/// The quick terminal's rectangle when fully shown, and how much of it is
+/// shown, from 0 (hidden) to 1. It slides in from its edge of the screen.
+quick_target: c.RECT = std.mem.zeroes(c.RECT),
+quick_shown: f32 = 0,
+
+/// The quick terminal's slide animation, while one is running.
+quick_slide: ?QuickSlide = null,
+
+const QuickSlide = struct {
+    from: f32,
+    to: f32,
+    start_ms: u64,
+    duration_ms: u64,
+};
 
 /// What a new window starts with.
 pub const Initial = union(enum) {
@@ -158,6 +174,7 @@ pub fn init(self: *Window, app: *App, initial: Initial) !void {
 /// handle; this is called while the window is being destroyed.
 pub fn deinit(self: *Window) void {
     _ = c.KillTimer(self.hwnd, progress_timer_id);
+    _ = c.KillTimer(self.hwnd, quick_slide_timer_id);
     const alloc = self.app.core_app.alloc;
     if (self.title_override) |v| alloc.free(v);
     for (self.tabs.items) |tab| tab.destroy();
@@ -179,13 +196,49 @@ pub fn show(self: *Window) void {
 /// focus it. The screen is chosen each time, so it follows the mouse with
 /// `quick-terminal-screen = mouse`.
 pub fn showQuick(self: *Window) void {
-    self.placeQuick(true);
+    // If it's still sliding out, it slides back in from where it is.
+    if (c.IsWindowVisible(self.hwnd) == 0) self.quick_shown = 0;
+    const target = self.quickTarget() orelse self.quick_target;
+    self.quick_target = target;
+    _ = util.SetWindowPos(
+        self.hwnd,
+        util.HWND_TOPMOST,
+        target.left,
+        target.top,
+        target.right - target.left,
+        target.bottom - target.top,
+        c.SWP_NOACTIVATE,
+    );
+    self.slideQuick(1);
     _ = c.ShowWindow(self.hwnd, c.SW_SHOW);
     self.present(self.activeSurface());
 }
 
+/// Whether the quick terminal is shown or sliding in.
+pub fn quickShowing(self: *const Window) bool {
+    if (c.IsWindowVisible(self.hwnd) == 0) return false;
+    const slide = self.quick_slide orelse return true;
+    return slide.to > 0;
+}
+
 /// Move and size the quick terminal according to its config.
 fn placeQuick(self: *Window, visible: bool) void {
+    const rect = self.quickTarget() orelse return;
+    self.quick_target = rect;
+    _ = util.SetWindowPos(
+        self.hwnd,
+        util.HWND_TOPMOST,
+        rect.left,
+        rect.top,
+        rect.right - rect.left,
+        rect.bottom - rect.top,
+        if (visible) c.SWP_SHOWWINDOW else c.SWP_NOACTIVATE,
+    );
+}
+
+/// The quick terminal's rectangle according to its config, on the screen
+/// it's configured to use.
+fn quickTarget(self: *const Window) ?c.RECT {
     const config = &self.app.config;
     const monitor = switch (config.@"quick-terminal-screen") {
         .mouse => monitor: {
@@ -197,27 +250,162 @@ fn placeQuick(self: *Window, visible: bool) void {
     };
     var info: c.MONITORINFO = undefined;
     info.cbSize = @sizeOf(c.MONITORINFO);
-    if (c.GetMonitorInfoW(monitor, &info) != 0) {
-        const work = info.rcWork;
-        var dpi_x: c.UINT = util.USER_DEFAULT_SCREEN_DPI;
-        var dpi_y: c.UINT = util.USER_DEFAULT_SCREEN_DPI;
-        _ = c.GetDpiForMonitor(monitor, c.MDT_EFFECTIVE_DPI, &dpi_x, &dpi_y);
-        const rect = quickRect(
-            config.@"quick-terminal-position",
-            config.@"quick-terminal-size",
-            work,
-            dpi_x,
-        );
-        _ = util.SetWindowPos(
-            self.hwnd,
-            util.HWND_TOPMOST,
-            rect.left,
-            rect.top,
-            rect.right - rect.left,
-            rect.bottom - rect.top,
-            if (visible) c.SWP_SHOWWINDOW else c.SWP_NOACTIVATE,
-        );
+    if (c.GetMonitorInfoW(monitor, &info) == 0) return null;
+    var dpi_x: c.UINT = util.USER_DEFAULT_SCREEN_DPI;
+    var dpi_y: c.UINT = util.USER_DEFAULT_SCREEN_DPI;
+    _ = c.GetDpiForMonitor(monitor, c.MDT_EFFECTIVE_DPI, &dpi_x, &dpi_y);
+    return quickRect(
+        config.@"quick-terminal-position",
+        config.@"quick-terminal-size",
+        info.rcWork,
+        dpi_x,
+    );
+}
+
+/// Slide the quick terminal toward being shown (1) or hidden (0), from
+/// wherever it is now, over `quick-terminal-animation-duration`. It's
+/// hidden at the end of sliding out.
+fn slideQuick(self: *Window, to: f32) void {
+    const config = &self.app.config;
+    const seconds = config.@"quick-terminal-animation-duration";
+    const animate = seconds > 0 and config.@"quick-terminal-position" != .center;
+    const distance: f64 = @abs(to - self.quick_shown);
+    self.quick_slide = .{
+        .from = self.quick_shown,
+        .to = to,
+        .start_ms = c.GetTickCount64(),
+        .duration_ms = if (animate) @intFromFloat(seconds * 1000 * distance) else 0,
+    };
+    self.stepQuickSlide();
+    if (self.quick_slide != null) {
+        // About 100 frames per second; timers aren't more precise anyway.
+        _ = c.SetTimer(self.hwnd, quick_slide_timer_id, 10, null);
     }
+}
+
+/// Advance the quick terminal's slide animation.
+fn stepQuickSlide(self: *Window) void {
+    const slide = self.quick_slide orelse return;
+    const elapsed: f32 = @floatFromInt(c.GetTickCount64() - slide.start_ms);
+    const t: f32 = if (slide.duration_ms == 0)
+        1
+    else
+        @min(1, elapsed / @as(f32, @floatFromInt(slide.duration_ms)));
+
+    // Ease out: fast at first, then settling into place.
+    const eased = 1 - std.math.pow(f32, 1 - t, 3);
+    self.quick_shown = slide.from + (slide.to - slide.from) * eased;
+    self.applyQuickSlide();
+
+    if (t < 1) return;
+    _ = c.KillTimer(self.hwnd, quick_slide_timer_id);
+    self.quick_slide = null;
+    if (slide.to == 0) _ = c.ShowWindow(self.hwnd, c.SW_HIDE);
+}
+
+/// Move and clip the quick terminal for how much of it is shown.
+fn applyQuickSlide(self: *Window) void {
+    const frame = quickSlideFrame(
+        self.app.config.@"quick-terminal-position",
+        self.quick_target,
+        self.quick_shown,
+    );
+    _ = util.SetWindowPos(
+        self.hwnd,
+        util.HWND_TOPMOST,
+        frame.x,
+        frame.y,
+        0,
+        0,
+        c.SWP_NOSIZE | c.SWP_NOACTIVATE,
+    );
+
+    // Clip the window at the screen edge it slides from, so that it never
+    // shows on a neighboring monitor. The system owns the region.
+    const region = if (self.quick_shown >= 1)
+        null
+    else
+        c.CreateRectRgnIndirect(&frame.visible);
+    _ = c.SetWindowRgn(self.hwnd, region, c.TRUE);
+}
+
+const QuickSlideFrame = struct {
+    /// The window position.
+    x: c_int,
+    y: c_int,
+
+    /// The part of the window that is shown, in window coordinates.
+    visible: c.RECT,
+};
+
+/// Where the quick terminal is when `shown` (0 to 1) of it is shown,
+/// sliding in from the edge of its position.
+fn quickSlideFrame(
+    position: configpkg.Config.QuickTerminalPosition,
+    target: c.RECT,
+    shown: f32,
+) QuickSlideFrame {
+    const w = target.right - target.left;
+    const h = target.bottom - target.top;
+    const hidden_w: c_int = @intFromFloat(@round(@as(f32, @floatFromInt(w)) * (1 - shown)));
+    const hidden_h: c_int = @intFromFloat(@round(@as(f32, @floatFromInt(h)) * (1 - shown)));
+    return switch (position) {
+        .top => .{
+            .x = target.left,
+            .y = target.top - hidden_h,
+            .visible = .{ .left = 0, .top = hidden_h, .right = w, .bottom = h },
+        },
+        .bottom => .{
+            .x = target.left,
+            .y = target.top + hidden_h,
+            .visible = .{ .left = 0, .top = 0, .right = w, .bottom = h - hidden_h },
+        },
+        .left => .{
+            .x = target.left - hidden_w,
+            .y = target.top,
+            .visible = .{ .left = hidden_w, .top = 0, .right = w, .bottom = h },
+        },
+        .right => .{
+            .x = target.left + hidden_w,
+            .y = target.top,
+            .visible = .{ .left = 0, .top = 0, .right = w - hidden_w, .bottom = h },
+        },
+        // There's no edge to slide from, so it appears in place.
+        .center => .{
+            .x = target.left,
+            .y = target.top,
+            .visible = .{ .left = 0, .top = 0, .right = w, .bottom = h },
+        },
+    };
+}
+
+test quickSlideFrame {
+    const testing = std.testing;
+    const target: c.RECT = .{ .left = 100, .top = 40, .right = 1100, .bottom = 440 };
+
+    // Hidden at the top: entirely above its place, and clipped away.
+    try testing.expectEqual(
+        QuickSlideFrame{ .x = 100, .y = -360, .visible = .{ .left = 0, .top = 400, .right = 1000, .bottom = 400 } },
+        quickSlideFrame(.top, target, 0),
+    );
+
+    // Half shown at the top: the bottom half of the window is visible.
+    try testing.expectEqual(
+        QuickSlideFrame{ .x = 100, .y = -160, .visible = .{ .left = 0, .top = 200, .right = 1000, .bottom = 400 } },
+        quickSlideFrame(.top, target, 0.5),
+    );
+
+    // A quarter shown from the right: its left quarter is visible.
+    try testing.expectEqual(
+        QuickSlideFrame{ .x = 850, .y = 40, .visible = .{ .left = 0, .top = 0, .right = 250, .bottom = 400 } },
+        quickSlideFrame(.right, target, 0.25),
+    );
+
+    // Fully shown: in place and unclipped.
+    try testing.expectEqual(
+        QuickSlideFrame{ .x = 100, .y = 40, .visible = .{ .left = 0, .top = 0, .right = 1000, .bottom = 400 } },
+        quickSlideFrame(.bottom, target, 1),
+    );
 }
 
 /// The quick terminal's rectangle within a monitor's work area. Pixel
@@ -288,7 +476,8 @@ test quickRect {
 
 /// Hide the quick terminal.
 pub fn hideQuick(self: *Window) void {
-    _ = c.ShowWindow(self.hwnd, c.SW_HIDE);
+    if (c.IsWindowVisible(self.hwnd) == 0) return;
+    self.slideQuick(0);
 }
 
 /// Request to close the window. This goes through the same path as the
@@ -1095,7 +1284,10 @@ pub fn wndProc(
     }
 
     switch (msg) {
-        c.WM_TIMER => if (wparam == progress_timer_id) {
+        c.WM_TIMER => if (wparam == quick_slide_timer_id) {
+            self.stepQuickSlide();
+            return 0;
+        } else if (wparam == progress_timer_id) {
             self.updateTaskbarProgress();
             return 0;
         },
