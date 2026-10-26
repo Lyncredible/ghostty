@@ -200,8 +200,17 @@ Notes:
       hide it in the title bar, where the menu shows up on hover (or clicking
       a hamburger menu icon like Zed). You can reference how the linux version
       works regarding menu. MacOS is not comparable due to the global menu.
-- [ ] Don't ask for exit confirmation if there is no active progress other than
+- [x] Don't ask for exit confirmation if there is no active progress other than
       the shell itself. This is the behavior on macOS and Linux.
+  - The core already skips confirmation when the cursor is at a prompt
+    (OSC 133). PowerShell and WSL had shell integration; cmd.exe, the
+    default shell, didn't, so every close asked.
+  - [x] cmd.exe shell integration (`shell-integration = cmd`, detected
+        from `cmd`/`cmd.exe`) through its `PROMPT` variable: 133;A before
+        the prompt, 133;I after it, OSC 7 with the raw `$P` path, and the
+        `title` and `cursor` features
+  - [ ] UI check: closing an idle cmd tab doesn't ask; closing one running
+        `ping -t localhost` does
 
 ## Development log (2026-10-24)
 
