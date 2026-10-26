@@ -399,6 +399,11 @@ pub const GlobalState = struct {
         /// Whether to log to macOS's unified logging. Enabled by default
         /// on macOS.
         macos: bool = builtin.target.os.tag.isDarwin(),
+        /// Whether to log with OutputDebugString on Windows, which
+        /// debuggers and tools such as DebugView show. Ghostty is a GUI
+        /// program there, so its stderr usually isn't visible. Enabled by
+        /// default on Windows.
+        windows: bool = builtin.target.os.tag == .windows,
     };
 
     /// Asserts that `self.io_impl` has been initialized.

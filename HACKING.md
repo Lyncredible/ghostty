@@ -112,11 +112,13 @@ optimizations debug logs will be output to `stderr`. If Ghostty is compiled with
 any other optimization the debug logs will not be output to `stderr`.
 
 Ghostty also checks the `GHOSTTY_LOG` environment variable. It can be used
-to control which destinations receive logs. Ghostty currently defines two
+to control which destinations receive logs. Ghostty currently defines three
 destinations:
 
 - `stderr` - logging to `stderr`.
 - `macos` - logging to macOS's unified log (has no effect on non-macOS platforms).
+- `windows` - logging with `OutputDebugString` on Windows, which debuggers and
+  DebugView show (has no effect on other platforms; debug messages are left out).
 
 Combine values with a comma to enable multiple destinations. Prefix a
 destination with `no-` to disable it. Enabling and disabling destinations
