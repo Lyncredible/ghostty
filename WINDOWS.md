@@ -226,8 +226,8 @@ Notes:
         from `cmd`/`cmd.exe`) through its `PROMPT` variable: 133;A before
         the prompt, 133;I after it, OSC 7 with the raw `$P` path, and the
         `title` and `cursor` features
-  - [x] UI check: closing an idle cmd window doesn't ask (still to check:
-        one running `ping -t localhost` should ask)
+  - [x] UI check: closing an idle cmd window doesn't ask; closing one
+        running `cmd /k ping -t localhost` shows "Close terminal?"
 
 ## Development log (2026-10-24)
 
