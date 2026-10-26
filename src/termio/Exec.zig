@@ -138,8 +138,8 @@ pub fn threadEnter(
     // Create our pipe that we'll use to kill our read thread.
     // pipe[0] is the read end, pipe[1] is the write end.
     const pipe = try internal_os.pipe();
-    errdefer _ = posix.system.close(pipe[0]);
-    errdefer _ = posix.system.close(pipe[1]);
+    errdefer internal_os.closePipe(pipe[0]);
+    errdefer internal_os.closePipe(pipe[1]);
 
     // Setup our stream so that we can write.
     var stream = xev.Stream.initFd(pty_fds.write);
@@ -568,7 +568,7 @@ pub const ThreadData = struct {
     termios_mode: ptypkg.Mode = .{},
 
     pub fn deinit(self: *ThreadData, alloc: Allocator) void {
-        _ = posix.system.close(self.read_thread_pipe);
+        internal_os.closePipe(self.read_thread_pipe);
 
         // Clear our write pool. We know we aren't ever going to do
         // any more IO since we stop our data stream below so we can just
@@ -1153,6 +1153,20 @@ const Subprocess = struct {
     /// Called to notify that we exited externally so we can unset our
     /// running state.
     pub fn externalExit(self: *Subprocess) void {
+        self.closeProcess();
+    }
+
+    /// Forget the process. On Windows, its handle (our `pid`) is ours to
+    /// close; the process watcher has its own copy.
+    fn closeProcess(self: *Subprocess) void {
+        if (comptime builtin.target.os.tag == .windows) {
+            if (self.process) |process| switch (process) {
+                .fork_exec => |cmd| if (cmd.pid) |handle| {
+                    _ = windows.exp.kernel32.CloseHandle(handle);
+                },
+                .flatpak => {},
+            };
+        }
         self.process = null;
     }
 
@@ -1177,7 +1191,7 @@ const Subprocess = struct {
             },
         }
 
-        self.process = null;
+        self.closeProcess();
     }
 
     /// Resize the pty subprocess. This is safe to call anytime.
@@ -1459,7 +1473,7 @@ pub const ReadThread = struct {
 
     fn threadMainPosix(fd: posix.fd_t, io: *termio.Termio, quit: posix.fd_t) void {
         // Always close our end of the pipe when we exit.
-        defer _ = posix.system.close(quit);
+        defer internal_os.closePipe(quit);
 
         // Right now, on Darwin, `std.Thread.setName` can only name the current
         // thread, and we have no way to get the current thread from within it,
@@ -1825,7 +1839,7 @@ pub const ReadThread = struct {
 
     fn threadMainWindows(fd: posix.fd_t, io: *termio.Termio, quit: posix.fd_t) void {
         // Always close our end of the pipe when we exit.
-        defer _ = posix.system.close(quit);
+        defer internal_os.closePipe(quit);
 
         // Setup our crash metadata
         crash.sentry.thread_state = .{

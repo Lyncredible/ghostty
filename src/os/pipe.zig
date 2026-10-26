@@ -20,3 +20,12 @@ pub fn pipe() ![2]posix.fd_t {
         },
     }
 }
+
+/// Close an end of a pipe from `pipe`. On Windows these are handles,
+/// which the C runtime's close doesn't know about.
+pub fn closePipe(fd: posix.fd_t) void {
+    switch (builtin.target.os.tag) {
+        .windows => _ = windows.exp.kernel32.CloseHandle(fd),
+        else => _ = posix.system.close(fd),
+    }
+}
