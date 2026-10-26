@@ -479,6 +479,59 @@ pub fn setSearchSelected(self: *Surface, selected: ?usize) void {
     self.search_bar.setCount(selected, self.search_total);
 }
 
+/// The color to paint beneath the renderer's translucent background so
+/// that together they look like the opaque background color, for
+/// toggle_background_opacity.
+///
+/// The compositor blends premultiplied, gamma encoded colors. With linear
+/// alpha blending the renderer premultiplies in linear space and gamma
+/// encodes the result, so its background comes out as encode(a * lin(bg))
+/// rather than a * bg, and we compensate for that.
+fn opaqueUnderlay(self: *const Surface) c.COLORREF {
+    const config = &self.app.config;
+    const bg = config.background;
+    const alpha: f32 = @floatCast(@max(0, @min(1, config.@"background-opacity")));
+    if (alpha >= 1) return rgbRef(bg.r, bg.g, bg.b);
+    const linear = config.@"alpha-blending".isLinear();
+    return rgbRef(
+        underlay(bg.r, alpha, linear),
+        underlay(bg.g, alpha, linear),
+        underlay(bg.b, alpha, linear),
+    );
+}
+
+/// The channel value beneath `alpha` of `value` that composites to `value`.
+fn underlay(value: u8, alpha: f32, linear: bool) u8 {
+    const v = @as(f32, @floatFromInt(value)) / 255;
+    const top = if (linear) srgbEncode(alpha * srgbDecode(v)) else alpha * v;
+    const under = std.math.clamp((v - top) / (1 - alpha), 0, 1);
+    return @intFromFloat(@round(under * 255));
+}
+
+fn srgbDecode(v: f32) f32 {
+    return if (v <= 0.04045) v / 12.92 else std.math.pow(f32, (v + 0.055) / 1.055, 2.4);
+}
+
+fn srgbEncode(v: f32) f32 {
+    return if (v <= 0.0031308) v * 12.92 else 1.055 * std.math.pow(f32, v, 1.0 / 2.4) - 0.055;
+}
+
+fn rgbRef(r: u8, g: u8, b: u8) c.COLORREF {
+    return @as(c.COLORREF, r) | (@as(c.COLORREF, g) << 8) | (@as(c.COLORREF, b) << 16);
+}
+
+test underlay {
+    const testing = std.testing;
+
+    // Gamma space blending: the renderer's half is half the color.
+    try testing.expectEqual(@as(u8, 192), underlay(192, 0.5, false));
+
+    // Linear blending: the renderer's half is encode(0.5 * lin(192)), about
+    // 141, so beneath it we need about 2 * (192 - 141).
+    try testing.expectEqual(@as(u8, 103), underlay(192, 0.5, true));
+    try testing.expectEqual(@as(u8, 0), underlay(0, 0.5, true));
+}
+
 /// The terminal's background or foreground color changed.
 pub fn colorChanged(self: *Surface, change: apprt.action.ColorChange) void {
     const color: terminal.color.RGB = .{ .r = change.r, .g = change.g, .b = change.b };
@@ -993,11 +1046,7 @@ pub fn wndProc(
             // toggle_background_opacity looks like an opaque one.
             var ps: c.PAINTSTRUCT = undefined;
             const hdc = c.BeginPaint(hwnd, &ps);
-            const bg = self.app.config.background;
-            const color: c.COLORREF = if (self.app.translucent())
-                0
-            else
-                @as(c.COLORREF, bg.r) | (@as(c.COLORREF, bg.g) << 8) | (@as(c.COLORREF, bg.b) << 16);
+            const color: c.COLORREF = if (self.app.translucent()) 0 else self.opaqueUnderlay();
             const brush = c.CreateSolidBrush(color);
             _ = c.FillRect(hdc, &ps.rcPaint, brush);
             _ = c.DeleteObject(brush);
