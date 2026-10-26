@@ -287,7 +287,7 @@ Notes:
         child of the surface, like the search bar. Checked natively: it
         opened from the menu, filtered, and Enter on `new_split:right`
         split the terminal.
-- [ ] Config options the Win32 apprt ignored (found 2026-10-25)
+- [x] Config options the Win32 apprt ignored (found 2026-10-25)
   - [x] `focus-follows-mouse`: hovering a split focuses it when the
         cursor really moves, the window is in front, no button is held,
         and focus is on another terminal (never a search field, palette,
@@ -299,7 +299,12 @@ Notes:
         WSL (the command runs `wsl.exe`) they become Linux paths
         (`/mnt/c/...`, `\\wsl$\<distro>\...` to `/...`) in single
         quotes when needed. Unit tested; a real drop needs a manual check.
-  - [ ] `window-position-x` and `window-position-y`
+  - [x] `window-position-x` and `window-position-y` for the first window:
+        points from the top left of the primary monitor's work area, like
+        macOS, placing the visible frame (not the invisible resize
+        borders) there, and falling back to the work area's corner if
+        that's off every monitor. Checked: 100,50 at 200% put the visible
+        frame at 200,100.
 - [x] Share built-in compiled shader bytecode across surfaces
 - [x] Precompile the built-in HLSL at build time when the build host is
       Windows (`src/build/hlsl_compile.zig` calls `D3DCompile` with the
