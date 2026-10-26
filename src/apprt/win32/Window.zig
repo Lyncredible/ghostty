@@ -16,6 +16,7 @@ const Surface = @import("Surface.zig");
 const Tab = @import("Tab.zig");
 const TabBar = @import("TabBar.zig");
 const Overrides = @import("Overrides.zig");
+const Menu = @import("Menu.zig");
 
 const log = std.log.scoped(.win32);
 
@@ -37,6 +38,10 @@ active: usize = 0,
 
 /// The split divider being dragged, if any.
 dragging: ?Tab.Divider = null,
+
+/// The number of items in the default system menu. Our main menu items
+/// follow them and are rebuilt each time the menu opens.
+system_menu_base: c_int = 0,
 
 /// The saved window state while we're fullscreen, used to restore it.
 fullscreen: ?struct {
@@ -118,6 +123,10 @@ pub fn init(self: *Window, app: *App, initial: Initial) !void {
     };
     errdefer _ = c.DestroyWindow(hwnd);
     self.hwnd = hwnd;
+
+    if (c.GetSystemMenu(hwnd, c.FALSE)) |menu| {
+        self.system_menu_base = @max(0, c.GetMenuItemCount(menu));
+    }
 
     self.updateTheme();
     self.updateDecorations();
@@ -1053,6 +1062,20 @@ fn utf16Buf(buf: []u16, s: []const u8) [*:0]const u16 {
 //----------------------------------------------------------------------------
 // Window procedure
 
+/// Replace our items in the system menu, so that their shortcuts and
+/// whether they're enabled are current.
+fn updateSystemMenu(self: *Window, menu: c.HMENU) void {
+    while (c.GetMenuItemCount(menu) > self.system_menu_base) {
+        if (c.DeleteMenu(menu, @intCast(self.system_menu_base), c.MF_BYPOSITION) == 0) break;
+    }
+
+    var arena: std.heap.ArenaAllocator = .init(self.app.core_app.alloc);
+    defer arena.deinit();
+    Menu.appendToSystemMenu(arena.allocator(), menu, &Menu.main, self.activeSurface()) catch |err| {
+        log.warn("error building system menu err={}", .{err});
+    };
+}
+
 pub fn wndProc(
     hwnd: c.HWND,
     msg: c.UINT,
@@ -1203,6 +1226,15 @@ pub fn wndProc(
             }
 
             self.destroy();
+            return 0;
+        },
+
+        c.WM_INITMENUPOPUP => if (c.GetSystemMenu(hwnd, c.FALSE)) |menu| {
+            if (@intFromPtr(menu) == wparam) self.updateSystemMenu(menu);
+        },
+
+        c.WM_SYSCOMMAND => if (Menu.systemCommand(&Menu.main, wparam)) |action| {
+            self.activeSurface().performMenuAction(action);
             return 0;
         },
 
