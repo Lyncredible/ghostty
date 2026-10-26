@@ -751,7 +751,7 @@ pub fn setMouseOverLink(self: *Surface, url: []const u8) void {
 pub fn copyTitleToClipboard(self: *Surface) !bool {
     const title = self.effectiveTitle() orelse return false;
     if (title.len == 0) return false;
-    try writeClipboardText(self.app.core_app.alloc, self.hwnd, title);
+    try writeClipboardText(self.app.core_app.alloc, self.hwnd, title, null);
     return true;
 }
 
@@ -1018,10 +1018,14 @@ pub fn setClipboard(
 ) !void {
     if (clipboard_type != .standard) return;
 
-    // We only support writing plain text.
+    // We write plain text, and HTML (with colors and styles) when we have
+    // it, which rich text editors paste.
     const text: [:0]const u8 = for (contents) |content| {
         if (std.mem.eql(u8, content.mime, "text/plain")) break content.data;
     } else return;
+    const html: ?[]const u8 = for (contents) |content| {
+        if (std.mem.eql(u8, content.mime, "text/html")) break content.data;
+    } else null;
 
     const alloc = self.app.core_app.alloc;
     const owned_text = if (confirm) try alloc.dupeSentinel(u8, text, 0) else null;
@@ -1037,7 +1041,7 @@ pub fn setClipboard(
 
     if (c.GetWindowLongPtrW(hwnd, util.GWLP_USERDATA) != identity) return;
 
-    try writeClipboardText(alloc, hwnd, owned_text orelse text);
+    try writeClipboardText(alloc, hwnd, owned_text orelse text, html);
     if (self.app.config.@"app-notifications".@"clipboard-copy") {
         self.showToast(if ((owned_text orelse text).len > 0) "Copied to clipboard" else "Cleared clipboard");
     }
@@ -1132,7 +1136,7 @@ fn readClipboardText(alloc: Allocator, hwnd: c.HWND) !?[:0]u8 {
 
 /// Write text to the clipboard. Line endings are converted from LF to
 /// CRLF, as is standard for text on Windows.
-fn writeClipboardText(alloc: Allocator, hwnd: c.HWND, text: []const u8) !void {
+fn writeClipboardText(alloc: Allocator, hwnd: c.HWND, text: []const u8, html: ?[]const u8) !void {
     // Convert LF to CRLF.
     var crlf: std.ArrayList(u8) = .empty;
     defer crlf.deinit(alloc);
@@ -1167,6 +1171,59 @@ fn writeClipboardText(alloc: Allocator, hwnd: c.HWND, text: []const u8) !void {
         _ = c.GlobalFree(mem);
         return error.SetClipboardFailed;
     }
+
+    // HTML is a bonus, so failing to add it isn't an error.
+    if (html) |fragment| html: {
+        const format = c.RegisterClipboardFormatW(std.unicode.utf8ToUtf16LeStringLiteral("HTML Format"));
+        if (format == 0) break :html;
+        const data = cfHtml(alloc, fragment) catch break :html;
+        defer alloc.free(data);
+        const html_mem = c.GlobalAlloc(c.GMEM_MOVEABLE, data.len + 1) orelse break :html;
+        const dst: [*]u8 = @ptrCast(c.GlobalLock(html_mem) orelse {
+            _ = c.GlobalFree(html_mem);
+            break :html;
+        });
+        @memcpy(dst[0..data.len], data);
+        dst[data.len] = 0;
+        _ = c.GlobalUnlock(html_mem);
+        if (c.SetClipboardData(format, html_mem) == null) _ = c.GlobalFree(html_mem);
+    }
+}
+
+/// An HTML fragment in the clipboard's "HTML Format" (CF_HTML): a header
+/// with the byte offsets of the document and of the fragment within it.
+fn cfHtml(alloc: Allocator, fragment: []const u8) ![]u8 {
+    // The offsets are fixed width so the header's length doesn't depend
+    // on them.
+    const header_len = "Version:0.9\r\nStartHTML:0000000000\r\nEndHTML:0000000000\r\nStartFragment:0000000000\r\nEndFragment:0000000000\r\n".len;
+    const prefix = "<html><body>\r\n<!--StartFragment-->";
+    const suffix = "<!--EndFragment-->\r\n</body></html>";
+    const start_html = header_len;
+    const start_fragment = start_html + prefix.len;
+    const end_fragment = start_fragment + fragment.len;
+    const end_html = end_fragment + suffix.len;
+    return std.fmt.allocPrint(
+        alloc,
+        "Version:0.9\r\nStartHTML:{d:0>10}\r\nEndHTML:{d:0>10}\r\nStartFragment:{d:0>10}\r\nEndFragment:{d:0>10}\r\n" ++
+            prefix ++ "{s}" ++ suffix,
+        .{ start_html, end_html, start_fragment, end_fragment, fragment },
+    );
+}
+
+test cfHtml {
+    const testing = std.testing;
+    const data = try cfHtml(testing.allocator, "<b>hi</b>");
+    defer testing.allocator.free(data);
+
+    const offset = struct {
+        fn f(d: []const u8, name: []const u8) usize {
+            const i = std.mem.indexOf(u8, d, name).? + name.len;
+            return std.fmt.parseInt(usize, d[i .. i + 10], 10) catch unreachable;
+        }
+    }.f;
+    try testing.expectEqualStrings("<b>hi</b>", data[offset(data, "StartFragment:")..offset(data, "EndFragment:")]);
+    try testing.expectEqualStrings("<html>", data[offset(data, "StartHTML:")..][0..6]);
+    try testing.expectEqual(data.len, offset(data, "EndHTML:"));
 }
 
 pub fn defaultTermioEnv(self: *Surface) !std.process.Environ.Map {
