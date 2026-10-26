@@ -1074,10 +1074,20 @@ fn completeClipboardText(
         => {
             const hwnd = self.hwnd;
             const identity = c.GetWindowLongPtrW(hwnd, util.GWLP_USERDATA);
-            const allowed = !confirmed and Window.confirm(
-                self.window,
+            // Like GTK, we say what's happening and show the text.
+            const title: []const u8, const message: []const u8 = if (err == error.UnsafePaste) .{
                 "Warning: Potentially Unsafe Paste",
                 "Pasting this text into the terminal may be dangerous as it looks like some commands may be executed. Paste anyway?",
+            } else .{
+                "Authorize Clipboard Access",
+                "An application is attempting to read from the clipboard. The current clipboard contents are shown below. Allow it?",
+            };
+            const allowed = !confirmed and Window.confirmText(
+                self.window,
+                self.app.core_app.alloc,
+                title,
+                message,
+                text,
             );
             // The process can exit and destroy this surface while the
             // confirmation dialog pumps messages.
@@ -1116,10 +1126,12 @@ pub fn setClipboard(
     const hwnd = self.hwnd;
     const identity = c.GetWindowLongPtrW(hwnd, util.GWLP_USERDATA);
 
-    if (confirm and !Window.confirm(
+    if (confirm and !Window.confirmText(
         self.window,
-        "Allow clipboard access?",
-        "An application is attempting to write to the clipboard. Allow it?",
+        alloc,
+        "Authorize Clipboard Access",
+        "An application is attempting to write to the clipboard. The text it would copy is shown below. Allow it?",
+        text,
     )) return;
 
     if (c.GetWindowLongPtrW(hwnd, util.GWLP_USERDATA) != identity) return;
