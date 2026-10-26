@@ -158,8 +158,8 @@ Notes:
       declare `dllimport`), both printed the parsed OSC title "hello".
   - [ ] The MSVC target: this machine has no Visual Studio or Windows SDK
         ("LibCStdLibHeaderNotFound").
-  - [ ] `zig build test-lib-vt` on Windows (not run yet: memory was short
-        while the full suite ran)
+  - [x] `zig build test-lib-vt -Dtarget=x86_64-windows-gnu`: 6,943
+        passed, 68 skipped, 0 failed (2026-10-26).
   - The examples' `build.zig` files don't pass their target to the
     ghostty dependency, so `-Dtarget` on an example still builds the
     library for the native target.
@@ -962,6 +962,13 @@ Reviewed the branch against this file and discussion #2563.
 - Fourth full native test run, after the config errors dialog, MSIX
   tool, and UI Automation (value, notifications, text pattern): 4,076
   passed, 61 skipped, 0 failed, exit 0.
+- Fifth full native test run, after light/dark mode, the tab overview,
+  undo for tabs, splits, and windows, the UIA selection, `font-thicken`,
+  and dragging tabs between windows: 4,079 passed, 61 skipped, 0 failed,
+  exit 0. (The "failed command" line in the log is the test binary's
+  stderr output, not a failure.) An earlier attempt was stopped by Claude
+  Code for low memory; running the lib-vt tests and the full suite one
+  at a time worked.
 - The inspector's buttons can't be clicked with posted messages: ImGui's
   Win32 backend calls `TrackMouseEvent` on mouse moves, and with the real
   cursor elsewhere Windows sends `WM_MOUSELEAVE` right away, so clicks
