@@ -26,6 +26,7 @@ const Scrollbar = @import("Scrollbar.zig");
 const Badge = @import("Badge.zig");
 const SearchBar = @import("SearchBar.zig");
 const CommandPalette = @import("CommandPalette.zig");
+const InspectorWindow = @import("InspectorWindow.zig");
 const Ipc = @import("Ipc.zig");
 const Overrides = @import("Overrides.zig");
 const Taskbar = @import("Taskbar.zig");
@@ -372,6 +373,20 @@ fn registerClasses(hinstance: c.HINSTANCE) !void {
         .{
             .cbSize = @sizeOf(c.WNDCLASSEXW),
             .style = 0,
+            .lpfnWndProc = InspectorWindow.wndProc,
+            .cbClsExtra = 0,
+            .cbWndExtra = 0,
+            .hInstance = hinstance,
+            .hIcon = icon,
+            .hCursor = util.loadSystemCursor(util.IDC_ARROW),
+            .hbrBackground = null,
+            .lpszMenuName = null,
+            .lpszClassName = InspectorWindow.class_name,
+            .hIconSm = null,
+        },
+        .{
+            .cbSize = @sizeOf(c.WNDCLASSEXW),
+            .style = 0,
             .lpfnWndProc = msgWndProc,
             .cbClsExtra = 0,
             .cbWndExtra = 0,
@@ -404,6 +419,7 @@ fn unregisterClasses(hinstance: c.HINSTANCE) void {
     _ = c.UnregisterClassW(Badge.class_name, hinstance);
     _ = c.UnregisterClassW(SearchBar.class_name, hinstance);
     _ = c.UnregisterClassW(CommandPalette.class_name, hinstance);
+    _ = c.UnregisterClassW(InspectorWindow.class_name, hinstance);
     _ = c.UnregisterClassW(message_class, hinstance);
 }
 
@@ -876,6 +892,16 @@ pub fn performAction(
         .mouse_shape => switch (target) {
             .app => return false,
             .surface => |v| v.rt_surface.setMouseShape(value),
+        },
+
+        .inspector => switch (target) {
+            .app => return false,
+            .surface => |v| v.rt_surface.controlInspector(value),
+        },
+
+        .render_inspector => switch (target) {
+            .app => return false,
+            .surface => |v| v.rt_surface.queueInspectorRender(),
         },
 
         .toggle_command_palette => switch (target) {

@@ -174,7 +174,14 @@ Notes:
         POSIX paths).
     - [ ] Manual check: a Start menu or Explorer launch opens at home
 - [x] Global keybinds (`RegisterHotKey`)
-- [ ] Terminal inspector (needs a Dear ImGui D3D11 backend)
+- [x] Terminal inspector (`inspector` toggle/show/hide,
+      `render_inspector`): a window per terminal, like GTK's, drawn by
+      Dear ImGui through its Win32 and Direct3D 11 backends (now built by
+      `pkg/dcimgui` for Windows) on a device and flip model swap chain of
+      its own. Redrawn on input, on `render_inspector`, and every 50 ms;
+      the style and font scale with the window's DPI. Checked natively:
+      opened from the menu (Terminal tab showing the screens), closed, and
+      reopened.
 - [x] Bell attention flash in the taskbar, honoring `bell-features`;
       system sound is now opt-in via `system`
 - [x] Desktop notifications and progress reports (taskbar)
@@ -259,7 +266,7 @@ Notes:
         135/136, Windows 10 1903+), set with the title bar theme.
         Verified with a screenshot of the context menu.
   - [x] Command palette item in the main menu
-  - [ ] Terminal inspector item, once it exists
+  - [x] Terminal inspector item
   - [ ] Keyboard access to the context menu (Shift+F10 / Menu key)
 - [x] Don't ask for exit confirmation if there is no active progress other than
       the shell itself. This is the behavior on macOS and Linux.
@@ -689,5 +696,5 @@ Reviewed the branch against this file and discussion #2563.
 - Pending manual UI tests: `toggle_background_opacity`,
   WSL `\wsl$` working directory inheritance through the UI,
   PowerShell 7.
-- Not started: command palette, terminal inspector (ImGui D3D11/Win32
-  backends), quick terminal animation, Windows 10 blur.
+- Done since: command palette, terminal inspector, quick terminal
+  animation, Windows 10 blur (pending a check on Windows 10).
