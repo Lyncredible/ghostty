@@ -96,6 +96,14 @@ background_opaque: bool = false,
 /// All of our open top-level windows.
 windows: std.ArrayList(*Window) = .empty,
 
+/// Windows the user closed that `undo` can still reopen, most recent
+/// last. They're hidden, and not in `windows`.
+closed_windows: std.ArrayList(*Window) = .empty,
+
+/// Windows reopened by `undo`, most recent last, which `redo` closes
+/// again. Entries are removed when the windows are destroyed.
+reopened_windows: std.ArrayList(*Window) = .empty,
+
 /// True once we've started quitting, so we don't quit twice.
 quitting: bool = false,
 
@@ -510,6 +518,64 @@ fn restoreWindows(self: *App) !bool {
     return self.windows.items.len > 0;
 }
 
+/// Reopen the most recently closed window, or the tab or split most
+/// recently closed in the target's window, whichever closed last.
+fn undo(self: *App, target: apprt.action.Target) bool {
+    const window = self.actionWindow(target);
+    const window_expiry = if (window) |w| w.lastClosedExpiry() else null;
+    if (self.closed_windows.getLastOrNull()) |closed| {
+        if (window_expiry == null or closed.closed_expires >= window_expiry.?) {
+            _ = self.closed_windows.pop();
+            const alloc = self.core_app.alloc;
+            self.windows.append(alloc, closed) catch {
+                closed.destroy();
+                return false;
+            };
+            self.reopened_windows.append(alloc, closed) catch {};
+            closed.reopen();
+            return true;
+        }
+    }
+    const w = window orelse return false;
+    return w.undoClose();
+}
+
+/// Close what `undo` reopened again: in the target's window first, and
+/// then windows.
+fn redo(self: *App, target: apprt.action.Target) bool {
+    if (self.actionWindow(target)) |window| {
+        if (window.redoClose()) return true;
+    }
+    const window = self.reopened_windows.pop() orelse return false;
+    window.closeByUser();
+    return true;
+}
+
+/// Keep a window the user closed for `undo`. The window hides itself.
+pub fn keepClosedWindow(self: *App, window: *Window) !void {
+    const idx = std.mem.indexOfScalar(*Window, self.windows.items, window) orelse
+        return error.NotOpen;
+    try self.closed_windows.append(self.core_app.alloc, window);
+    _ = self.windows.orderedRemove(idx);
+    removeWindow(&self.reopened_windows, window);
+    if (self.hidden_active == window) self.hidden_active = null;
+}
+
+/// Destroy a closed window that can no longer be reopened.
+pub fn releaseClosedWindow(self: *App, window: *Window) void {
+    removeWindow(&self.closed_windows, window);
+    window.destroy();
+}
+
+/// Destroy every closed window.
+fn releaseClosedWindows(self: *App) void {
+    while (self.closed_windows.pop()) |window| window.destroy();
+}
+
+fn removeWindow(list: *std.ArrayList(*Window), window: *Window) void {
+    if (std.mem.indexOfScalar(*Window, list.items, window)) |i| _ = list.orderedRemove(i);
+}
+
 /// The window for an action: the target's window, or for the app, the
 /// window in the foreground.
 fn actionWindow(self: *const App, target: apprt.action.Target) ?*Window {
@@ -539,10 +605,13 @@ pub fn lastWindow(self: *const App) ?*Window {
 pub fn terminate(self: *App) void {
     // Close any windows that are still open. This deinitializes their
     // surfaces, which must happen before the core app is destroyed.
+    self.releaseClosedWindows();
     while (self.windows.items.len > 0) {
         self.windows.items[self.windows.items.len - 1].destroy();
     }
     self.windows.deinit(self.core_app.alloc);
+    self.closed_windows.deinit(self.core_app.alloc);
+    self.reopened_windows.deinit(self.core_app.alloc);
 
     self.taskbar.deinit();
     self.notifier.deinit();
@@ -796,13 +865,17 @@ fn toggleVisibility(self: *App) void {
 pub fn windowDestroyed(self: *App, window: *Window) void {
     if (self.hidden_active == window) self.hidden_active = null;
     if (self.quick_terminal == window) self.quick_terminal = null;
-    for (self.windows.items, 0..) |w, i| {
-        if (w == window) {
-            // Keep the creation order for goto_window.
-            _ = self.windows.orderedRemove(i);
-            break;
-        }
-    }
+    // Keep the creation order for goto_window.
+    removeWindow(&self.windows, window);
+    removeWindow(&self.closed_windows, window);
+    removeWindow(&self.reopened_windows, window);
+
+    // Closed windows can't outlive the last open one: the app quits once
+    // their terminals are gone too.
+    const open = for (self.windows.items) |w| {
+        if (!w.quick) break true;
+    } else false;
+    if (!open) self.releaseClosedWindows();
 }
 
 /// Start the quit timer, which quits the app (if configured to) once
@@ -845,6 +918,7 @@ fn closeAllWindows(self: *App) void {
     SaveState.save(self);
     self.closing_all = true;
     defer self.closing_all = false;
+    self.releaseClosedWindows();
     while (self.windows.items.len > 0) {
         self.windows.items[self.windows.items.len - 1].destroy();
     }
@@ -1035,8 +1109,8 @@ pub fn performAction(
         },
 
         // Like macOS, closing a tab or split can be undone for a while.
-        .undo => return if (self.actionWindow(target)) |window| window.undoClose() else false,
-        .redo => return if (self.actionWindow(target)) |window| window.redoClose() else false,
+        .undo => return self.undo(target),
+        .redo => return self.redo(target),
 
         .toggle_tab_overview => switch (target) {
             .app => return false,
