@@ -204,7 +204,15 @@ Notes:
   - [x] Scrollbar (`scrollbar`)
   - [x] Key table / sequence indicators (`key_table`, `key_sequence`)
   - [x] Quick terminal (`toggle_quick_terminal`, `+toggle-quick-terminal`)
-    - [ ] Slide animation (`quick-terminal-animation-duration`)
+    - [x] Slide animation (`quick-terminal-animation-duration`): the
+          window moves in from its edge, clipped by a window region at
+          the screen edge so it never shows on a neighboring monitor, with
+          an ease-out over the configured duration (scaled by the distance
+          left when reversing). The terminal size never changes. `center`
+          appears in place. Sampled while sliding in: top -182, -73, -8,
+          -2, then 0 and unclipped after ~140 ms.
+      - [ ] Manual check: sliding out (toggling hides only when the quick
+            terminal is in front, which a locked test desktop never is)
   - [ ] Command palette
 - [x] Share built-in compiled shader bytecode across surfaces
 - [x] Cache compiled custom shader bytecode across surfaces
