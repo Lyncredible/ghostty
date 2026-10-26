@@ -258,6 +258,12 @@ Notes:
         opened from the menu, filtered, and Enter on `new_split:right`
         split the terminal.
 - [x] Share built-in compiled shader bytecode across surfaces
+- [x] Precompile the built-in HLSL at build time when the build host is
+      Windows (`src/build/hlsl_compile.zig` calls `D3DCompile` with the
+      runtime flags; the bytecode is embedded as `d3d11_shaders`). Other
+      hosts still compile at runtime. ReleaseSafe startup: the nine
+      shaders took about 190 ms to compile and now take about 0.1 ms to
+      load.
 - [x] Cache compiled custom shader bytecode across surfaces
 - [x] Add Menu support. Need to decide on where to put the menu. I prefer
       hide it in the title bar, where the menu shows up on hover (or clicking

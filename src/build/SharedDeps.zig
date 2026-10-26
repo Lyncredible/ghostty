@@ -628,6 +628,8 @@ pub fn add(
                 .msvc => "d3dcompiler",
                 else => "d3dcompiler_47",
             }, dynamic_link_opts);
+
+            step.root_module.addImport("d3d11_shaders", d3d11Shaders(b, optimize));
         }
     }
 
@@ -1259,3 +1261,56 @@ const dynamic_link_opts: std.Build.Module.LinkSystemLibraryOptions = .{
     .preferred_link_mode = .dynamic,
     .search_strategy = .mode_first,
 };
+
+/// The built-in Direct3D 11 shaders, compiled to bytecode at build time
+/// when the build host is Windows (which has D3DCompile). Otherwise the
+/// module is empty and the renderer compiles them at runtime. The entries
+/// must match `BuiltinEntry` in src/renderer/direct3d11/shaders.zig.
+fn d3d11Shaders(b: *std.Build, optimize: std.builtin.OptimizeMode) *std.Build.Module {
+    const entries = [_][]const u8{
+        "full_screen_vertex",
+        "cell_text_vertex",
+        "image_vertex",
+        "bg_image_vertex",
+        "bg_color_fragment",
+        "cell_bg_fragment",
+        "cell_text_fragment",
+        "image_fragment",
+        "bg_image_fragment",
+    };
+
+    const wf = b.addWriteFiles();
+    var index: std.Io.Writer.Allocating = .init(b.allocator);
+    const writer = &index.writer;
+    if (b.graph.host.result.os.tag == .windows) {
+        const tool = b.addExecutable(.{
+            .name = "hlsl_compile",
+            .root_module = b.createModule(.{
+                .root_source_file = b.path("src/build/hlsl_compile.zig"),
+                .target = b.graph.host,
+            }),
+        });
+        tool.root_module.linkSystemLibrary(switch (b.graph.host.result.abi) {
+            .msvc => "d3dcompiler",
+            else => "d3dcompiler_47",
+        }, .{});
+
+        const run = b.addRunArtifact(tool);
+        run.addFileArg(b.path("src/renderer/shaders/shaders.hlsl"));
+        const out_dir = run.addOutputDirectoryArg("dxbc");
+        run.addArg(if (optimize == .debug) "1" else "0");
+        for (entries) |entry| run.addArg(entry);
+        _ = wf.addCopyDirectory(out_dir, "", .{});
+
+        writer.writeAll("pub const available = true;\n") catch @panic("OOM");
+        for (entries) |entry| writer.print(
+            "pub const {s} = @embedFile(\"{s}.dxbc\");\n",
+            .{ entry, entry },
+        ) catch @panic("OOM");
+    } else {
+        writer.writeAll("pub const available = false;\n") catch @panic("OOM");
+    }
+
+    const file = wf.add("d3d11_shaders.zig", index.written());
+    return b.createModule(.{ .root_source_file = file });
+}
