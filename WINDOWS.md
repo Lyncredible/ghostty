@@ -194,6 +194,10 @@ Notes:
         POSIX paths).
     - [ ] Manual check: a Start menu or Explorer launch opens at home
 - [x] Global keybinds (`RegisterHotKey`)
+- [x] Taskbar jump list with a "New Window" task, which starts
+      `ghostty.exe` again (single instance opens the window in the running
+      app). Checked: the shell wrote the custom destinations file with the
+      task and the executable's path.
 - [x] Terminal inspector (`inspector` toggle/show/hide,
       `render_inspector`): a window per terminal, like GTK's, drawn by
       Dear ImGui through its Win32 and Direct3D 11 backends (now built by
