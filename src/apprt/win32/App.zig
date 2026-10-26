@@ -49,6 +49,9 @@ const WM_GHOSTTY_CONFIG_ERRORS = c.WM_APP + 3;
 /// Posted to redo closing, with the window (or 0) as the wparam.
 const WM_GHOSTTY_REDO = c.WM_APP + 4;
 
+/// Posted to close all windows.
+const WM_GHOSTTY_CLOSE_ALL = c.WM_APP + 5;
+
 /// The ID of the timer on our message window for the quit timer.
 const quit_timer_id = 1;
 
@@ -680,6 +683,11 @@ fn msgWndProc(
                 return 0;
             },
 
+            WM_GHOSTTY_CLOSE_ALL => {
+                self.closeAllWindows();
+                return 0;
+            },
+
             WM_GHOSTTY_WAKEUP => {
                 self.core_app.tick(self) catch |err| {
                     log.err("error ticking app err={}", .{err});
@@ -980,7 +988,9 @@ pub fn performAction(
             .surface => |v| v,
         } }),
 
-        .close_all_windows => self.closeAllWindows(),
+        // The terminal whose key binding asked for this closes too, while
+        // the core is still handling the key, so we close later.
+        .close_all_windows => _ = c.PostMessageW(self.msg_hwnd, WM_GHOSTTY_CLOSE_ALL, 0, 0),
 
         .close_window => switch (target) {
             .app => return false,
