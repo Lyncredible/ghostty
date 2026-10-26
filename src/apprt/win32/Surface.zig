@@ -102,6 +102,9 @@ scrollbar: Scrollbar = .{},
 readonly_badge: Badge = .{},
 key_badge: Badge = .{},
 health_badge: Badge = .{},
+
+/// A short message that hides itself, like GTK's toasts.
+toast_badge: Badge = .{},
 search_bar: SearchBar = .{},
 command_palette: CommandPalette = .{},
 
@@ -258,6 +261,8 @@ pub fn init(self: *Surface, app: *App, window: *Window, opts: Options) !void {
     errdefer self.key_badge.deinit(alloc);
     try self.health_badge.init(hwnd, app.hinstance, &config, .center);
     errdefer self.health_badge.deinit(alloc);
+    try self.toast_badge.init(hwnd, app.hinstance, &config, .bottom_center);
+    errdefer self.toast_badge.deinit(alloc);
     c.DragAcceptFiles(hwnd, c.TRUE);
     try self.search_bar.init(hwnd, app.hinstance, &config, self, searchEvent);
     errdefer self.search_bar.deinit();
@@ -298,6 +303,8 @@ pub fn deinit(self: *Surface) void {
     self.readonly_badge.deinit(alloc);
     self.key_badge.deinit(alloc);
     self.health_badge.deinit(alloc);
+    _ = c.KillTimer(self.hwnd, toast_timer_id);
+    self.toast_badge.deinit(alloc);
     self.closeInspector();
     self.search_bar.deinit();
     self.command_palette.deinit();
@@ -737,6 +744,7 @@ pub fn configChanged(self: *Surface, config: *const configpkg.Config) void {
     self.readonly_badge.updateConfig(config);
     self.key_badge.updateConfig(config);
     self.health_badge.updateConfig(config);
+    self.toast_badge.updateConfig(config);
     self.search_bar.updateConfig(config);
     self.command_palette.updateConfig(config);
     self.dim_overlay.updateConfig(config) catch |err| {
@@ -997,6 +1005,18 @@ pub fn setClipboard(
     if (c.GetWindowLongPtrW(hwnd, util.GWLP_USERDATA) != identity) return;
 
     try writeClipboardText(alloc, hwnd, owned_text orelse text);
+    if (self.app.config.@"app-notifications".@"clipboard-copy") {
+        self.showToast(if ((owned_text orelse text).len > 0) "Copied to clipboard" else "Cleared clipboard");
+    }
+}
+
+const toast_timer_id = 1;
+const toast_ms = 2000;
+
+/// Show a short message for a couple of seconds.
+pub fn showToast(self: *Surface, text: []const u8) void {
+    self.toast_badge.set(self.app.core_app.alloc, text);
+    _ = c.SetTimer(self.hwnd, toast_timer_id, toast_ms, null);
 }
 
 /// Open the clipboard, retrying a few times since another application
@@ -1144,6 +1164,7 @@ pub fn wndProc(
                 self.readonly_badge.parentResized();
                 self.key_badge.parentResized();
                 self.health_badge.parentResized();
+                self.toast_badge.parentResized();
                 self.search_bar.parentResized();
                 self.command_palette.parentResized();
                 self.core_surface.sizeCallback(size) catch |err| {
@@ -1226,6 +1247,12 @@ pub fn wndProc(
             }
             self.cursorPosEvent(pos);
             self.scrollbar.updateHover();
+            return 0;
+        },
+
+        c.WM_TIMER => if (wparam == toast_timer_id) {
+            _ = c.KillTimer(hwnd, toast_timer_id);
+            self.toast_badge.set(self.app.core_app.alloc, null);
             return 0;
         },
 

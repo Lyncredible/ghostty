@@ -299,6 +299,10 @@ Notes:
         WSL (the command runs `wsl.exe`) they become Linux paths
         (`/mnt/c/...`, `\\wsl$\<distro>\...` to `/...`) in single
         quotes when needed. Unit tested; a real drop needs a manual check.
+  - [x] `app-notifications`: "Copied to clipboard" / "Cleared clipboard"
+        and "Reloaded the configuration" as a badge at the bottom of the
+        terminal for two seconds, like GTK's toasts. Checked with
+        screenshots after Reload Configuration and an OSC 52 write.
   - [x] `maximize` and `fullscreen` for new windows, like GTK. Checked:
         `--maximize=true` started zoomed; `--fullscreen=true` started
         captionless at 0,0,3840,2160.
