@@ -208,3 +208,11 @@ pub fn setBlurBehindAccent(hwnd: c.HWND, enable: bool) void {
     };
     _ = set(hwnd, &data);
 }
+
+/// A handle (HWND, HDC, ...) passed in a message's WPARAM or LPARAM.
+/// Handles aren't pointers to aligned memory, so `@ptrFromInt` would fail
+/// its alignment check for many of them; we reinterpret the bits instead.
+pub fn handle(comptime T: type, value: anytype) T {
+    comptime std.debug.assert(@sizeOf(@TypeOf(value)) == @sizeOf(T));
+    return @as(*const T, @ptrCast(&value)).*;
+}
