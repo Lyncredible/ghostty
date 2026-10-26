@@ -170,12 +170,18 @@ Notes:
       tab with a running process is hidden instead of destroyed, `undo`
       (or "Reopen Closed Tab" in the tab menu) puts it back where it was,
       and `redo` closes it again. Closed tabs are destroyed when the
-      timeout expires or the window closes. Closing a split or a window
-      can't be undone yet. Checked with `--undo-timeout=3s` and F9/F8
+      timeout expires or the window closes. Closing a split can be
+      undone too: it goes back next to the terminals it was split from,
+      on the same side and with the same ratio. Closing a window can't
+      be undone yet. Checked with `--undo-timeout=3s` and F9/F8
       bound to undo/redo: close, undo, and redo switched the visible
       terminal as expected; after the timeout the hidden surface was
       destroyed and undo did nothing. The tab menu item reopened a tab.
-  - [ ] Undo closing a split or a window
+      For splits: a right split closed and came back at the same
+      position (x 1539..2965), redo closed it again, and it expired the
+      same way. Closing a split and then its tab, two undos brought back
+      the tab and then the split.
+  - [ ] Undo closing a window
 
 ### Known limitations
 
