@@ -860,6 +860,7 @@ fn updateTheme(self: *Window) void {
         &value,
         @sizeOf(c.BOOL),
     );
+    util.setMenuTheme(dark);
 }
 
 /// Whether the user chose the dark app mode in the Windows settings.
