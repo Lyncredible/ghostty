@@ -163,8 +163,10 @@ Notes:
           blocked in the dev session. Check that `using conpty.dll` is
           logged, shells work, and a Kitty graphics APC (`ESC _ G a=q ;
           ESC \`) reaches Ghostty ("executing kitty graphics command").
-    - [ ] If it works, add an opt-in to `dist/windows/package.ps1` that
-          bundles the package's `conpty.dll` and `OpenConsole.exe`.
+    - [x] `package.ps1 -BundleConpty` downloads that package (version and
+          SHA-256 pinned), and puts its `conpty.dll` and `OpenConsole.exe`
+          for the target architecture in `bin`. Checked: the zip has both
+          next to `ghostty.exe`. Use it to try the item above.
 
 ### Next
 
