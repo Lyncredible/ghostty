@@ -35,6 +35,7 @@ tracking_mouse: bool = false,
 /// The tab under an in-progress left-button drag, if still present.
 drag_tab: ?*Tab = null,
 drag_start_x: c_int = 0,
+drag_start_y: c_int = 0,
 dragging: bool = false,
 
 /// The parts of the tab bar the mouse can be over.
@@ -528,15 +529,18 @@ fn setHover(self: *TabBar, hit: ?Hit) void {
     self.invalidate();
 }
 
-fn dragMove(self: *TabBar, x: c_int) void {
+fn dragMove(self: *TabBar, x: c_int, y: c_int) void {
     const tab = self.drag_tab orelse return;
     if (self.window.tabs.items[self.window.active] != tab) {
         self.drag_tab = null;
         return;
     }
     if (!self.dragging) {
-        const threshold = @max(1, c.GetSystemMetrics(c.SM_CXDRAG));
-        if (@abs(x - self.drag_start_x) < threshold) return;
+        // Dragging down starts a drag too, to move the tab to a window.
+        const threshold_x = @max(1, c.GetSystemMetrics(c.SM_CXDRAG));
+        const threshold_y = @max(1, c.GetSystemMetrics(c.SM_CYDRAG));
+        if (@abs(x - self.drag_start_x) < threshold_x and
+            @abs(y - self.drag_start_y) < threshold_y) return;
         self.dragging = true;
     }
     const width = self.layout().tab_width;
@@ -547,6 +551,49 @@ fn dragMove(self: *TabBar, x: c_int) void {
     );
     const from = self.window.active;
     if (to != from) _ = self.window.moveTab(@as(isize, @intCast(to)) - @as(isize, @intCast(from)));
+}
+
+/// A dragged tab was dropped at a point in our client area. Dropped well
+/// above or below the tab bar, like in browsers, it moves to the window
+/// under the pointer, or to a new window there.
+fn dropTab(self: *TabBar, tab: *Tab, x: c_int, y: c_int) void {
+    var client: c.RECT = undefined;
+    _ = c.GetClientRect(self.hwnd, &client);
+    const margin = client.bottom - client.top;
+    if (y >= client.top - margin and y < client.bottom + margin) return;
+
+    var pt: c.POINT = .{ .x = x, .y = y };
+    _ = c.ClientToScreen(self.hwnd, &pt);
+    const window = self.window;
+    if (window.app.windowAt(pt)) |target| {
+        if (target != window) {
+            _ = window.moveTabToWindow(tab, target) catch |err| {
+                log.warn("error moving tab to window err={}", .{err});
+            };
+            return;
+        }
+    }
+
+    const new_window = (window.tearOffTab(tab) catch |err| {
+        log.warn("error moving tab to a new window err={}", .{err});
+        return;
+    }) orelse return;
+
+    // Put the new window's tab bar under the pointer.
+    if (c.IsZoomed(new_window.hwnd) != 0) return;
+    const dpi: c_int = @intCast(c.GetDpiForWindow(new_window.hwnd));
+    const offset_x = @divTrunc(80 * dpi, 96);
+    const offset_y = c.GetSystemMetricsForDpi(c.SM_CYCAPTION, @intCast(dpi)) +
+        @divTrunc(margin, 2);
+    _ = c.SetWindowPos(
+        new_window.hwnd,
+        null,
+        pt.x - offset_x,
+        pt.y - offset_y,
+        0,
+        0,
+        c.SWP_NOSIZE | c.SWP_NOZORDER | c.SWP_NOACTIVATE,
+    );
 }
 
 fn paintClient(self: *TabBar, hdc: c.HDC) void {
@@ -581,7 +628,7 @@ pub fn wndProc(
 
         c.WM_MOUSEMOVE => {
             if (self.drag_tab != null and (wparam & c.MK_LBUTTON) != 0) {
-                self.dragMove(util.loword(lparam));
+                self.dragMove(util.loword(lparam), util.hiword(lparam));
             }
             if (!self.tracking_mouse) {
                 var tme: c.TRACKMOUSEEVENT = .{
@@ -614,6 +661,7 @@ pub fn wndProc(
                     self.window.selectTab(i);
                     self.drag_tab = self.window.tabs.items[i];
                     self.drag_start_x = util.loword(lparam);
+                    self.drag_start_y = util.hiword(lparam);
                     self.dragging = false;
                     _ = c.SetCapture(hwnd);
                 },
@@ -626,10 +674,12 @@ pub fn wndProc(
         },
 
         c.WM_LBUTTONUP => {
-            if (self.drag_tab != null) {
+            if (self.drag_tab) |tab| {
+                const dragged = self.dragging;
                 self.drag_tab = null;
                 self.dragging = false;
                 if (c.GetCapture() == hwnd) _ = c.ReleaseCapture();
+                if (dragged) self.dropTab(tab, util.loword(lparam), util.hiword(lparam));
             }
             return 0;
         },
