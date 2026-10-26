@@ -783,11 +783,30 @@ const Subprocess = struct {
 
         // Setup our shell integration, if we can.
         const shell_command: configpkg.Command = shell: {
-            const default_shell_command: configpkg.Command =
+            const configured_command: configpkg.Command =
                 cfg.command orelse .{ .shell = switch (builtin.target.os.tag) {
                     .windows => "cmd.exe",
                     else => "sh",
                 } };
+
+            // The Command Prompt can't start in a UNC path, such as a WSL
+            // directory inherited from a WSL terminal, and would fall back
+            // to the Windows directory. A directory in WSL is best opened
+            // in WSL, so we start a WSL shell there instead.
+            const default_shell_command: configpkg.Command = command: {
+                if (comptime builtin.target.os.tag != .windows) break :command configured_command;
+                const cwd = cfg.working_directory orelse break :command configured_command;
+                if (!shell_integration.isCmdCommand(alloc, configured_command)) break :command configured_command;
+                const share = try internal_os.wsl.sharePath(alloc, cwd) orelse break :command configured_command;
+                const argv = try alloc.alloc([:0]const u8, 5);
+                argv[0] = "wsl.exe";
+                argv[1] = "-d";
+                argv[2] = try alloc.dupeSentinel(u8, share.distribution, 0);
+                argv[3] = "--cd";
+                argv[4] = try alloc.dupeSentinel(u8, share.linux, 0);
+                log.info("starting WSL for a WSL working directory distribution={s} path={s}", .{ argv[2], argv[4] });
+                break :command .{ .direct = argv };
+            };
 
             // Always set up shell features (GHOSTTY_SHELL_FEATURES). These are
             // used by both automatic and manual shell integrations.

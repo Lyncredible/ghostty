@@ -73,6 +73,43 @@ test windowsPath {
     try testing.expectEqualStrings("\\\\wsl$\\Ubuntu\\", root);
 }
 
+/// A path in a WSL distribution's share (\\wsl$\<distro>\... or
+/// \\wsl.localhost\<distro>\...), split into the distribution and the Linux
+/// path. The Linux path is allocated; free it with the allocator.
+pub const SharePath = struct {
+    distribution: []const u8,
+    linux: []u8,
+};
+
+pub fn sharePath(alloc: Allocator, path: []const u8) Allocator.Error!?SharePath {
+    const rest = for ([_][]const u8{ "\\\\wsl$\\", "\\\\wsl.localhost\\" }) |prefix| {
+        if (std.ascii.startsWithIgnoreCase(path, prefix)) break path[prefix.len..];
+    } else return null;
+    const end = std.mem.indexOfScalar(u8, rest, '\\') orelse rest.len;
+    if (end == 0) return null;
+    const linux = try alloc.dupe(u8, if (end < rest.len) rest[end..] else "/");
+    std.mem.replaceScalar(u8, linux, '\\', '/');
+    return .{ .distribution = rest[0..end], .linux = linux };
+}
+
+test sharePath {
+    const testing = std.testing;
+    const alloc = testing.allocator;
+
+    const home = (try sharePath(alloc, "\\\\wsl$\\Ubuntu-24.04\\home\\me")).?;
+    defer alloc.free(home.linux);
+    try testing.expectEqualStrings("Ubuntu-24.04", home.distribution);
+    try testing.expectEqualStrings("/home/me", home.linux);
+
+    const root = (try sharePath(alloc, "\\\\WSL.localhost\\Debian")).?;
+    defer alloc.free(root.linux);
+    try testing.expectEqualStrings("Debian", root.distribution);
+    try testing.expectEqualStrings("/", root.linux);
+
+    try testing.expect(try sharePath(alloc, "\\\\server\\share") == null);
+    try testing.expect(try sharePath(alloc, "C:\\Users") == null);
+}
+
 /// The name of the user's default WSL distribution, from the registry.
 /// The caller owns the returned memory.
 pub fn defaultDistribution(alloc: Allocator) !?[]u8 {
