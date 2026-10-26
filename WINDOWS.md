@@ -224,8 +224,13 @@ Notes:
         and what was added (after scrolling or on the last line) is
         announced, except for typing echo on the cursor line. The diff is
         unit tested; hearing it in Narrator needs a manual check.
-  - [ ] Text pattern (ranges, selection, caret) for reviewing the screen
-        by line or word
+  - [x] Text pattern, for reviewing the screen by character, word, or
+        line: ranges over a snapshot of the visible text, the cursor as
+        an empty selection (the caret), move/expand/compare, find, line
+        bounding rectangles, and "not supported" for formatting
+        attributes. Checked with the .NET UIA client: document text, the
+        cursor's line ("C:\Code\ghostty>"), moving a line, finding text,
+        and the cursor line's rectangle.
 - [x] Taskbar jump list with a "New Window" task, which starts
       `ghostty.exe` again (single instance opens the window in the running
       app). Checked: the shell wrote the custom destinations file with the
