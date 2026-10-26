@@ -237,6 +237,13 @@ test detectShell {
     }
 }
 
+/// Whether a command runs the Windows Command Prompt.
+pub fn isCmdCommand(alloc: Allocator, command: config.Command) bool {
+    const args = commandArgs(alloc, command) catch return false;
+    defer freeArgs(alloc, command, args);
+    return args.len > 0 and isCmd(args[0]);
+}
+
 /// Whether the executable is the Windows Command Prompt.
 fn isCmd(arg0: []const u8) bool {
     // Windows paths can use either separator.
