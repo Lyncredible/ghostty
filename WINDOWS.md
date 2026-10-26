@@ -248,6 +248,8 @@ Notes:
         `install.ps1 -Uninstall`), and optionally adds `bin` to the user
         PATH. No administrator rights or signing. Checked: install,
         uninstall, and `-AddToPath` leave nothing behind.
+  - [x] CI: the `build-windows` job packages the portable zip and
+        uploads it as a 14-day artifact (not run yet; needs a push)
   - [ ] Installer or MSIX (needs signing and an app identity)
 - [x] Unimplemented apprt actions (as of 2026-10-25)
   - [x] `show_on_screen_keyboard`: toggles the touch keyboard through the

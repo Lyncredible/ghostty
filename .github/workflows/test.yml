@@ -951,6 +951,19 @@ jobs:
       - name: Build
         run: zig build
 
+      # An unofficial portable build of the Windows port, with its
+      # per-user install script.
+      - name: Package
+        shell: pwsh
+        run: ./dist/windows/package.ps1 -OutDir zig-out/dist
+
+      - name: Upload package
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: ghostty-windows-unofficial
+          path: zig-out/dist/*.zip
+          retention-days: 14
+
   build-libghostty-vt-windows:
     runs-on: namespace-profile-ghostty-windows
     timeout-minutes: 45
