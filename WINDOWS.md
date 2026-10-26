@@ -231,6 +231,10 @@ Notes:
         windows, split zoom, and equalizing splits (22 operations). Seeds
         5, 6, and 7 (400 steps each) ran without a panic or fault; seed 6
         ended early when its last terminal closed, which quits the app.
+  - [x] Leaks: the script now quits through the menu at the end, so the
+        debug build's allocator reports leaks at exit (`global.deinit`).
+        Seeds 8 and 9 (250 steps each) quit cleanly with no leaks and no
+        faults.
 - [x] CLI actions on Windows: `+version`, `+list-fonts`, `+list-themes`,
       `+list-keybinds`, `+list-colors`, `+list-actions`, `+show-config`,
       `+validate-config`, `+help`, `+show-face`, `+explain-config`, and
