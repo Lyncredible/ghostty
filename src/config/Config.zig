@@ -6729,6 +6729,16 @@ pub const Keybinds = struct {
                 .{ .copy_to_clipboard = .mixed },
                 .{ .performable = true },
             );
+
+            // On Windows, like Windows Terminal, ctrl+c also copies when
+            // there's a selection. It's performable, so without a
+            // selection it's still ctrl+c for the terminal (an interrupt).
+            if (comptime builtin.target.os.tag == .windows) try self.set.putFlags(
+                alloc,
+                .{ .key = .{ .unicode = 'c' }, .mods = .{ .ctrl = true } },
+                .{ .copy_to_clipboard = .mixed },
+                .{ .performable = true },
+            );
             try self.set.putFlags(
                 alloc,
                 .{ .key = .{ .unicode = 'v' }, .mods = mods },
@@ -10725,6 +10735,20 @@ test "parse e: command and args" {
     try testing.expectEqualStrings(cmd.direct[0], "echo");
     try testing.expectEqualStrings(cmd.direct[1], "foo");
     try testing.expectEqualStrings(cmd.direct[2], "bar baz");
+}
+
+test "default keybinds: ctrl+c copies a selection on Windows" {
+    if (comptime builtin.target.os.tag != .windows) return error.SkipZigTest;
+    const testing = std.testing;
+
+    var config = try Config.default(testing.allocator);
+    defer config.deinit();
+    const entry = config.keybind.set.get(.{
+        .key = .{ .unicode = 'c' },
+        .mods = .{ .ctrl = true },
+    }).?;
+    try testing.expect(entry.value_ptr.*.leaf.action == .copy_to_clipboard);
+    try testing.expect(entry.value_ptr.*.leaf.flags.performable);
 }
 
 test "default keybinds: shift+insert pastes the clipboard on Windows" {

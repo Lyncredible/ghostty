@@ -107,6 +107,9 @@ Notes:
         mouse input. Needs a check on a touch screen.
   - [x] Plain text clipboard, with CRLF handling and unsafe paste
         confirmation.
+  - [x] Ctrl+C copies when there's a selection, like Windows Terminal,
+        and is still an interrupt otherwise (a performable default
+        keybind on Windows). Unit tested; needs a check with real keys.
   - [x] Copying also writes HTML ("HTML Format", CF_HTML) when the core
         provides it (`copy_to_clipboard` with `mixed`), so rich text
         editors paste with colors and styles. Checked: Select All and Copy
