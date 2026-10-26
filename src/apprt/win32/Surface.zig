@@ -111,6 +111,9 @@ toast_badge: Badge = .{},
 /// Our UI Automation provider, for screen readers.
 accessibility: ?*Accessibility = null,
 
+/// When we last got key input, in GetTickCount64 milliseconds.
+last_key_ms: u64 = 0,
+
 /// The handle to drag this split elsewhere, and the highlight where a
 /// dragged split would drop on us.
 drag_handle: SplitDrag.Handle = .{},
@@ -337,6 +340,7 @@ pub fn deinit(self: *Surface) void {
     _ = c.KillTimer(self.hwnd, toast_timer_id);
     self.toast_badge.deinit(alloc);
     _ = c.KillTimer(self.hwnd, resize_timer_id);
+    _ = c.KillTimer(self.hwnd, accessibility_timer_id);
     self.resize_badge.deinit(alloc);
     self.drag_handle.deinit();
     self.drop_zone.deinit();
@@ -1057,6 +1061,8 @@ pub fn setClipboard(
 
 const toast_timer_id = 1;
 const resize_timer_id = 2;
+const accessibility_timer_id = 3;
+const accessibility_ms = 500;
 
 fn updateResizeOverlay(self: *Surface, config: *const configpkg.Config) void {
     self.resize_overlay = config.@"resize-overlay";
@@ -1323,6 +1329,12 @@ pub fn wndProc(
 
         c.WM_SETFOCUS, c.WM_KILLFOCUS => {
             if (msg == c.WM_SETFOCUS) self.window.surfaceFocused(self);
+
+            // Screen readers follow the output of the focused terminal.
+            if (msg == c.WM_SETFOCUS)
+                _ = c.SetTimer(hwnd, accessibility_timer_id, accessibility_ms, null)
+            else
+                _ = c.KillTimer(hwnd, accessibility_timer_id);
             self.core_surface.focusCallback(msg == c.WM_SETFOCUS) catch |err| {
                 log.err("error in focus callback err={}", .{err});
             };
@@ -1392,6 +1404,12 @@ pub fn wndProc(
         c.WM_TIMER => if (wparam == toast_timer_id) {
             _ = c.KillTimer(hwnd, toast_timer_id);
             self.toast_badge.set(self.app.core_app.alloc, null);
+            return 0;
+        } else if (wparam == accessibility_timer_id) {
+            if (self.accessibility) |a| {
+                const typing = c.GetTickCount64() -| self.last_key_ms < 2 * accessibility_ms;
+                a.announceOutput(typing);
+            }
             return 0;
         } else if (wparam == resize_timer_id) {
             _ = c.KillTimer(hwnd, resize_timer_id);
@@ -1543,6 +1561,7 @@ fn keyEvent(
     lparam: c.LPARAM,
 ) bool {
     const vk: c.UINT = @intCast(wparam & 0xFFFF);
+    self.last_key_ms = c.GetTickCount64();
 
     // Keys being processed by an IME are handled by the IME messages.
     if (vk == c.VK_PROCESSKEY) return false;
