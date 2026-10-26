@@ -34,10 +34,13 @@ pub const Unit = enum(i32) {
 pub const Snapshot = struct {
     refs: std.atomic.Value(u32) = .init(1),
     alloc: Allocator,
-    text: []const u16,
+    text: [:0]const u16,
 
     /// The cursor's offset in the text.
     cursor: u32,
+
+    /// The visible part of the terminal's selection, [start, end).
+    selection: ?[2]u32 = null,
 
     /// Where the text's first line is on the screen, and the size of a
     /// cell, for bounding rectangles.

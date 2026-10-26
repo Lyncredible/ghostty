@@ -1133,6 +1133,9 @@ pub fn setClipboard(
 const toast_timer_id = 1;
 const resize_timer_id = 2;
 const accessibility_timer_id = 3;
+
+/// Posted to the surface when its selection changes.
+pub const WM_GHOSTTY_SELECTION_CHANGED = c.WM_APP + 10;
 const accessibility_ms = 500;
 
 fn updateResizeOverlay(self: *Surface, config: *const configpkg.Config) void {
@@ -1395,6 +1398,11 @@ pub fn wndProc(
             self.core_surface.contentScaleCallback(self.content_scale) catch |err| {
                 log.err("error in content scale callback err={}", .{err});
             };
+            return 0;
+        },
+
+        WM_GHOSTTY_SELECTION_CHANGED => {
+            if (self.accessibility) |a| a.selectionChanged();
             return 0;
         },
 

@@ -287,6 +287,18 @@ Notes:
         attributes. Checked with the .NET UIA client: document text, the
         cursor's line ("C:\Code\ghostty>"), moving a line, finding text,
         and the cursor line's rectangle.
+  - [x] The text pattern's selection is the terminal's selection (its
+        visible part), or else the cursor as a caret, and selection
+        changes raise `TextSelectionChanged` (posted from
+        `selection_changed`, since the core holds the renderer mutex
+        there). Checked with the .NET UIA client: nothing selected gave
+        an empty range, and after `select_all` the selection was the
+        screen's 109 characters. Unit test: `viewportSelection`. This
+        fixed a crash freeing text snapshots (the UTF-16 text lost its
+        sentinel, so the free had the wrong length).
+    - [ ] Manual check that screen readers get the event: on this
+          locked desktop no UIA events reach the .NET client, even from
+          a standard Edit control.
 - [x] Taskbar jump list with a "New Window" task, which starts
       `ghostty.exe` again (single instance opens the window in the running
       app). Checked: the shell wrote the custom destinations file with the
