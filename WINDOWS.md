@@ -226,6 +226,11 @@ Notes:
         Checked each closing action from a key binding: `close_all_windows`,
         `quit`, and `close_window` quit cleanly, and `close_tab` left the
         other tab, all without a fault.
+  - [x] Extended with the inspector, search, full screen, the quick
+        terminal, font size changes, the tab overview, moving tabs to new
+        windows, split zoom, and equalizing splits (22 operations). Seeds
+        5, 6, and 7 (400 steps each) ran without a panic or fault; seed 6
+        ended early when its last terminal closed, which quits the app.
 - [x] CLI actions on Windows: `+version`, `+list-fonts`, `+list-themes`,
       `+list-keybinds`, `+list-colors`, `+list-actions`, `+show-config`,
       `+validate-config`, `+help`, `+show-face`, `+explain-config`, and
