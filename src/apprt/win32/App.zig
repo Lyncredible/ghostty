@@ -576,6 +576,16 @@ fn removeWindow(list: *std.ArrayList(*Window), window: *Window) void {
     if (std.mem.indexOfScalar(*Window, list.items, window)) |i| _ = list.orderedRemove(i);
 }
 
+/// The window (other than the quick terminal) at a point on the screen.
+pub fn windowAt(self: *const App, pt: c.POINT) ?*Window {
+    const hwnd = c.WindowFromPoint(pt) orelse return null;
+    const root = c.GetAncestor(hwnd, c.GA_ROOT);
+    for (self.windows.items) |window| {
+        if (window.hwnd == root and !window.quick) return window;
+    }
+    return null;
+}
+
 /// The window for an action: the target's window, or for the app, the
 /// window in the foreground.
 fn actionWindow(self: *const App, target: apprt.action.Target) ?*Window {
