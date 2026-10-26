@@ -1319,6 +1319,7 @@ fn rgb(r: u8, g: u8, b: u8) c.COLORREF {
 /// Apply app-level config changes, such as the tab bar colors and
 /// visibility and the window theme.
 pub fn configChanged(self: *Window) void {
+    self.tab_bar.updateFont();
     self.updateTheme();
     self.updateDecorations();
     self.updateBackdrop();
