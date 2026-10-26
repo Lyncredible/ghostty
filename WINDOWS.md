@@ -258,6 +258,16 @@ Notes:
       text, with control characters shown as dots. Checked: pasting
       "echo one / echo two" showed both lines under the warning. Unit
       test: `writePreview`.
+- [x] The child environment (printed by Python under `-e`): `TERM`,
+      `COLORTERM`, `TERM_PROGRAM`, `TERM_PROGRAM_VERSION`,
+      `GHOSTTY_RESOURCES_DIR`, `GHOSTTY_BIN_DIR`, `GHOSTTY_SHELL_FEATURES`,
+      and `TERMINFO` are set. Fixed two things it showed:
+  - `GHOSTTY_RESOURCES_DIR` and `TERMINFO` mixed separators
+    (`zig-out/share\ghostty`); the resources dir lookup and `TERMINFO` now
+    join with the platform's separator.
+  - `WT_SESSION` was inherited when Ghostty was started from Windows
+    Terminal, so programs would think they run in Windows Terminal. It's
+    removed now, with `WT_PROFILE_ID`, like `VTE_VERSION`.
 - [x] `-e` arguments reach the program intact: Python launched with
       `-e py -c "print(sys.argv[1:])" ...` printed exactly the arguments
       given, for spaces, embedded quotes, trailing backslashes, an empty
