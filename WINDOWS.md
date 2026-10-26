@@ -258,6 +258,13 @@ Notes:
       text, with control characters shown as dots. Checked: pasting
       "echo one / echo two" showed both lines under the warning. Unit
       test: `writePreview`.
+- [x] Font fallback check (2026-10-26): a UTF-8 file with emoji (with a
+      skin tone, a flag, and a variation selector), Chinese, Japanese,
+      Korean, box drawing and shades, math symbols, Arabic, Hebrew, and
+      combining marks, shown with `type` after `chcp 65001`, all drew
+      (right-to-left text in logical order, as in most terminals). Before
+      `chcp 65001`, cmd decodes the file with the system code page (936
+      here), as in Windows Terminal; that isn't ours to change.
 - [x] CLI actions on Windows: `+version`, `+list-fonts`, `+list-themes`,
       `+list-keybinds`, `+list-colors`, `+list-actions`, `+show-config`,
       `+validate-config`, `+help`, `+show-face`, `+explain-config`, and
