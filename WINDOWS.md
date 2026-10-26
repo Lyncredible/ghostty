@@ -153,6 +153,14 @@ Notes:
       after casting `GetProcAddress` results with `@alignCast` (function
       pointers are 4-byte aligned on ARM64).
   - [ ] Run it on an ARM64 machine
+- [x] Light and dark themes: the app reports the Windows app mode
+      (`AppsUseLightTheme`) to the core at startup and on
+      `WM_SETTINGCHANGE`, so `theme = light:X,dark:Y` and color scheme
+      reports (mode 2031) follow the system. Checked with
+      `--theme=light:Builtin Light,dark:Builtin Dark` in light mode: the
+      background was white, and a settings change message kept it.
+  - [ ] Switch Windows to dark mode while it runs (not done here, since
+        it changes the whole desktop)
 
 ### Known limitations
 
@@ -919,4 +927,5 @@ Reviewed the branch against this file and discussion #2563.
   - (Done: `conpty.dll` from the ConPTY package works, but doesn't pass
     Kitty graphics APCs either)
   - PowerShell 7
+  - Switching the Windows app mode to dark while Ghostty runs
 - Remaining work: a signed package, which needs a certificate.

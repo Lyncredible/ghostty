@@ -468,6 +468,9 @@ fn unregisterClasses(hinstance: c.HINSTANCE) void {
 }
 
 pub fn run(self: *App) !void {
+    // Surfaces start with the app's color scheme, so we report it first.
+    self.updateColorScheme();
+
     // Create our initial window, if requested. Otherwise we start the
     // quit timer, as if the last window was just closed.
     if (self.config.@"initial-window") {
@@ -1184,6 +1187,21 @@ pub fn performAction(
     }
 
     return true;
+}
+
+/// Tell the core whether Windows uses the light or dark app mode, which
+/// picks the theme of `theme = light:...,dark:...` and answers color
+/// scheme queries. The core ignores reports that don't change the scheme.
+pub fn updateColorScheme(self: *App) void {
+    const scheme: apprt.ColorScheme = if (Window.systemUsesDarkTheme()) .dark else .light;
+    self.core_app.colorSchemeEvent(self, scheme) catch |err| {
+        log.warn("error updating app color scheme err={}", .{err});
+    };
+    for (self.core_app.surfaces.items) |surface| {
+        surface.core().colorSchemeCallback(scheme) catch |err| {
+            log.warn("unable to tell surface about color scheme change err={}", .{err});
+        };
+    }
 }
 
 fn reloadConfig(
