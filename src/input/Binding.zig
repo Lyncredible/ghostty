@@ -910,7 +910,7 @@ pub const Action = union(enum) {
     /// in the background indefinitely, and the keybinds become available
     /// for terminal applications to use.
     ///
-    /// Only implemented on macOS.
+    /// Implemented on macOS, and on Windows for closing a tab.
     undo,
 
     /// Redo the last undoable action for the focused surface or terminal,

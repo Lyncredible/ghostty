@@ -166,6 +166,16 @@ Notes:
       F9 bound to the action showed them, and choosing "Tab 1" made the
       first tab active. Toggling the command palette from the overview
       switches to the commands.
+- [x] `undo`/`redo` for closing tabs (`undo-timeout`), like macOS: a closed
+      tab with a running process is hidden instead of destroyed, `undo`
+      (or "Reopen Closed Tab" in the tab menu) puts it back where it was,
+      and `redo` closes it again. Closed tabs are destroyed when the
+      timeout expires or the window closes. Closing a split or a window
+      can't be undone yet. Checked with `--undo-timeout=3s` and F9/F8
+      bound to undo/redo: close, undo, and redo switched the visible
+      terminal as expected; after the timeout the hidden surface was
+      destroyed and undo did nothing. The tab menu item reopened a tab.
+  - [ ] Undo closing a split or a window
 
 ### Known limitations
 

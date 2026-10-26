@@ -25,6 +25,16 @@ const log = std.log.scoped(.win32);
 
 const progress_timer_id = 1;
 const quick_slide_timer_id = 2;
+const undo_timer_id = 3;
+
+/// A closed tab that `undo` can reopen until it expires.
+const ClosedTab = struct {
+    tab: *Tab,
+    index: usize,
+
+    /// When to destroy the tab, from GetTickCount64.
+    expires: u64,
+};
 
 app: *App,
 
@@ -36,6 +46,14 @@ tab_bar: TabBar,
 
 /// The tabs in this window, in order.
 tabs: std.ArrayList(*Tab) = .empty,
+
+/// Closed tabs, most recent last. Their surfaces stay alive (and hidden)
+/// so that `undo` can reopen them, until the undo timeout.
+closed_tabs: std.ArrayList(ClosedTab) = .empty,
+
+/// Tabs reopened by `undo`, most recent last, which `redo` closes again.
+/// They are only compared, since they may have been closed since.
+reopened_tabs: std.ArrayList(*Tab) = .empty,
 
 /// The index of the active tab.
 active: usize = 0,
@@ -193,10 +211,14 @@ pub fn init(self: *Window, app: *App, initial: Initial) !void {
 pub fn deinit(self: *Window) void {
     _ = c.KillTimer(self.hwnd, progress_timer_id);
     _ = c.KillTimer(self.hwnd, quick_slide_timer_id);
+    _ = c.KillTimer(self.hwnd, undo_timer_id);
     const alloc = self.app.core_app.alloc;
     if (self.title_override) |v| alloc.free(v);
     for (self.tabs.items) |tab| tab.destroy();
     self.tabs.deinit(alloc);
+    for (self.closed_tabs.items) |closed| closed.tab.destroy();
+    self.closed_tabs.deinit(alloc);
+    self.reopened_tabs.deinit(alloc);
     self.tab_bar.deinit();
 }
 
@@ -616,6 +638,7 @@ pub fn addTabWith(
         .end => self.tabs.items.len,
     };
     try self.tabs.insert(alloc, idx, tab);
+    self.reopened_tabs.clearRetainingCapacity();
     self.selectTab(idx);
     return tab;
 }
@@ -732,6 +755,9 @@ fn closeTab(self: *Window, tab: *Tab) void {
     }
 
     _ = self.tabs.orderedRemove(idx);
+    if (std.mem.indexOfScalar(*Tab, self.reopened_tabs.items, tab)) |i| {
+        _ = self.reopened_tabs.orderedRemove(i);
+    }
 
     // Keep the same tab active. If the active tab was closed, the tab
     // that took its place (or the new last tab) becomes active.
@@ -739,8 +765,73 @@ fn closeTab(self: *Window, tab: *Tab) void {
     // WM_SETFOCUS to us synchronously, which reads activeSurface().
     if (idx < self.active) self.active -= 1;
     self.active = @min(self.active, self.tabs.items.len - 1);
+    tab.setVisible(false);
     self.selectTab(self.active);
+
+    // Like macOS, a closed tab can be reopened with `undo` for a while.
+    // A tab whose processes have all exited isn't worth reopening.
+    const timeout_ms = self.app.config.@"undo-timeout".duration / std.time.ns_per_ms;
+    if (timeout_ms > 0 and tab.hasRunningProcess()) {
+        if (self.closed_tabs.append(self.app.core_app.alloc, .{
+            .tab = tab,
+            .index = idx,
+            .expires = c.GetTickCount64() +| timeout_ms,
+        })) |_| {
+            self.scheduleUndoExpiry();
+            return;
+        } else |err| log.warn("error keeping closed tab for undo err={}", .{err});
+    }
     tab.destroy();
+}
+
+/// Reopen the most recently closed tab. Returns false if there's none.
+pub fn undoCloseTab(self: *Window) bool {
+    const closed = self.closed_tabs.pop() orelse return false;
+    self.scheduleUndoExpiry();
+    const alloc = self.app.core_app.alloc;
+    const idx = @min(closed.index, self.tabs.items.len);
+    self.tabs.insert(alloc, idx, closed.tab) catch |err| {
+        log.warn("error reopening tab err={}", .{err});
+        closed.tab.destroy();
+        return false;
+    };
+    self.reopened_tabs.append(alloc, closed.tab) catch {};
+    self.selectTab(idx);
+    return true;
+}
+
+/// Close the tab most recently reopened by `undo` again. Returns false
+/// if there's none.
+pub fn redoCloseTab(self: *Window) bool {
+    const tab = self.reopened_tabs.pop() orelse return false;
+    if (self.tabIndex(tab) == null) return false;
+    self.closeTab(tab);
+    return true;
+}
+
+/// Destroy closed tabs that can no longer be reopened, and wake up when
+/// the next one expires.
+fn scheduleUndoExpiry(self: *Window) void {
+    const now = c.GetTickCount64();
+    var i: usize = 0;
+    var next: ?u64 = null;
+    while (i < self.closed_tabs.items.len) {
+        const closed = self.closed_tabs.items[i];
+        if (closed.expires <= now) {
+            _ = self.closed_tabs.orderedRemove(i);
+            closed.tab.destroy();
+            continue;
+        }
+        next = @min(next orelse closed.expires, closed.expires);
+        i += 1;
+    }
+
+    if (next) |expires| {
+        const delay: c.UINT = @intCast(@min(expires - now, std.math.maxInt(c.UINT)));
+        _ = c.SetTimer(self.hwnd, undo_timer_id, delay, null);
+    } else {
+        _ = c.KillTimer(self.hwnd, undo_timer_id);
+    }
 }
 
 /// Close the given surface without confirmation. This removes it from
@@ -1508,6 +1599,9 @@ pub fn wndProc(
             return 0;
         } else if (wparam == progress_timer_id) {
             self.updateTaskbarProgress();
+            return 0;
+        } else if (wparam == undo_timer_id) {
+            self.scheduleUndoExpiry();
             return 0;
         },
         c.WM_SIZE => {
