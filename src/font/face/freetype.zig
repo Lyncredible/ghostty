@@ -158,27 +158,47 @@ pub const Face = struct {
     pub fn name(self: *const Face, buf: []u8) Allocator.Error![]const u8 {
         const count = self.face.getSfntNameCount();
 
-        // We look for the font family entry.
+        // Fonts often have several family names: for different platforms,
+        // encodings, and languages. We prefer the US English Microsoft
+        // Unicode name, then any Unicode name, and decode those from
+        // UTF-16BE. Other encodings are returned as they are.
+        var best: ?freetype.c.FT_SfntName = null;
+        var best_rank: u8 = 0;
         for (0..count) |i| {
             const entry = self.face.getSfntName(i) catch continue;
-            if (entry.name_id == freetype.c.TT_NAME_ID_FONT_FAMILY) {
-                const string = entry.string[0..entry.string_len];
-                // There are other encodings that are something other than UTF-8
-                // but this is one we've seen "in the wild" so far.
-                if (entry.platform_id == freetype.c.TT_PLATFORM_MICROSOFT and entry.encoding_id == freetype.c.TT_MS_ID_UNICODE_CS) skip: {
-                    if (string.len % 2 != 0) break :skip;
-                    if (string.len > 1024) break :skip;
-                    var tmp: [512]u16 = undefined;
-                    const max = string.len / 2;
-                    for (@as([]const u16, @ptrCast(@alignCast(string))), 0..) |c, j| tmp[j] = @byteSwap(c);
-                    const len = std.unicode.utf16LeToUtf8(buf, tmp[0..max]) catch return string;
-                    return buf[0..len];
-                }
-                return string;
+            if (entry.name_id != freetype.c.TT_NAME_ID_FONT_FAMILY) continue;
+            const rank: u8 = if (isUtf16Name(entry))
+                if (entry.platform_id == freetype.c.TT_PLATFORM_MICROSOFT and
+                    entry.language_id == freetype.c.TT_MS_LANGID_ENGLISH_UNITED_STATES) 3 else 2
+            else
+                1;
+            if (rank > best_rank) {
+                best = entry;
+                best_rank = rank;
             }
         }
 
-        return "";
+        const entry = best orelse return "";
+        const string = entry.string[0..entry.string_len];
+        if (!isUtf16Name(entry)) return string;
+        if (string.len % 2 != 0 or string.len > 1024) return string;
+        var tmp: [512]u16 = undefined;
+        const max = string.len / 2;
+        for (0..max) |j| tmp[j] = std.mem.readInt(u16, string[j * 2 ..][0..2], .big);
+        const len = std.unicode.utf16LeToUtf8(buf, tmp[0..max]) catch return string;
+        return buf[0..len];
+    }
+
+    /// Whether a name table entry is UTF-16BE: Unicode platform names,
+    /// and Microsoft names in the Unicode BMP or full repertoire
+    /// encodings.
+    fn isUtf16Name(entry: freetype.c.FT_SfntName) bool {
+        return switch (entry.platform_id) {
+            freetype.c.TT_PLATFORM_APPLE_UNICODE => true,
+            freetype.c.TT_PLATFORM_MICROSOFT => entry.encoding_id == freetype.c.TT_MS_ID_UNICODE_CS or
+                entry.encoding_id == freetype.c.TT_MS_ID_UCS_4,
+            else => false,
+        };
     }
 
     test "face name" {
