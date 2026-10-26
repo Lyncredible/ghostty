@@ -258,6 +258,20 @@ Notes:
       text, with control characters shown as dots. Checked: pasting
       "echo one / echo two" showed both lines under the warning. Unit
       test: `writePreview`.
+- [x] Opening the config:
+  - Open Config (menu, `open_config`) did nothing visible: `.ghostty`
+    files have no associated app, and ShellExecute "open" then only asks
+    which app to use. Files whose type has no app (`AssocQueryStringW`)
+    now open in Notepad. Checked: Notepad started.
+  - `ghostty +edit-config` wasn't supported on Windows (and its message
+    promised a path it didn't print). It now runs `$VISUAL` or `$EDITOR`
+    through `cmd.exe /d /s /c` (so editors can have arguments or be batch
+    files), or Notepad, waits, and returns the editor's exit code, with
+    our standard handles. Checked with `EDITOR="echo EDITED"`, a Python
+    one-liner (the path arrived as one argument), and `cmd /c exit 3`
+    (exit code 3).
+  - The default config path mixed separators (`ghostty/config.ghostty`);
+    it's joined with the platform's separator now.
 - [x] The child environment (printed by Python under `-e`): `TERM`,
       `COLORTERM`, `TERM_PROGRAM`, `TERM_PROGRAM_VERSION`,
       `GHOSTTY_RESOURCES_DIR`, `GHOSTTY_BIN_DIR`, `GHOSTTY_SHELL_FEATURES`,
