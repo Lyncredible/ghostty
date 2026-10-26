@@ -13,6 +13,10 @@ const log = std.log.scoped(.shell_integration);
 /// Shell types we support
 pub const Shell = enum {
     bash,
+
+    /// Windows Command Prompt (cmd.exe).
+    cmd,
+
     elvish,
     fish,
     nushell,
@@ -75,6 +79,12 @@ pub fn setup(
             alloc_arena,
             command,
             resource_dir,
+        ),
+
+        .cmd => try setupCmd(
+            alloc_arena,
+            command,
+            env,
         ),
 
         .zsh => try setupZsh(
@@ -159,6 +169,7 @@ fn detectShell(alloc: Allocator, command: config.Command) !?Shell {
         const args = try commandArgs(alloc, command);
         defer freeArgs(alloc, command, args);
         if (args.len > 0 and isPowerShell(args[0])) return .powershell;
+        if (args.len > 0 and isCmd(args[0])) return .cmd;
         if (args.len > 0 and internal_os.wsl.isWsl(args[0])) return .wsl;
     }
 
@@ -212,6 +223,8 @@ test detectShell {
     try testing.expectEqual(.bash, try detectShell(alloc, .{ .shell = "\"/a b/bash\"" }));
 
     try testing.expectEqual(.powershell, try detectShell(alloc, .{ .shell = "pwsh" }));
+    try testing.expectEqual(.cmd, try detectShell(alloc, .{ .shell = "cmd.exe" }));
+    try testing.expectEqual(.cmd, try detectShell(alloc, .{ .shell = "C:/Windows/System32/cmd.exe /k echo hi" }));
     try testing.expectEqual(.powershell, try detectShell(alloc, .{ .shell = "pwsh -NoLogo" }));
     try testing.expectEqual(.powershell, try detectShell(alloc, .{ .shell = "PowerShell.exe" }));
     try testing.expect(try detectShell(alloc, .{ .shell = "pwshx" }) == null);
@@ -222,6 +235,15 @@ test detectShell {
             .shell = "\"C:\\Program Files\\PowerShell\\7\\pwsh.exe\" -NoLogo",
         }));
     }
+}
+
+/// Whether the executable is the Windows Command Prompt.
+fn isCmd(arg0: []const u8) bool {
+    // Windows paths can use either separator.
+    const start = if (std.mem.lastIndexOfAny(u8, arg0, "/\\")) |i| i + 1 else 0;
+    const exe = arg0[start..];
+    return std.ascii.eqlIgnoreCase(exe, "cmd") or
+        std.ascii.eqlIgnoreCase(exe, "cmd.exe");
 }
 
 /// Whether the executable is PowerShell: pwsh (7+) or powershell (5.1).
@@ -276,6 +298,109 @@ fn freeArgs(alloc: Allocator, command: config.Command, args: []const [:0]const u
             alloc.free(args);
         },
     }
+}
+
+/// The Command Prompt has no hooks, but it expands `$` codes in the
+/// PROMPT environment variable each time it shows a prompt. We wrap the
+/// user's prompt with semantic prompt marks: 133;A before it and 133;I
+/// after it, which ends the input at the end of the line, since there's
+/// no way to mark when a command starts. This is enough to know whether
+/// the shell is at a prompt, for example to close it without asking.
+/// We also report the working directory with OSC 7 and, depending on the
+/// features, set the title and a bar cursor.
+///
+/// The command isn't changed. If PROMPT already has semantic prompt
+/// marks (for example from Clink or the user), it's left alone.
+fn setupCmd(
+    alloc: Allocator,
+    command: config.Command,
+    env: *EnvMap,
+) !?config.Command {
+    const prompt = env.get("PROMPT") orelse "$P$G";
+    if (std.mem.indexOf(u8, prompt, "]133;") == null) {
+        const features = env.get("GHOSTTY_SHELL_FEATURES") orelse "";
+        const title = hasFeature(features, "title");
+        const cursor: []const u8 = if (cursorFeature(features)) |steady|
+            if (steady) "$e[6 q" else "$e[5 q"
+        else
+            "";
+
+        try env.put("PROMPT", try std.fmt.allocPrint(
+            alloc,
+            "{s}$e]7;kitty-shell-cwd://localhost/$P$e\\$e]133;A$e\\{s}{s}$e]133;I$e\\",
+            .{ if (title) "$e]2;$P$e\\" else "", prompt, cursor },
+        ));
+    }
+
+    return try command.clone(alloc);
+}
+
+/// Whether a comma-separated GHOSTTY_SHELL_FEATURES value has a feature,
+/// with or without a `:value` suffix.
+fn hasFeature(features: []const u8, name: []const u8) bool {
+    var it = std.mem.splitScalar(u8, features, ',');
+    while (it.next()) |feature| {
+        if (std.mem.eql(u8, feature, name)) return true;
+        if (std.mem.startsWith(u8, feature, name) and
+            feature.len > name.len and feature[name.len] == ':') return true;
+    }
+    return false;
+}
+
+/// Whether the cursor feature is on, and if so whether it's steady.
+fn cursorFeature(features: []const u8) ?bool {
+    if (!hasFeature(features, "cursor")) return null;
+    return std.mem.indexOf(u8, features, "cursor:steady") != null;
+}
+
+test "cmd" {
+    const testing = std.testing;
+    var arena = ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const alloc = arena.allocator();
+
+    var env = EnvMap.init(alloc);
+    defer env.deinit();
+
+    const command = try setupCmd(alloc, .{ .shell = "cmd.exe" }, &env);
+    try testing.expectEqualStrings("cmd.exe", command.?.shell);
+    try testing.expectEqualStrings(
+        "$e]7;kitty-shell-cwd://localhost/$P$e\\$e]133;A$e\\$P$G$e]133;I$e\\",
+        env.get("PROMPT").?,
+    );
+}
+
+test "cmd: features and existing prompt" {
+    const testing = std.testing;
+    var arena = ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const alloc = arena.allocator();
+
+    var env = EnvMap.init(alloc);
+    defer env.deinit();
+    try env.put("PROMPT", "$T $P$G");
+    try env.put("GHOSTTY_SHELL_FEATURES", "cursor:steady,title");
+
+    _ = try setupCmd(alloc, .{ .shell = "cmd" }, &env);
+    try testing.expectEqualStrings(
+        "$e]2;$P$e\\$e]7;kitty-shell-cwd://localhost/$P$e\\$e]133;A$e\\$T $P$G$e[6 q$e]133;I$e\\",
+        env.get("PROMPT").?,
+    );
+
+    // Setting up again (for example in a nested shell) doesn't wrap twice.
+    const prompt = try alloc.dupe(u8, env.get("PROMPT").?);
+    _ = try setupCmd(alloc, .{ .shell = "cmd" }, &env);
+    try testing.expectEqualStrings(prompt, env.get("PROMPT").?);
+}
+
+test isCmd {
+    const testing = std.testing;
+    try testing.expect(isCmd("cmd"));
+    try testing.expect(isCmd("CMD.EXE"));
+    try testing.expect(isCmd("C:\\Windows\\System32\\cmd.exe"));
+    try testing.expect(isCmd("C:/Windows/System32/cmd.exe"));
+    try testing.expect(!isCmd("cmdx.exe"));
+    try testing.expect(!isCmd("pwsh"));
 }
 
 /// Start PowerShell interactively with our integration script loaded

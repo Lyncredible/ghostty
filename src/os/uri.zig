@@ -212,9 +212,9 @@ test isValidMacAddress {
 /// Other Linux paths, such as "/home/me" in WSL, have no Windows path.
 pub fn windowsPath(alloc: std.mem.Allocator, path: []const u8) std.mem.Allocator.Error!?[]u8 {
     const drive: u8, const rest: []const u8 = drive: {
-        // "/C:" or "/C:/..."
+        // "/C:", "/C:/...", or "/C:\..." (a raw Windows path)
         if (path.len >= 3 and path[0] == '/' and std.ascii.isAlphabetic(path[1]) and
-            path[2] == ':' and (path.len == 3 or path[3] == '/'))
+            path[2] == ':' and (path.len == 3 or path[3] == '/' or path[3] == '\\'))
         {
             break :drive .{ path[1], path[3..] };
         }
@@ -249,6 +249,7 @@ test windowsPath {
         .{ "/c:/", "c:\\" },
         .{ "/C:", "C:\\" },
         .{ "/C:/Program Files/x", "C:\\Program Files\\x" },
+        .{ "/C:\\Users\\me", "C:\\Users\\me" },
         .{ "/mnt/c/Users/me", "C:\\Users\\me" },
         .{ "/mnt/d", "D:\\" },
         .{ "/c/Users", "C:\\Users" },
