@@ -510,6 +510,21 @@ fn restoreWindows(self: *App) !bool {
     return self.windows.items.len > 0;
 }
 
+/// The window for an action: the target's window, or for the app, the
+/// window in the foreground.
+fn actionWindow(self: *const App, target: apprt.action.Target) ?*Window {
+    switch (target) {
+        .surface => |v| return v.rt_surface.window,
+        .app => {
+            const foreground = c.GetForegroundWindow();
+            for (self.windows.items) |window| {
+                if (window.hwnd == foreground) return window;
+            }
+            return self.lastWindow();
+        },
+    }
+}
+
 /// The only window other than the quick terminal, if there's just one.
 pub fn lastWindow(self: *const App) ?*Window {
     var last: ?*Window = null;
@@ -1018,6 +1033,10 @@ pub fn performAction(
             .app => return false,
             .surface => |v| v.rt_surface.toggleCommandPalette(),
         },
+
+        // Like macOS, closing a tab can be undone for a while.
+        .undo => return if (self.actionWindow(target)) |window| window.undoCloseTab() else false,
+        .redo => return if (self.actionWindow(target)) |window| window.redoCloseTab() else false,
 
         .toggle_tab_overview => switch (target) {
             .app => return false,

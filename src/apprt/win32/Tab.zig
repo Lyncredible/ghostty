@@ -157,6 +157,15 @@ pub fn destroy(self: *Tab) void {
     alloc.destroy(self);
 }
 
+/// Whether a process is still running in any of the tab's terminals.
+pub fn hasRunningProcess(self: *const Tab) bool {
+    var it = self.tree.iterator();
+    while (it.next()) |entry| {
+        if (!entry.view.core_surface.child_exited) return true;
+    }
+    return false;
+}
+
 /// The title to show for this tab.
 pub fn title(self: *const Tab) [:0]const u8 {
     return self.title_override orelse self.focused.effectiveTitle() orelse "Ghostty";
