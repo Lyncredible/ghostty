@@ -1019,6 +1019,11 @@ pub fn performAction(
             .surface => |v| v.rt_surface.toggleCommandPalette(),
         },
 
+        .toggle_tab_overview => switch (target) {
+            .app => return false,
+            .surface => |v| v.rt_surface.toggleTabOverview(),
+        },
+
         .start_search => switch (target) {
             .app => return false,
             .surface => |v| v.rt_surface.startSearch(value.needle),
