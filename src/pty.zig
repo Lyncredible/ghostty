@@ -334,6 +334,7 @@ const WindowsPty = struct {
     out_pipe: windows.HANDLE,
     in_pipe: windows.HANDLE,
     pseudo_console: windows.HPCON,
+    conpty: Conpty,
     size: winsize,
 
     /// Whether the pseudoconsole has been closed, see `closeConsole`.
@@ -341,14 +342,63 @@ const WindowsPty = struct {
 
     pub const OpenError = error{Unexpected};
 
+    /// The pseudoconsole implementation. If there's a conpty.dll next to
+    /// our executable (with its OpenConsole.exe), from the
+    /// Microsoft.Windows.Console.ConPTY package or Windows Terminal, we use
+    /// it: it's much newer than the one built into Windows, and for example
+    /// passes through sequences such as the Kitty graphics protocol's APCs,
+    /// which the inbox one drops. Otherwise we use the inbox ConPTY.
+    const Conpty = struct {
+        create: *const fn (windows.COORD, windows.HANDLE, windows.HANDLE, windows.DWORD, *windows.HPCON) callconv(.winapi) windows.HRESULT,
+        resize: *const fn (windows.HPCON, windows.COORD) callconv(.winapi) windows.HRESULT,
+        close: *const fn (windows.HPCON) callconv(.winapi) void,
+
+        /// The flags to create pseudoconsoles with.
+        flags: windows.DWORD,
+
+        const inbox: Conpty = .{
+            .create = &windows.exp.kernel32.CreatePseudoConsole,
+            .resize = &windows.exp.kernel32.ResizePseudoConsole,
+            .close = &windows.exp.kernel32.ClosePseudoConsole,
+            .flags = 0,
+        };
+
+        fn load() Conpty {
+            const kernel32 = windows.exp.kernel32;
+
+            // Only from our own directory, never the search path.
+            const LOAD_LIBRARY_SEARCH_APPLICATION_DIR = 0x00000200;
+            const module = kernel32.LoadLibraryExW(
+                std.unicode.utf8ToUtf16LeStringLiteral("conpty.dll"),
+                null,
+                LOAD_LIBRARY_SEARCH_APPLICATION_DIR,
+            ) orelse return inbox;
+
+            const create = kernel32.GetProcAddress(module, "ConptyCreatePseudoConsole") orelse return inbox;
+            const resize = kernel32.GetProcAddress(module, "ConptyResizePseudoConsole") orelse return inbox;
+            const close = kernel32.GetProcAddress(module, "ConptyClosePseudoConsole") orelse return inbox;
+
+            // Measure text by grapheme clusters, like we do by default.
+            const PSEUDOCONSOLE_GLYPH_WIDTH_GRAPHEMES = 0x08;
+            return .{
+                .create = @ptrCast(create),
+                .resize = @ptrCast(resize),
+                .close = @ptrCast(close),
+                .flags = PSEUDOCONSOLE_GLYPH_WIDTH_GRAPHEMES,
+            };
+        }
+    };
+
     /// Open a new PTY with the given initial size.
     pub fn open(size: winsize) OpenError!Pty {
         var pty: Pty = .{
             .out_pipe = undefined,
             .in_pipe = undefined,
             .pseudo_console = undefined,
+            .conpty = .load(),
             .size = size,
         };
+        if (pty.conpty.flags != Conpty.inbox.flags) log.info("using conpty.dll", .{});
 
         // The pseudoconsole's ends of the pipes. The pseudoconsole
         // duplicates these when it's created, so we close ours after.
@@ -452,11 +502,11 @@ const WindowsPty = struct {
         try SetHandleInformation.f(pty.out_pipe);
         try SetHandleInformation.f(out_pipe_pty);
 
-        const result = windows.exp.kernel32.CreatePseudoConsole(
+        const result = pty.conpty.create(
             .{ .X = @intCast(size.ws_col), .Y = @intCast(size.ws_row) },
             in_pipe_pty,
             out_pipe_pty,
-            0,
+            pty.conpty.flags,
             &pty.pseudo_console,
         );
         if (result != windows.S_OK) return error.Unexpected;
@@ -488,7 +538,7 @@ const WindowsPty = struct {
     pub fn closeConsole(self: *Pty) void {
         if (self.console_closed) return;
         self.console_closed = true;
-        windows.exp.kernel32.ClosePseudoConsole(self.pseudo_console);
+        self.conpty.close(self.pseudo_console);
     }
 
     pub const GetSizeError = error{};
@@ -502,7 +552,7 @@ const WindowsPty = struct {
 
     /// Set the size of the pty.
     pub fn setSize(self: *Pty, size: winsize) SetSizeError!void {
-        const result = windows.exp.kernel32.ResizePseudoConsole(
+        const result = self.conpty.resize(
             self.pseudo_console,
             .{ .X = @intCast(size.ws_col), .Y = @intCast(size.ws_row) },
         );
