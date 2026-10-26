@@ -212,6 +212,9 @@ Notes:
       cmd banner (pixels brighter than half): 6,463 normally, 6,850 at
       strength 0, and 8,403 at 255; the text stays crisp.
 - [x] `window-show-tab-bar` is documented as working on Windows.
+- [x] `window-title-font-family` sets the tab bar's font (at the system
+      UI font's size; it's reapplied on config reload). Checked with
+      screenshots: "Courier New" drew the tab title in Courier.
 - [x] `window-subtitle = working-directory`: the title bar has one line,
       so the working directory follows the title after a dash, unless the
       title already contains it; it updates on the core's `pwd` action.
