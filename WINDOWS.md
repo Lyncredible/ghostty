@@ -235,6 +235,12 @@ Notes:
         debug build's allocator reports leaks at exit (`global.deinit`).
         Seeds 8 and 9 (250 steps each) quit cleanly with no leaks and no
         faults.
+  - [x] Extended with config reload, select all, copy, paste, clear, and
+        reset (28 operations). Seed 10 reported 11 leaked accessibility
+        providers: something on the system had queried the terminals
+        through UI Automation, which still held references at exit. The
+        app now calls `UiaDisconnectAllProviders` when it terminates, and
+        seed 10 then quit with no leaks.
 - [x] CLI actions on Windows: `+version`, `+list-fonts`, `+list-themes`,
       `+list-keybinds`, `+list-colors`, `+list-actions`, `+show-config`,
       `+validate-config`, `+help`, `+show-face`, `+explain-config`, and

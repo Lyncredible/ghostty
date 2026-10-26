@@ -19,6 +19,7 @@ const c = util.c;
 const Surface = @import("Surface.zig");
 const TabBar = @import("TabBar.zig");
 const Window = @import("Window.zig");
+const Accessibility = @import("Accessibility.zig");
 const DimOverlay = @import("DimOverlay.zig");
 const BellBorder = @import("BellBorder.zig");
 const LinkPreview = @import("LinkPreview.zig");
@@ -643,6 +644,10 @@ pub fn terminate(self: *App) void {
     }
     self.windows.deinit(self.core_app.alloc);
     self.closed_windows.deinit(self.core_app.alloc);
+
+    // Screen readers and other UI Automation clients may still hold
+    // references to our terminals' providers.
+    Accessibility.disconnectAll();
     self.reopened_windows.deinit(self.core_app.alloc);
 
     self.taskbar.deinit();
