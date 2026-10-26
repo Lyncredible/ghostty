@@ -20,4 +20,5 @@ test {
     _ = @import("win32/drop.zig");
     _ = @import("win32/SaveState.zig");
     _ = @import("win32/SplitDrag.zig");
+    _ = @import("win32/Accessibility.zig");
 }

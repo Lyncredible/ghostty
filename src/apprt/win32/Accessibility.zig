@@ -24,6 +24,10 @@ simple: Interface = .{ .vtbl = &simple_vtbl },
 value: Interface = .{ .vtbl = &value_vtbl },
 
 refs: std.atomic.Value(u32) = .init(1),
+
+/// The visible text when we last announced output, to find what's new.
+/// Only used on the surface's thread.
+last_text: ?[:0]const u8 = null,
 surface: std.atomic.Value(?*Surface) = .init(null),
 alloc: Allocator,
 
@@ -39,6 +43,8 @@ pub fn create(alloc: Allocator, surface: *Surface) !*Accessibility {
 /// Forget the surface and release our reference. Clients may still hold
 /// references, which then get nothing.
 pub fn detach(self: *Accessibility) void {
+    if (self.last_text) |t| self.alloc.free(t);
+    self.last_text = null;
     self.surface.store(null, .release);
     _ = UiaDisconnectProvider(&self.simple);
     _ = release(self);
@@ -49,6 +55,104 @@ pub fn getObject(self: *Accessibility, hwnd: c.HWND, wparam: c.WPARAM, lparam: c
     const UiaRootObjectId: c.LPARAM = -25;
     if (lparam != UiaRootObjectId) return null;
     return UiaReturnRawElementProvider(hwnd, wparam, lparam, &self.simple);
+}
+
+/// Announce new output to screen readers, like Windows Terminal, with a
+/// UI Automation notification. Called periodically while the surface has
+/// focus. `typing` is whether the user typed recently, in which case
+/// changes to the last line are their own echo, which screen readers
+/// already speak.
+pub fn announceOutput(self: *Accessibility, typing: bool) void {
+    if (UiaClientsAreListening() == 0) return;
+    const surface = self.surface.load(.acquire) orelse return;
+    if (!surface.core_initialized) return;
+
+    const text = viewportText(self.alloc, surface) catch return;
+    const old = self.last_text;
+    self.last_text = text;
+    const previous = old orelse return;
+    defer self.alloc.free(previous);
+
+    const change = newOutput(previous, text);
+    if (change.text.len == 0) return;
+    if (typing and change.only_last_line) return;
+
+    const text16 = util.utf16Alloc(self.alloc, change.text) catch return;
+    defer self.alloc.free(text16);
+    const display = SysAllocStringLen(text16.ptr, @intCast(text16.len)) orelse return;
+    defer SysFreeString(display);
+    const activity_id = std.unicode.utf8ToUtf16LeStringLiteral("GhosttyOutput");
+    const activity = SysAllocStringLen(activity_id, activity_id.len) orelse return;
+    defer SysFreeString(activity);
+    _ = UiaRaiseNotificationEvent(&self.simple, NotificationKind_Other, NotificationProcessing_All, display, activity);
+}
+
+/// What's new in `new` compared to `old`, two snapshots of the visible
+/// lines. If the screen scrolled, the old lines are found at the top of
+/// the new ones and everything after them is new; the last old line may
+/// have grown, such as a prompt that the output follows on. Otherwise the
+/// new text starts at the first line that changed.
+pub const Change = struct {
+    text: []const u8,
+    /// Whether only the last non-empty line changed, such as while typing.
+    only_last_line: bool,
+};
+
+pub fn newOutput(old: []const u8, new: []const u8) Change {
+    const old_trimmed = std.mem.trimEnd(u8, old, " \n");
+    const new_trimmed = std.mem.trimEnd(u8, new, " \n");
+    if (std.mem.eql(u8, old_trimmed, new_trimmed)) return .{ .text = "", .only_last_line = false };
+
+    // Scrolled (or not) by some number of lines: drop old lines from the
+    // top until what's left is where the new text starts.
+    var shift: usize = 0;
+    var rest = old_trimmed;
+    while (true) {
+        if (std.mem.startsWith(u8, new_trimmed, rest)) {
+            const added = std.mem.trimStart(u8, new_trimmed[rest.len..], " \n");
+            const last_line_start = if (std.mem.lastIndexOfScalar(u8, rest, '\n')) |i| i + 1 else 0;
+            const only_last = shift == 0 and std.mem.indexOfScalar(u8, new_trimmed[last_line_start..], '\n') == null;
+            return .{ .text = added, .only_last_line = only_last };
+        }
+        const nl = std.mem.indexOfScalar(u8, rest, '\n') orelse break;
+        rest = rest[nl + 1 ..];
+        shift += 1;
+    }
+
+    // Something changed in place: from the first line that differs.
+    var start: usize = 0;
+    var i: usize = 0;
+    while (i < old_trimmed.len and i < new_trimmed.len and old_trimmed[i] == new_trimmed[i]) : (i += 1) {
+        if (new_trimmed[i] == '\n') start = i + 1;
+    }
+    const tail = new_trimmed[start..];
+    return .{ .text = tail, .only_last_line = std.mem.indexOfScalar(u8, tail, '\n') == null };
+}
+
+test newOutput {
+    const testing = std.testing;
+
+    // A command's output after the prompt, without scrolling.
+    var change = newOutput("C:\\> dir\n\n", "C:\\> dir\nfile.txt\nC:\\>\n");
+    try testing.expectEqualStrings("file.txt\nC:\\>", change.text);
+    try testing.expect(!change.only_last_line);
+
+    // Typing on the prompt line.
+    change = newOutput("a\nC:\\> di", "a\nC:\\> dir");
+    try testing.expectEqualStrings("r", change.text);
+    try testing.expect(change.only_last_line);
+
+    // Scrolled by two lines.
+    change = newOutput("1\n2\n3\n4", "3\n4\n5\n6");
+    try testing.expectEqualStrings("5\n6", change.text);
+    try testing.expect(!change.only_last_line);
+
+    // Nothing new.
+    try testing.expectEqualStrings("", newOutput("a\nb  \n", "a\nb\n\n").text);
+
+    // Cleared and redrawn.
+    change = newOutput("old\nscreen", "new\nscreen");
+    try testing.expectEqualStrings("new\nscreen", change.text);
 }
 
 //---------------------------------------------------------------------------
@@ -92,6 +196,17 @@ extern "uiautomationcore" fn UiaReturnRawElementProvider(hwnd: c.HWND, wparam: c
 extern "uiautomationcore" fn UiaHostProviderFromHwnd(hwnd: c.HWND, provider: *?*anyopaque) callconv(.winapi) HRESULT;
 extern "uiautomationcore" fn UiaDisconnectProvider(provider: *Interface) callconv(.winapi) HRESULT;
 extern "oleaut32" fn SysAllocStringLen(s: ?[*]const u16, len: u32) callconv(.winapi) ?[*:0]u16;
+extern "oleaut32" fn SysFreeString(s: ?[*:0]u16) callconv(.winapi) void;
+extern "uiautomationcore" fn UiaClientsAreListening() callconv(.winapi) c.BOOL;
+extern "uiautomationcore" fn UiaRaiseNotificationEvent(
+    provider: *Interface,
+    kind: i32,
+    processing: i32,
+    display: ?[*:0]u16,
+    activity: ?[*:0]u16,
+) callconv(.winapi) HRESULT;
+const NotificationKind_Other = 4;
+const NotificationProcessing_All = 2;
 
 fn fromSimple(iface: *Interface) *Accessibility {
     return @fieldParentPtr("simple", iface);
