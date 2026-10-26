@@ -40,10 +40,16 @@ $package = Join-Path $staging $name
 New-Item -ItemType Directory -Force (Join-Path $package "bin") | Out-Null
 Copy-Item (Join-Path $prefix "bin\ghostty.exe") (Join-Path $package "bin")
 Copy-Item -Recurse (Join-Path $prefix "share") $package
+Copy-Item (Join-Path $PSScriptRoot "install.ps1") $package
 
 @"
 This is an unofficial build of the Windows port on the windows branch.
-It isn't supported by the Ghostty project. Run bin\ghostty.exe.
+It isn't supported by the Ghostty project.
+
+Run bin\ghostty.exe from this folder, or install it for the current user
+(Start menu shortcut, and uninstall from Settings > Apps):
+
+    powershell -ExecutionPolicy Bypass -File install.ps1 [-AddToPath]
 "@ | Set-Content -Encoding utf8 (Join-Path $package "README.txt")
 
 New-Item -ItemType Directory -Force $OutDir | Out-Null

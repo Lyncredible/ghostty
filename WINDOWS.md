@@ -222,6 +222,12 @@ Notes:
         Japanese gets Yu Gothic UI and Korean gets Malgun Gothic.
 - [ ] Packaging and release builds
   - [x] Portable zip (`dist/windows/package.ps1`)
+  - [x] Per-user install script in the zip (`dist/windows/install.ps1`):
+        copies to `%LOCALAPPDATA%\Programs\ghostty-windows-unofficial`,
+        adds a Start menu shortcut and a Settings > Apps entry (which runs
+        `install.ps1 -Uninstall`), and optionally adds `bin` to the user
+        PATH. No administrator rights or signing. Checked: install,
+        uninstall, and `-AddToPath` leave nothing behind.
   - [ ] Installer or MSIX (needs signing and an app identity)
 - [ ] Unimplemented apprt actions (as of 2026-10-25)
   - [ ] Window management
