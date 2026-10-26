@@ -1235,6 +1235,49 @@ fn setTerminalSize(self: *Window, width: u32, height: u32) void {
     );
 }
 
+/// Adjust a window rectangle being resized by the user (WM_SIZING) so that
+/// the terminal grows and shrinks by whole cells, for window-step-resize.
+fn stepResize(self: *const Window, rect: *c.RECT, edge: c_uint, cell: apprt.action.CellSize) void {
+    var window: c.RECT = undefined;
+    var client: c.RECT = undefined;
+    if (c.GetWindowRect(self.hwnd, &window) == 0 or c.GetClientRect(self.hwnd, &client) == 0) return;
+
+    // The non-client area doesn't change while resizing.
+    const frame_w = (window.right - window.left) - client.right;
+    const frame_h = (window.bottom - window.top) - client.bottom;
+    const width = snapToCells(client.right, (rect.right - rect.left) - frame_w, @intCast(cell.width));
+    const height = snapToCells(client.bottom, (rect.bottom - rect.top) - frame_h, @intCast(cell.height));
+
+    switch (edge) {
+        c.WMSZ_LEFT, c.WMSZ_TOPLEFT, c.WMSZ_BOTTOMLEFT => rect.left = rect.right - width - frame_w,
+        else => rect.right = rect.left + width + frame_w,
+    }
+    switch (edge) {
+        c.WMSZ_TOP, c.WMSZ_TOPLEFT, c.WMSZ_TOPRIGHT => rect.top = rect.bottom - height - frame_h,
+        else => rect.bottom = rect.top + height + frame_h,
+    }
+}
+
+/// The client size nearest to `proposed` that differs from `current` by
+/// whole cells, so that the leftover space (padding, the tab bar) stays
+/// the same. It's never less than one cell plus that leftover space.
+fn snapToCells(current: c_int, proposed: c_int, cell: c_int) c_int {
+    if (cell <= 0) return proposed;
+    const extra = @mod(current, cell);
+    const cells = @max(1, @divFloor(proposed - extra + @divTrunc(cell, 2), cell));
+    return extra + cells * cell;
+}
+
+test snapToCells {
+    const testing = std.testing;
+    // 10px cells and 3px of padding: sizes are 3 + 10n.
+    try testing.expectEqual(@as(c_int, 803), snapToCells(803, 801, 10));
+    try testing.expectEqual(@as(c_int, 813), snapToCells(803, 809, 10));
+    try testing.expectEqual(@as(c_int, 793), snapToCells(803, 797, 10));
+    try testing.expectEqual(@as(c_int, 13), snapToCells(803, 2, 10));
+    try testing.expectEqual(@as(c_int, 500), snapToCells(803, 500, 0));
+}
+
 /// Move the first window to `window-position-x` and `window-position-y`,
 /// if both are set.
 fn placeAtConfiguredPosition(self: *Window) void {
@@ -1357,6 +1400,16 @@ pub fn wndProc(
         c.WM_SIZE => {
             self.layout();
             return 0;
+        },
+
+        c.WM_SIZING => if (self.app.config.@"window-step-resize" and
+            self.fullscreen == null and self.tabs.items.len > 0)
+        {
+            if (self.activeSurface().cell_size) |cell| {
+                const rect: *c.RECT = @ptrFromInt(@as(usize, @bitCast(lparam)));
+                self.stepResize(rect, @intCast(wparam), cell);
+                return c.TRUE;
+            }
         },
 
         c.WM_GETMINMAXINFO => if (self.min_size) |min| {

@@ -303,6 +303,10 @@ Notes:
         and "Reloaded the configuration" as a badge at the bottom of the
         terminal for two seconds, like GTK's toasts. Checked with
         screenshots after Reload Configuration and an OSC 52 write.
+  - [x] `window-step-resize`: dragging a window edge resizes the active
+        terminal in whole cells (`WM_SIZING`, with the cell size from the
+        `cell_size` action), keeping the leftover padding. Unit tested;
+        dragging needs a manual check.
   - [x] `maximize` and `fullscreen` for new windows, like GTK. Checked:
         `--maximize=true` started zoomed; `--fullscreen=true` started
         captionless at 0,0,3840,2160.
