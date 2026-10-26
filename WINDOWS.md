@@ -196,10 +196,27 @@ Notes:
   - [ ] Command palette
 - [x] Share built-in compiled shader bytecode across surfaces
 - [x] Cache compiled custom shader bytecode across surfaces
-- [ ] Add Menu support. Need to decide on where to put the menu. I prefer
+- [x] Add Menu support. Need to decide on where to put the menu. I prefer
       hide it in the title bar, where the menu shows up on hover (or clicking
       a hamburger menu icon like Zed). You can reference how the linux version
       works regarding menu. MacOS is not comparable due to the global menu.
+  - The window keeps the native caption, so a menu drawn inside the
+    caption would need custom non-client painting. Instead the main menu
+    (modeled on GTK's) is in the places Windows users look for it:
+  - [x] The window's system menu (window icon, right-click on the title
+        bar, Alt+Space), rebuilt on each open so that shortcuts and
+        disabled items are current
+  - [x] A ☰ button at the right end of the tab bar (the tab bar is hidden
+        with one tab under `window-show-tab-bar=auto`)
+  - [x] A terminal context menu for `right-click-action = context-menu`,
+        shown on button release like other Windows apps
+  - Items run keybind actions and show their shortcuts ("Ctrl+Shift+T").
+    Copy shows Ctrl+Ins because ctrl+shift+c is a performable binding,
+    which the reverse map skips (same as GTK).
+  - [ ] Dark menus to match a dark theme (needs the undocumented
+        `SetPreferredAppMode` from uxtheme, or owner-drawn menus)
+  - [ ] Command palette and inspector items, once those exist
+  - [ ] Keyboard access to the context menu (Shift+F10 / Menu key)
 - [x] Don't ask for exit confirmation if there is no active progress other than
       the shell itself. This is the behavior on macOS and Linux.
   - The core already skips confirmation when the cursor is at a prompt
@@ -209,8 +226,8 @@ Notes:
         from `cmd`/`cmd.exe`) through its `PROMPT` variable: 133;A before
         the prompt, 133;I after it, OSC 7 with the raw `$P` path, and the
         `title` and `cursor` features
-  - [ ] UI check: closing an idle cmd tab doesn't ask; closing one running
-        `ping -t localhost` does
+  - [x] UI check: closing an idle cmd window doesn't ask (still to check:
+        one running `ping -t localhost` should ask)
 
 ## Development log (2026-10-24)
 
@@ -593,6 +610,23 @@ Reviewed the branch against this file and discussion #2563.
   relative to the executable, so the folder is portable. Verified: an
   18 MB zip whose extracted `ghostty.exe +list-themes` finds its bundled
   themes.
+
+- cmd.exe shell integration and menus were checked natively with a
+  script that only sends window messages (no synthetic keys): the system
+  menu after `WM_INITMENUPOPUP` lists our items with shortcuts and a
+  grayed Copy; its New Tab command opened a second tab; the ☰ button and a
+  right click open their popups; and `WM_CLOSE` on a window with two idle
+  cmd tabs closed it without a confirmation dialog.
+- Testing notes: make UI scripts per-monitor DPI aware
+  (`SetProcessDpiAwarenessContext(-4)`), or window sizes are scaled and
+  `PrintWindow` screenshots are cropped. When the desktop is locked,
+  `GetCursorPos` and screen captures fail, so menus are placed from the
+  message's coordinates instead of the cursor position.
+- Zig 0.17 on this machine: its TLS client failed every dependency fetch
+  after the package cache was cleared. Workaround: download the archive
+  with curl, extract it (stripping a single top-level folder), and
+  `zig fetch <dir>`. `zig fetch <file>` repacks a local tarball with the
+  extra folder and gets the wrong hash.
 
 ## Next steps (2026-10-25)
 
