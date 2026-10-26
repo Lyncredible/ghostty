@@ -14,6 +14,7 @@ const c = util.c;
 const App = @import("App.zig");
 const Tab = @import("Tab.zig");
 const Window = @import("Window.zig");
+const Menu = @import("Menu.zig");
 
 const log = std.log.scoped(.win32);
 
@@ -42,6 +43,7 @@ const Hit = union(enum) {
     close: usize,
     new_tab,
     shell_menu,
+    main_menu,
 
     fn eql(a: ?Hit, b: ?Hit) bool {
         const x = a orelse return b == null;
@@ -125,6 +127,9 @@ const Layout = struct {
     new_tab: c.RECT,
     shell_menu: c.RECT,
 
+    /// The main menu button, at the right end of the bar.
+    main_menu: c.RECT,
+
     fn tabRect(self: Layout, idx: usize, h: c_int) c.RECT {
         const left = @as(c_int, @intCast(idx)) * self.tab_width;
         return .{ .left = left, .top = 0, .right = left + self.tab_width, .bottom = h };
@@ -137,9 +142,9 @@ fn layout(self: *const TabBar) Layout {
     const h = client.bottom;
     const n: c_int = @intCast(@max(1, self.window.tabs.items.len));
 
-    // Tabs share the width (less the new tab button) up to a maximum.
+    // Tabs share the width (less the buttons) up to a maximum.
     const button = h;
-    const available = @max(0, client.right - button * 2);
+    const available = @max(0, client.right - button * 3);
     const tab_width = @min(self.scale(240), @divTrunc(available, n));
 
     const new_left = tab_width * n;
@@ -147,6 +152,7 @@ fn layout(self: *const TabBar) Layout {
         .tab_width = tab_width,
         .new_tab = .{ .left = new_left, .top = 0, .right = new_left + button, .bottom = h },
         .shell_menu = .{ .left = new_left + button, .top = 0, .right = new_left + button * 2, .bottom = h },
+        .main_menu = .{ .left = client.right - button, .top = 0, .right = client.right, .bottom = h },
     };
 }
 
@@ -171,6 +177,7 @@ fn hitTest(self: *const TabBar, x: c_int, y: c_int) ?Hit {
 
     if (c.PtInRect(&l.new_tab, pt) != 0) return .new_tab;
     if (c.PtInRect(&l.shell_menu, pt) != 0) return .shell_menu;
+    if (c.PtInRect(&l.main_menu, pt) != 0) return .main_menu;
     for (0..self.window.tabs.items.len) |i| {
         const rect = l.tabRect(i, client.bottom);
         if (c.PtInRect(&rect, pt) == 0) continue;
@@ -311,6 +318,32 @@ fn paint(self: *TabBar, hdc: c.HDC, client: c.RECT) void {
     self.drawPlus(hdc, l.new_tab, col.text_inactive);
     if (Hit.eql(self.hover, .shell_menu)) fill(hdc, &l.shell_menu, col.hover);
     self.drawChevron(hdc, l.shell_menu, col.text_inactive);
+    if (Hit.eql(self.hover, .main_menu)) fill(hdc, &l.main_menu, col.hover);
+    self.drawHamburger(hdc, l.main_menu, col.text_inactive);
+}
+
+fn drawHamburger(self: *const TabBar, hdc: c.HDC, rect: c.RECT, color: Rgb) void {
+    const half_width = self.scale(6);
+    const gap = self.scale(4);
+    const cx = @divTrunc(rect.left + rect.right, 2);
+    const cy = @divTrunc(rect.top + rect.bottom, 2);
+    const pen = c.CreatePen(c.PS_SOLID, @max(1, self.scale(1)), colorref(color));
+    defer _ = c.DeleteObject(pen);
+    const old = c.SelectObject(hdc, pen);
+    defer _ = c.SelectObject(hdc, old);
+    for ([_]c_int{ -gap, 0, gap }) |dy| {
+        _ = c.MoveToEx(hdc, cx - half_width, cy + dy, null);
+        _ = c.LineTo(hdc, cx + half_width + 1, cy + dy);
+    }
+}
+
+/// Show the main menu below its button.
+fn showMainMenu(self: *TabBar) void {
+    const rect = self.layout().main_menu;
+    var pt: c.POINT = .{ .x = rect.right, .y = rect.bottom };
+    _ = c.ClientToScreen(self.hwnd, &pt);
+    self.setHover(null);
+    Menu.track(&Menu.main, self.window.activeSurface(), self.window.hwnd, pt, c.TPM_RIGHTALIGN);
 }
 
 fn drawChevron(self: *const TabBar, hdc: c.HDC, rect: c.RECT, color: Rgb) void {
@@ -583,6 +616,7 @@ pub fn wndProc(
                 .close => |i| self.window.closeTabAt(i),
                 .new_tab => _ = self.window.newTab(),
                 .shell_menu => self.showShellMenu(),
+                .main_menu => self.showMainMenu(),
             }
             return 0;
         },
@@ -606,7 +640,7 @@ pub fn wndProc(
             const hit = self.hitTest(util.loword(lparam), util.hiword(lparam)) orelse return 0;
             switch (hit) {
                 .tab, .close => |i| self.window.closeTabAt(i),
-                .new_tab, .shell_menu => {},
+                .new_tab, .shell_menu, .main_menu => {},
             }
             return 0;
         },
