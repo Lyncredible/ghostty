@@ -27,6 +27,7 @@ const Badge = @import("Badge.zig");
 const SearchBar = @import("SearchBar.zig");
 const CommandPalette = @import("CommandPalette.zig");
 const InspectorWindow = @import("InspectorWindow.zig");
+const shell = @import("shell.zig");
 const Ipc = @import("Ipc.zig");
 const Overrides = @import("Overrides.zig");
 const Taskbar = @import("Taskbar.zig");
@@ -892,6 +893,24 @@ pub fn performAction(
         .mouse_shape => switch (target) {
             .app => return false,
             .surface => |v| v.rt_surface.setMouseShape(value),
+        },
+
+        .show_on_screen_keyboard => switch (target) {
+            .app => return false,
+            .surface => |v| return shell.toggleTouchKeyboard(v.rt_surface.window.hwnd),
+        },
+
+        // The contents are only valid during this call, and the dialog is
+        // modal, so we save them before returning.
+        .export_terminal_io => switch (target) {
+            .app => return false,
+            .surface => |v| _ = shell.saveAs(
+                self.core_app.alloc,
+                if (v.rt_surface.inspector) |window| window.hwnd else v.rt_surface.window.hwnd,
+                "Export Terminal IO Events",
+                "ghostty-terminal-io.txt",
+                value.contents,
+            ),
         },
 
         .inspector => switch (target) {

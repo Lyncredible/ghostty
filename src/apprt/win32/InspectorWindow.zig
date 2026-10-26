@@ -33,6 +33,10 @@ swap_chain: *d3d.IDXGISwapChain1,
 target: ?*d3d.ID3D11RenderTargetView = null,
 last_frame: ?std.Io.Timestamp = null,
 
+/// True while drawing. The inspector can open modal dialogs (such as for
+/// exporting terminal IO), which pump messages while we're mid-frame.
+rendering: bool = false,
+
 /// Open an inspector window for the surface, activating its inspector.
 pub fn create(surface: *Surface) !*InspectorWindow {
     const alloc = surface.app.core_app.alloc;
@@ -216,6 +220,10 @@ fn ensureTarget(self: *InspectorWindow) !*d3d.ID3D11RenderTargetView {
 }
 
 fn render(self: *InspectorWindow) void {
+    if (self.rendering) return;
+    self.rendering = true;
+    defer self.rendering = false;
+
     const target = self.ensureTarget() catch return;
     cimgui.c.ImGui_SetCurrentContext(self.ig_context);
 
