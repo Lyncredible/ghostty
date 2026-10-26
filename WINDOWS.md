@@ -737,6 +737,13 @@ Reviewed the branch against this file and discussion #2563.
   discovered `DeferredFace`; fixed. The run takes about 40 minutes here,
   most of it in the debug-build PageList compression tests, which can
   look like a hang.
+- Full native test run after the menus, palette, inspector, win32 input
+  mode, DirectWrite fallback, and precompiled shaders: 4,067 passed,
+  61 skipped, 0 failed, no leaks, exit 0.
+- The inspector's buttons can't be clicked with posted messages: ImGui's
+  Win32 backend calls `TrackMouseEvent` on mouse moves, and with the real
+  cursor elsewhere Windows sends `WM_MOUSELEAVE` right away, so clicks
+  have no position. The export dialog needs a manual check.
 - Single instance, checked natively: with one instance running, a second
   plain launch logged "opened this launch in the running instance",
   exited, and the first instance showed a second window; a launch with
