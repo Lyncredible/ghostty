@@ -27,6 +27,7 @@ const Badge = @import("Badge.zig");
 const SearchBar = @import("SearchBar.zig");
 const CommandPalette = @import("CommandPalette.zig");
 const InspectorWindow = @import("InspectorWindow.zig");
+const SaveState = @import("SaveState.zig");
 const shell = @import("shell.zig");
 const Ipc = @import("Ipc.zig");
 const Overrides = @import("Overrides.zig");
@@ -92,6 +93,9 @@ windows: std.ArrayList(*Window) = .empty,
 
 /// True once we've started quitting, so we don't quit twice.
 quitting: bool = false,
+
+/// True while closing every window at once, which saves the session first.
+closing_all: bool = false,
 
 /// The single instance lock for our app class, held while we run.
 instance_mutex: ?c.HANDLE = null,
@@ -428,7 +432,7 @@ pub fn run(self: *App) !void {
     // Create our initial window, if requested. Otherwise we start the
     // quit timer, as if the last window was just closed.
     if (self.config.@"initial-window") {
-        _ = try self.newWindow(.{ .parent = null });
+        if (!try self.restoreWindows()) _ = try self.newWindow(.{ .parent = null });
     } else {
         self.armQuitTimer();
     }
@@ -447,6 +451,32 @@ pub fn run(self: *App) !void {
         _ = c.TranslateMessage(&msg);
         _ = c.DispatchMessageW(&msg);
     }
+}
+
+/// Restore the saved session, for window-save-state. Returns false if
+/// there wasn't one.
+fn restoreWindows(self: *App) !bool {
+    var arena: std.heap.ArenaAllocator = .init(self.core_app.alloc);
+    defer arena.deinit();
+    const state = SaveState.load(arena.allocator(), self) orelse return false;
+    for (state.windows) |*window_state| {
+        _ = self.newWindow(.{ .restored = window_state }) catch |err| {
+            log.warn("error restoring a window err={}", .{err});
+            continue;
+        };
+    }
+    return self.windows.items.len > 0;
+}
+
+/// The only window other than the quick terminal, if there's just one.
+pub fn lastWindow(self: *const App) ?*Window {
+    var last: ?*Window = null;
+    for (self.windows.items) |window| {
+        if (window.quick) continue;
+        if (last != null) return null;
+        last = window;
+    }
+    return last;
 }
 
 pub fn terminate(self: *App) void {
@@ -750,6 +780,9 @@ fn closeAllWindows(self: *App) void {
         return;
     }
 
+    SaveState.save(self);
+    self.closing_all = true;
+    defer self.closing_all = false;
     while (self.windows.items.len > 0) {
         self.windows.items[self.windows.items.len - 1].destroy();
     }
@@ -768,6 +801,7 @@ pub fn performAction(
             {
                 return true;
             }
+            SaveState.save(self);
             self.quit();
         },
 
