@@ -211,7 +211,9 @@ Notes:
         "Process exited" in the terminal
   - [x] `readonly` and `renderer_health` indicators
   - [x] Search UI (`start_search`, `end_search`, `search_total`,
-        `search_selected`); needs a manual UI test
+        `search_selected`). Checked natively: opened from the menu,
+        typing "Microsoft" highlighted both matches in the cmd banner and
+        showed 0/2. (A cast in it panicked in debug builds before this.)
   - [x] Scrollbar (`scrollbar`)
   - [x] Key table / sequence indicators (`key_table`, `key_sequence`)
   - [x] Quick terminal (`toggle_quick_terminal`, `+toggle-quick-terminal`)
@@ -684,7 +686,7 @@ Reviewed the branch against this file and discussion #2563.
   the Claude Code terminal instead, interrupting the session. Before
   sending keys, check that `GetForegroundWindow()` is the Ghostty window
   (activate it with a title bar click if needed) and abort otherwise.
-- Pending manual UI tests: search bar, `toggle_background_opacity`,
+- Pending manual UI tests: `toggle_background_opacity`,
   WSL `\wsl$` working directory inheritance through the UI,
   PowerShell 7.
 - Not started: command palette, terminal inspector (ImGui D3D11/Win32
