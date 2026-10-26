@@ -28,6 +28,7 @@ const SearchBar = @import("SearchBar.zig");
 const CommandPalette = @import("CommandPalette.zig");
 const InspectorWindow = @import("InspectorWindow.zig");
 const SaveState = @import("SaveState.zig");
+const JumpList = @import("JumpList.zig");
 const shell = @import("shell.zig");
 const Ipc = @import("Ipc.zig");
 const Overrides = @import("Overrides.zig");
@@ -192,6 +193,7 @@ pub fn init(
 
     _ = c.SetWindowLongPtrW(msg_hwnd, util.GWLP_USERDATA, @bitCast(@intFromPtr(self)));
     self.global_keys.update(&self.config);
+    JumpList.update();
 }
 
 /// Hand this launch to the running instance of our class. Returns false if
