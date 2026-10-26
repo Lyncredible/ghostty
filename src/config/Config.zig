@@ -7038,12 +7038,15 @@ pub const Keybinds = struct {
                 .{ .select_all = {} },
             );
 
-            // Selection clipboard paste
-            try self.set.put(
-                alloc,
-                .{ .key = .{ .physical = .insert }, .mods = .{ .shift = true } },
-                .{ .paste_from_selection = {} },
-            );
+            // Selection clipboard paste. Windows has no selection
+            // clipboard, and shift+insert pastes the clipboard there.
+            if (comptime builtin.target.os.tag != .windows) {
+                try self.set.put(
+                    alloc,
+                    .{ .key = .{ .physical = .insert }, .mods = .{ .shift = true } },
+                    .{ .paste_from_selection = {} },
+                );
+            }
         }
         {
             // On macOS we default to super but everywhere else
@@ -10712,6 +10715,23 @@ test "parse e: command and args" {
     try testing.expectEqualStrings(cmd.direct[0], "echo");
     try testing.expectEqualStrings(cmd.direct[1], "foo");
     try testing.expectEqualStrings(cmd.direct[2], "bar baz");
+}
+
+test "default keybinds: shift+insert pastes the clipboard on Windows" {
+    if (comptime builtin.target.os.tag != .windows) return error.SkipZigTest;
+    const testing = std.testing;
+
+    var config = try Config.default(testing.allocator);
+    defer config.deinit();
+    const entry = config.keybind.set.get(.{
+        .key = .{ .physical = .insert },
+        .mods = .{ .shift = true },
+    }).?;
+    try testing.expect(entry.value_ptr.*.leaf.action == .paste_from_clipboard);
+    try testing.expectEqual(
+        inputpkg.Binding.Trigger{ .key = .{ .physical = .insert }, .mods = .{ .shift = true } },
+        config.keybind.set.getTrigger(.paste_from_clipboard).?,
+    );
 }
 
 test "clone default" {
