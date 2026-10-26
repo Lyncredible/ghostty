@@ -299,6 +299,9 @@ Notes:
         WSL (the command runs `wsl.exe`) they become Linux paths
         (`/mnt/c/...`, `\\wsl$\<distro>\...` to `/...`) in single
         quotes when needed. Unit tested; a real drop needs a manual check.
+  - [x] `maximize` and `fullscreen` for new windows, like GTK. Checked:
+        `--maximize=true` started zoomed; `--fullscreen=true` started
+        captionless at 0,0,3840,2160.
   - [x] `window-position-x` and `window-position-y` for the first window:
         points from the top left of the primary monitor's work area, like
         macOS, placing the visible frame (not the invisible resize

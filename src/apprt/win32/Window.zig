@@ -189,8 +189,12 @@ pub fn show(self: *Window) void {
         self.showQuick();
         return;
     }
-    _ = c.ShowWindow(self.hwnd, c.SW_SHOWDEFAULT);
+    // Start maximized or in fullscreen per the config. The initial size
+    // has already been set, so it's the size the window restores to.
+    const config = &self.app.config;
+    _ = c.ShowWindow(self.hwnd, if (config.maximize) c.SW_SHOWMAXIMIZED else c.SW_SHOWDEFAULT);
     _ = c.UpdateWindow(self.hwnd);
+    if (config.fullscreen != .false and self.fullscreen == null) self.toggleFullscreen();
 }
 
 /// Place the quick terminal according to its config, then show and
