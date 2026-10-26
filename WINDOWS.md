@@ -149,6 +149,20 @@ Notes:
       `[Console]::ReadKey` behind ConPTY: Numpad 5 arrives as `NumPad5`
       (the VT fallback can only send a plain `5`), Up as `UpArrow`.
 - [x] CI job that builds and tests the app on Windows.
+- [x] libghostty-vt builds on Windows: `zig build -Demit-lib-vt
+      -Dtarget=x86_64-windows-gnu` emits `ghostty-vt.dll` with its import
+      library `ghostty-vt.lib`, and `ghostty-vt-static.lib`. Checked
+      (2026-10-26) by compiling `example/c-vt/src/main.c` with `zig cc`:
+      linked against the import library (with the DLL next to it) and
+      statically (with `-DGHOSTTY_STATIC`, since the headers otherwise
+      declare `dllimport`), both printed the parsed OSC title "hello".
+  - [ ] The MSVC target: this machine has no Visual Studio or Windows SDK
+        ("LibCStdLibHeaderNotFound").
+  - [ ] `zig build test-lib-vt` on Windows (not run yet: memory was short
+        while the full suite ran)
+  - The examples' `build.zig` files don't pass their target to the
+    ghostty dependency, so `-Dtarget` on an example still builds the
+    library for the native target.
 - [x] Windows on ARM: `zig build -Dtarget=aarch64-windows-gnu` builds
       after casting `GetProcAddress` results with `@alignCast` (function
       pointers are 4-byte aligned on ARM64).
