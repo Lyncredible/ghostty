@@ -1,6 +1,7 @@
 //! UI Automation for the tab bar, which we draw ourselves, so that screen
 //! readers can find and switch tabs: a Tab control whose children are
-//! TabItems named by the tabs' titles, which can be selected.
+//! TabItems named by the tabs' titles, which can be selected, and then
+//! the bar's buttons, which can be invoked.
 //!
 //! The tab bar returns the root from WM_GETOBJECT. We ask UI Automation to
 //! call us on the tab bar's thread (UseComThreading), so the tab bar and
@@ -49,7 +50,7 @@ pub fn getObject(self: *Root, hwnd: c.HWND, wparam: c.WPARAM, lparam: c.LPARAM) 
 /// Tell screen readers that a tab was selected.
 pub fn tabSelected(self: *Root, tab: *Tab) void {
     if (UiaClientsAreListening() == 0) return;
-    const item = Item.create(self, tab) catch return;
+    const item = Item.create(self, .{ .tab = tab }) catch return;
     defer _ = item.release();
     _ = UiaRaiseAutomationEvent(&item.simple, UIA_SelectionItem_ElementSelectedEventId);
 }
@@ -79,12 +80,26 @@ fn queryInterface(self: *Root, iid: *const GUID, out: *?*anyopaque) HRESULT {
     return S_OK;
 }
 
-/// The item for the tab at an index, with a reference for the caller.
-fn itemAt(self: *Root, idx: usize) ?*Item {
+/// The child element at a position, with a reference for the caller: the
+/// tabs, then the buttons.
+fn childAt(self: *Root, pos: usize) ?*Item {
     const bar = self.bar orelse return null;
-    if (idx >= bar.window.tabs.items.len) return null;
-    return Item.create(self, bar.window.tabs.items[idx]) catch null;
+    const tabs = bar.window.tabs.items;
+    const kind: Item.Kind = if (pos < tabs.len)
+        .{ .tab = tabs[pos] }
+    else if (pos - tabs.len < buttons.len)
+        .{ .button = buttons[pos - tabs.len] }
+    else
+        return null;
+    return Item.create(self, kind) catch null;
 }
+
+fn childCount(self: *const Root) usize {
+    const bar = self.bar orelse return 0;
+    return bar.window.tabs.items.len + buttons.len;
+}
+
+const buttons = std.enums.values(TabBar.Button);
 
 fn fromIface(comptime field: []const u8, iface: *Interface) *Root {
     return @alignCast(@fieldParentPtr(field, iface));
@@ -166,10 +181,11 @@ const root_fragment_vtbl = FragmentVtbl{
             const self = fromIface("fragment", i);
             out.* = null;
             const bar = self.bar orelse return UIA_E_ELEMENTNOTAVAILABLE;
-            const n = bar.window.tabs.items.len;
+            _ = bar;
+            const n = self.childCount();
             const item = switch (direction) {
-                NavigateDirection_FirstChild => self.itemAt(0),
-                NavigateDirection_LastChild => if (n > 0) self.itemAt(n - 1) else null,
+                NavigateDirection_FirstChild => self.childAt(0),
+                NavigateDirection_LastChild => if (n > 0) self.childAt(n - 1) else null,
                 // The host window provides our parent and siblings.
                 else => null,
             };
@@ -230,12 +246,16 @@ const root_fragment_root_vtbl = FragmentRootVtbl{
             out.* = null;
             const bar = self.bar orelse return UIA_E_ELEMENTNOTAVAILABLE;
             const pt: c.POINT = .{ .x = @intFromFloat(x), .y = @intFromFloat(y) };
-            if (bar.tabAtScreen(pt)) |idx| {
-                if (self.itemAt(idx)) |item| {
-                    out.* = &item.fragment;
-                    return S_OK;
-                }
-            }
+            const kind: ?Item.Kind = if (bar.hitAtScreen(pt)) |hit| switch (hit) {
+                .tab, .close => |idx| .{ .tab = bar.window.tabs.items[idx] },
+                .new_tab => .{ .button = .new_tab },
+                .shell_menu => .{ .button = .shell_menu },
+                .main_menu => .{ .button = .main_menu },
+            } else null;
+            if (kind) |k| if (Item.create(self, k)) |item| {
+                out.* = &item.fragment;
+                return S_OK;
+            } else |_| {};
             out.* = &self.fragment;
             _ = self.addRef();
             return S_OK;
@@ -273,7 +293,8 @@ const root_selection_vtbl = SelectionVtbl{
             const self = fromIface("selection", i);
             out.* = null;
             const bar = self.bar orelse return UIA_E_ELEMENTNOTAVAILABLE;
-            const item = self.itemAt(bar.window.active) orelse return S_OK;
+            // The tabs come first, so a tab's position is its index.
+            const item = self.childAt(bar.window.active) orelse return S_OK;
             defer _ = item.release();
             const array = SafeArrayCreateVector(VT_UNKNOWN, 0, 1) orelse return E_OUTOFMEMORY;
             const index: i32 = 0;
@@ -292,20 +313,26 @@ const root_selection_vtbl = SelectionVtbl{
     }.f,
 };
 
-/// A tab, as a TabItem element. It refers to the tab, which may have
-/// closed since, so it looks the tab up in the window each time.
+/// A tab, as a TabItem element, or a button. A tab may have closed since,
+/// so it's looked up in the window each time.
 const Item = struct {
     simple: Interface = .{ .vtbl = &item_simple_vtbl },
     fragment: Interface = .{ .vtbl = &item_fragment_vtbl },
     selection_item: Interface = .{ .vtbl = &item_selection_vtbl },
+    invoke: Interface = .{ .vtbl = &item_invoke_vtbl },
     refs: std.atomic.Value(u32) = .init(1),
     root: *Root,
-    tab: *Tab,
+    kind: Kind,
 
-    fn create(root: *Root, tab: *Tab) !*Item {
+    const Kind = union(enum) {
+        tab: *Tab,
+        button: TabBar.Button,
+    };
+
+    fn create(root: *Root, kind: Kind) !*Item {
         const self = try root.alloc.create(Item);
         _ = root.addRef();
-        self.* = .{ .root = root, .tab = tab };
+        self.* = .{ .root = root, .kind = kind };
         return self;
     }
 
@@ -328,18 +355,32 @@ const Item = struct {
             &self.simple
         else if (eqlGuid(iid, &IID_IRawElementProviderFragment))
             &self.fragment
-        else if (eqlGuid(iid, &IID_ISelectionItemProvider))
+        else if (self.kind == .tab and eqlGuid(iid, &IID_ISelectionItemProvider))
             &self.selection_item
+        else if (self.kind == .button and eqlGuid(iid, &IID_IInvokeProvider))
+            &self.invoke
         else
             return E_NOINTERFACE;
         _ = self.addRef();
         return S_OK;
     }
 
-    /// The tab's index, if both it and the tab bar still exist.
-    fn index(self: *const Item) ?usize {
+    /// The position among the tab bar's children, if the element and the
+    /// tab bar still exist.
+    fn position(self: *const Item) ?usize {
         const bar = self.root.bar orelse return null;
-        return bar.window.tabIndex(self.tab);
+        return switch (self.kind) {
+            .tab => |tab| bar.window.tabIndex(tab),
+            .button => |button| bar.window.tabs.items.len + @backingInt(button),
+        };
+    }
+
+    /// The tab's index, for a tab that still exists.
+    fn tabIndex(self: *const Item) ?usize {
+        return switch (self.kind) {
+            .tab => self.position(),
+            .button => null,
+        };
     }
 
     fn fromIface(comptime field: []const u8, iface: *Interface) *Item {
@@ -368,8 +409,11 @@ const item_simple_vtbl = SimpleVtbl{
         fn f(i: *Interface, pattern: i32, out: *?*anyopaque) callconv(.winapi) HRESULT {
             const self = Item.fromIface("simple", i);
             out.* = null;
-            if (pattern == UIA_SelectionItemPatternId) {
+            if (self.kind == .tab and pattern == UIA_SelectionItemPatternId) {
                 out.* = &self.selection_item;
+                _ = self.addRef();
+            } else if (self.kind == .button and pattern == UIA_InvokePatternId) {
+                out.* = &self.invoke;
                 _ = self.addRef();
             }
             return S_OK;
@@ -379,10 +423,17 @@ const item_simple_vtbl = SimpleVtbl{
         fn f(i: *Interface, property: i32, out: *VARIANT) callconv(.winapi) HRESULT {
             const self = Item.fromIface("simple", i);
             out.* = .{};
-            _ = self.index() orelse return UIA_E_ELEMENTNOTAVAILABLE;
+            _ = self.position() orelse return UIA_E_ELEMENTNOTAVAILABLE;
+            const bar = self.root.bar orelse return UIA_E_ELEMENTNOTAVAILABLE;
             switch (property) {
-                UIA_ControlTypePropertyId => setInt(out, UIA_TabItemControlTypeId),
-                UIA_NamePropertyId => setString(out, self.tab.title()),
+                UIA_ControlTypePropertyId => setInt(out, switch (self.kind) {
+                    .tab => UIA_TabItemControlTypeId,
+                    .button => UIA_ButtonControlTypeId,
+                }),
+                UIA_NamePropertyId => setString(out, switch (self.kind) {
+                    .tab => |tab| tab.title(),
+                    .button => |button| bar.buttonName(button),
+                }),
                 else => {},
             }
             return S_OK;
@@ -416,17 +467,17 @@ const item_fragment_vtbl = FragmentVtbl{
         fn f(i: *Interface, direction: i32, out: *?*anyopaque) callconv(.winapi) HRESULT {
             const self = Item.fromIface("fragment", i);
             out.* = null;
-            const idx = self.index() orelse return UIA_E_ELEMENTNOTAVAILABLE;
+            const pos = self.position() orelse return UIA_E_ELEMENTNOTAVAILABLE;
             switch (direction) {
                 NavigateDirection_Parent => {
                     out.* = &self.root.fragment;
                     _ = self.root.addRef();
                 },
-                NavigateDirection_NextSibling => if (self.root.itemAt(idx + 1)) |v| {
+                NavigateDirection_NextSibling => if (self.root.childAt(pos + 1)) |v| {
                     out.* = &v.fragment;
                 },
-                NavigateDirection_PreviousSibling => if (idx > 0) {
-                    if (self.root.itemAt(idx - 1)) |v| out.* = &v.fragment;
+                NavigateDirection_PreviousSibling => if (pos > 0) {
+                    if (self.root.childAt(pos - 1)) |v| out.* = &v.fragment;
                 },
                 else => {},
             }
@@ -437,13 +488,17 @@ const item_fragment_vtbl = FragmentVtbl{
         fn f(i: *Interface, out: *?*anyopaque) callconv(.winapi) HRESULT {
             const self = Item.fromIface("fragment", i);
             out.* = null;
-            // UiaAppendRuntimeId, then an ID that's unique among the tabs:
-            // the tab's address.
-            const ids = [_]i32{ UiaAppendRuntimeId, @truncate(@as(isize, @bitCast(@intFromPtr(self.tab)))) };
+            // UiaAppendRuntimeId, then an ID that's unique among the
+            // children: a tab's address, or a small number for a button.
+            const id: i32 = switch (self.kind) {
+                .tab => |tab| @truncate(@as(isize, @bitCast(@intFromPtr(tab)))),
+                .button => |button| 1 + @as(i32, @backingInt(button)),
+            };
+            const ids = [_]i32{ UiaAppendRuntimeId, id };
             const array = SafeArrayCreateVector(VT_I4, 0, ids.len) orelse return E_OUTOFMEMORY;
-            for (ids, 0..) |id, n| {
+            for (ids, 0..) |value, n| {
                 const at: i32 = @intCast(n);
-                _ = SafeArrayPutElement(array, &at, &id);
+                _ = SafeArrayPutElement(array, &at, &value);
             }
             out.* = array;
             return S_OK;
@@ -453,9 +508,12 @@ const item_fragment_vtbl = FragmentVtbl{
         fn f(i: *Interface, out: *UiaRect) callconv(.winapi) HRESULT {
             const self = Item.fromIface("fragment", i);
             out.* = .{};
-            const idx = self.index() orelse return UIA_E_ELEMENTNOTAVAILABLE;
+            const pos = self.position() orelse return UIA_E_ELEMENTNOTAVAILABLE;
             const bar = self.root.bar orelse return UIA_E_ELEMENTNOTAVAILABLE;
-            out.* = .fromRect(bar.tabScreenRect(idx));
+            out.* = .fromRect(switch (self.kind) {
+                .tab => bar.tabScreenRect(pos),
+                .button => |button| bar.buttonScreenRect(button),
+            });
             return S_OK;
         }
     }.f,
@@ -499,7 +557,7 @@ const item_selection_vtbl = SelectionItemVtbl{
         fn f(i: *Interface, out: *c.BOOL) callconv(.winapi) HRESULT {
             const self = Item.fromIface("selection_item", i);
             out.* = c.FALSE;
-            const idx = self.index() orelse return UIA_E_ELEMENTNOTAVAILABLE;
+            const idx = self.tabIndex() orelse return UIA_E_ELEMENTNOTAVAILABLE;
             const bar = self.root.bar orelse return UIA_E_ELEMENTNOTAVAILABLE;
             out.* = @intFromBool(idx == bar.window.active);
             return S_OK;
@@ -515,9 +573,38 @@ const item_selection_vtbl = SelectionItemVtbl{
     }.f,
 };
 
+const item_invoke_vtbl = InvokeVtbl{
+    .QueryInterface = struct {
+        fn f(i: *Interface, iid: *const GUID, out: *?*anyopaque) callconv(.winapi) HRESULT {
+            return Item.fromIface("invoke", i).queryInterface(iid, out);
+        }
+    }.f,
+    .AddRef = struct {
+        fn f(i: *Interface) callconv(.winapi) u32 {
+            return Item.fromIface("invoke", i).addRef();
+        }
+    }.f,
+    .Release = struct {
+        fn f(i: *Interface) callconv(.winapi) u32 {
+            return Item.fromIface("invoke", i).release();
+        }
+    }.f,
+    .Invoke = struct {
+        fn f(i: *Interface) callconv(.winapi) HRESULT {
+            const self = Item.fromIface("invoke", i);
+            const bar = self.root.bar orelse return UIA_E_ELEMENTNOTAVAILABLE;
+            switch (self.kind) {
+                .button => |button| bar.pressButton(button),
+                .tab => return UIA_E_INVALIDOPERATION,
+            }
+            return S_OK;
+        }
+    }.f,
+};
+
 fn selectItem(i: *Interface) callconv(.winapi) HRESULT {
     const self = Item.fromIface("selection_item", i);
-    const idx = self.index() orelse return UIA_E_ELEMENTNOTAVAILABLE;
+    const idx = self.tabIndex() orelse return UIA_E_ELEMENTNOTAVAILABLE;
     const bar = self.root.bar orelse return UIA_E_ELEMENTNOTAVAILABLE;
     bar.window.selectTab(idx);
     return S_OK;
@@ -576,6 +663,7 @@ const IID_IRawElementProviderSimple: GUID = .{ .a = 0xd6dd68d1, .b = 0x86fd, .c 
 const IID_IRawElementProviderFragment: GUID = .{ .a = 0xf7063da8, .b = 0x8359, .c = 0x439c, .d = .{ 0x92, 0x97, 0xbb, 0xc5, 0x29, 0x9a, 0x7d, 0x87 } };
 const IID_IRawElementProviderFragmentRoot: GUID = .{ .a = 0x620ce2a5, .b = 0xab8f, .c = 0x40a9, .d = .{ 0x86, 0xcb, 0xde, 0x3c, 0x75, 0x59, 0x9b, 0x58 } };
 const IID_ISelectionProvider: GUID = .{ .a = 0xfb8b03af, .b = 0x3bdf, .c = 0x48d4, .d = .{ 0xbd, 0x36, 0x1a, 0x65, 0x79, 0x3b, 0xe1, 0x68 } };
+const IID_IInvokeProvider: GUID = .{ .a = 0x54fcb24b, .b = 0xe18e, .c = 0x47a2, .d = .{ 0xb4, 0xd3, 0xec, 0xcb, 0xe7, 0x75, 0x99, 0xa2 } };
 const IID_ISelectionItemProvider: GUID = .{ .a = 0x2acad808, .b = 0xb2d4, .c = 0x452d, .d = .{ 0xa4, 0x07, 0x91, 0xff, 0x1a, 0xd1, 0x67, 0xb2 } };
 
 const VARIANT = extern struct {
@@ -610,12 +698,14 @@ const UiaRect = extern struct {
 const ProviderOptions_ServerSideProvider = 0x1;
 const ProviderOptions_UseComThreading = 0x20;
 const UiaAppendRuntimeId = 3;
+const UIA_InvokePatternId = 10000;
 const UIA_SelectionPatternId = 10001;
 const UIA_SelectionItemPatternId = 10010;
 const UIA_ControlTypePropertyId = 30003;
 const UIA_NamePropertyId = 30005;
 const UIA_TabControlTypeId = 50018;
 const UIA_TabItemControlTypeId = 50019;
+const UIA_ButtonControlTypeId = 50000;
 const UIA_SelectionItem_ElementSelectedEventId = 20012;
 const NavigateDirection_Parent = 0;
 const NavigateDirection_NextSibling = 1;
@@ -666,6 +756,13 @@ const SelectionVtbl = extern struct {
     GetSelection: OutFn,
     get_CanSelectMultiple: BoolFn,
     get_IsSelectionRequired: BoolFn,
+};
+
+const InvokeVtbl = extern struct {
+    QueryInterface: QueryInterfaceFn,
+    AddRef: RefFn,
+    Release: RefFn,
+    Invoke: VoidFn,
 };
 
 const SelectionItemVtbl = extern struct {
