@@ -262,7 +262,19 @@ Notes:
           were created and removed, and the command opened at the folder.
   - [x] CI: the `build-windows` job packages the portable zip and
         uploads it as a 14-day artifact (not run yet; needs a push)
-  - [ ] Installer or MSIX (needs signing and an app identity)
+  - [x] MSIX package (`package.ps1 -Msix`): `dist/windows/msix.zig` packs
+        a layout with the packaging API built into Windows
+        (`IAppxPackageWriter`), so no Windows SDK is needed, and checks it
+        by opening it with `IAppxPackageReader`, which validates the block
+        map and manifest. The manifest is unsigned (publisher with the
+        unsigned OID), runs full trust, has logos made from the icon and a
+        `ghostty.exe` execution alias. Checked: the reader accepted
+        `GhosttyWindowsUnofficial_1.0.18522.0_x64__ddpcdxnmqgtp8`.
+    - [ ] Manual check: `Add-AppxPackage -AllowUnsigned <file>.msix` on
+          Windows 11 (not done here, since it registers an app), then the
+          Start menu entry and the `ghostty` alias
+    - [ ] A signed package for Windows 10 and the Store (needs a
+          certificate)
 - [x] Unimplemented apprt actions (as of 2026-10-25)
   - [x] `show_on_screen_keyboard`: toggles the touch keyboard through the
         shell's (undocumented) `ITipInvocation`, starting TabTip.exe if
