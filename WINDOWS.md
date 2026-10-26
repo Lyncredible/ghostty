@@ -188,7 +188,15 @@ Notes:
       tabs (active index and split focus must be valid during teardown)
 - [x] Shell integration for wsl
   - [x] Map WSL Linux paths (`/home/...`) to `\\wsl$\<distro>\...`
-        so new tabs can start there (end-to-end UI check pending)
+        so new tabs can start there
+    - [x] Checked (2026-10-26, Ubuntu-24.04): `-e wsl.exe` injects the
+          WSL integration, `/mnt/c/Code/ghostty` reports as
+          `C:\Code\ghostty` (a new cmd tab opened there), and `~` reports
+          as `\\wsl$\Ubuntu-24.04\home\yuan`.
+    - [x] A new tab or split in a WSL directory with cmd (the default)
+          showed "UNC paths are not supported" and started in
+          `C:\Windows`. Now it starts `wsl.exe -d <distro> --cd <path>`
+          there instead. Checked: the new tab opened zsh in `~`.
 - [x] Choose a registered WSL distribution by name from the shell menu
 - [x] Choose Command Prompt, Windows PowerShell, PowerShell, WSL, or
       the configured command when opening a new tab from the tab bar
@@ -904,6 +912,5 @@ Reviewed the branch against this file and discussion #2563.
   - Blur on Windows 10
   - (Done: `conpty.dll` from the ConPTY package works, but doesn't pass
     Kitty graphics APCs either)
-  - WSL `\wsl$` working directory inheritance through the UI,
-    PowerShell 7
+  - PowerShell 7
 - Remaining work: a signed package, which needs a certificate.
