@@ -1227,9 +1227,25 @@ fn updateWindowTitle(self: *Window) void {
     //
     // Debug builds are much slower, so like GTK's banner, we say so.
     const debug = if (comptime builtin.mode == .debug) " (debug build)" else "";
-    const display_title = std.fmt.allocPrint(alloc, "{s}{s}{s}", .{
+
+    // The title bar has a single line, so a subtitle follows the title,
+    // unless the title already shows it (cmd's titles are often the
+    // working directory).
+    const pwd: ?[]const u8 = switch (self.app.config.@"window-subtitle") {
+        .false => null,
+        .@"working-directory" => self.activeSurface().core_surface.pwd(alloc) catch null,
+    };
+    defer if (pwd) |v| alloc.free(v);
+    const subtitle = if (pwd) |v|
+        if (v.len > 0 and std.mem.indexOf(u8, title, v) == null) v else null
+    else
+        null;
+
+    const display_title = std.fmt.allocPrint(alloc, "{s}{s}{s}{s}{s}", .{
         if (pending) "🔔 " else "",
         title,
+        if (subtitle != null) " — " else "",
+        subtitle orelse "",
         debug,
     }) catch return;
     defer alloc.free(display_title);

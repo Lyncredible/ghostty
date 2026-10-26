@@ -1042,6 +1042,12 @@ pub fn performAction(
             .stop => _ = c.KillTimer(self.msg_hwnd, quit_timer_id),
         },
 
+        // For `window-subtitle`, which shows the working directory.
+        .pwd => switch (target) {
+            .app => return false,
+            .surface => |v| v.rt_surface.window.surfaceTitleChanged(v.rt_surface),
+        },
+
         .set_title => switch (target) {
             .app => return false,
             .surface => |v| v.rt_surface.setTitle(value.title),
