@@ -111,6 +111,12 @@ Notes:
         middle-click close, and a new tab button.
   - [x] Splits: new, goto (including spatial), resize, equalize, zoom, and
         draggable dividers.
+  - [x] Rearranging splits with drag handles (`drag-handle`), like GTK: a
+        handle at the top of each split; dragging it over a terminal in
+        the tab highlights the half nearest the pointer, and dropping
+        moves the split there. Checked with posted mouse messages: two
+        side-by-side splits became stacked after dropping on the left
+        one's bottom half.
   - [x] Inline IME preedit and candidate window placement (still needs
         testing with a real IME).
   - [x] Quit timer delay, `initial-window`, and the system double-click
