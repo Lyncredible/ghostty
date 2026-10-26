@@ -173,3 +173,38 @@ pub fn setMenuTheme(dark: bool) void {
     _ = set_mode(if (dark) .force_dark else .force_light);
     flush();
 }
+
+/// Turn the blur behind accent on or off for a window. This blurs what's
+/// behind the window's transparent parts on Windows 10 and early Windows
+/// 11, which don't have system backdrops.
+///
+/// SetWindowCompositionAttribute is undocumented, but user32 has exported
+/// it by name since Windows 7 and it's widely used for this.
+pub fn setBlurBehindAccent(hwnd: c.HWND, enable: bool) void {
+    const AccentPolicy = extern struct {
+        state: c_int,
+        flags: c_int = 0,
+        gradient_color: u32 = 0,
+        animation_id: c_int = 0,
+    };
+    const CompositionData = extern struct {
+        attribute: c_int,
+        data: *anyopaque,
+        size: usize,
+    };
+    const SetWindowCompositionAttribute = *const fn (c.HWND, *CompositionData) callconv(.winapi) c.BOOL;
+
+    const user32 = c.GetModuleHandleW(std.unicode.utf8ToUtf16LeStringLiteral("user32.dll")) orelse return;
+    const set: SetWindowCompositionAttribute = @ptrCast(c.GetProcAddress(user32, "SetWindowCompositionAttribute") orelse return);
+
+    const ACCENT_DISABLED = 0;
+    const ACCENT_ENABLE_BLURBEHIND = 3;
+    const WCA_ACCENT_POLICY = 19;
+    var policy: AccentPolicy = .{ .state = if (enable) ACCENT_ENABLE_BLURBEHIND else ACCENT_DISABLED };
+    var data: CompositionData = .{
+        .attribute = WCA_ACCENT_POLICY,
+        .data = &policy,
+        .size = @sizeOf(AccentPolicy),
+    };
+    _ = set(hwnd, &data);
+}
