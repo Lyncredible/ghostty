@@ -161,6 +161,11 @@ Notes:
       background was white, and a settings change message kept it.
   - [ ] Switch Windows to dark mode while it runs (not done here, since
         it changes the whole desktop)
+- [x] `toggle_tab_overview`: the command palette lists the window's tabs
+      ("Tab N: title") to filter and switch to. Checked with three tabs:
+      F9 bound to the action showed them, and choosing "Tab 1" made the
+      first tab active. Toggling the command palette from the overview
+      switches to the commands.
 
 ### Known limitations
 
