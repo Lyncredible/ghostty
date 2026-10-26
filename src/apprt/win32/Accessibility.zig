@@ -211,6 +211,8 @@ extern "oleaut32" fn SafeArrayCreateVector(vt: u16, lower: i32, count: u32) call
 extern "oleaut32" fn SafeArrayPutElement(array: *anyopaque, index: *const i32, value: *const anyopaque) callconv(.winapi) HRESULT;
 extern "uiautomationcore" fn UiaGetReservedNotSupportedValue(out: *?*anyopaque) callconv(.winapi) HRESULT;
 extern "uiautomationcore" fn UiaClientsAreListening() callconv(.winapi) c.BOOL;
+extern "uiautomationcore" fn UiaRaiseAutomationEvent(provider: *Interface, id: i32) callconv(.winapi) HRESULT;
+const UIA_Text_TextSelectionChangedEventId = 20014;
 extern "uiautomationcore" fn UiaRaiseNotificationEvent(
     provider: *Interface,
     kind: i32,
@@ -423,7 +425,7 @@ fn takeSnapshot(self: *Accessibility) !*TextRange.Snapshot {
     if (!surface.core_initialized) return error.NoSurface;
     const alloc = self.alloc;
 
-    const text, const cursor_line: u32, const cursor_column: u32 = text: {
+    const text, const cursor_line: u32, const cursor_column: u32, const selection = text: {
         const core = &surface.core_surface;
         core.renderer_state.mutex.lockUncancelable(global.io());
         defer core.renderer_state.mutex.unlock(global.io());
@@ -434,7 +436,7 @@ fn takeSnapshot(self: *Accessibility) !*TextRange.Snapshot {
             .sel = terminal.Selection.init(top_left, bottom_right, false),
             .trim = true,
         });
-        break :text .{ utf8, screen.cursor.y, screen.cursor.x };
+        break :text .{ utf8, screen.cursor.y, screen.cursor.x, viewportSelection(screen) };
     };
     defer alloc.free(text);
     const text16 = try util.utf16Alloc(alloc, text);
@@ -443,6 +445,10 @@ fn takeSnapshot(self: *Accessibility) !*TextRange.Snapshot {
     const snapshot = try alloc.create(TextRange.Snapshot);
     snapshot.* = .{ .alloc = alloc, .text = text16, .cursor = 0 };
     snapshot.cursor = snapshot.offsetOf(cursor_line, cursor_column);
+    if (selection) |sel| snapshot.selection = .{
+        snapshot.offsetOf(sel.start_line, sel.start_column),
+        snapshot.offsetOf(sel.end_line, sel.end_column),
+    };
 
     var rect: c.RECT = undefined;
     if (c.GetWindowRect(surface.hwnd, &rect) != 0) {
@@ -453,6 +459,83 @@ fn takeSnapshot(self: *Accessibility) !*TextRange.Snapshot {
         snapshot.cell_height = @floatFromInt(size.cell.height);
     }
     return snapshot;
+}
+
+/// The part of the screen's selection in the viewport, as lines and
+/// columns of the viewport with an exclusive end, or null if none of it
+/// is visible. A rectangle selection is treated as running from its top
+/// left to its bottom right.
+fn viewportSelection(screen: *terminal.Screen) ?struct {
+    start_line: u32,
+    start_column: u32,
+    end_line: u32,
+    end_column: u32,
+} {
+    const sel = screen.selection orelse return null;
+    const pages = &screen.pages;
+    const start = (pages.pointFromPin(.screen, sel.topLeft(screen)) orelse return null).coord();
+    const end = (pages.pointFromPin(.screen, sel.bottomRight(screen)) orelse return null).coord();
+    const top = (pages.pointFromPin(.screen, pages.getTopLeft(.viewport)) orelse return null).coord().y;
+    const bottom_pin = pages.getBottomRight(.viewport) orelse return null;
+    const bottom = (pages.pointFromPin(.screen, bottom_pin) orelse return null).coord().y;
+    if (end.y < top or start.y > bottom) return null;
+
+    return .{
+        .start_line = if (start.y < top) 0 else start.y - top,
+        .start_column = if (start.y < top) 0 else start.x,
+        .end_line = @min(end.y, bottom) - top,
+        .end_column = if (end.y > bottom) std.math.maxInt(u32) else @as(u32, end.x) + 1,
+    };
+}
+
+test viewportSelection {
+    const testing = std.testing;
+    const alloc = testing.allocator;
+
+    var s: terminal.Screen = try .init(testing.io, alloc, .{ .cols = 10, .rows = 3, .max_scrollback_bytes = 10_000 });
+    defer s.deinit();
+    try s.testWriteString("1\n2\n3\nabcd\nefgh");
+    try testing.expect(viewportSelection(&s) == null);
+
+    // Within the viewport, which shows "3", "abcd", and "efgh".
+    try s.select(terminal.Selection.init(
+        s.pages.pin(.{ .screen = .{ .x = 1, .y = 3 } }).?,
+        s.pages.pin(.{ .screen = .{ .x = 2, .y = 4 } }).?,
+        false,
+    ));
+    const inside = viewportSelection(&s).?;
+    try testing.expectEqual(@as(u32, 1), inside.start_line);
+    try testing.expectEqual(@as(u32, 1), inside.start_column);
+    try testing.expectEqual(@as(u32, 2), inside.end_line);
+    try testing.expectEqual(@as(u32, 3), inside.end_column);
+
+    // Starting in the scrollback: the visible part starts at the top.
+    try s.select(terminal.Selection.init(
+        s.pages.pin(.{ .screen = .{ .x = 0, .y = 0 } }).?,
+        s.pages.pin(.{ .screen = .{ .x = 1, .y = 3 } }).?,
+        false,
+    ));
+    const above = viewportSelection(&s).?;
+    try testing.expectEqual(@as(u32, 0), above.start_line);
+    try testing.expectEqual(@as(u32, 0), above.start_column);
+    try testing.expectEqual(@as(u32, 1), above.end_line);
+    try testing.expectEqual(@as(u32, 2), above.end_column);
+
+    // Only in the scrollback.
+    try s.select(terminal.Selection.init(
+        s.pages.pin(.{ .screen = .{ .x = 0, .y = 0 } }).?,
+        s.pages.pin(.{ .screen = .{ .x = 0, .y = 1 } }).?,
+        false,
+    ));
+    try testing.expect(viewportSelection(&s) == null);
+}
+
+/// Tell screen readers that the terminal's selection changed. This must
+/// not be called with the renderer mutex held, since screen readers may
+/// ask for the selection right away.
+pub fn selectionChanged(self: *Accessibility) void {
+    if (UiaClientsAreListening() == 0) return;
+    _ = UiaRaiseAutomationEvent(&self.simple, UIA_Text_TextSelectionChangedEventId);
 }
 
 /// A new text range object, taking a reference to the snapshot.
@@ -480,8 +563,10 @@ fn textSelection(iface: *Interface, out: *?*anyopaque) callconv(.winapi) HRESULT
     out.* = null;
     const snapshot = self.takeSnapshot() catch return UIA_E_ELEMENTNOTAVAILABLE;
     defer snapshot.unref();
-    // We report the cursor as an empty selection, like a caret.
-    const range = self.newRange(snapshot, snapshot.cursor, snapshot.cursor) catch return E_OUTOFMEMORY;
+    // We report the terminal's selection, or else the cursor as an empty
+    // selection, like a caret.
+    const start, const end = snapshot.selection orelse .{ snapshot.cursor, snapshot.cursor };
+    const range = self.newRange(snapshot, start, end) catch return E_OUTOFMEMORY;
     defer _ = range.release();
     out.* = rangeArray(range) orelse return E_OUTOFMEMORY;
     return S_OK;

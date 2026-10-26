@@ -1088,6 +1088,13 @@ pub fn performAction(
             .surface => |v| v.rt_surface.scrollbar.update(value),
         },
 
+        // The core holds the renderer mutex here, so the surface tells
+        // screen readers later.
+        .selection_changed => switch (target) {
+            .app => return false,
+            .surface => |v| _ = c.PostMessageW(v.rt_surface.hwnd, Surface.WM_GHOSTTY_SELECTION_CHANGED, 0, 0),
+        },
+
         .mouse_over_link => switch (target) {
             .app => return false,
             .surface => |v| v.rt_surface.setMouseOverLink(value.url),
