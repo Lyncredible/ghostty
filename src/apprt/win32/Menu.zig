@@ -222,7 +222,7 @@ fn enabled(surface: *Surface, action: Binding.Action) bool {
     if (!surface.core_initialized) return false;
     return switch (action) {
         .copy_to_clipboard => surface.core_surface.hasSelection(),
-        .undo => surface.window.closed_tabs.items.len > 0,
+        .undo => surface.window.canUndo(),
         else => true,
     };
 }
