@@ -321,6 +321,10 @@ Notes:
       write) and CRLF line endings both validate cleanly with
       `+validate-config` (the loader already skips a BOM), while a bogus
       key in the same setup is reported.
+- [x] `config-file` includes with Windows paths: a relative
+      `sub\other.ghostty` and an absolute `C:\...\other.ghostty` (setting
+      `font-size = 23`) both applied, giving the same 37x81 cells as
+      setting it directly (19x42 by default at this DPI).
 - [x] Working directories with spaces and non-ASCII names: launched with
       `--working-directory` set to a folder named "dir 中文 é", the first
       tab's cmd prompt and a new tab's (inherited through OSC 7) both
