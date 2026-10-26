@@ -48,7 +48,7 @@ drag_start_y: c_int = 0,
 dragging: bool = false,
 
 /// The parts of the tab bar the mouse can be over.
-const Hit = union(enum) {
+pub const Hit = union(enum) {
     tab: usize,
     close: usize,
     new_tab,
@@ -248,15 +248,48 @@ pub fn tabScreenRect(self: *const TabBar, idx: usize) c.RECT {
     return .{ .left = top_left.x, .top = top_left.y, .right = bottom_right.x, .bottom = bottom_right.y };
 }
 
-/// The index of the tab at a point on the screen, if any.
-pub fn tabAtScreen(self: *const TabBar, pt: c.POINT) ?usize {
+/// The element at a point on the screen, if any.
+pub fn hitAtScreen(self: *const TabBar, pt: c.POINT) ?Hit {
     var client_pt = pt;
     _ = c.ScreenToClient(self.hwnd, &client_pt);
-    return switch (self.hitTest(client_pt.x, client_pt.y) orelse return null) {
-        .tab, .close => |i| i,
-        else => null,
-    };
+    return self.hitTest(client_pt.x, client_pt.y);
 }
+
+/// The buttons at the end of the tab bar.
+pub const Button = enum { new_tab, shell_menu, main_menu };
+
+/// The rectangle of a button, on the screen.
+pub fn buttonScreenRect(self: *const TabBar, button: Button) c.RECT {
+    const l = self.layout();
+    const rect = switch (button) {
+        .new_tab => l.new_tab,
+        .shell_menu => l.shell_menu,
+        .main_menu => l.main_menu,
+    };
+    var top_left: c.POINT = .{ .x = rect.left, .y = rect.top };
+    var bottom_right: c.POINT = .{ .x = rect.right, .y = rect.bottom };
+    _ = c.ClientToScreen(self.hwnd, &top_left);
+    _ = c.ClientToScreen(self.hwnd, &bottom_right);
+    return .{ .left = top_left.x, .top = top_left.y, .right = bottom_right.x, .bottom = bottom_right.y };
+}
+
+/// A button's name, as in its tooltip.
+pub fn buttonName(self: *TabBar, button: Button) []const u8 {
+    return self.tooltipText(switch (button) {
+        .new_tab => .new_tab,
+        .shell_menu => .shell_menu,
+        .main_menu => .main_menu,
+    });
+}
+
+/// Press a button, as if clicked, for UI Automation. It happens later,
+/// from a posted message, since the menus run a modal loop and Invoke
+/// should return right away.
+pub fn pressButton(self: *TabBar, button: Button) void {
+    _ = c.PostMessageW(self.hwnd, WM_GHOSTTY_PRESS_BUTTON, @backingInt(button), 0);
+}
+
+const WM_GHOSTTY_PRESS_BUTTON = c.WM_APP + 1;
 
 /// Called when a tab is selected, to tell screen readers.
 pub fn tabSelected(self: *TabBar, tab: *Tab) void {
@@ -729,6 +762,15 @@ pub fn wndProc(
 
     switch (msg) {
         c.WM_ERASEBKGND => return 1,
+
+        WM_GHOSTTY_PRESS_BUTTON => {
+            switch (std.enums.fromInt(Button, wparam) orelse return 0) {
+                .new_tab => _ = self.window.newTab(),
+                .shell_menu => self.showShellMenu(),
+                .main_menu => self.showMainMenu(),
+            }
+            return 0;
+        },
 
         c.WM_GETOBJECT => {
             if (self.accessibility == null) {
