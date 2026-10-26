@@ -740,15 +740,24 @@ Reviewed the branch against this file and discussion #2563.
   detection, launches from PowerShell in `C:\Users` and then `C:\Code`
   opened windows in those directories (the second via forwarding).
 
-## Next steps (2026-10-25)
+## Next steps (2026-10-25, evening)
 
 - UI tests that type need a focus guard. Twice, `SetForegroundWindow`
   from the test script failed, and the synthetic keys ("line 3") went to
-  the Claude Code terminal instead, interrupting the session. Before
-  sending keys, check that `GetForegroundWindow()` is the Ghostty window
-  (activate it with a title bar click if needed) and abort otherwise.
-- Pending manual UI tests: `toggle_background_opacity`,
-  WSL `\wsl$` working directory inheritance through the UI,
-  PowerShell 7.
-- Done since: command palette, terminal inspector, quick terminal
-  animation, Windows 10 blur (pending a check on Windows 10).
+  the Claude Code terminal instead, interrupting the session. Prefer
+  posting messages to Ghostty's own windows (`WM_KEYDOWN`/`WM_CHAR` to a
+  surface or edit control, `WM_SYSCOMMAND` for menu items), which is how
+  the menus, palette, search, inspector, and win32 input mode were
+  checked. Posted keys can't carry modifiers, since those come from
+  `GetKeyState`.
+- Pending manual checks (they need an unlocked desktop, real input, or
+  another machine):
+  - `toggle_background_opacity`, quick terminal sliding out, the touch
+    keyboard showing, the terminal IO export dialog
+  - A Start menu or Explorer launch opening at home
+  - Blur on Windows 10
+  - `conpty.dll` from the ConPTY package (Kitty graphics APCs)
+  - WSL `\wsl$` working directory inheritance through the UI,
+    PowerShell 7
+- Remaining work: an MSIX package (needs the Windows SDK and signing),
+  and bundling `conpty.dll` once it's verified.
