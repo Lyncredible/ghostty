@@ -523,6 +523,11 @@ Notes:
         with the .NET UIA client: two TabItems with their titles and
         rectangles, the second selected; selecting the first made it the
         active tab.
+    - [x] The buttons come after the tabs, as Buttons named like their
+          tooltips ("New Tab", "New Tab With a Shell", "Menu") with the
+          Invoke pattern, which presses them from a posted message (the
+          menus run a modal loop). Checked: invoking "New Tab" opened a
+          second tab.
   - [x] The text pattern's selection is the terminal's selection (its
         visible part), or else the cursor as a caret, and selection
         changes raise `TextSelectionChanged` (posted from
