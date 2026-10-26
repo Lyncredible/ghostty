@@ -635,7 +635,7 @@ fn toggleQuickTerminal(self: *App) !void {
         self.quick_terminal = try self.newWindow(.quick);
         return;
     };
-    if (c.IsWindowVisible(window.hwnd) != 0 and c.GetForegroundWindow() == window.hwnd) {
+    if (window.quickShowing() and c.GetForegroundWindow() == window.hwnd) {
         window.hideQuick();
     } else {
         window.showQuick();
