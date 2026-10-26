@@ -341,7 +341,8 @@ language: ?[:0]const u8 = null,
 @"clipboard-codepoint-map": RepeatableClipboardCodepointMap = .{},
 
 /// Draw fonts with a thicker stroke, if supported.
-/// This is currently only supported on macOS.
+/// This is supported on macOS (with font smoothing) and with FreeType,
+/// such as on Windows, where outlines are emboldened slightly.
 @"font-thicken": bool = false,
 
 /// Strength of thickening when `font-thicken` is enabled.
@@ -351,7 +352,7 @@ language: ?[:0]const u8 = null,
 ///
 /// Has no effect when `font-thicken` is set to `false`.
 ///
-/// This is currently only supported on macOS.
+/// This is supported on macOS and with FreeType, such as on Windows.
 @"font-thicken-strength": u8 = 255,
 
 /// Locations to break font shaping into multiple runs.
@@ -2340,7 +2341,7 @@ keybind: Keybinds = .{},
 ///    Never show the tab bar. Tabs are only accessible via the tab
 ///    overview or by keybind actions.
 ///
-/// Currently only supported on Linux (GTK).
+/// Currently only supported on Linux (GTK) and Windows.
 @"window-show-tab-bar": WindowShowTabBar = .auto,
 
 /// Background color for the window titlebar. This only takes effect if

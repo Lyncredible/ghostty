@@ -190,6 +190,12 @@ Notes:
         With a window waiting for undo, closing the last open one quit
         the app. This found a use-after-free: closing a single-terminal
         window with the close button reset a flag on the freed window.
+- [x] `font-thicken` and `font-thicken-strength` with FreeType (so on
+      Windows): outlines are emboldened by a quarter of a pixel up to a
+      whole pixel overall, by strength. Measured on a screenshot of the
+      cmd banner (pixels brighter than half): 6,463 normally, 6,850 at
+      strength 0, and 8,403 at 255; the text stays crisp.
+- [x] `window-show-tab-bar` is documented as working on Windows.
 
 ### Known limitations
 
