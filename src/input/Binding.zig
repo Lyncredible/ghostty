@@ -592,7 +592,8 @@ pub const Action = union(enum) {
 
     /// Toggle the tab overview.
     ///
-    /// This is only supported on Linux and when the system's libadwaita
+    /// This is only supported on Windows, where it lists the window's
+    /// tabs to switch between, and on Linux when the system's libadwaita
     /// version is 1.4 or newer. The current libadwaita version can be
     /// found by running `ghostty +version`.
     toggle_tab_overview,
