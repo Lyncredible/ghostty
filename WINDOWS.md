@@ -129,10 +129,17 @@ Notes:
 
 ### Known limitations
 
-- ConPTY (as used with no flags) doesn't pass through APC or OSC 8
-  sequences. Kitty graphics payloads leak into the terminal as text and
-  hyperlinks are dropped. Fixing this needs a ConPTY passthrough mode (if
-  the OS supports one) or bypassing ConPTY for capable programs.
+- The inbox ConPTY drops APC sequences, so the Kitty graphics protocol
+  doesn't work. OSC 8 hyperlinks do pass through on build 26100 (checked:
+  a PowerShell `Write-Host` of an OSC 8 link reached `startHyperlink`).
+  `PSEUDOCONSOLE_PASSTHROUGH_MODE` (0x8) is accepted by
+  `CreatePseudoConsole` on 26100 but changes nothing: the APC still
+  doesn't arrive.
+  - [ ] Optionally load `conpty.dll` (with `OpenConsole.exe`) from the
+        Microsoft.Windows.Console.ConPTY package or Windows Terminal,
+        which implements passthrough, when it's next to `ghostty.exe`
+        (`ConptyCreatePseudoConsole` and friends), falling back to the
+        inbox ConPTY.
 
 ### Next
 
