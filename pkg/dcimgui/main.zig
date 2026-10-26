@@ -23,6 +23,20 @@ pub extern fn ImGui_ImplOSX_Init(*anyopaque) callconv(.c) bool;
 pub extern fn ImGui_ImplOSX_Shutdown() callconv(.c) void;
 pub extern fn ImGui_ImplOSX_NewFrame(*anyopaque) callconv(.c) void;
 
+// Direct3D 11 backend. The device and context are ID3D11Device and
+// ID3D11DeviceContext pointers.
+pub extern fn ImGui_ImplDX11_Init(device: *anyopaque, device_context: *anyopaque) callconv(.c) bool;
+pub extern fn ImGui_ImplDX11_Shutdown() callconv(.c) void;
+pub extern fn ImGui_ImplDX11_NewFrame() callconv(.c) void;
+pub extern fn ImGui_ImplDX11_RenderDrawData(draw_data: *c.ImDrawData) callconv(.c) void;
+
+// Win32 backend. The handles are HWND.
+pub extern fn ImGui_ImplWin32_Init(hwnd: *anyopaque) callconv(.c) bool;
+pub extern fn ImGui_ImplWin32_Shutdown() callconv(.c) void;
+pub extern fn ImGui_ImplWin32_NewFrame() callconv(.c) void;
+pub extern fn ImGui_ImplWin32_WndProcHandler(hwnd: *anyopaque, msg: c_uint, wparam: usize, lparam: isize) callconv(.c) isize;
+pub extern fn ImGui_ImplWin32_GetDpiScaleForHwnd(hwnd: *anyopaque) callconv(.c) f32;
+
 // Internal API types and functions from dcimgui_internal.h We declare these
 // manually because the internal header contains bitfields that translate-c has
 // trouble with.
