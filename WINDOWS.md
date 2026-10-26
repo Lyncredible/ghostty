@@ -169,10 +169,13 @@ Notes:
         `PSEUDOCONSOLE_GLYPH_WIDTH_GRAPHEMES`, matching our default width
         method. That package's header has no passthrough flag (0x8 is now
         the grapheme width flag).
-    - [ ] Not verified: running the downloaded package's binaries was
-          blocked in the dev session. Check that `using conpty.dll` is
-          logged, shells work, and a Kitty graphics APC (`ESC _ G a=q ;
-          ESC \`) reaches Ghostty ("executing kitty graphics command").
+    - [x] Checked (with permission, 2026-10-26): Ghostty logged "using
+          conpty.dll" and the shell ran normally, but the Kitty graphics
+          APC still didn't arrive: PowerShell's `Write-Host` of
+          `ESC _ G i=31,a=q; ESC \` showed "=31,a=q;" as text. So neither
+          the inbox ConPTY nor the 1.25 package passes APCs through, and
+          the Kitty graphics protocol can't work through ConPTY for now.
+          OSC 8 hyperlinks pass through both.
     - [x] `package.ps1 -BundleConpty` downloads that package (version and
           SHA-256 pinned), and puts its `conpty.dll` and `OpenConsole.exe`
           for the target architecture in `bin`. Checked: the zip has both
@@ -899,8 +902,8 @@ Reviewed the branch against this file and discussion #2563.
   - A Start menu or Explorer launch opening at home
   - Installing the MSIX (`Add-AppxPackage -AllowUnsigned`)
   - Blur on Windows 10
-  - `conpty.dll` from the ConPTY package (Kitty graphics APCs); build with
-    `package.ps1 -BundleConpty` to try it
+  - (Done: `conpty.dll` from the ConPTY package works, but doesn't pass
+    Kitty graphics APCs either)
   - WSL `\wsl$` working directory inheritance through the UI,
     PowerShell 7
 - Remaining work: a signed package, which needs a certificate.
