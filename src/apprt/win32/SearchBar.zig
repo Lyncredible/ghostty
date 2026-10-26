@@ -372,14 +372,14 @@ pub fn wndProc(hwnd: c.HWND, msg: c.UINT, wparam: c.WPARAM, lparam: c.LPARAM) ca
         },
 
         c.WM_CTLCOLOREDIT => {
-            const dc: c.HDC = @ptrFromInt(wparam);
+            const dc = util.handle(c.HDC, wparam);
             _ = c.SetTextColor(dc, self.foreground);
             _ = c.SetBkColor(dc, self.field);
             return @bitCast(@intFromPtr(self.edit_brush));
         },
 
         c.WM_COMMAND => {
-            if (@as(c.HWND, @ptrFromInt(@as(usize, @bitCast(lparam)))) == self.edit and
+            if (util.handle(c.HWND, lparam) == self.edit and
                 (wparam >> 16) & 0xFFFF == c.EN_CHANGE)
             {
                 self.editChanged();
