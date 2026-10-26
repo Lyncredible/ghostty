@@ -212,6 +212,10 @@ Notes:
       cmd banner (pixels brighter than half): 6,463 normally, 6,850 at
       strength 0, and 8,403 at 255; the text stays crisp.
 - [x] `window-show-tab-bar` is documented as working on Windows.
+- [x] `split-preserve-zoom = navigation`, like GTK: navigating away from
+      a zoomed split zooms the target instead of unzooming. Checked: with
+      the option, `goto_split:previous` from the zoomed split showed only
+      the first split; without it, both showed.
 - [x] `window-title-font-family` sets the tab bar's font (at the system
       UI font's size; it's reapplied on config reload). Checked with
       screenshots: "Courier New" drew the tab title in Courier.
