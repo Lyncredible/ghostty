@@ -317,6 +317,10 @@ Notes:
   - `WT_SESSION` was inherited when Ghostty was started from Windows
     Terminal, so programs would think they run in Windows Terminal. It's
     removed now, with `WT_PROFILE_ID`, like `VTE_VERSION`.
+- [x] Config files from Windows editors: a UTF-8 BOM (which some editors
+      write) and CRLF line endings both validate cleanly with
+      `+validate-config` (the loader already skips a BOM), while a bogus
+      key in the same setup is reported.
 - [x] Working directories with spaces and non-ASCII names: launched with
       `--working-directory` set to a folder named "dir 中文 é", the first
       tab's cmd prompt and a new tab's (inherited through OSC 7) both
