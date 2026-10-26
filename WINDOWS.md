@@ -111,6 +111,8 @@ Notes:
         clipboard.
   - [x] Titles, maximize, borderless fullscreen, and initial size.
   - [x] Close confirmation, open URL/config, and config reload.
+  - [x] Debug builds say "(debug build)" in the window title, like GTK's
+        debug warning banner, since they're much slower.
   - [x] Configuration errors dialog, like GTK's: at startup (once the
         first window is up) and after a reload, a warning lists the
         errors (up to 15) and offers to reload. Checked with two bad CLI

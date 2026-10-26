@@ -4,6 +4,7 @@
 const Window = @This();
 
 const std = @import("std");
+const builtin = @import("builtin");
 const Allocator = std.mem.Allocator;
 const apprt = @import("../../apprt.zig");
 const configpkg = @import("../../config.zig");
@@ -905,10 +906,14 @@ fn updateWindowTitle(self: *Window) void {
     } else false;
     // Like other platforms, mark the title with a bell emoji. We do so
     // for any tab so that it remains visible when the tab bar is hidden.
-    const display_title = if (pending)
-        std.fmt.allocPrint(alloc, "🔔 {s}", .{title}) catch return
-    else
-        alloc.dupe(u8, title) catch return;
+    //
+    // Debug builds are much slower, so like GTK's banner, we say so.
+    const debug = if (comptime builtin.mode == .debug) " (debug build)" else "";
+    const display_title = std.fmt.allocPrint(alloc, "{s}{s}{s}", .{
+        if (pending) "🔔 " else "",
+        title,
+        debug,
+    }) catch return;
     defer alloc.free(display_title);
     const title16 = util.utf16Alloc(alloc, display_title) catch return;
     defer alloc.free(title16);
