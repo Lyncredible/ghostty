@@ -135,11 +135,19 @@ Notes:
   `PSEUDOCONSOLE_PASSTHROUGH_MODE` (0x8) is accepted by
   `CreatePseudoConsole` on 26100 but changes nothing: the APC still
   doesn't arrive.
-  - [ ] Optionally load `conpty.dll` (with `OpenConsole.exe`) from the
-        Microsoft.Windows.Console.ConPTY package or Windows Terminal,
-        which implements passthrough, when it's next to `ghostty.exe`
-        (`ConptyCreatePseudoConsole` and friends), falling back to the
-        inbox ConPTY.
+  - [x] Load `conpty.dll` (with `OpenConsole.exe`) when it's next to
+        `ghostty.exe`, from the Microsoft.Windows.Console.ConPTY NuGet
+        package (MIT, 1.25.260930003 has x64/x86/arm64) or Windows
+        Terminal, falling back to the inbox ConPTY. It's created with
+        `PSEUDOCONSOLE_GLYPH_WIDTH_GRAPHEMES`, matching our default width
+        method. That package's header has no passthrough flag (0x8 is now
+        the grapheme width flag).
+    - [ ] Not verified: running the downloaded package's binaries was
+          blocked in the dev session. Check that `using conpty.dll` is
+          logged, shells work, and a Kitty graphics APC (`ESC _ G a=q ;
+          ESC \`) reaches Ghostty ("executing kitty graphics command").
+    - [ ] If it works, add an opt-in to `dist/windows/package.ps1` that
+          bundles the package's `conpty.dll` and `OpenConsole.exe`.
 
 ### Next
 
