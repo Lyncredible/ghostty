@@ -1007,16 +1007,20 @@ fn updateBackdrop(self: *Window) void {
     };
     _ = c.DwmExtendFrameIntoClientArea(self.hwnd, &margins);
 
+    // The system backdrop (acrylic) needs Windows 11 22H2. Earlier
+    // versions, including Windows 10, get the older blur behind accent.
+    const system_backdrop = util.windowsBuild() >= 22621;
     const DWMWA_SYSTEMBACKDROP_TYPE = 38;
     const DWMSBT_AUTO = 0;
     const DWMSBT_TRANSIENTWINDOW = 3;
-    const backdrop: c.DWORD = if (blur) DWMSBT_TRANSIENTWINDOW else DWMSBT_AUTO;
+    const backdrop: c.DWORD = if (blur and system_backdrop) DWMSBT_TRANSIENTWINDOW else DWMSBT_AUTO;
     _ = c.DwmSetWindowAttribute(
         self.hwnd,
         DWMWA_SYSTEMBACKDROP_TYPE,
         &backdrop,
         @sizeOf(c.DWORD),
     );
+    if (!system_backdrop) util.setBlurBehindAccent(self.hwnd, blur);
 
     const region = if (translucent and !blur) c.CreateRectRgn(0, 0, -1, -1) else null;
     defer if (region != null) {

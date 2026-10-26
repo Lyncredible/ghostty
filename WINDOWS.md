@@ -143,7 +143,11 @@ Notes:
 - [x] Move a tab to a new window (`move_tab_to_new_window`)
 - [x] Background opacity/blur (DirectComposition swap chain)
   - [x] `toggle_background_opacity` (needs a manual UI test)
-  - [ ] Blur on Windows 10 (the acrylic backdrop is Windows 11 only)
+  - [x] Blur on Windows 10 and Windows 11 before 22H2 (no system
+        backdrop there): the blur behind accent from the undocumented
+        `SetWindowCompositionAttribute`
+    - [ ] Manual check on Windows 10 (the dev machine is build 26100,
+          which takes the system backdrop path)
 - [x] Single instance and IPC
   - [x] `+new-window` and `+new-tab` (with `-e`, `--working-directory`,
         `--title`, `--shell-integration`)
