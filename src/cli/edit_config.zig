@@ -40,7 +40,9 @@ pub const Options = struct {
 ///
 /// This command prefers the `$VISUAL` environment variable over `$EDITOR`,
 /// if both are set. If neither are set, it will print an error
-/// and exit.
+/// and exit. On Windows, the editor runs through `cmd.exe` (so it can be
+/// a command with arguments, such as `code --wait`), and Notepad is used
+/// if neither is set.
 pub fn run(alloc: Allocator) !u8 {
     // Implementation note (by @mitchellh): I do proper memory cleanup
     // throughout this command, even though we plan on doing `exec`.
@@ -83,18 +85,8 @@ fn runInner(alloc: Allocator, stderr: *std.Io.Writer) !u8 {
     const path = try configpkg.preferredDefaultFilePath(alloc);
     defer alloc.free(path);
 
-    // We don't currently support Windows because we use the exec syscall.
-    if (comptime builtin.target.os.tag == .windows) {
-        try stderr.print(
-            \\The `ghostty +edit-config` command is not supported on Windows.
-            \\Please edit the configuration file manually at the following path:
-            \\
-            \\
-        ,
-            .{},
-        );
-        return 1;
-    }
+    // Windows has no exec, so we run the editor and wait for it.
+    if (comptime builtin.target.os.tag == .windows) return try runWindows(alloc, stderr, path);
 
     const command = internal_os.getConfigEditCommand(alloc, path, .{ .default_editor = .failure }) catch |err| {
         switch (err) {
@@ -160,3 +152,72 @@ fn runInner(alloc: Allocator, stderr: *std.Io.Writer) !u8 {
     );
     return 1;
 }
+
+/// Edit the config in `$VISUAL` or `$EDITOR`, or else in Notepad, and wait
+/// for the editor to exit. The editor runs through cmd, so it can have
+/// arguments (such as `code --wait`) and be a batch file.
+fn runWindows(alloc: Allocator, stderr: *std.Io.Writer, path: []const u8) !u8 {
+    const windows = internal_os.windows;
+    const env = global.environ();
+    const editor: ?[]const u8 = editor: {
+        inline for (.{ "VISUAL", "EDITOR" }) |name| {
+            if (env.containsUnempty(alloc, name) catch false) {
+                break :editor env.getAlloc(alloc, name) catch null;
+            }
+        }
+        break :editor null;
+    };
+    defer if (editor) |v| alloc.free(v);
+
+    // With /s, cmd removes only the outer quotes and runs the rest as it
+    // is, so the editor and the quoted path don't need more escaping.
+    const command_line = if (editor) |v|
+        try std.fmt.allocPrint(alloc, "cmd.exe /d /s /c \"{s} \"{s}\"\"", .{ v, path })
+    else
+        try std.fmt.allocPrint(alloc, "notepad.exe \"{s}\"", .{path});
+    defer alloc.free(command_line);
+    const command_line_w = try std.unicode.utf8ToUtf16LeAllocZ(alloc, command_line);
+    defer alloc.free(command_line_w);
+
+    // We pass on our standard handles, which may be pipes rather than the
+    // console, such as when our output is redirected.
+    var startup_info = std.mem.zeroes(windows.STARTUPINFOW);
+    startup_info.cb = @sizeOf(windows.STARTUPINFOW);
+    startup_info.dwFlags = windows.STARTF_USESTDHANDLES;
+    startup_info.hStdInput = GetStdHandle(@bitCast(@as(i32, -10)));
+    startup_info.hStdOutput = GetStdHandle(@bitCast(@as(i32, -11)));
+    startup_info.hStdError = GetStdHandle(@bitCast(@as(i32, -12)));
+    var process_information: windows.PROCESS_INFORMATION = undefined;
+    if (windows.exp.kernel32.CreateProcessW(
+        null,
+        command_line_w.ptr,
+        null,
+        null,
+        windows.TRUE,
+        0,
+        null,
+        null,
+        &startup_info,
+        &process_information,
+    ) == windows.FALSE) {
+        try stderr.print(
+            \\Failed to start the editor ({t}).
+            \\
+            \\Command: {s}
+            \\
+            \\You can edit the configuration file at the following path:
+            \\{s}
+            \\
+        , .{ windows.GetLastError(), command_line, path });
+        return 1;
+    }
+    defer _ = windows.exp.kernel32.CloseHandle(process_information.hProcess);
+    defer _ = windows.exp.kernel32.CloseHandle(process_information.hThread);
+
+    _ = windows.exp.kernel32.WaitForSingleObject(process_information.hProcess, windows.INFINITE);
+    var code: windows.DWORD = 1;
+    _ = windows.exp.kernel32.GetExitCodeProcess(process_information.hProcess, &code);
+    return @truncate(code);
+}
+
+extern "kernel32" fn GetStdHandle(std_handle: u32) callconv(.winapi) ?*anyopaque;

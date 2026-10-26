@@ -1336,7 +1336,7 @@ pub fn performAction(
                 return true;
             };
             defer alloc.free(path);
-            openUrl(alloc, path);
+            shell.openFile(alloc, path);
         },
 
         // Unimplemented

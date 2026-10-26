@@ -16,7 +16,7 @@ pub fn defaultXdgPath(alloc: Allocator) ![]const u8 {
         global.io(),
         alloc,
         &environ_map,
-        .{ .subdir = "ghostty/config.ghostty" },
+        .{ .subdir = "ghostty" ++ std.fs.path.sep_str ++ "config.ghostty" },
     );
 }
 
@@ -29,7 +29,7 @@ pub fn legacyDefaultXdgPath(alloc: Allocator) ![]const u8 {
         global.io(),
         alloc,
         &environ_map,
-        .{ .subdir = "ghostty/config" },
+        .{ .subdir = "ghostty" ++ std.fs.path.sep_str ++ "config" },
     );
 }
 

@@ -781,6 +781,7 @@ fn addWin32(
     step.root_module.linkSystemLibrary("comdlg32", dynamic_link_opts);
     step.root_module.linkSystemLibrary("uiautomationcore", dynamic_link_opts);
     step.root_module.linkSystemLibrary("oleaut32", dynamic_link_opts);
+    step.root_module.linkSystemLibrary("shlwapi", dynamic_link_opts);
     step.root_module.linkSystemLibrary("uuid", dynamic_link_opts);
 }
 

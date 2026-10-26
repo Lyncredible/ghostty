@@ -71,6 +71,66 @@ fn tipInvocation() ?*ITipInvocation {
 /// Ask where to save `contents` with the standard Save As dialog, and save
 /// it there. The dialog is modal and pumps messages. Returns false if the
 /// user canceled or saving failed.
+/// Open a file in the app associated with its type, or in Notepad if
+/// there's none. Our config file's `.ghostty` type usually has no app, and
+/// Windows would only ask which app to use.
+pub fn openFile(alloc: Allocator, path: []const u8) void {
+    const path16 = util.utf16Alloc(alloc, path) catch return;
+    defer alloc.free(path16);
+    const open = std.unicode.utf8ToUtf16LeStringLiteral("open");
+
+    if (hasAssociation(path)) {
+        const result = c.ShellExecuteW(null, open, path16, null, null, c.SW_SHOWNORMAL);
+        if (@intFromPtr(result) > 32) return;
+        log.warn("failed to open file path={s} result={}", .{ path, @intFromPtr(result) });
+    }
+
+    // Notepad takes the path as a single (quoted) argument.
+    const params = std.fmt.allocPrint(alloc, "\"{s}\"", .{path}) catch return;
+    defer alloc.free(params);
+    const params16 = util.utf16Alloc(alloc, params) catch return;
+    defer alloc.free(params16);
+    const notepad = std.unicode.utf8ToUtf16LeStringLiteral("notepad.exe");
+    const result = c.ShellExecuteW(null, open, notepad, params16, null, c.SW_SHOWNORMAL);
+    if (@intFromPtr(result) <= 32) {
+        log.warn("failed to open file in notepad path={s} result={}", .{ path, @intFromPtr(result) });
+    }
+}
+
+/// Whether the file's type (its extension) has an app to open it with.
+fn hasAssociation(path: []const u8) bool {
+    const ext = std.fs.path.extension(path);
+    if (ext.len == 0) return false;
+    var ext_buf: [64]u16 = undefined;
+    if (ext.len >= ext_buf.len) return false;
+    const n = std.unicode.utf8ToUtf16Le(&ext_buf, ext) catch return false;
+    ext_buf[n] = 0;
+
+    var len: u32 = 0;
+    const ASSOCF_INIT_IGNOREUNKNOWN: u32 = 0x400;
+    const ASSOCSTR_EXECUTABLE: i32 = 2;
+    const S_FALSE = 1;
+    const hr = AssocQueryStringW(
+        ASSOCF_INIT_IGNOREUNKNOWN,
+        ASSOCSTR_EXECUTABLE,
+        ext_buf[0..n :0],
+        std.unicode.utf8ToUtf16LeStringLiteral("open"),
+        null,
+        &len,
+    );
+    // With no output buffer, success is S_FALSE with the length.
+    return hr == S_FALSE or hr == 0;
+}
+
+extern "shlwapi" fn AssocQueryStringW(
+    flags: u32,
+    str: i32,
+    assoc: [*:0]const u16,
+    extra: ?[*:0]const u16,
+    out: ?[*]u16,
+    out_len: *u32,
+) callconv(.winapi) i32;
+
 pub fn saveAs(
     alloc: Allocator,
     owner: c.HWND,
