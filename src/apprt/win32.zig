@@ -15,4 +15,5 @@ test {
     _ = @import("win32/Ipc.zig");
     _ = @import("win32/Overrides.zig");
     _ = @import("win32/Window.zig");
+    _ = @import("win32/Menu.zig");
 }

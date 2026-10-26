@@ -25,6 +25,7 @@ const Scrollbar = @import("Scrollbar.zig");
 const Badge = @import("Badge.zig");
 const SearchBar = @import("SearchBar.zig");
 const Overrides = @import("Overrides.zig");
+const Menu = @import("Menu.zig");
 
 const log = std.log.scoped(.win32);
 
@@ -51,6 +52,10 @@ cursor_pos: apprt.CursorPos = .{ .x = -1, .y = -1 },
 
 /// Whether we're tracking the mouse to get WM_MOUSELEAVE.
 tracking_mouse: bool = false,
+
+/// Whether the core left the last right button press to us, so we show
+/// the context menu when it's released.
+context_menu_pending: bool = false,
 
 /// The cursor to show when the mouse is over us, and whether it's hidden.
 cursor: c.HCURSOR,
@@ -1017,12 +1022,12 @@ pub fn wndProc(
             return 0;
         },
 
-        c.WM_LBUTTONDOWN => return self.mouseButtonEvent(.press, .left, wparam),
-        c.WM_LBUTTONUP => return self.mouseButtonEvent(.release, .left, wparam),
-        c.WM_RBUTTONDOWN => return self.mouseButtonEvent(.press, .right, wparam),
-        c.WM_RBUTTONUP => return self.mouseButtonEvent(.release, .right, wparam),
-        c.WM_MBUTTONDOWN => return self.mouseButtonEvent(.press, .middle, wparam),
-        c.WM_MBUTTONUP => return self.mouseButtonEvent(.release, .middle, wparam),
+        c.WM_LBUTTONDOWN => return self.mouseButtonEvent(.press, .left, wparam, lparam),
+        c.WM_LBUTTONUP => return self.mouseButtonEvent(.release, .left, wparam, lparam),
+        c.WM_RBUTTONDOWN => return self.mouseButtonEvent(.press, .right, wparam, lparam),
+        c.WM_RBUTTONUP => return self.mouseButtonEvent(.release, .right, wparam, lparam),
+        c.WM_MBUTTONDOWN => return self.mouseButtonEvent(.press, .middle, wparam, lparam),
+        c.WM_MBUTTONUP => return self.mouseButtonEvent(.release, .middle, wparam, lparam),
         c.WM_XBUTTONDOWN, c.WM_XBUTTONUP => {
             const button: input.MouseButton = switch (util.hiword(wparam)) {
                 c.XBUTTON1 => .four,
@@ -1033,6 +1038,7 @@ pub fn wndProc(
                 if (msg == c.WM_XBUTTONDOWN) .press else .release,
                 button,
                 wparam,
+                lparam,
             );
             // XBUTTON messages must return TRUE.
             return 1;
@@ -1081,6 +1087,7 @@ fn mouseButtonEvent(
     action: input.MouseButtonState,
     button: input.MouseButton,
     wparam: c.WPARAM,
+    lparam: c.LPARAM,
 ) c.LRESULT {
     // Capture the mouse while a button is held so that we keep getting
     // events (e.g. while selecting) if the cursor leaves the window.
@@ -1098,10 +1105,37 @@ fn mouseButtonEvent(
         },
     }
 
-    _ = self.core_surface.mouseButtonCallback(action, button, key.currentMods()) catch |err| {
+    const consumed = self.core_surface.mouseButtonCallback(action, button, key.currentMods()) catch |err| err: {
         log.err("error in mouse button callback err={}", .{err});
+        break :err true;
+    };
+
+    // When `right-click-action` is `context-menu`, the core selects the
+    // word under the cursor and doesn't consume the press. Like other
+    // Windows apps, we show the menu when the button is released.
+    if (button == .right) switch (action) {
+        .press => self.context_menu_pending = !consumed,
+        .release => if (self.context_menu_pending) {
+            self.context_menu_pending = false;
+            self.showContextMenu(.{ .x = util.loword(lparam), .y = util.hiword(lparam) });
+        },
     };
     return 0;
+}
+
+/// Show the context menu at a point in our client area.
+fn showContextMenu(self: *Surface, client_pt: c.POINT) void {
+    var pt = client_pt;
+    _ = c.ClientToScreen(self.hwnd, &pt);
+    Menu.track(&Menu.context, self, self.window.hwnd, pt, 0);
+}
+
+/// Run an action chosen from a menu.
+pub fn performMenuAction(self: *Surface, action: input.Binding.Action) void {
+    if (!self.core_initialized) return;
+    _ = self.core_surface.performBindingAction(action) catch |err| {
+        log.warn("error performing menu action action={} err={}", .{ action, err });
+    };
 }
 
 /// Handle a key message. Returns true if the message was handled and
