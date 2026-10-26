@@ -2850,7 +2850,7 @@ keybind: Keybinds = .{},
 /// Set it to 0 to disable animation completely. This can be changed at
 /// runtime.
 ///
-/// Only implemented on macOS.
+/// Only implemented on macOS and Windows.
 @"quick-terminal-animation-duration": f64 = 0.2,
 
 /// Automatically hide the quick terminal when focus shifts to another window.
@@ -2883,7 +2883,7 @@ keybind: Keybinds = .{},
 ///
 /// The default value is `move`.
 ///
-/// Only implemented on macOS.
+/// Only implemented on macOS and Windows.
 /// On Linux the behavior is always equivalent to `move`.
 ///
 /// Available since: 1.1.0
