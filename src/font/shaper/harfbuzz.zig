@@ -2198,8 +2198,9 @@ fn testShaperWithDiscoveredFont(alloc: Allocator, font_req: [:0]const u8) !TestS
             .monospace = false,
         });
         defer disco_it.deinit();
+        // Loading makes a new face, so we always free the deferred one.
         var face: font.DeferredFace = (try disco_it.next()) orelse return error.FontNotFound;
-        errdefer face.deinit();
+        defer face.deinit();
 
         // Check which font was discovered - skip if it doesn't match the request
         var name_buf: [256]u8 = undefined;
