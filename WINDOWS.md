@@ -292,7 +292,13 @@ Notes:
         cursor really moves, the window is in front, no button is held,
         and focus is on another terminal (never a search field, palette,
         or dialog). Needs a check on an unlocked desktop.
-  - [ ] Dropping files on a terminal pastes their quoted paths
+  - [x] Dropping files on a terminal pastes their paths through the
+        normal paste path (bracketed paste, unsafe paste checks),
+        separated by spaces like Windows Terminal. For cmd/PowerShell,
+        paths with spaces or special characters are double quoted; for
+        WSL (the command runs `wsl.exe`) they become Linux paths
+        (`/mnt/c/...`, `\wsl$\<distro>\...` to `/...`) in single
+        quotes when needed. Unit tested; a real drop needs a manual check.
   - [ ] `window-position-x` and `window-position-y`
 - [x] Share built-in compiled shader bytecode across surfaces
 - [x] Precompile the built-in HLSL at build time when the build host is
