@@ -116,6 +116,15 @@ Notes:
   - [x] Quit timer delay, `initial-window`, and the system double-click
         interval.
 - [x] ConPTY: clean shutdown when the shell exits or the surface closes.
+- [x] Win32 input mode (DECSET 9001), which ConPTY requests: keys are
+      sent as `CSI Vk;Sc;Uc;Kd;Cs;Rc _` key event records, with releases,
+      so console programs see real virtual keys, scan codes, and modifier
+      state. The mode is only enabled in the Windows app (not
+      libghostty-vt); it takes snapshot mode bit 43, a reserved bit that
+      earlier decoders ignore. The virtual key comes from the scan code
+      with `MapVirtualKeyW` for the current layout. Checked with
+      `[Console]::ReadKey` behind ConPTY: Numpad 5 arrives as `NumPad5`
+      (the VT fallback can only send a plain `5`), Up as `UpArrow`.
 - [x] CI job that builds and tests the app on Windows.
 
 ### Known limitations
@@ -124,8 +133,6 @@ Notes:
   sequences. Kitty graphics payloads leak into the terminal as text and
   hyperlinks are dropped. Fixing this needs a ConPTY passthrough mode (if
   the OS supports one) or bypassing ConPTY for capable programs.
-- ConPTY requests win32-input-mode (DECSET 9001), which Ghostty doesn't
-  implement yet; ConPTY falls back to plain VT input.
 
 ### Next
 

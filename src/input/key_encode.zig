@@ -8,6 +8,11 @@ const function_keys = @import("function_keys.zig");
 const key = @import("key.zig");
 const KittyEntry = @import("kitty.zig").Entry;
 const kitty_entries = @import("kitty.zig").entries;
+const keycodes = @import("keycodes.zig");
+
+/// Whether win32 input mode is available. See the `win32_input` mode.
+const win32_input_available = @import("terminal_options").artifact == .ghostty and
+    builtin.target.os.tag == .windows;
 
 /// Options that affect key encoding behavior. This is a mix of behavior
 /// from terminal state as well as application configuration.
@@ -37,6 +42,10 @@ pub const Options = struct {
     /// Kitty keyboard protocol flags.
     kitty_flags: KittyFlags = .disabled,
 
+    /// Win32 input mode (DEC mode 9001), requested by ConPTY on Windows.
+    /// This takes precedence over the other encodings.
+    win32_input: bool = false,
+
     /// Determines whether the "option" key on macOS is treated
     /// as "alt" or not. See the Ghostty `macos_option-as-alt` config
     /// docs for a more detailed description of why this is needed.
@@ -65,6 +74,7 @@ pub const Options = struct {
             .ignore_keypad_with_numlock = t.modes.get(.ignore_keypad_with_numlock),
             .modify_other_keys_state_2 = t.flags.modify_other_keys_2,
             .kitty_flags = t.screens.active.kitty_keyboard.current(),
+            .win32_input = t.modes.get(.win32_input),
 
             // These can't be known from the terminal state.
             .macos_option_as_alt = .false,
@@ -85,6 +95,10 @@ pub fn encode(
     opts: Options,
 ) std.Io.Writer.Error!void {
     //std.log.warn("KEYENCODER event={} opts={}", .{ event, opts });
+    if (comptime win32_input_available) {
+        if (opts.win32_input) return try win32(writer, event);
+    }
+
     return if (opts.kitty_flags.int() != 0) try kitty(
         writer,
         event,
@@ -94,6 +108,206 @@ pub fn encode(
         event,
         opts,
     );
+}
+
+/// Encode a key event in win32 input mode, as a Win32 KEY_EVENT_RECORD:
+///
+///     CSI Vk ; Sc ; Uc ; Kd ; Cs ; Rc _
+///
+/// with the virtual key code, scan code, UTF-16 character, whether the
+/// key is down, the control key state, and the repeat count. Text longer
+/// than one UTF-16 unit, such as an emoji, follows as character-only
+/// events like the ones Windows Terminal sends for IME input.
+fn win32(
+    writer: *std.Io.Writer,
+    event: key.KeyEvent,
+) std.Io.Writer.Error!void {
+    // A dead key is reported with the character it composes.
+    if (event.composing) return;
+
+    const scan = win32ScanCode(event.key);
+    const down = event.action != .release;
+    const state = win32ControlKeyState(event.mods, scan > 0xFF);
+
+    // The characters, as Windows produces them for the key.
+    var text: [8]u16 = undefined;
+    var text_len: usize = 0;
+    if (down) {
+        if (win32ControlChar(event)) |ch| {
+            text[0] = ch;
+            text_len = 1;
+        } else {
+            text_len = std.unicode.utf8ToUtf16Le(&text, event.utf8) catch 0;
+        }
+    }
+
+    try win32Record(writer, .{
+        .vk = win32VirtualKey(event.key, scan, event.mods),
+        .scan = @intCast(scan & 0xFF),
+        .char = if (text_len > 0) text[0] else 0,
+        .down = down,
+        .state = state,
+    });
+    if (text_len > 1) for (text[1..text_len]) |unit| {
+        try win32Record(writer, .{ .char = unit, .down = true });
+        try win32Record(writer, .{ .char = unit, .down = false });
+    };
+}
+
+const Win32Record = struct {
+    vk: u16 = 0,
+    scan: u16 = 0,
+    char: u16 = 0,
+    down: bool,
+    state: u32 = 0,
+};
+
+fn win32Record(writer: *std.Io.Writer, record: Win32Record) std.Io.Writer.Error!void {
+    try writer.print("\x1b[{};{};{};{};{};1_", .{
+        record.vk,
+        record.scan,
+        record.char,
+        @intFromBool(record.down),
+        record.state,
+    });
+}
+
+/// The control key state flags of a KEY_EVENT_RECORD.
+fn win32ControlKeyState(mods: key.Mods, enhanced: bool) u32 {
+    const RIGHT_ALT_PRESSED = 0x0001;
+    const LEFT_ALT_PRESSED = 0x0002;
+    const RIGHT_CTRL_PRESSED = 0x0004;
+    const LEFT_CTRL_PRESSED = 0x0008;
+    const SHIFT_PRESSED = 0x0010;
+    const NUMLOCK_ON = 0x0020;
+    const CAPSLOCK_ON = 0x0080;
+    const ENHANCED_KEY = 0x0100;
+
+    var state: u32 = 0;
+    if (mods.alt) state |= if (mods.sides.alt == .right) RIGHT_ALT_PRESSED else LEFT_ALT_PRESSED;
+    if (mods.ctrl) state |= if (mods.sides.ctrl == .right) RIGHT_CTRL_PRESSED else LEFT_CTRL_PRESSED;
+    if (mods.shift) state |= SHIFT_PRESSED;
+    if (mods.num_lock) state |= NUMLOCK_ON;
+    if (mods.caps_lock) state |= CAPSLOCK_ON;
+    if (enhanced) state |= ENHANCED_KEY;
+    return state;
+}
+
+/// The character Windows produces for keys whose text isn't in the event:
+/// control characters for ctrl+letter and the keys that type them.
+fn win32ControlChar(event: key.KeyEvent) ?u16 {
+    // AltGr (ctrl+alt) types the character in the event.
+    const ctrl = event.mods.ctrl and !event.mods.alt;
+    return switch (event.key) {
+        .enter, .numpad_enter => if (ctrl) 0x0A else 0x0D,
+        .tab => if (ctrl) null else 0x09,
+        .backspace => if (ctrl) 0x7F else 0x08,
+        .escape => 0x1B,
+        else => {
+            if (!ctrl or event.utf8.len != 1) return null;
+            return switch (event.utf8[0]) {
+                'a'...'z' => event.utf8[0] - 'a' + 1,
+                'A'...'Z' => event.utf8[0] - 'A' + 1,
+                '[' => 0x1B,
+                '\\' => 0x1C,
+                ']' => 0x1D,
+                else => null,
+            };
+        },
+    };
+}
+
+/// The scan code of a key, with 0xE000 set for extended keys, or 0.
+fn win32ScanCode(k: key.Key) u32 {
+    const table = comptime table: {
+        @setEvalBranchQuota(100_000);
+        var result: std.EnumArray(key.Key, u32) = .initFill(0);
+        for (keycodes.entries) |entry| {
+            if (entry.key == .unidentified) continue;
+            result.set(entry.key, entry.native);
+        }
+        break :table result;
+    };
+    return table.get(k);
+}
+
+/// The virtual key code of a key for the current keyboard layout.
+fn win32VirtualKey(k: key.Key, scan: u32, mods: key.Mods) u16 {
+    // Console key events use the generic modifier keys.
+    switch (k) {
+        .shift_left, .shift_right => return 0x10, // VK_SHIFT
+        .control_left, .control_right => return 0x11, // VK_CONTROL
+        .alt_left, .alt_right => return 0x12, // VK_MENU
+        else => {},
+    }
+
+    // The numpad digits share scan codes with the navigation keys and only
+    // type digits with num lock on.
+    if (mods.num_lock) switch (k) {
+        // VK_NUMPAD0 to VK_NUMPAD9
+        .numpad_0 => return 0x60,
+        .numpad_1 => return 0x61,
+        .numpad_2 => return 0x62,
+        .numpad_3 => return 0x63,
+        .numpad_4 => return 0x64,
+        .numpad_5 => return 0x65,
+        .numpad_6 => return 0x66,
+        .numpad_7 => return 0x67,
+        .numpad_8 => return 0x68,
+        .numpad_9 => return 0x69,
+        .numpad_decimal => return 0x6E, // VK_DECIMAL
+        else => {},
+    };
+
+    if (scan == 0) return 0;
+    const MAPVK_VSC_TO_VK_EX = 3;
+    return @truncate(MapVirtualKeyW(scan, MAPVK_VSC_TO_VK_EX));
+}
+
+extern "user32" fn MapVirtualKeyW(code: u32, map_type: u32) callconv(.winapi) u32;
+
+test "win32 input: control key state" {
+    try testing.expectEqual(@as(u32, 0x0018), win32ControlKeyState(.{ .ctrl = true, .shift = true }, false));
+    try testing.expectEqual(@as(u32, 0x0105), win32ControlKeyState(.{
+        .ctrl = true,
+        .alt = true,
+        .sides = .{ .ctrl = .right, .alt = .right },
+    }, true));
+    try testing.expectEqual(@as(u32, 0x00A0), win32ControlKeyState(.{ .caps_lock = true, .num_lock = true }, false));
+}
+
+test "win32 input: control characters" {
+    try testing.expectEqual(@as(?u16, 0x01), win32ControlChar(.{ .key = .key_a, .mods = .{ .ctrl = true }, .utf8 = "a" }));
+    try testing.expectEqual(@as(?u16, null), win32ControlChar(.{ .key = .key_a, .utf8 = "a" }));
+    try testing.expectEqual(@as(?u16, null), win32ControlChar(.{ .key = .key_q, .mods = .{ .ctrl = true, .alt = true }, .utf8 = "@" }));
+    try testing.expectEqual(@as(?u16, 0x0D), win32ControlChar(.{ .key = .enter }));
+    try testing.expectEqual(@as(?u16, 0x7F), win32ControlChar(.{ .key = .backspace, .mods = .{ .ctrl = true } }));
+}
+
+test "win32 input: encode" {
+    if (comptime !win32_input_available) return error.SkipZigTest;
+
+    var buf: [128]u8 = undefined;
+    {
+        // Arrow keys are extended keys, independent of the layout.
+        var writer: std.Io.Writer = .fixed(&buf);
+        try encode(&writer, .{ .key = .arrow_up }, .{ .win32_input = true });
+        try testing.expectEqualStrings("\x1b[38;72;0;1;256;1_", writer.buffered());
+    }
+    {
+        var writer: std.Io.Writer = .fixed(&buf);
+        try encode(&writer, .{ .key = .enter, .action = .release }, .{ .win32_input = true });
+        try testing.expectEqualStrings("\x1b[13;28;0;0;0;1_", writer.buffered());
+    }
+    {
+        // Text beyond one UTF-16 unit follows as character events.
+        var writer: std.Io.Writer = .fixed(&buf);
+        try encode(&writer, .{ .key = .unidentified, .utf8 = "😀" }, .{ .win32_input = true });
+        try testing.expectEqualStrings(
+            "\x1b[0;0;55357;1;0;1_\x1b[0;0;56832;1;0;1_\x1b[0;0;56832;0;0;1_",
+            writer.buffered(),
+        );
+    }
 }
 
 /// Perform Kitty keyboard protocol encoding of the key event.
