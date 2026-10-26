@@ -77,6 +77,15 @@ fn homeUnix(io: std.Io, environ_map: *const std.process.Environ.Map, buf: []u8) 
 }
 
 fn homeWindows(environ_map: *const std.process.Environ.Map, buf: []u8) !?[]const u8 {
+    // USERPROFILE is the user's local profile folder, which Windows tools
+    // use as the home directory. HOMEDRIVE and HOMEPATH can instead point
+    // to a network home share on domain-joined machines.
+    if (environ_map.get("USERPROFILE")) |profile| if (profile.len > 0) {
+        if (profile.len > buf.len) return error.WriteFailed;
+        @memcpy(buf[0..profile.len], profile);
+        return buf[0..profile.len];
+    };
+
     var writer: std.Io.Writer = .fixed(buf);
     _ = try writer.write(environ_map.get("HOMEDRIVE") orelse return null);
     _ = try writer.write(environ_map.get("HOMEPATH") orelse return null);
@@ -159,8 +168,9 @@ test expandHomeWindows {
     const testing = std.testing;
     var environ_map = try testing.environ.createMap(testing.allocator);
     defer environ_map.deinit();
-    try environ_map.put("HOMEDRIVE", "C:");
-    try environ_map.put("HOMEPATH", "\\Users\\me");
+    try environ_map.put("USERPROFILE", "C:\\Users\\me");
+    try environ_map.put("HOMEDRIVE", "H:");
+    try environ_map.put("HOMEPATH", "\\net\\me");
     var buf: [std.Io.Dir.max_path_bytes]u8 = undefined;
 
     try testing.expectEqualStrings(
@@ -177,6 +187,13 @@ test expandHomeWindows {
 
     var small: [8]u8 = undefined;
     try testing.expectError(error.BufferTooSmall, expandHomeWindows(&environ_map, "~/Downloads", &small));
+
+    // Without USERPROFILE, HOMEDRIVE and HOMEPATH.
+    _ = environ_map.swapRemove("USERPROFILE");
+    try testing.expectEqualStrings(
+        "H:\\net\\me\\x",
+        try expandHomeWindows(&environ_map, "~/x", &buf),
+    );
 }
 
 test "expandHomeUnix" {
