@@ -2738,8 +2738,8 @@ keybind: Keybinds = .{},
 /// A future update may disallow this.
 ///
 /// This configuration is supported on macOS and Windows. On Windows,
-/// closing a tab or a split can be undone (but not closing a window);
-/// "Reopen Closed Tab" in the tab menu does the same. Linux doesn't
+/// closing a tab, a split, or a window (other than the last one) can be
+/// undone; "Reopen Closed Tab" in the tab menu does the same. Linux doesn't
 /// support undo operations at all so this configuration has no
 /// effect.
 ///

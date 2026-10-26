@@ -26,6 +26,7 @@ const log = std.log.scoped(.win32);
 const progress_timer_id = 1;
 const quick_slide_timer_id = 2;
 const undo_timer_id = 3;
+const closed_window_timer_id = 4;
 
 /// A closed tab or split that `undo` can reopen until it expires.
 const Closed = struct {
@@ -83,6 +84,10 @@ restore_maximized: bool = false,
 /// Set when the user asks to close the window, as opposed to it closing
 /// because its last terminal exited.
 closing_by_user: bool = false,
+
+/// While the window is closed but `undo` can still reopen it, when it's
+/// destroyed (from GetTickCount64). Zero while it's open.
+closed_expires: u64 = 0,
 
 /// The number of items in the default system menu. Our main menu items
 /// follow them and are rebuilt each time the menu opens.
@@ -225,6 +230,7 @@ pub fn deinit(self: *Window) void {
     _ = c.KillTimer(self.hwnd, progress_timer_id);
     _ = c.KillTimer(self.hwnd, quick_slide_timer_id);
     _ = c.KillTimer(self.hwnd, undo_timer_id);
+    _ = c.KillTimer(self.hwnd, closed_window_timer_id);
     const alloc = self.app.core_app.alloc;
     if (self.title_override) |v| alloc.free(v);
     for (self.tabs.items) |tab| tab.destroy();
@@ -591,9 +597,56 @@ pub fn splitDragCancel(self: *Window) void {
 }
 
 /// Close the window because the user asked to.
-fn closeByUser(self: *Window) void {
+pub fn closeByUser(self: *Window) void {
     self.closing_by_user = true;
-    self.destroy();
+    self.closeOrKeep();
+}
+
+/// Close the window, or, like macOS, hide it so that `undo` can reopen
+/// it for a while.
+fn closeOrKeep(self: *Window) void {
+    if (!self.keepForUndo()) self.destroy();
+}
+
+/// Hide the window instead of destroying it, if it's worth reopening:
+/// a terminal is still running in it, and another window stays open.
+/// The app quits when its last window closes, so that one isn't kept.
+fn keepForUndo(self: *Window) bool {
+    if (self.quick or self.app.quitting or self.app.closing_all) return false;
+    const timeout = self.undoTimeout();
+    if (timeout == 0) return false;
+    const other_open = for (self.app.windows.items) |window| {
+        if (window != self and !window.quick) break true;
+    } else false;
+    if (!other_open) return false;
+    const running = for (self.tabs.items) |tab| {
+        if (tab.hasRunningProcess()) break true;
+    } else false;
+    if (!running) return false;
+
+    // This fails for a window that's already closed.
+    self.app.keepClosedWindow(self) catch return false;
+    self.closed_expires = c.GetTickCount64() +| timeout;
+    _ = c.ShowWindow(self.hwnd, c.SW_HIDE);
+    const delay: c.UINT = @intCast(@min(timeout, std.math.maxInt(c.UINT)));
+    _ = c.SetTimer(self.hwnd, closed_window_timer_id, delay, null);
+    return true;
+}
+
+/// Show a window that `undo` reopened.
+pub fn reopen(self: *Window) void {
+    self.closed_expires = 0;
+    self.closing_by_user = false;
+    _ = c.KillTimer(self.hwnd, closed_window_timer_id);
+    _ = c.ShowWindow(self.hwnd, c.SW_SHOW);
+    self.present(self.activeSurface());
+}
+
+/// When the most recently closed tab or split expires, if any. Later
+/// expiry means it was closed later.
+pub fn lastClosedExpiry(self: *const Window) ?u64 {
+    const closed = self.closed.getLastOrNull() orelse return null;
+    return closed.expires;
 }
 
 /// The active tab.
@@ -762,7 +815,7 @@ fn closeTab(self: *Window, tab: *Tab) void {
 
     // The last tab closes the window, which destroys the tab.
     if (self.tabs.items.len == 1) {
-        if (!self.destroying) self.destroy();
+        if (!self.destroying) self.closeOrKeep();
         return;
     }
 
@@ -1740,6 +1793,10 @@ pub fn wndProc(
         } else if (wparam == undo_timer_id) {
             self.scheduleUndoExpiry();
             return 0;
+        } else if (wparam == closed_window_timer_id) {
+            _ = c.KillTimer(hwnd, closed_window_timer_id);
+            self.app.releaseClosedWindow(self);
+            return 0;
         },
         c.WM_SIZE => {
             self.layout();
@@ -1862,9 +1919,13 @@ pub fn wndProc(
             // With a single surface, go through the core so that it
             // confirms as usual and calls back into Surface.close.
             if (self.tabs.items.len == 1 and self.activeTab().isSingle()) {
+                // Closing may destroy the window, and us with it.
+                const identity = c.GetWindowLongPtrW(hwnd, util.GWLP_USERDATA);
                 self.closing_by_user = true;
                 self.activeSurface().core_surface.close();
-                self.closing_by_user = false;
+                if (c.GetWindowLongPtrW(hwnd, util.GWLP_USERDATA) == identity) {
+                    self.closing_by_user = false;
+                }
                 return 0;
             }
 
