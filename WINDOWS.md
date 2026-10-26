@@ -258,6 +258,16 @@ Notes:
       text, with control characters shown as dots. Checked: pasting
       "echo one / echo two" showed both lines under the warning. Unit
       test: `writePreview`.
+- [x] Crash reports: Ghostty is a GUI program on Windows, so a panic's
+      message and stack trace went to an invisible standard error and the
+      window just vanished (Sentry isn't built for Windows, as on Linux).
+      A panic handler (`src/crash/windows.zig`) now first writes the
+      message and stack trace to `%LOCALAPPDATA%\ghostty\crash\crash-<time>.txt`
+      and, without a console, shows "Ghostty crashed: ..." with the
+      report's path, then runs the default handler. It uses only fixed
+      buffers and Win32 calls. Checked with `crash:main`, `crash:io`, and
+      `crash:render` keybinds: each showed the dialog, saved a report with
+      the version, message, and source locations, and exited.
 - [x] Opening the config:
   - Open Config (menu, `open_config`) did nothing visible: `.ghostty`
     files have no associated app, and ShellExecute "open" then only asks

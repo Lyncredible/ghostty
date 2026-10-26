@@ -18,4 +18,5 @@ pub const deinit = sentry.deinit;
 
 test {
     @import("std").testing.refAllDecls(@This());
+    if (comptime @import("builtin").target.os.tag == .windows) _ = @import("windows.zig");
 }

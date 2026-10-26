@@ -1,4 +1,5 @@
 const std = @import("std");
+const builtin = @import("builtin");
 const build_config = @import("build_config.zig");
 
 /// See build_config.ExeEntrypoint for why we do this.
@@ -14,6 +15,15 @@ const entrypoint = switch (build_config.exe_entrypoint) {
 
 /// The main entrypoint for the program.
 pub const main = entrypoint.main;
+
+/// On Windows, Ghostty saves a crash report and tells the user where it is
+/// before the default panic handler runs, since a GUI program's standard
+/// error isn't visible. See crash/windows.zig.
+pub const panic = if (builtin.target.os.tag == .windows and
+    build_config.exe_entrypoint == .ghostty)
+    std.debug.FullPanic(@import("crash/windows.zig").panic)
+else
+    std.debug.FullPanic(std.debug.defaultPanic);
 
 /// Standard options such as logger overrides.
 pub const std_options: std.Options = if (@hasDecl(entrypoint, "std_options"))
