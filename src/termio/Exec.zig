@@ -1828,7 +1828,10 @@ pub const ReadThread = struct {
         };
         defer crash.sentry.thread_state = null;
 
-        var buf: [1024]u8 = undefined;
+        // ReadFile returns what's in the pipe, up to the buffer's size, so
+        // a large buffer means fewer (renderer mutex taking) calls to
+        // processOutput under heavy output.
+        var buf: [64 * 1024]u8 = undefined;
         while (true) {
             while (true) {
                 var n: windows.DWORD = 0;
