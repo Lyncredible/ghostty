@@ -21,4 +21,5 @@ test {
     _ = @import("win32/SaveState.zig");
     _ = @import("win32/SplitDrag.zig");
     _ = @import("win32/Accessibility.zig");
+    _ = @import("win32/TextRange.zig");
 }
