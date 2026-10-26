@@ -232,6 +232,9 @@ Notes:
       `internal_os.closePipe`. Afterwards: 461, 461, 460, 462 handles.
       Memory and GDI and user objects were already flat after the first
       round.
+  - Splits and windows don't leak: three rounds of four splits and three
+    windows opened and closed left 474, 472, 472 handles, 35 GDI and 42
+    user objects each time, and memory within 3 MB.
 - [x] Stress test: a script posts random operations to a debug build
       (new windows, tabs, and splits; closing splits and windows; undo and
       redo; the command palette; dragging tabs out; typing; resizing; and
