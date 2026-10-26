@@ -895,6 +895,11 @@ pub fn performAction(
             .surface => |v| v.rt_surface.setMouseShape(value),
         },
 
+        .color_change => switch (target) {
+            .app => return false,
+            .surface => |v| v.rt_surface.colorChanged(value),
+        },
+
         .show_on_screen_keyboard => switch (target) {
             .app => return false,
             .surface => |v| return shell.toggleTouchKeyboard(v.rt_surface.window.hwnd),
