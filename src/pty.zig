@@ -381,9 +381,9 @@ const WindowsPty = struct {
             // Measure text by grapheme clusters, like we do by default.
             const PSEUDOCONSOLE_GLYPH_WIDTH_GRAPHEMES = 0x08;
             return .{
-                .create = @ptrCast(create),
-                .resize = @ptrCast(resize),
-                .close = @ptrCast(close),
+                .create = @ptrCast(@alignCast(create)),
+                .resize = @ptrCast(@alignCast(resize)),
+                .close = @ptrCast(@alignCast(close)),
                 .flags = PSEUDOCONSOLE_GLYPH_WIDTH_GRAPHEMES,
             };
         }
