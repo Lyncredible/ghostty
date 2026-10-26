@@ -168,8 +168,8 @@ pub fn setMenuTheme(dark: bool) void {
     const PreferredAppMode = enum(c_int) { force_dark = 2, force_light = 3 };
     const SetPreferredAppMode = *const fn (PreferredAppMode) callconv(.winapi) PreferredAppMode;
     const FlushMenuThemes = *const fn () callconv(.winapi) void;
-    const set_mode: SetPreferredAppMode = @ptrCast(c.GetProcAddress(uxtheme, @ptrFromInt(135)) orelse return);
-    const flush: FlushMenuThemes = @ptrCast(c.GetProcAddress(uxtheme, @ptrFromInt(136)) orelse return);
+    const set_mode: SetPreferredAppMode = @ptrCast(@alignCast(c.GetProcAddress(uxtheme, @ptrFromInt(135)) orelse return));
+    const flush: FlushMenuThemes = @ptrCast(@alignCast(c.GetProcAddress(uxtheme, @ptrFromInt(136)) orelse return));
     _ = set_mode(if (dark) .force_dark else .force_light);
     flush();
 }
@@ -195,7 +195,7 @@ pub fn setBlurBehindAccent(hwnd: c.HWND, enable: bool) void {
     const SetWindowCompositionAttribute = *const fn (c.HWND, *CompositionData) callconv(.winapi) c.BOOL;
 
     const user32 = c.GetModuleHandleW(std.unicode.utf8ToUtf16LeStringLiteral("user32.dll")) orelse return;
-    const set: SetWindowCompositionAttribute = @ptrCast(c.GetProcAddress(user32, "SetWindowCompositionAttribute") orelse return);
+    const set: SetWindowCompositionAttribute = @ptrCast(@alignCast(c.GetProcAddress(user32, "SetWindowCompositionAttribute") orelse return));
 
     const ACCENT_DISABLED = 0;
     const ACCENT_ENABLE_BLURBEHIND = 3;
