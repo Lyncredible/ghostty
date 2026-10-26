@@ -317,6 +317,10 @@ Notes:
   - `WT_SESSION` was inherited when Ghostty was started from Windows
     Terminal, so programs would think they run in Windows Terminal. It's
     removed now, with `WT_PROFILE_ID`, like `VTE_VERSION`.
+- [x] Working directories with spaces and non-ASCII names: launched with
+      `--working-directory` set to a folder named "dir 中文 é", the first
+      tab's cmd prompt and a new tab's (inherited through OSC 7) both
+      showed that path exactly (compared with UI Automation).
 - [x] `-e` arguments reach the program intact: Python launched with
       `-e py -c "print(sys.argv[1:])" ...` printed exactly the arguments
       given, for spaces, embedded quotes, trailing backslashes, an empty
