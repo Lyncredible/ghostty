@@ -4836,6 +4836,10 @@ pub fn finalize(self: *Config) !void {
                 // read from SHELL if we're in a probable CLI environment.
                 if (!probable_cli) break :shell_env;
 
+                // On Windows, SHELL comes from POSIX environments such as
+                // Git Bash and MSYS2, and is a path we can't run.
+                if (comptime builtin.target.os.tag == .windows) break :shell_env;
+
                 const value = global.environ().getAlloc(alloc, "SHELL") catch |err| switch (err) {
                     error.EnvironmentVariableMissing => break :shell_env,
                     else => return err,
@@ -5359,10 +5363,10 @@ pub const ChangeIterator = struct {
 /// as possible because magic sucks, but each place is well documented.
 fn probableCliEnvironment() bool {
     switch (builtin.target.os.tag) {
-        // Windows has its own problems, just ignore it for now since
-        // its not a real supported target and GTK via WSL2 assuming
-        // single instance is probably fine.
-        .windows => return false,
+        // Anything not started by Explorer, such as a terminal, is a CLI.
+        // Unlike on Linux, there's no environment to check: a GUI program
+        // started from a console doesn't get TERM_PROGRAM, for example.
+        .windows => return !internal_os.launchedFromDesktop(),
 
         // On macOS, we don't want to detect `open` calls as CLI envs.
         // Our desktop detection on macOS is very accurate due to how

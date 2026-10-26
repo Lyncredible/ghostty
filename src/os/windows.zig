@@ -135,6 +135,21 @@ pub const NTSTATUS = windows.NTSTATUS;
 pub const OBJECT_ATTRIBUTES = windows.OBJECT.ATTRIBUTES;
 
 // Exported functions by library
+pub const TH32CS_SNAPPROCESS = 0x00000002;
+
+pub const PROCESSENTRY32W = extern struct {
+    dwSize: DWORD,
+    cntUsage: DWORD,
+    th32ProcessID: DWORD,
+    th32DefaultHeapID: usize,
+    th32ModuleID: DWORD,
+    cntThreads: DWORD,
+    th32ParentProcessID: DWORD,
+    pcPriClassBase: i32,
+    dwFlags: DWORD,
+    szExeFile: [260]u16,
+};
+
 pub const exp = struct {
     pub const kernel32 = struct {
         pub extern "kernel32" fn CreatePipe(
@@ -266,6 +281,19 @@ pub const exp = struct {
             nNumberOfBytesToRead: DWORD,
             lpNumberOfBytesRead: ?*DWORD,
             lpOverlapped: ?*OVERLAPPED,
+        ) callconv(.winapi) BOOL;
+        /// https://learn.microsoft.com/en-us/windows/win32/api/tlhelp32/nf-tlhelp32-createtoolhelp32snapshot
+        pub extern "kernel32" fn CreateToolhelp32Snapshot(
+            dwFlags: DWORD,
+            th32ProcessID: DWORD,
+        ) callconv(.winapi) HANDLE;
+        pub extern "kernel32" fn Process32FirstW(
+            hSnapshot: HANDLE,
+            lppe: *PROCESSENTRY32W,
+        ) callconv(.winapi) BOOL;
+        pub extern "kernel32" fn Process32NextW(
+            hSnapshot: HANDLE,
+            lppe: *PROCESSENTRY32W,
         ) callconv(.winapi) BOOL;
         /// https://learn.microsoft.com/en-us/windows/win32/api/fileapi/nf-fileapi-getfinalpathnamebyhandlew
         pub extern "kernel32" fn GetFinalPathNameByHandleW(
