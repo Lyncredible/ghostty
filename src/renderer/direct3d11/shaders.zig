@@ -7,6 +7,9 @@ const com = @import("com.zig");
 const c = com.c;
 const Pipeline = @import("Pipeline.zig");
 
+/// The built-in shaders' bytecode, when the build could compile them.
+const precompiled = @import("d3d11_shaders");
+
 const log = std.log.scoped(.direct3d11);
 
 /// The HLSL source for all of our shaders. Each shader stage is a
@@ -38,12 +41,30 @@ fn compileBuiltin(entry: [:0]const u8, profile: [:0]const u8) !*c.ID3DBlob {
     builtin_lock.lockUncancelable(global.io());
     defer builtin_lock.unlock(global.io());
     const blob = builtin_blobs[index] orelse blob: {
-        const compiled = try compile(source, entry, profile);
+        const compiled = try precompiledBlob(known) orelse
+            try compile(source, entry, profile);
         builtin_blobs[index] = compiled;
         break :blob compiled;
     };
     _ = com.call(blob, "AddRef", .{});
     return blob;
+}
+
+/// A blob with the build's bytecode for a built-in shader, if it has some.
+fn precompiledBlob(entry: BuiltinEntry) !?*c.ID3DBlob {
+    if (comptime !precompiled.available) return null;
+    const bytes: []const u8 = switch (entry) {
+        inline else => |tag| if (comptime tag == ._count)
+            unreachable
+        else
+            @field(precompiled, @tagName(tag)),
+    };
+
+    var blob: ?*c.ID3DBlob = null;
+    try com.check(c.D3DCreateBlob(bytes.len, &blob), "D3DCreateBlob");
+    const ptr: [*]u8 = @ptrCast(com.call(blob.?, "GetBufferPointer", .{}).?);
+    @memcpy(ptr[0..bytes.len], bytes);
+    return blob.?;
 }
 
 /// Compiled custom shader bytecode, keyed by a hash of the HLSL source,
