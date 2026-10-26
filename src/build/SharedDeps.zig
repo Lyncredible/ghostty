@@ -610,6 +610,16 @@ pub fn add(
         step.root_module.linkSystemLibrary("user32", dynamic_link_opts);
         step.root_module.linkSystemLibrary("advapi32", dynamic_link_opts);
 
+        // DirectWrite's system font fallback, for font discovery.
+        if (self.config.font_backend == .freetype_windows) {
+            try translate_c.addImportToModule(b, "dwrite_c", step.root_module, .{
+                .source = .{ .file = b.path("src/font/dwrite.h") },
+                .target = target,
+                .optimize = optimize,
+            });
+            step.root_module.linkSystemLibrary("dwrite", dynamic_link_opts);
+        }
+
         if (self.config.renderer == .direct3d11) {
             try translate_c.addImportToModule(b, "d3d11_c", step.root_module, .{
                 .source = .{ .file = b.path("src/renderer/direct3d11/d3d11.h") },

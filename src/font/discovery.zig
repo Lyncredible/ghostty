@@ -13,6 +13,7 @@ const Library = @import("main.zig").Library;
 const Presentation = @import("main.zig").Presentation;
 const Variation = @import("main.zig").face.Variation;
 const global = @import("../global.zig");
+const dwrite_fallback = @import("dwrite_fallback.zig");
 
 const log = std.log.scoped(.discovery);
 
@@ -983,7 +984,8 @@ pub const Windows = struct {
             .lib = self.lib,
             .desc = desc,
             .variations = desc.variations,
-            .state = .system,
+            // For a codepoint, first ask Windows which font it would use.
+            .state = if (desc.codepoint != 0 and desc.family == null) .dwrite else .system,
             .dir = null,
             .iter = null,
             .system_path = null,
@@ -1012,7 +1014,7 @@ pub const Windows = struct {
         system_path: ?[:0]const u8,
         user_path: ?[:0]const u8,
 
-        const State = enum { system, user, done };
+        const State = enum { dwrite, system, user, done };
 
         pub fn deinit(self: *DiscoverIterator) void {
             if (self.dir) |*d| d.close(global.io());
@@ -1026,6 +1028,11 @@ pub const Windows = struct {
                 // Ensure we have a directory iterator for the current state.
                 if (self.iter == null) {
                     switch (self.state) {
+                        .dwrite => {
+                            self.state = .system;
+                            if (try self.systemFallback()) |face| return face;
+                            continue;
+                        },
                         .system => {
                             const path = self.systemFontsPath() orelse {
                                 self.state = .user;
@@ -1068,7 +1075,7 @@ pub const Windows = struct {
                     self.dir = null;
                     self.iter = null;
                     self.state = switch (self.state) {
-                        .system => .user,
+                        .dwrite, .system => .user,
                         .user => .done,
                         .done => .done,
                     };
@@ -1112,6 +1119,27 @@ pub const Windows = struct {
             ) catch null;
         }
 
+        /// The font DirectWrite's system font fallback chooses for our
+        /// codepoint, if it matches the rest of the descriptor.
+        fn systemFallback(self: *DiscoverIterator) !?DeferredFace {
+            const cp = std.math.cast(u21, self.desc.codepoint) orelse return null;
+            const font = dwrite_fallback.find(self.alloc, cp, self.desc.bold, self.desc.italic) orelse
+                return null;
+            defer self.alloc.free(font.path);
+
+            var face = Face.initFile(
+                self.lib,
+                font.path,
+                @intCast(font.index),
+                .{ .size = .{ .points = 12 } },
+            ) catch return null;
+            if (!self.matches(&face)) {
+                face.deinit();
+                return null;
+            }
+            return try self.makeDeferred(face, font.path, @intCast(font.index));
+        }
+
         fn tryMatch(
             self: *DiscoverIterator,
             name: []const u8,
@@ -1119,7 +1147,7 @@ pub const Windows = struct {
             const dir_path = switch (self.state) {
                 .system => self.system_path.?,
                 .user => self.user_path.?,
-                .done => return null,
+                .dwrite, .done => return null,
             };
 
             var path_buf: [std.Io.Dir.max_path_bytes]u8 = undefined;
@@ -1412,4 +1440,8 @@ test "windows" {
     var face = (try it.next()) orelse return error.TestFontNotFound;
     defer face.deinit();
     try testing.expect(face.hasCodepoint('A', null));
+}
+
+test {
+    if (comptime options.backend == .freetype_windows) _ = dwrite_fallback;
 }
