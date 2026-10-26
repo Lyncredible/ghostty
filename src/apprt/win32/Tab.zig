@@ -318,6 +318,99 @@ pub fn remove(self: *Tab, surface: *Surface) !void {
     if (next) |n| self.focus(n);
 }
 
+/// Where a surface was in the split tree, so that it can be put back
+/// after it's removed: next to the terminals it was split from, on the
+/// same side and with the same size.
+pub const Placement = struct {
+    /// The terminals of the subtree on the other side of the split.
+    /// They aren't referenced; we only compare them.
+    siblings: []*Surface,
+    direction: Tree.Split.Direction,
+    ratio: f16,
+
+    pub fn deinit(self: *Placement, alloc: Allocator) void {
+        alloc.free(self.siblings);
+    }
+};
+
+/// Where the given surface is. The tab must have more than one surface.
+pub fn placement(self: *const Tab, alloc: Allocator, surface: *const Surface) !Placement {
+    const at = self.tree.locate(surface) orelse return error.NotFound;
+    for (self.tree.nodes) |node| switch (node) {
+        .leaf => {},
+        .split => |s| {
+            if (s.left != at and s.right != at) continue;
+            const sibling = if (s.left == at) s.right else s.left;
+            var siblings: std.ArrayList(*Surface) = .empty;
+            errdefer siblings.deinit(alloc);
+            try self.collectLeaves(alloc, sibling, &siblings);
+            return .{
+                .siblings = try siblings.toOwnedSlice(alloc),
+                .direction = switch (s.layout) {
+                    .horizontal => if (s.left == at) .left else .right,
+                    .vertical => if (s.left == at) .up else .down,
+                },
+                .ratio = s.ratio,
+            };
+        },
+    };
+    return error.NotFound;
+}
+
+fn collectLeaves(
+    self: *const Tab,
+    alloc: Allocator,
+    handle: Tree.Node.Handle,
+    list: *std.ArrayList(*Surface),
+) !void {
+    switch (self.tree.nodes[handle.idx()]) {
+        .leaf => |view| try list.append(alloc, view),
+        .split => |s| {
+            try self.collectLeaves(alloc, s.left, list);
+            try self.collectLeaves(alloc, s.right, list);
+        },
+    }
+}
+
+/// Put a removed surface back where it was, and focus it. If the
+/// terminals it was split from have changed, it goes next to the one
+/// that's left, or splits the whole tab.
+pub fn restore(self: *Tab, surface: *Surface, where: Placement) !void {
+    const alloc = self.window.app.core_app.alloc;
+    const at = try self.siblingNode(alloc, where.siblings);
+
+    var insert: Tree = try .init(alloc, surface);
+    defer insert.deinit();
+    const new_tree = try self.tree.split(alloc, at, where.direction, where.ratio, &insert);
+    self.replaceTree(new_tree);
+
+    self.window.layout();
+    self.setVisible(true);
+    self.focus(surface);
+}
+
+/// The node whose terminals are exactly the given ones, or else a node
+/// with one of them, or else the root.
+fn siblingNode(self: *const Tab, alloc: Allocator, siblings: []const *Surface) !Tree.Node.Handle {
+    var leaves: std.ArrayList(*Surface) = .empty;
+    defer leaves.deinit(alloc);
+    for (0..self.tree.nodes.len) |i| {
+        const handle: Tree.Node.Handle = @fromBackingInt(@intCast(i));
+        leaves.clearRetainingCapacity();
+        try self.collectLeaves(alloc, handle, &leaves);
+        if (leaves.items.len != siblings.len) continue;
+        const same = for (siblings) |sibling| {
+            if (std.mem.indexOfScalar(*Surface, leaves.items, sibling) == null) break false;
+        } else true;
+        if (same) return handle;
+    }
+
+    for (siblings) |sibling| {
+        if (self.tree.locate(sibling)) |handle| return handle;
+    }
+    return .root;
+}
+
 /// Move focus to another split, returning true if focus moved.
 pub fn gotoSplit(self: *Tab, from: *Surface, to: apprt.action.GotoSplit) bool {
     const alloc = self.window.app.core_app.alloc;

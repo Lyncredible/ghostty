@@ -1034,9 +1034,9 @@ pub fn performAction(
             .surface => |v| v.rt_surface.toggleCommandPalette(),
         },
 
-        // Like macOS, closing a tab can be undone for a while.
-        .undo => return if (self.actionWindow(target)) |window| window.undoCloseTab() else false,
-        .redo => return if (self.actionWindow(target)) |window| window.redoCloseTab() else false,
+        // Like macOS, closing a tab or split can be undone for a while.
+        .undo => return if (self.actionWindow(target)) |window| window.undoClose() else false,
+        .redo => return if (self.actionWindow(target)) |window| window.redoClose() else false,
 
         .toggle_tab_overview => switch (target) {
             .app => return false,
