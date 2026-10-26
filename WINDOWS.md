@@ -997,6 +997,11 @@ Reviewed the branch against this file and discussion #2563.
   stderr output, not a failure.) An earlier attempt was stopped by Claude
   Code for low memory; running the lib-vt tests and the full suite one
   at a time worked.
+- Sixth full native test run, after `window-subtitle`,
+  `window-title-font-family`, `split-preserve-zoom`, the unwind tables
+  fix, and the 64 KiB read buffer: 4,079 passed, 61 skipped, 0 failed,
+  exit 0. Claude Code stops idle background jobs when memory runs low,
+  so this ran in the background while foreground calls waited on it.
 - The inspector's buttons can't be clicked with posted messages: ImGui's
   Win32 backend calls `TrackMouseEvent` on mouse moves, and with the real
   cursor elsewhere Windows sends `WM_MOUSELEAVE` right away, so clicks
