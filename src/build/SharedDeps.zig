@@ -778,6 +778,7 @@ fn addWin32(
     step.root_module.linkSystemLibrary("shcore", dynamic_link_opts);
     step.root_module.linkSystemLibrary("shell32", dynamic_link_opts);
     step.root_module.linkSystemLibrary("ole32", dynamic_link_opts);
+    step.root_module.linkSystemLibrary("comdlg32", dynamic_link_opts);
     step.root_module.linkSystemLibrary("uuid", dynamic_link_opts);
 }
 
