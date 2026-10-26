@@ -196,6 +196,12 @@ Notes:
   - [ ] Command palette
 - [x] Share built-in compiled shader bytecode across surfaces
 - [x] Cache compiled custom shader bytecode across surfaces
+- [ ] Add Menu support. Need to decide on where to put the menu. I prefer
+      hide it in the title bar, where the menu shows up on hover (or clicking
+      a hamburger menu icon like Zed). You can reference how the linux version
+      works regarding menu. MacOS is not comparable due to the global menu.
+- [ ] Don't ask for exit confirmation if there is no active progress other than
+      the shell itself. This is the behavior on macOS and Linux.
 
 ## Development log (2026-10-24)
 
