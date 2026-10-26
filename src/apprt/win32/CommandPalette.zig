@@ -279,7 +279,6 @@ fn supported(action: input.Binding.Action) bool {
         .check_for_updates,
         .redo,
         .undo,
-        .inspector,
         .toggle_command_palette,
         => false,
 

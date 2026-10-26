@@ -27,6 +27,7 @@ const SearchBar = @import("SearchBar.zig");
 const Overrides = @import("Overrides.zig");
 const Menu = @import("Menu.zig");
 const CommandPalette = @import("CommandPalette.zig");
+const InspectorWindow = @import("InspectorWindow.zig");
 
 const log = std.log.scoped(.win32);
 
@@ -96,6 +97,9 @@ key_badge: Badge = .{},
 health_badge: Badge = .{},
 search_bar: SearchBar = .{},
 command_palette: CommandPalette = .{},
+
+/// The terminal inspector's window, while it's open.
+inspector: ?*InspectorWindow = null,
 
 /// The search state from the core, shown in the search bar.
 search_total: ?usize = null,
@@ -281,6 +285,7 @@ pub fn deinit(self: *Surface) void {
     self.readonly_badge.deinit(alloc);
     self.key_badge.deinit(alloc);
     self.health_badge.deinit(alloc);
+    self.closeInspector();
     self.search_bar.deinit();
     self.command_palette.deinit();
     clearLabels(alloc, &self.key_tables);
@@ -467,6 +472,33 @@ pub fn setSearchTotal(self: *Surface, total: ?usize) void {
 pub fn setSearchSelected(self: *Surface, selected: ?usize) void {
     self.search_selected = selected;
     self.search_bar.setCount(selected, self.search_total);
+}
+
+/// Show, hide, or toggle the terminal inspector's window.
+pub fn controlInspector(self: *Surface, mode: apprt.action.Inspector) void {
+    const show = switch (mode) {
+        .toggle => self.inspector == null,
+        .show => true,
+        .hide => false,
+    };
+    if (!show) return self.closeInspector();
+    if (self.inspector) |window| return window.present();
+    self.inspector = InspectorWindow.create(self) catch |err| {
+        log.err("error opening the inspector err={}", .{err});
+        return;
+    };
+}
+
+/// Close the terminal inspector's window, if it's open.
+pub fn closeInspector(self: *Surface) void {
+    const window = self.inspector orelse return;
+    self.inspector = null;
+    window.destroy();
+}
+
+/// Redraw the terminal inspector, if it's open.
+pub fn queueInspectorRender(self: *Surface) void {
+    if (self.inspector) |window| window.queueRender();
 }
 
 /// Show the command palette, or hide it if it's open.
