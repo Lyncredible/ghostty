@@ -28,6 +28,8 @@ const Overrides = @import("Overrides.zig");
 const Menu = @import("Menu.zig");
 const CommandPalette = @import("CommandPalette.zig");
 const InspectorWindow = @import("InspectorWindow.zig");
+const drop = @import("drop.zig");
+const internal_os = @import("../../os/main.zig");
 
 const log = std.log.scoped(.win32);
 
@@ -117,6 +119,10 @@ key_sequence: std.ArrayList([:0]const u8) = .empty,
 
 /// An explicitly selected command, owned by this surface and inherited by splits.
 shell: ?configpkg.Command = null,
+
+/// Whether our command runs WSL, so that dropped files are pasted as
+/// Linux paths.
+runs_wsl: bool = false,
 
 /// A pending high surrogate from a standalone WM_CHAR.
 high_surrogate: ?u16 = null,
@@ -230,6 +236,7 @@ pub fn init(self: *Surface, app: *App, window: *Window, opts: Options) !void {
         config.@"initial-command" = null;
     }
     opts.overrides.apply(&config);
+    self.runs_wsl = if (config.command) |command| commandRunsWsl(command) else false;
     self.bell_features = config.@"bell-features";
     self.notify_on_command_finish = config.@"notify-on-command-finish";
     self.notify_on_command_finish_action = config.@"notify-on-command-finish-action";
@@ -251,6 +258,7 @@ pub fn init(self: *Surface, app: *App, window: *Window, opts: Options) !void {
     errdefer self.key_badge.deinit(alloc);
     try self.health_badge.init(hwnd, app.hinstance, &config, .center);
     errdefer self.health_badge.deinit(alloc);
+    c.DragAcceptFiles(hwnd, c.TRUE);
     try self.search_bar.init(hwnd, app.hinstance, &config, self, searchEvent);
     errdefer self.search_bar.deinit();
     try self.command_palette.init(hwnd, app.hinstance, &config, self, commandPaletteChoice);
@@ -530,6 +538,55 @@ test underlay {
     // 141, so beneath it we need about 2 * (192 - 141).
     try testing.expectEqual(@as(u8, 103), underlay(192, 0.5, true));
     try testing.expectEqual(@as(u8, 0), underlay(0, 0.5, true));
+}
+
+/// Whether a command starts WSL. For a shell command line, this looks at
+/// the program, the first word, which may be quoted.
+fn commandRunsWsl(command: configpkg.Command) bool {
+    const program = switch (command) {
+        .direct => |args| if (args.len > 0) args[0] else return false,
+        .shell => |line| program: {
+            const trimmed = std.mem.trimStart(u8, line, " \t");
+            if (std.mem.startsWith(u8, trimmed, "\"")) {
+                const end = std.mem.indexOfScalarPos(u8, trimmed, 1, '"') orelse trimmed.len;
+                break :program trimmed[1..end];
+            }
+            const end = std.mem.indexOfAny(u8, trimmed, " \t") orelse trimmed.len;
+            break :program trimmed[0..end];
+        },
+    };
+    return internal_os.wsl.isWsl(program);
+}
+
+test commandRunsWsl {
+    const testing = std.testing;
+    try testing.expect(commandRunsWsl(.{ .shell = "wsl.exe -d Ubuntu" }));
+    try testing.expect(commandRunsWsl(.{ .shell = "\"C:\\Windows\\System32\\wsl.exe\" ~" }));
+    try testing.expect(!commandRunsWsl(.{ .shell = "cmd.exe" }));
+}
+
+/// Paste the paths of files dropped on us, quoted for our shell.
+fn dropFiles(self: *Surface, hdrop: c.HDROP) void {
+    defer c.DragFinish(hdrop);
+    if (!self.core_initialized) return;
+
+    var arena: std.heap.ArenaAllocator = .init(self.app.core_app.alloc);
+    defer arena.deinit();
+    const alloc = arena.allocator();
+
+    const count = c.DragQueryFileW(hdrop, 0xFFFFFFFF, null, 0);
+    var paths: std.ArrayList([]const u8) = .empty;
+    for (0..count) |i| {
+        const len = c.DragQueryFileW(hdrop, @intCast(i), null, 0);
+        const buf = alloc.alloc(u16, len + 1) catch return;
+        _ = c.DragQueryFileW(hdrop, @intCast(i), buf.ptr, len + 1);
+        const path = util.utf8Alloc(alloc, buf[0..len]) catch return;
+        paths.append(alloc, path) catch return;
+    }
+    if (paths.items.len == 0) return;
+
+    const text = drop.text(alloc, paths.items, if (self.runs_wsl) .wsl else .windows) catch return;
+    self.completeClipboardText(.{ .paste = .standard }, text, false);
 }
 
 /// With focus-follows-mouse, take focus from another terminal in our
@@ -1169,6 +1226,11 @@ pub fn wndProc(
             }
             self.cursorPosEvent(pos);
             self.scrollbar.updateHover();
+            return 0;
+        },
+
+        c.WM_DROPFILES => {
+            self.dropFiles(util.handle(c.HDROP, wparam));
             return 0;
         },
 
