@@ -155,11 +155,13 @@ Notes:
         apply to a new window (anything but `-e`, `--command`,
         `--working-directory`, `--title`, `--shell-integration`,
         `--class`) run as their own instance.
-  - [ ] Windows always counts as a desktop launch (`probableCliEnvironment`
-        returns false), so `working-directory` defaults to `home` even
-        when started from a terminal. Detect terminal launches (for
-        example a parent console, or `TERM_PROGRAM`/`WT_SESSION`) so that
-        `inherit` applies there, as on Linux.
+  - [x] Detect terminal launches so `working-directory` defaults to
+        `inherit` there and `home` for desktop launches, as on Linux:
+        `launchedFromDesktop` is true when the parent process is
+        `explorer.exe` (or has exited). Forwarded launches carry the
+        directory. `SHELL` is ignored on Windows (Git Bash and MSYS2 set
+        POSIX paths).
+    - [ ] Manual check: a Start menu or Explorer launch opens at home
 - [x] Global keybinds (`RegisterHotKey`)
 - [ ] Terminal inspector (needs a Dear ImGui D3D11 backend)
 - [x] Bell attention flash in the taskbar, honoring `bell-features`;
@@ -641,7 +643,9 @@ Reviewed the branch against this file and discussion #2563.
   plain launch logged "opened this launch in the running instance",
   exited, and the first instance showed a second window; a launch with
   `--font-size=20` logged "running as a separate instance" and kept its
-  own window. Unit test: `launchArguments`.
+  own window. Unit test: `launchArguments`. After terminal launch
+  detection, launches from PowerShell in `C:\Users` and then `C:\Code`
+  opened windows in those directories (the second via forwarding).
 
 ## Next steps (2026-10-25)
 
