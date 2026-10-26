@@ -133,7 +133,7 @@ pub fn init(
         std.unicode.utf8ToUtf16LeStringLiteral("LISTBOX"),
         null,
         c.WS_CHILD | c.WS_VISIBLE | c.WS_VSCROLL | c.LBS_NOTIFY |
-            c.LBS_OWNERDRAWFIXED | c.LBS_NOINTEGRALHEIGHT,
+            c.LBS_OWNERDRAWFIXED | c.LBS_HASSTRINGS | c.LBS_NOINTEGRALHEIGHT,
         0,
         0,
         0,
@@ -355,8 +355,12 @@ fn filter(self: *CommandPalette) void {
     _ = c.SendMessageW(self.list, c.LB_RESETCONTENT, 0, 0);
     for (self.entries, 0..) |entry, i| {
         if (!matches(entry.search, query[0..n])) continue;
-        // Without LBS_HASSTRINGS, an owner drawn item is just its data.
-        _ = c.SendMessageW(self.list, c.LB_ADDSTRING, 0, @intCast(i));
+        // We draw the items ourselves, but give them their titles as text
+        // so that screen readers (through the list box's UI Automation
+        // proxy) can read them. The data is the entry's index.
+        const item = c.SendMessageW(self.list, c.LB_ADDSTRING, 0, @bitCast(@intFromPtr(entry.title.ptr)));
+        if (item < 0) continue;
+        _ = c.SendMessageW(self.list, c.LB_SETITEMDATA, @intCast(item), @intCast(i));
     }
     _ = c.SendMessageW(self.list, c.LB_SETCURSEL, 0, 0);
     if (self.visible()) self.layout();
