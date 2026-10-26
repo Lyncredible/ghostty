@@ -2302,7 +2302,9 @@ keybind: Keybinds = .{},
 ///
 /// The default value is `default`.
 ///
-/// This is currently only supported on macOS. This has no effect on Linux.
+/// This is currently only supported on macOS and Windows. This has no effect
+/// on Linux. On Windows, only `always` restores windows, since there's no
+/// system setting for `default` to follow.
 @"window-save-state": WindowSaveState = .default,
 
 /// Resize the window in discrete increments of the focused surface's cell size.

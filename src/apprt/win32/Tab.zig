@@ -7,6 +7,7 @@ const apprt = @import("../../apprt.zig");
 const configpkg = @import("../../config.zig");
 const CoreSurface = @import("../../Surface.zig");
 const SplitTree = @import("../../datastruct/split_tree.zig").SplitTree;
+const SaveState = @import("SaveState.zig");
 
 const util = @import("util.zig");
 const c = util.c;
@@ -76,6 +77,75 @@ pub fn create(
         .focused = surface,
     };
     return self;
+}
+
+/// Create a tab from saved state, with a terminal in each saved working
+/// directory and the saved splits. `first` is whether this is the first
+/// tab of a new window.
+pub fn createRestored(window: *Window, state: SaveState.TabState, first: bool) !*Tab {
+    const alloc = window.app.core_app.alloc;
+    if (state.nodes.len == 0) return error.InvalidState;
+
+    var arena: std.heap.ArenaAllocator = .init(alloc);
+    defer arena.deinit();
+    var context: apprt.surface.NewSurfaceContext = if (first) .window else .tab;
+    var tree = try restoreNode(window, arena.allocator(), state.nodes, 0, &context, 0);
+    errdefer tree.deinit();
+
+    // The focused terminal, counting terminals from left to right.
+    const focused = SaveState.leafAt(&tree, state.focused) orelse
+        SaveState.leafAt(&tree, 0);
+
+    const self = try alloc.create(Tab);
+    self.* = .{
+        .window = window,
+        .tree = tree,
+        .focused = focused.?,
+    };
+    if (state.title) |saved| self.title_override = alloc.dupeSentinel(u8, saved, 0) catch null;
+    return self;
+}
+
+fn restoreNode(
+    window: *Window,
+    arena: std.mem.Allocator,
+    nodes: []const SaveState.NodeState,
+    index: usize,
+    context: *apprt.surface.NewSurfaceContext,
+    depth: usize,
+) !Tree {
+    const alloc = window.app.core_app.alloc;
+    if (index >= nodes.len or depth > nodes.len) return error.InvalidState;
+    const node = nodes[index];
+
+    const split_layout = node.layout orelse {
+        const surface = try Surface.create(window, .{
+            .context = context.*,
+            .overrides = .{
+                .working_directory = if (node.pwd) |pwd| try arena.dupeSentinel(u8, pwd, 0) else null,
+            },
+        });
+        context.* = .split;
+        return Tree.init(alloc, surface) catch |err| {
+            surface.destroy();
+            return err;
+        };
+    };
+
+    var left = try restoreNode(window, arena, nodes, node.left, context, depth + 1);
+    defer left.deinit();
+    var right = try restoreNode(window, arena, nodes, node.right, context, depth + 1);
+    defer right.deinit();
+    return try left.split(
+        alloc,
+        .root,
+        switch (split_layout) {
+            .horizontal => .right,
+            .vertical => .down,
+        },
+        @floatCast(std.math.clamp(node.ratio, 0.05, 0.95)),
+        &right,
+    );
 }
 
 /// Destroy the tab, which closes all of its surfaces.

@@ -18,4 +18,5 @@ test {
     _ = @import("win32/Menu.zig");
     _ = @import("win32/CommandPalette.zig");
     _ = @import("win32/drop.zig");
+    _ = @import("win32/SaveState.zig");
 }
