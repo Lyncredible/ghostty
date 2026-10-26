@@ -11,6 +11,8 @@ const Config = configpkg.Config;
 const CoreApp = @import("../../App.zig");
 const CoreSurface = @import("../../Surface.zig");
 const internal_os = @import("../../os/main.zig");
+const cli = @import("../../cli.zig");
+const global = @import("../../global.zig");
 
 const util = @import("util.zig");
 const c = util.c;
@@ -88,6 +90,9 @@ windows: std.ArrayList(*Window) = .empty,
 /// True once we've started quitting, so we don't quit twice.
 quitting: bool = false,
 
+/// The single instance lock for our app class, held while we run.
+instance_mutex: ?c.HANDLE = null,
+
 pub fn init(
     self: *App,
     core_app: *CoreApp,
@@ -111,6 +116,24 @@ pub fn init(
             log.warn("configuration error: {f}", .{diag});
         }
     }
+
+    // Single instance: a launch that the running instance of our class can
+    // open as a new window is handed to it, and we exit without a window.
+    const class = config.class orelse Ipc.default_class;
+    var instance_mutex: ?c.HANDLE = null;
+    switch (Ipc.claim(class)) {
+        .primary => |mutex| instance_mutex = mutex,
+        .failed => log.warn("unable to create the single instance lock", .{}),
+        .secondary => if (forwardLaunch(alloc, &config, class)) {
+            log.info("opened this launch in the running instance", .{});
+            std.process.exit(0);
+        } else {
+            log.info("running as a separate instance", .{});
+        },
+    }
+    errdefer if (instance_mutex) |mutex| {
+        _ = c.CloseHandle(mutex);
+    };
 
     // Note: we render at the native resolution of each monitor. The
     // per-monitor DPI awareness for that is set by our application
@@ -157,10 +180,44 @@ pub fn init(
         .taskbar_button_created = taskbar_button_created,
         .notifier = .init(msg_hwnd, util.loadIcon(hinstance, 1)),
         .global_keys = .init(alloc, msg_hwnd),
+        .instance_mutex = instance_mutex,
     };
 
     _ = c.SetWindowLongPtrW(msg_hwnd, util.GWLP_USERDATA, @bitCast(@intFromPtr(self)));
     self.global_keys.update(&self.config);
+}
+
+/// Hand this launch to the running instance of our class. Returns false if
+/// we should run as our own instance instead, for example because the
+/// launch has options that only apply to a new instance.
+fn forwardLaunch(alloc: Allocator, config: *const Config, class: []const u8) bool {
+    // With no initial window there's nothing to open, and an instance is
+    // already running.
+    if (!config.@"initial-window") return true;
+
+    var arena: std.heap.ArenaAllocator = .init(alloc);
+    defer arena.deinit();
+    const arena_alloc = arena.allocator();
+
+    var args: std.ArrayList([]const u8) = .empty;
+    {
+        var it = cli.args.argsIterator(arena_alloc, global.args()) catch return false;
+        defer it.deinit();
+        while (it.next()) |arg| {
+            args.append(arena_alloc, arena_alloc.dupe(u8, arg) catch return false) catch return false;
+        }
+    }
+
+    // Open the window where this launch would have.
+    const working_directory: ?[]const u8 = if (config.@"working-directory") |wd| switch (wd) {
+        .path => |path| path,
+        .inherit => std.Io.Dir.cwd().realPathFileAlloc(global.io(), ".", arena_alloc) catch null,
+        .home => null,
+    } else null;
+
+    const arguments = (Ipc.launchArguments(arena_alloc, args.items, working_directory) catch
+        return false) orelse return false;
+    return Ipc.forwardLaunch(arena_alloc, class, arguments);
 }
 
 fn registerClasses(hinstance: c.HINSTANCE) !void {
@@ -374,6 +431,7 @@ pub fn terminate(self: *App) void {
 
     _ = c.DestroyWindow(self.msg_hwnd);
     unregisterClasses(self.hinstance);
+    if (self.instance_mutex) |mutex| _ = c.CloseHandle(mutex);
     _ = c.BufferedPaintUnInit();
     self.config.deinit();
 }

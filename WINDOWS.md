@@ -144,12 +144,22 @@ Notes:
 - [x] Background opacity/blur (DirectComposition swap chain)
   - [x] `toggle_background_opacity` (needs a manual UI test)
   - [ ] Blur on Windows 10 (the acrylic backdrop is Windows 11 only)
-- [ ] Single instance and IPC
+- [x] Single instance and IPC
   - [x] `+new-window` and `+new-tab` (with `-e`, `--working-directory`,
         `--title`, `--shell-integration`)
   - [x] CLI action output in the parent console
-  - [ ] Launching `ghostty.exe` again opens a window in the running
-        instance (an opt-in, like `gtk-single-instance`)
+  - [x] Launching `ghostty.exe` again opens a window in the running
+        instance (always on, per app `class`). A named mutex
+        (`Local\ghostty-instance-<class>`) detects an instance that is
+        still starting. Launches with options the running instance can't
+        apply to a new window (anything but `-e`, `--command`,
+        `--working-directory`, `--title`, `--shell-integration`,
+        `--class`) run as their own instance.
+  - [ ] Windows always counts as a desktop launch (`probableCliEnvironment`
+        returns false), so `working-directory` defaults to `home` even
+        when started from a terminal. Detect terminal launches (for
+        example a parent console, or `TERM_PROGRAM`/`WT_SESSION`) so that
+        `inherit` applies there, as on Linux.
 - [x] Global keybinds (`RegisterHotKey`)
 - [ ] Terminal inspector (needs a Dear ImGui D3D11 backend)
 - [x] Bell attention flash in the taskbar, honoring `bell-features`;
@@ -627,14 +637,14 @@ Reviewed the branch against this file and discussion #2563.
   with curl, extract it (stripping a single top-level folder), and
   `zig fetch <dir>`. `zig fetch <file>` repacks a local tarball with the
   extra folder and gets the wrong hash.
+- Single instance, checked natively: with one instance running, a second
+  plain launch logged "opened this launch in the running instance",
+  exited, and the first instance showed a second window; a launch with
+  `--font-size=20` logged "running as a separate instance" and kept its
+  own window. Unit test: `launchArguments`.
 
 ## Next steps (2026-10-25)
 
-- Single instance, always on (decided with the user): in `App.init`, take
-  a named mutex for the app class, and if another instance's message
-  window exists, forward this launch's arguments (plus its working
-  directory) as a `new_window` IPC request and exit without a window.
-  A different `class` still gets its own instance.
 - UI tests that type need a focus guard. Twice, `SetForegroundWindow`
   from the test script failed, and the synthetic keys ("line 3") went to
   the Claude Code terminal instead, interrupting the session. Before
