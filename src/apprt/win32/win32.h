@@ -13,3 +13,4 @@
 #include <uxtheme.h>
 #include <shellscalingapi.h>
 #include <commdlg.h>
+#include <commctrl.h>
