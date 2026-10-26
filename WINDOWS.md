@@ -297,7 +297,7 @@ Notes:
         separated by spaces like Windows Terminal. For cmd/PowerShell,
         paths with spaces or special characters are double quoted; for
         WSL (the command runs `wsl.exe`) they become Linux paths
-        (`/mnt/c/...`, `\wsl$\<distro>\...` to `/...`) in single
+        (`/mnt/c/...`, `\\wsl$\<distro>\...` to `/...`) in single
         quotes when needed. Unit tested; a real drop needs a manual check.
   - [ ] `window-position-x` and `window-position-y`
 - [x] Share built-in compiled shader bytecode across surfaces
