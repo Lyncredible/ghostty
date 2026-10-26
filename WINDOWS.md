@@ -268,6 +268,10 @@ Notes:
       buffers and Win32 calls. Checked with `crash:main`, `crash:io`, and
       `crash:render` keybinds: each showed the dialog, saved a report with
       the version, message, and source locations, and exited.
+  - Release builds have no debug info, so their stack trace says
+    "stack tracing is disabled" (checked with ReleaseFast). Reports also
+    list the raw return addresses (`RtlCaptureStackBackTrace`) as offsets
+    into ghostty.exe, which the build's PDB can resolve.
 - [x] Opening the config:
   - Open Config (menu, `open_config`) did nothing visible: `.ghostty`
     files have no associated app, and ShellExecute "open" then only asks
