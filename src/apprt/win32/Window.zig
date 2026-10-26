@@ -1084,6 +1084,20 @@ fn updateTheme(self: *Window) void {
         @sizeOf(c.BOOL),
     );
     util.setMenuTheme(dark);
+
+    // With the ghostty theme, the title bar takes the terminal's colors
+    // (or the configured title bar colors), like GTK. Caption colors need
+    // Windows 11. DWMWA_COLOR_DEFAULT restores the system's colors.
+    const DWMWA_CAPTION_COLOR = 35;
+    const DWMWA_TEXT_COLOR = 36;
+    const DWMWA_COLOR_DEFAULT: c.COLORREF = 0xFFFFFFFF;
+    const ghostty = config.@"window-theme" == .ghostty;
+    const background = config.@"window-titlebar-background" orelse config.background;
+    const foreground = config.@"window-titlebar-foreground" orelse config.foreground;
+    const caption: c.COLORREF = if (ghostty) rgb(background.r, background.g, background.b) else DWMWA_COLOR_DEFAULT;
+    const text: c.COLORREF = if (ghostty) rgb(foreground.r, foreground.g, foreground.b) else DWMWA_COLOR_DEFAULT;
+    _ = c.DwmSetWindowAttribute(self.hwnd, DWMWA_CAPTION_COLOR, &caption, @sizeOf(c.COLORREF));
+    _ = c.DwmSetWindowAttribute(self.hwnd, DWMWA_TEXT_COLOR, &text, @sizeOf(c.COLORREF));
 }
 
 /// Whether the user chose the dark app mode in the Windows settings.
