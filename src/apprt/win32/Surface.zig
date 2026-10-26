@@ -751,6 +751,8 @@ pub fn toggleCommandPalette(self: *Surface) void {
     var targets: std.ArrayList(CommandPalette.Target) = .empty;
     for (self.app.core_app.surfaces.items) |surface| {
         if (!surface.core_initialized) continue;
+        // Closed tabs kept for undo can't be focused.
+        if (surface.window.tabOf(surface) == null) continue;
         targets.append(alloc, .{
             .surface = &surface.core_surface,
             .title = surface.effectiveTitle() orelse "Untitled",

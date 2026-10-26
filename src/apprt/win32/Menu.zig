@@ -88,6 +88,7 @@ pub const context = [_]Item{
 pub const tab = [_]Item{
     .act("Change Tab &Title…", .prompt_tab_title),
     .act("&New Tab", .new_tab),
+    .act("Reo&pen Closed Tab", .undo),
     .separator,
     .act("&Move Tab to New Window", .move_tab_to_new_window),
     .separator,
@@ -221,6 +222,7 @@ fn enabled(surface: *Surface, action: Binding.Action) bool {
     if (!surface.core_initialized) return false;
     return switch (action) {
         .copy_to_clipboard => surface.core_surface.hasSelection(),
+        .undo => surface.window.closed_tabs.items.len > 0,
         else => true,
     };
 }
