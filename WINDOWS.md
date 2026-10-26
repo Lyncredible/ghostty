@@ -172,8 +172,9 @@ Notes:
       and `redo` closes it again. Closed tabs are destroyed when the
       timeout expires or the window closes. Closing a split can be
       undone too: it goes back next to the terminals it was split from,
-      on the same side and with the same ratio. Closing a window can't
-      be undone yet. Checked with `--undo-timeout=3s` and F9/F8
+      on the same side and with the same ratio. Closing a window can be
+      undone too, unless it's the last one (the app quits then, and
+      closed windows are destroyed with it). Checked with `--undo-timeout=3s` and F9/F8
       bound to undo/redo: close, undo, and redo switched the visible
       terminal as expected; after the timeout the hidden surface was
       destroyed and undo did nothing. The tab menu item reopened a tab.
@@ -181,7 +182,14 @@ Notes:
       position (x 1539..2965), redo closed it again, and it expired the
       same way. Closing a split and then its tab, two undos brought back
       the tab and then the split.
-  - [ ] Undo closing a window
+  - [x] Undo closing a window: it's hidden and taken out of the app's
+        window list until it expires; `undo` reopens whichever of the
+        closed windows and the window's own closed tabs and splits closed
+        last. Checked with two windows: closing the second hid it, undo
+        showed it, redo hid it, and after the timeout it was destroyed.
+        With a window waiting for undo, closing the last open one quit
+        the app. This found a use-after-free: closing a single-terminal
+        window with the close button reset a flag on the freed window.
 
 ### Known limitations
 
