@@ -254,6 +254,10 @@ Notes:
         `install.ps1 -Uninstall`), and optionally adds `bin` to the user
         PATH. No administrator rights or signing. Checked: install,
         uninstall, and `-AddToPath` leave nothing behind.
+    - [x] `-ExplorerMenu` adds "Open in Ghostty (unofficial Windows
+          build)" to Explorer's right-click menu for folders and folder
+          backgrounds (HKCU, `--working-directory=%V`). Checked: the keys
+          were created and removed, and the command opened at the folder.
   - [x] CI: the `build-windows` job packages the portable zip and
         uploads it as a 14-day artifact (not run yet; needs a push)
   - [ ] Installer or MSIX (needs signing and an app identity)

@@ -5,7 +5,7 @@
 #
 # Usage, from the extracted zip:
 #
-#     powershell -ExecutionPolicy Bypass -File install.ps1 [-AddToPath]
+#     powershell -ExecutionPolicy Bypass -File install.ps1 [-AddToPath] [-ExplorerMenu]
 #     powershell -ExecutionPolicy Bypass -File install.ps1 -Uninstall
 #
 # Options:
@@ -13,6 +13,8 @@
 #     -AddToPath    Also add the bin folder to the user's PATH, so that
 #                   `ghostty +new-window` and other CLI actions work from
 #                   any terminal.
+#     -ExplorerMenu Also add "Open in Ghostty (unofficial Windows build)" to the right-click menu of
+#                   folders (and of a folder's background) in Explorer.
 #     -Uninstall    Remove the installation, shortcut, PATH entry, and the
 #                   Settings > Apps entry.
 #     -Destination  Where to install (default
@@ -20,6 +22,7 @@
 
 param(
     [switch]$AddToPath,
+    [switch]$ExplorerMenu,
     [switch]$Uninstall,
     [string]$Destination = (Join-Path $env:LOCALAPPDATA "Programs\ghostty-windows-unofficial")
 )
@@ -31,6 +34,12 @@ $displayName = "Ghostty (unofficial Windows build)"
 $uninstallKey = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\$id"
 $shortcut = Join-Path ([Environment]::GetFolderPath("Programs")) "$displayName.lnk"
 $bin = Join-Path $Destination "bin"
+
+# Explorer's right-click menu for folders and a folder's background.
+$explorerKeys = @(
+    "HKCU:\Software\Classes\Directory\shell\$id",
+    "HKCU:\Software\Classes\Directory\Background\shell\$id"
+)
 
 function Remove-FromPath([string]$dir) {
     $path = [Environment]::GetEnvironmentVariable("Path", "User")
@@ -52,6 +61,7 @@ if (Test-Running $exe) {
 if ($Uninstall) {
     if (Test-Path $shortcut) { Remove-Item -Force $shortcut }
     if (Test-Path $uninstallKey) { Remove-Item -Recurse -Force $uninstallKey }
+    foreach ($key in $explorerKeys) { if (Test-Path $key) { Remove-Item -Recurse -Force $key } }
     Remove-FromPath $bin
     if (Test-Path $Destination) { Remove-Item -Recurse -Force $Destination }
     Write-Output "Uninstalled $displayName."
@@ -95,6 +105,17 @@ foreach ($entry in $values.GetEnumerator()) {
 }
 New-ItemProperty -Force -Path $uninstallKey -Name NoModify -Value 1 -PropertyType DWord | Out-Null
 New-ItemProperty -Force -Path $uninstallKey -Name NoRepair -Value 1 -PropertyType DWord | Out-Null
+
+if ($ExplorerMenu) {
+    foreach ($key in $explorerKeys) {
+        New-Item -Force "$key\command" | Out-Null
+        New-ItemProperty -Force -Path $key -Name "(default)" -Value "Open in $displayName" | Out-Null
+        New-ItemProperty -Force -Path $key -Name "Icon" -Value $exe | Out-Null
+        # %V is the folder: the clicked one, or the one whose background
+        # was clicked.
+        New-ItemProperty -Force -Path "$key\command" -Name "(default)" -Value "`"$exe`" `"--working-directory=%V`"" | Out-Null
+    }
+}
 
 if ($AddToPath) {
     Remove-FromPath $bin
