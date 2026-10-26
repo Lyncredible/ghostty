@@ -2541,16 +2541,16 @@ keybind: Keybinds = .{},
 /// * `none` - Do not copy selected text automatically.
 ///
 /// * `primary` - On Linux, copy to the selection clipboard only. This has no
-///   effect on macOS. (Available since: 1.4.0)
+///   effect on macOS and Windows. (Available since: 1.4.0)
 ///
 /// * `clipboard` - Copy text to the system clipboard only.
 ///
 /// * `both` - Copy to both clipboards on Linux, and only the system clipboard
-///   on macOS. (Available since: 1.4.0)
+///   on macOS and Windows. (Available since: 1.4.0)
 ///
 /// For backward compatibility and convenience, a value of `true` is the same as
-/// `primary` on Linux and `clipboard` on macOS, and `false` is an alias for
-/// `none`.
+/// `primary` on Linux and `clipboard` on macOS and Windows, and `false` is an
+/// alias for `none`.
 ///
 /// The default value is `primary` on Linux and `none` otherwise.
 @"copy-on-select": CopyOnSelect = switch (builtin.target.os.tag) {
@@ -2575,7 +2575,8 @@ keybind: Keybinds = .{},
 ///
 /// Valid values:
 ///   * `primary-paste` - Paste from the selection clipboard on Linux.
-///      Does nothing on macOS.
+///      Does nothing on macOS and Windows, which have no selection
+///      clipboard.
 ///   * `clipboard-paste` - Paste from the system clipboard.
 ///   * `ignore` - Do nothing, ignore the middle click.
 ///
