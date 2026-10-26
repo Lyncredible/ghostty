@@ -69,10 +69,12 @@ fn dir(
     }
 
     // First check the env var. On Windows we treat `LOCALAPPDATA` as a
-    // fallback for `XDG_CONFIG_HOME`
+    // fallback for `XDG_CONFIG_HOME`. An empty value counts as unset, as
+    // the spec says.
+    const xdg_env = environ_map.get(internal_opts.env) orelse "";
     const env = switch (builtin.target.os.tag) {
-        .windows => environ_map.get(internal_opts.env) orelse environ_map.get(internal_opts.windows_env) orelse "",
-        else => environ_map.get(internal_opts.env) orelse "",
+        .windows => if (xdg_env.len > 0) xdg_env else environ_map.get(internal_opts.windows_env) orelse "",
+        else => xdg_env,
     };
 
     if (env.len > 0) {
@@ -161,6 +163,42 @@ test "cache directory paths" {
             defer alloc.free(expected);
             try testing.expectEqualStrings(expected, cache_path);
         }
+    }
+}
+
+test "windows: LOCALAPPDATA when xdg env unset or empty" {
+    if (builtin.target.os.tag != .windows) return error.SkipZigTest;
+
+    const io = std.testing.io;
+    const alloc = std.testing.allocator;
+    const local = "C:\\Users\\me\\AppData\\Local";
+
+    inline for (.{
+        .{ "XDG_CONFIG_HOME", config },
+        .{ "XDG_CACHE_HOME", cache },
+        .{ "XDG_STATE_HOME", state },
+    }) |case| {
+        var environ_map = try std.testing.environ.createMap(alloc);
+        defer environ_map.deinit();
+        try environ_map.put("LOCALAPPDATA", local);
+        const expected = local ++ "\\ghostty";
+
+        // Unset, then empty: both use LOCALAPPDATA.
+        _ = environ_map.swapRemove(case[0]);
+        const unset = try case[1](io, alloc, &environ_map, .{ .subdir = "ghostty" });
+        defer alloc.free(unset);
+        try std.testing.expectEqualStrings(expected, unset);
+
+        try environ_map.put(case[0], "");
+        const empty = try case[1](io, alloc, &environ_map, .{ .subdir = "ghostty" });
+        defer alloc.free(empty);
+        try std.testing.expectEqualStrings(expected, empty);
+
+        // A set XDG variable wins.
+        try environ_map.put(case[0], "D:\\xdg");
+        const set = try case[1](io, alloc, &environ_map, .{ .subdir = "ghostty" });
+        defer alloc.free(set);
+        try std.testing.expectEqualStrings("D:\\xdg\\ghostty", set);
     }
 }
 
