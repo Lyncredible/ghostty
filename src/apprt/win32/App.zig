@@ -46,6 +46,9 @@ const WM_GHOSTTY_WAKEUP = c.WM_APP + 1;
 /// Posted at startup to show configuration errors once a window is up.
 const WM_GHOSTTY_CONFIG_ERRORS = c.WM_APP + 3;
 
+/// Posted to redo closing, with the window (or 0) as the wparam.
+const WM_GHOSTTY_REDO = c.WM_APP + 4;
+
 /// The ID of the timer on our message window for the quit timer.
 const quit_timer_id = 1;
 
@@ -542,13 +545,29 @@ fn undo(self: *App, target: apprt.action.Target) bool {
 
 /// Close what `undo` reopened again: in the target's window first, and
 /// then windows.
+///
+/// Redo can close the terminal that asked for it, while the core is still
+/// handling its key, which only expects close actions to do that. So we
+/// close later, from a posted message.
 fn redo(self: *App, target: apprt.action.Target) bool {
-    if (self.actionWindow(target)) |window| {
-        if (window.redoClose()) return true;
+    const window = self.actionWindow(target);
+    const can_redo = (if (window) |w| w.canRedo() else false) or
+        self.reopened_windows.items.len > 0;
+    if (!can_redo) return false;
+    const hwnd: c.WPARAM = if (window) |w| @intFromPtr(w.hwnd) else 0;
+    return c.PostMessageW(self.msg_hwnd, WM_GHOSTTY_REDO, hwnd, 0) != 0;
+}
+
+fn redoNow(self: *App, hwnd: c.WPARAM) void {
+    // The window may have closed since.
+    const window = for (self.windows.items) |w| {
+        if (@intFromPtr(w.hwnd) == hwnd) break w;
+    } else null;
+    if (window) |w| {
+        if (w.redoClose()) return;
     }
-    const window = self.reopened_windows.pop() orelse return false;
-    window.closeByUser();
-    return true;
+    const reopened = self.reopened_windows.pop() orelse return;
+    reopened.closeByUser();
 }
 
 /// Keep a window the user closed for `undo`. The window hides itself.
@@ -653,6 +672,11 @@ fn msgWndProc(
         switch (msg) {
             WM_GHOSTTY_CONFIG_ERRORS => {
                 self.showConfigErrors(&self.config);
+                return 0;
+            },
+
+            WM_GHOSTTY_REDO => {
+                self.redoNow(wparam);
                 return 0;
             },
 

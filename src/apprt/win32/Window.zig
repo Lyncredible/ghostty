@@ -984,6 +984,11 @@ pub fn undoClose(self: *Window) bool {
     return true;
 }
 
+/// Whether `redo` has anything to close again.
+pub fn canRedo(self: *const Window) bool {
+    return self.reopened.items.len > 0;
+}
+
 /// Close the tab or split most recently reopened by `undo` again.
 /// Returns false if there's none.
 pub fn redoClose(self: *Window) bool {
