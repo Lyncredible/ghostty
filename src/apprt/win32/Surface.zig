@@ -30,6 +30,7 @@ const CommandPalette = @import("CommandPalette.zig");
 const InspectorWindow = @import("InspectorWindow.zig");
 const drop = @import("drop.zig");
 const SplitDrag = @import("SplitDrag.zig");
+const Accessibility = @import("Accessibility.zig");
 const internal_os = @import("../../os/main.zig");
 
 const log = std.log.scoped(.win32);
@@ -106,6 +107,9 @@ health_badge: Badge = .{},
 
 /// A short message that hides itself, like GTK's toasts.
 toast_badge: Badge = .{},
+
+/// Our UI Automation provider, for screen readers.
+accessibility: ?*Accessibility = null,
 
 /// The handle to drag this split elsewhere, and the highlight where a
 /// dragged split would drop on us.
@@ -286,6 +290,8 @@ pub fn init(self: *Surface, app: *App, window: *Window, opts: Options) !void {
     errdefer self.drop_zone.deinit();
     try self.drag_handle.init(self, app.hinstance, &config);
     errdefer self.drag_handle.deinit();
+    self.accessibility = Accessibility.create(alloc, self) catch null;
+    errdefer if (self.accessibility) |a| a.detach();
     self.updateResizeOverlay(&config);
     c.DragAcceptFiles(hwnd, c.TRUE);
     try self.search_bar.init(hwnd, app.hinstance, &config, self, searchEvent);
@@ -334,6 +340,8 @@ pub fn deinit(self: *Surface) void {
     self.resize_badge.deinit(alloc);
     self.drag_handle.deinit();
     self.drop_zone.deinit();
+    if (self.accessibility) |a| a.detach();
+    self.accessibility = null;
     self.closeInspector();
     self.search_bar.deinit();
     self.command_palette.deinit();
@@ -1389,6 +1397,10 @@ pub fn wndProc(
             _ = c.KillTimer(hwnd, resize_timer_id);
             self.resize_badge.set(self.app.core_app.alloc, null);
             return 0;
+        },
+
+        c.WM_GETOBJECT => if (self.accessibility) |a| {
+            if (a.getObject(hwnd, wparam, lparam)) |result| return result;
         },
 
         c.WM_DROPFILES => {
