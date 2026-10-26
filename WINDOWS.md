@@ -154,6 +154,10 @@ Notes:
       `[Console]::ReadKey` behind ConPTY: Numpad 5 arrives as `NumPad5`
       (the VT fallback can only send a plain `5`), Up as `UpArrow`.
 - [x] CI job that builds and tests the app on Windows.
+  - It now passes `-Dtarget=x86_64-windows-gnu` for the tests and the
+    build: the Windows runner's native target is MSVC, which isn't what
+    the app is built and tested with (upstream's CI matrix also leaves
+    `x86_64-windows-msvc` commented out).
 - [x] libghostty-vt builds on Windows: `zig build -Demit-lib-vt
       -Dtarget=x86_64-windows-gnu` emits `ghostty-vt.dll` with its import
       library `ghostty-vt.lib`, and `ghostty-vt-static.lib`. Checked

@@ -945,11 +945,13 @@ jobs:
       - name: Setup Zig
         uses: mlugg/setup-zig@d1434d08867e3ee9daa34448df10607b98908d29 # v2.2.1
 
+      # The app targets the GNU ABI (MinGW), as documented in WINDOWS.md;
+      # the runner's native target would be MSVC.
       - name: Test
-        run: zig build test
+        run: zig build test -Dtarget=x86_64-windows-gnu
 
       - name: Build
-        run: zig build
+        run: zig build -Dtarget=x86_64-windows-gnu
 
       - name: Build for ARM64
         run: zig build -Dtarget=aarch64-windows-gnu
