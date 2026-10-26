@@ -111,6 +111,10 @@ Notes:
         clipboard.
   - [x] Titles, maximize, borderless fullscreen, and initial size.
   - [x] Close confirmation, open URL/config, and config reload.
+  - [x] Configuration errors dialog, like GTK's: at startup (once the
+        first window is up) and after a reload, a warning lists the
+        errors (up to 15) and offers to reload. Checked with two bad CLI
+        options: both listed with their sources; No dismissed it.
   - [x] Tabs: new, close (this/other/right), goto, and move.
   - [x] Custom tab bar themed from the terminal colors: close buttons,
         middle-click close, and a new tab button.
