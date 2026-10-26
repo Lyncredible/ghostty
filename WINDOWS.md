@@ -215,8 +215,11 @@ Notes:
 - [x] OSC 7 working directory reports on Windows
 - [x] Font discovery: FreeType scans the system and user font folders
       (`+list-fonts --family=Consolas` takes about 0.1 s here)
-  - [ ] Consider DirectWrite (`IDWriteFontFallback`) for faster codepoint
-        fallback across many fonts
+  - [x] Codepoint fallback asks DirectWrite's system font fallback
+        (`IDWriteFontFallback::MapCharacters`, with the user's locale)
+        first, then scans the font folders as before. Scanning picked
+        whichever file came first: Arial Unicode MS for Japanese here. Now
+        Japanese gets Yu Gothic UI and Korean gets Malgun Gothic.
 - [ ] Packaging and release builds
   - [x] Portable zip (`dist/windows/package.ps1`)
   - [ ] Installer or MSIX (needs signing and an app identity)
