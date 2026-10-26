@@ -8,6 +8,8 @@
 //! to ensure all our various types and logic remain in sync.
 
 const std = @import("std");
+const builtin = @import("builtin");
+const build_options = @import("terminal_options");
 const testing = std.testing;
 const ComptimeIntSet = @import("../datastruct/main.zig").ComptimeIntSet;
 const checkGhosttyVtHMacroExists = @import("../lib/enum.zig").checkGhosttyVtHMacroExists;
@@ -419,6 +421,15 @@ const entries: []const ModeEntry = &.{
     // one-time password instead of pasting the text.
     // See https://sw.kovidgoyal.net/kitty/clipboard/
     .{ .name = "kitty_paste_events", .value = 5522 },
+    // Win32 input mode, from Windows Terminal. ConPTY requests it so that
+    // console programs get full key events: virtual keys, scan codes, and
+    // key releases. Only the Windows app runs programs through ConPTY.
+    // https://github.com/microsoft/terminal/blob/main/doc/specs/%234999%20-%20Improved%20keyboard%20handling%20in%20Conpty.md
+    .{
+        .name = "win32_input",
+        .value = 9001,
+        .disabled = build_options.artifact == .lib or builtin.target.os.tag != .windows,
+    },
 };
 
 test {
