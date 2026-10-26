@@ -17,6 +17,7 @@ const Tab = @import("Tab.zig");
 const TabBar = @import("TabBar.zig");
 const Overrides = @import("Overrides.zig");
 const Menu = @import("Menu.zig");
+const SaveState = @import("SaveState.zig");
 
 const log = std.log.scoped(.win32);
 
@@ -39,6 +40,13 @@ active: usize = 0,
 
 /// The split divider being dragged, if any.
 dragging: ?Tab.Divider = null,
+
+/// Whether a restored window was maximized when its state was saved.
+restore_maximized: bool = false,
+
+/// Set when the user asks to close the window, as opposed to it closing
+/// because its last terminal exited.
+closing_by_user: bool = false,
 
 /// The number of items in the default system menu. Our main menu items
 /// follow them and are rebuilt each time the menu opens.
@@ -106,6 +114,9 @@ pub const Initial = union(enum) {
 
     /// The quick terminal, with a new tab.
     quick,
+
+    /// Saved tabs and placement, for window-save-state.
+    restored: *const SaveState.WindowState,
 };
 
 pub fn init(self: *Window, app: *App, initial: Initial) !void {
@@ -162,6 +173,7 @@ pub fn init(self: *Window, app: *App, initial: Initial) !void {
             self.placeQuick(false);
             _ = try self.addTab(null);
         },
+        .restored => |state| try self.restore(state),
     }
 
     // Only now that we're fully initialized do we attach ourselves to
@@ -192,7 +204,8 @@ pub fn show(self: *Window) void {
     // Start maximized or in fullscreen per the config. The initial size
     // has already been set, so it's the size the window restores to.
     const config = &self.app.config;
-    _ = c.ShowWindow(self.hwnd, if (config.maximize) c.SW_SHOWMAXIMIZED else c.SW_SHOWDEFAULT);
+    const maximize = config.maximize or self.restore_maximized;
+    _ = c.ShowWindow(self.hwnd, if (maximize) c.SW_SHOWMAXIMIZED else c.SW_SHOWDEFAULT);
     _ = c.UpdateWindow(self.hwnd);
     if (config.fullscreen != .false and self.fullscreen == null) self.toggleFullscreen();
 }
@@ -493,7 +506,19 @@ pub fn close(self: *Window) void {
 
 /// Destroy the window immediately, without confirmation.
 pub fn destroy(self: *Window) void {
+    // When the last window closes, save the session if the user closed it,
+    // and otherwise (its shell exited) forget it. Quitting saves before
+    // closing the windows.
+    if (!self.quick and !self.app.quitting and !self.app.closing_all and self.app.lastWindow() == self) {
+        if (self.closing_by_user) SaveState.save(self.app) else SaveState.clear(self.app);
+    }
     _ = c.DestroyWindow(self.hwnd);
+}
+
+/// Close the window because the user asked to.
+fn closeByUser(self: *Window) void {
+    self.closing_by_user = true;
+    self.destroy();
 }
 
 /// The active tab.
@@ -1278,6 +1303,36 @@ test snapToCells {
     try testing.expectEqual(@as(c_int, 500), snapToCells(803, 500, 0));
 }
 
+/// Restore saved placement and tabs into a new window.
+fn restore(self: *Window, state: *const SaveState.WindowState) !void {
+    // Place the window first, like the quick terminal, so that the
+    // terminals start out at their size. The saved size wins over the
+    // configured initial size.
+    self.initial_size_applied = true;
+    var placement: c.WINDOWPLACEMENT = undefined;
+    placement.length = @sizeOf(c.WINDOWPLACEMENT);
+    if (c.GetWindowPlacement(self.hwnd, &placement) != 0) {
+        placement.rcNormalPosition = .{ .left = state.left, .top = state.top, .right = state.right, .bottom = state.bottom };
+        placement.showCmd = c.SW_HIDE;
+        _ = c.SetWindowPlacement(self.hwnd, &placement);
+    }
+    self.restore_maximized = state.maximized;
+
+    const alloc = self.app.core_app.alloc;
+    for (state.tabs) |tab_state| {
+        const tab = Tab.createRestored(self, tab_state, self.tabs.items.len == 0) catch |err| {
+            log.warn("error restoring a tab err={}", .{err});
+            continue;
+        };
+        self.tabs.append(alloc, tab) catch {
+            tab.destroy();
+            continue;
+        };
+    }
+    if (self.tabs.items.len == 0) _ = try self.addTab(null);
+    self.selectTab(@min(state.active_tab, self.tabs.items.len - 1));
+}
+
 /// Move the first window to `window-position-x` and `window-position-y`,
 /// if both are set.
 fn placeAtConfiguredPosition(self: *Window) void {
@@ -1517,7 +1572,9 @@ pub fn wndProc(
             // With a single surface, go through the core so that it
             // confirms as usual and calls back into Surface.close.
             if (self.tabs.items.len == 1 and self.activeTab().isSingle()) {
+                self.closing_by_user = true;
                 self.activeSurface().core_surface.close();
+                self.closing_by_user = false;
                 return 0;
             }
 
@@ -1534,7 +1591,7 @@ pub fn wndProc(
                 }
             }
 
-            self.destroy();
+            self.closeByUser();
             return 0;
         },
 
