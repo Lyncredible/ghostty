@@ -432,6 +432,8 @@ fn startWindows(self: *Command, arena: Allocator) !void {
         &process_information,
     ) == windows.FALSE) return windows.unexpectedError(windows.GetLastError());
 
+    // We only need the process's handle.
+    _ = windows.exp.kernel32.CloseHandle(process_information.hThread);
     self.pid = process_information.hProcess;
 }
 

@@ -53,6 +53,7 @@ pub const clickInterval = mouse.clickInterval;
 pub const open = openpkg.open;
 pub const OpenType = openpkg.Type;
 pub const pipe = pipepkg.pipe;
+pub const closePipe = pipepkg.closePipe;
 pub const resourcesDir = resourcesdir.resourcesDir;
 pub const ResourcesDir = resourcesdir.ResourcesDir;
 pub const ShellEscapeWriter = shell.ShellEscapeWriter;

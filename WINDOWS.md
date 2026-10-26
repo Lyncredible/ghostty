@@ -221,6 +221,17 @@ Notes:
       cmd banner (pixels brighter than half): 6,463 normally, 6,850 at
       strength 0, and 8,403 at 255; the text stays crisp.
 - [x] `window-show-tab-bar` is documented as working on Windows.
+- [x] Handle leak: opening and closing tabs leaked about four kernel
+      handles per terminal (measured: 493, 528, 560, 594, 626 handles
+      over four rounds of eight tabs). The child's thread handle from
+      CreateProcessW was never closed, nor was its process handle (the
+      process watcher duplicates its own), and the read thread's quit pipe
+      was closed with the C runtime's `close`, which doesn't know about
+      Windows handles. Now: the thread handle is closed right away, the
+      process handle when the subprocess ends, and pipes with
+      `internal_os.closePipe`. Afterwards: 461, 461, 460, 462 handles.
+      Memory and GDI and user objects were already flat after the first
+      round.
 - [x] Stress test: a script posts random operations to a debug build
       (new windows, tabs, and splits; closing splits and windows; undo and
       redo; the command palette; dragging tabs out; typing; resizing; and
