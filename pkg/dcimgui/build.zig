@@ -9,6 +9,8 @@ pub fn build(b: *std.Build) !void {
     const backend_opengl3 = b.option(bool, "backend-opengl3", "OpenGL3 backend") orelse false;
     const backend_metal = b.option(bool, "backend-metal", "Metal backend") orelse false;
     const backend_osx = b.option(bool, "backend-osx", "OSX backend") orelse false;
+    const backend_dx11 = b.option(bool, "backend-dx11", "Direct3D 11 backend") orelse false;
+    const backend_win32 = b.option(bool, "backend-win32", "Win32 backend") orelse false;
 
     // Build options
     const options = b.addOptions();
@@ -16,6 +18,8 @@ pub fn build(b: *std.Build) !void {
     options.addOption(bool, "backend_opengl3", backend_opengl3);
     options.addOption(bool, "backend_metal", backend_metal);
     options.addOption(bool, "backend_osx", backend_osx);
+    options.addOption(bool, "backend_dx11", backend_dx11);
+    options.addOption(bool, "backend_win32", backend_win32);
 
     // Main static lib
     const lib = b.addLibrary(.{
@@ -166,6 +170,30 @@ pub fn build(b: *std.Build) !void {
                 upstream.path("backends"),
                 "",
                 .{ .include_extensions = &.{"imgui_impl_opengl3.h"} },
+            );
+        }
+        if (backend_dx11) {
+            lib.root_module.addCSourceFiles(.{
+                .root = upstream.path("backends"),
+                .files = &.{"imgui_impl_dx11.cpp"},
+                .flags = all_flags.items,
+            });
+            lib.installHeadersDirectory(
+                upstream.path("backends"),
+                "",
+                .{ .include_extensions = &.{"imgui_impl_dx11.h"} },
+            );
+        }
+        if (backend_win32) {
+            lib.root_module.addCSourceFiles(.{
+                .root = upstream.path("backends"),
+                .files = &.{"imgui_impl_win32.cpp"},
+                .flags = all_flags.items,
+            });
+            lib.installHeadersDirectory(
+                upstream.path("backends"),
+                "",
+                .{ .include_extensions = &.{"imgui_impl_win32.h"} },
             );
         }
     }

@@ -641,6 +641,9 @@ pub fn add(
         // OpenGL3 backend should only be built on non-Apple targets.
         // Apple platforms use Metal (and macOS may also use the OSX backend).
         .@"backend-opengl3" = !target.result.os.tag.isDarwin(),
+        // The Windows inspector renders with Direct3D 11.
+        .@"backend-dx11" = target.result.os.tag == .windows,
+        .@"backend-win32" = target.result.os.tag == .windows,
     })) |dep| {
         step.root_module.addImport("dcimgui", dep.module("dcimgui"));
         step.root_module.linkLibrary(dep.artifact("dcimgui"));
