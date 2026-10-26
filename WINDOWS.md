@@ -279,6 +279,9 @@ Notes:
     "stack tracing is disabled" (checked with ReleaseFast). Reports also
     list the raw return addresses (`RtlCaptureStackBackTrace`) as offsets
     into ghostty.exe, which the build's PDB can resolve.
+  - `ghostty +crash-report` lists them: on Windows the crash directory
+    is the same `%LOCALAPPDATA%\ghostty\crash`. Checked: after a
+    `crash:main`, it listed "crash-66322625.txt (5s ago)".
 - [x] Opening the config:
   - Open Config (menu, `open_config`) did nothing visible: `.ghostty`
     files have no associated app, and ShellExecute "open" then only asks
