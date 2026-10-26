@@ -13,6 +13,9 @@ const c = @import("posix_c");
 /// desktop file. This also includes when `gtk-launch` is used because I
 /// can't find a way to distinguish the two scenarios.
 ///
+/// On Windows, this returns true if the program was started by Explorer
+/// (the Start menu, taskbar, shortcuts, or the Run dialog).
+///
 /// For other platforms and app runtimes, this returns false.
 pub fn launchedFromDesktop() bool {
     return switch (builtin.target.os.tag) {
@@ -55,14 +58,50 @@ pub fn launchedFromDesktop() bool {
             break :ul gio_pid == pid;
         },
 
-        // TODO: This should have some logic to detect this. Perhaps std.lang.subsystem
-        .windows => false,
+        // Explorer starts apps from the Start menu, the taskbar, shortcuts,
+        // and the Run dialog. Terminals and other programs are a CLI.
+        .windows => parentIsExplorer(),
 
         // iPhone/iPad is always launched from the "desktop"
         .ios => true,
 
         else => @compileError("unsupported platform"),
     };
+}
+
+/// Whether our parent process is Explorer. If the parent has already
+/// exited (for example a launcher), we can't tell, so we say yes.
+fn parentIsExplorer() bool {
+    const windows = @import("windows.zig");
+    const kernel32 = windows.exp.kernel32;
+
+    const snapshot = kernel32.CreateToolhelp32Snapshot(windows.TH32CS_SNAPPROCESS, 0);
+    if (snapshot == windows.INVALID_HANDLE_VALUE) return false;
+    defer _ = kernel32.CloseHandle(snapshot);
+
+    // Find our parent, then the parent's entry.
+    const pid = windows.GetCurrentProcessId();
+    var parent: ?windows.DWORD = null;
+    for (0..2) |_| {
+        var entry: windows.PROCESSENTRY32W = undefined;
+        entry.dwSize = @sizeOf(windows.PROCESSENTRY32W);
+        var ok = kernel32.Process32FirstW(snapshot, &entry);
+        while (ok != windows.FALSE) : (ok = kernel32.Process32NextW(snapshot, &entry)) {
+            if (parent) |parent_pid| {
+                if (entry.th32ProcessID != parent_pid) continue;
+                const name = std.mem.sliceTo(&entry.szExeFile, 0);
+                return std.ascii.eqlIgnoreCase(
+                    std.mem.sliceAsBytes(name),
+                    std.mem.sliceAsBytes(std.unicode.utf8ToUtf16LeStringLiteral("explorer.exe")),
+                );
+            } else if (entry.th32ProcessID == pid) {
+                parent = entry.th32ParentProcessID;
+                break;
+            }
+        }
+        if (parent == null) return false;
+    }
+    return true;
 }
 
 /// The list of desktop environments that we detect. New Linux desktop
@@ -118,7 +157,7 @@ test "desktop environment" {
         inline .macos, .windows => |tag| {
             var environ_map: std.process.Environ.Map = .init(testing.allocator);
             defer environ_map.deinit();
-            try testing.expectEqual(@tagName(tag), @tagName(desktopEnvironment(&environ_map)));
+            try testing.expectEqualStrings(@tagName(tag), @tagName(desktopEnvironment(&environ_map)));
         },
         .linux, .freebsd => {
             {
