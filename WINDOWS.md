@@ -164,7 +164,12 @@ Notes:
 - [x] Drag tabs to reorder within a window
 - [x] Move a tab to a new window (`move_tab_to_new_window`)
 - [x] Background opacity/blur (DirectComposition swap chain)
-  - [x] `toggle_background_opacity` (needs a manual UI test)
+  - [x] `toggle_background_opacity`. Checked with `PrintWindow` captures
+        (background `#3060c0`, opacity 0.5, toggled by an F12 keybind):
+        made opaque, the background first came out as 56,117,236, since
+        with linear alpha blending the renderer outputs encode(a·lin(c))
+        rather than a·c. Surfaces now paint a compensating color beneath
+        it, and it comes out as 47,96,191.
   - [x] Blur on Windows 10 and Windows 11 before 22H2 (no system
         backdrop there): the blur behind accent from the undocumented
         `SetWindowCompositionAttribute`
@@ -752,7 +757,7 @@ Reviewed the branch against this file and discussion #2563.
   `GetKeyState`.
 - Pending manual checks (they need an unlocked desktop, real input, or
   another machine):
-  - `toggle_background_opacity`, quick terminal sliding out, the touch
+  - Quick terminal sliding out, the touch
     keyboard showing, the terminal IO export dialog
   - A Start menu or Explorer launch opening at home
   - Blur on Windows 10
