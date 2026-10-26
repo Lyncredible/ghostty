@@ -724,22 +724,46 @@ fn adoptTab(self: *Window, tab: *Tab) !void {
 /// Move the tab containing the given surface to a new window. Like GTK,
 /// this does nothing if it's the only tab.
 pub fn moveTabToNewWindow(self: *Window, surface: *Surface) !bool {
-    if (self.tabs.items.len <= 1) return false;
     const tab = self.tabOf(surface) orelse return false;
-    const idx = self.tabIndex(tab) orelse return false;
+    return try self.tearOffTab(tab) != null;
+}
+
+/// Move a tab to a new window, returning it. Does nothing (and returns
+/// null) if it's the only tab.
+pub fn tearOffTab(self: *Window, tab: *Tab) !?*Window {
+    if (self.tabs.items.len <= 1) return null;
+    const idx = self.tabIndex(tab) orelse return null;
 
     const window = try self.app.newWindow(.{ .tab = tab });
-
-    _ = self.tabs.orderedRemove(idx);
-    if (idx < self.active) self.active -= 1;
-    self.active = @min(self.active, self.tabs.items.len - 1);
-    self.dragging = null;
-    self.selectTab(self.active);
+    self.detachTab(idx);
 
     // Selecting our remaining tab focuses it, which activates this window
     // again. The moved tab should end up in front.
     window.present(tab.focused);
+    return window;
+}
+
+/// Move a tab to another window and select it there. Like moving it to
+/// a new window, this does nothing if it's the only tab.
+pub fn moveTabToWindow(self: *Window, tab: *Tab, target: *Window) !bool {
+    if (target == self or self.tabs.items.len <= 1) return false;
+    const idx = self.tabIndex(tab) orelse return false;
+    try target.tabs.ensureUnusedCapacity(self.app.core_app.alloc, 1);
+    self.detachTab(idx);
+    // We reserved room for the tab, so this can't fail.
+    target.adoptTab(tab) catch unreachable;
+    target.present(tab.focused);
     return true;
+}
+
+/// Remove a tab that moved to another window from our list.
+fn detachTab(self: *Window, idx: usize) void {
+    const tab = self.tabs.orderedRemove(idx);
+    self.forgetReopened(tab);
+    if (idx < self.active) self.active -= 1;
+    self.active = @min(self.active, self.tabs.items.len - 1);
+    self.dragging = null;
+    self.selectTab(self.active);
 }
 
 /// Open a new tab from the tab bar, inheriting from the active surface.
