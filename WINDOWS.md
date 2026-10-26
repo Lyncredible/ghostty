@@ -241,6 +241,11 @@ Notes:
         through UI Automation, which still held references at exit. The
         app now calls `UiaDisconnectAllProviders` when it terminates, and
         seed 10 then quit with no leaks.
+  - Seed 11 didn't exit within 20 s of Quit; its log ended at an unsafe
+    paste waiting for confirmation. Reproduced directly: with the
+    "Potentially Unsafe Paste" dialog open, Quit from the menu still
+    exited. So that run was most likely waiting on a confirmation dialog,
+    which is expected.
 - [x] CLI actions on Windows: `+version`, `+list-fonts`, `+list-themes`,
       `+list-keybinds`, `+list-colors`, `+list-actions`, `+show-config`,
       `+validate-config`, `+help`, `+show-face`, `+explain-config`, and
