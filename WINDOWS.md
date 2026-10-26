@@ -528,6 +528,14 @@ Notes:
           Invoke pattern, which presses them from a posted message (the
           menus run a modal loop). Checked: invoking "New Tab" opened a
           second tab.
+  - [x] The command palette's list is owner drawn without strings, so the
+        list box's UI Automation proxy had no text for screen readers to
+        read. Items now carry their titles as text (LBS_HASSTRINGS), with
+        the entry index as item data for drawing. Checked: 88 items with
+        text (LB_GETTEXTLEN 17, 22, 20, ...), the palette draws as before,
+        and choosing an entry still runs it. (The .NET client in PowerShell
+        has no proxies for standard Win32 controls, so it can't show this;
+        screen readers use the native ones.)
   - [x] The text pattern's selection is the terminal's selection (its
         visible part), or else the cursor as a caret, and selection
         changes raise `TextSelectionChanged` (posted from
