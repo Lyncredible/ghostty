@@ -166,6 +166,8 @@ Notes:
 - [x] Windows on ARM: `zig build -Dtarget=aarch64-windows-gnu` builds
       after casting `GetProcAddress` results with `@alignCast` (function
       pointers are 4-byte aligned on ARM64).
+  - Still builds after this session's changes (2026-10-26, debug, 64 MB
+    `ghostty.exe`).
   - [ ] Run it on an ARM64 machine
 - [x] Light and dark themes: the app reports the Windows app mode
       (`AppsUseLightTheme`) to the core at startup and on
