@@ -368,6 +368,11 @@ Notes:
         Verified with a screenshot of the context menu.
   - [x] Command palette item in the main menu
   - [x] Terminal inspector item
+  - [x] A tab menu on right clicks in the tab bar, like GTK's: change
+        title, new tab, move to a new window, close, close others, close
+        to the right. Right clicks elsewhere in the tab bar show the main
+        menu. Checked: "Close Other Tabs" from the first tab's menu left
+        one terminal.
   - Not planned: opening the context menu from the keyboard (Shift+F10,
     the Menu key). Terminal programs use those keys, and with win32 input
     mode console programs receive them.
