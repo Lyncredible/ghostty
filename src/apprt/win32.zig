@@ -16,4 +16,5 @@ test {
     _ = @import("win32/Overrides.zig");
     _ = @import("win32/Window.zig");
     _ = @import("win32/Menu.zig");
+    _ = @import("win32/CommandPalette.zig");
 }

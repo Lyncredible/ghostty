@@ -224,7 +224,15 @@ Notes:
           -2, then 0 and unclipped after ~140 ms.
       - [ ] Manual check: sliding out (toggling hides only when the quick
             terminal is in front, which a locked test desktop never is)
-  - [ ] Command palette
+  - [x] Command palette (`toggle_command_palette`): a field over an
+        owner-drawn list of the `command-palette-entry` commands (title,
+        description, shortcut) and "Focus: <title>" entries for every
+        terminal, like GTK. Every word of the query must appear in the
+        title or action (`new_split:right`). Up/Down/PageUp/PageDown move,
+        Enter or a click runs, Escape or focus loss closes. A layered
+        child of the surface, like the search bar. Checked natively: it
+        opened from the menu, filtered, and Enter on `new_split:right`
+        split the terminal.
 - [x] Share built-in compiled shader bytecode across surfaces
 - [x] Cache compiled custom shader bytecode across surfaces
 - [x] Add Menu support. Need to decide on where to put the menu. I prefer
@@ -248,7 +256,8 @@ Notes:
         undocumented `SetPreferredAppMode`/`FlushMenuThemes` (ordinals
         135/136, Windows 10 1903+), set with the title bar theme.
         Verified with a screenshot of the context menu.
-  - [ ] Command palette and inspector items, once those exist
+  - [x] Command palette item in the main menu
+  - [ ] Terminal inspector item, once it exists
   - [ ] Keyboard access to the context menu (Shift+F10 / Menu key)
 - [x] Don't ask for exit confirmation if there is no active progress other than
       the shell itself. This is the behavior on macOS and Linux.

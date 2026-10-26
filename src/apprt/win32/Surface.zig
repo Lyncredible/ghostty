@@ -26,6 +26,7 @@ const Badge = @import("Badge.zig");
 const SearchBar = @import("SearchBar.zig");
 const Overrides = @import("Overrides.zig");
 const Menu = @import("Menu.zig");
+const CommandPalette = @import("CommandPalette.zig");
 
 const log = std.log.scoped(.win32);
 
@@ -94,6 +95,7 @@ readonly_badge: Badge = .{},
 key_badge: Badge = .{},
 health_badge: Badge = .{},
 search_bar: SearchBar = .{},
+command_palette: CommandPalette = .{},
 
 /// The search state from the core, shown in the search bar.
 search_total: ?usize = null,
@@ -242,6 +244,8 @@ pub fn init(self: *Surface, app: *App, window: *Window, opts: Options) !void {
     errdefer self.health_badge.deinit(alloc);
     try self.search_bar.init(hwnd, app.hinstance, &config, self, searchEvent);
     errdefer self.search_bar.deinit();
+    try self.command_palette.init(hwnd, app.hinstance, &config, self, commandPaletteChoice);
+    errdefer self.command_palette.deinit();
 
     // Initialize our surface now that we have the stable pointer.
     try self.core_surface.init(
@@ -278,6 +282,7 @@ pub fn deinit(self: *Surface) void {
     self.key_badge.deinit(alloc);
     self.health_badge.deinit(alloc);
     self.search_bar.deinit();
+    self.command_palette.deinit();
     clearLabels(alloc, &self.key_tables);
     self.key_tables.deinit(alloc);
     clearLabels(alloc, &self.key_sequence);
@@ -464,6 +469,39 @@ pub fn setSearchSelected(self: *Surface, selected: ?usize) void {
     self.search_bar.setCount(selected, self.search_total);
 }
 
+/// Show the command palette, or hide it if it's open.
+pub fn toggleCommandPalette(self: *Surface) void {
+    if (self.command_palette.visible()) {
+        self.command_palette.hide();
+        return;
+    }
+
+    // Every terminal can be focused from the palette.
+    var arena: std.heap.ArenaAllocator = .init(self.app.core_app.alloc);
+    defer arena.deinit();
+    const alloc = arena.allocator();
+    var targets: std.ArrayList(CommandPalette.Target) = .empty;
+    for (self.app.core_app.surfaces.items) |surface| {
+        if (!surface.core_initialized) continue;
+        targets.append(alloc, .{
+            .surface = &surface.core_surface,
+            .title = surface.effectiveTitle() orelse "Untitled",
+            .pwd = surface.core_surface.pwd(alloc) catch null,
+        }) catch break;
+    }
+    self.command_palette.show(self.app.core_app.alloc, &self.app.config, targets.items);
+}
+
+/// Called by the command palette when the user chooses an entry.
+fn commandPaletteChoice(ctx: *anyopaque, choice: CommandPalette.Choice) void {
+    const self: *Surface = @ptrCast(@alignCast(ctx));
+    switch (choice) {
+        .action => |action| self.performMenuAction(action),
+        // presentSurface ignores a terminal that has closed since.
+        .surface => |surface| self.app.presentSurface(surface),
+    }
+}
+
 /// Called by the search bar for user input.
 fn searchEvent(ctx: *anyopaque, event: SearchBar.Event) void {
     const self: *Surface = @ptrCast(@alignCast(ctx));
@@ -523,6 +561,7 @@ pub fn configChanged(self: *Surface, config: *const configpkg.Config) void {
     self.key_badge.updateConfig(config);
     self.health_badge.updateConfig(config);
     self.search_bar.updateConfig(config);
+    self.command_palette.updateConfig(config);
     self.dim_overlay.updateConfig(config) catch |err| {
         log.err("error updating split dimming err={}", .{err});
     };
@@ -933,6 +972,7 @@ pub fn wndProc(
                 self.key_badge.parentResized();
                 self.health_badge.parentResized();
                 self.search_bar.parentResized();
+                self.command_palette.parentResized();
                 self.core_surface.sizeCallback(size) catch |err| {
                     log.err("error in size callback err={}", .{err});
                 };

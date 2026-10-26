@@ -25,6 +25,7 @@ const LinkPreview = @import("LinkPreview.zig");
 const Scrollbar = @import("Scrollbar.zig");
 const Badge = @import("Badge.zig");
 const SearchBar = @import("SearchBar.zig");
+const CommandPalette = @import("CommandPalette.zig");
 const Ipc = @import("Ipc.zig");
 const Overrides = @import("Overrides.zig");
 const Taskbar = @import("Taskbar.zig");
@@ -357,6 +358,20 @@ fn registerClasses(hinstance: c.HINSTANCE) !void {
         .{
             .cbSize = @sizeOf(c.WNDCLASSEXW),
             .style = 0,
+            .lpfnWndProc = CommandPalette.wndProc,
+            .cbClsExtra = 0,
+            .cbWndExtra = 0,
+            .hInstance = hinstance,
+            .hIcon = null,
+            .hCursor = util.loadSystemCursor(util.IDC_ARROW),
+            .hbrBackground = null,
+            .lpszMenuName = null,
+            .lpszClassName = CommandPalette.class_name,
+            .hIconSm = null,
+        },
+        .{
+            .cbSize = @sizeOf(c.WNDCLASSEXW),
+            .style = 0,
             .lpfnWndProc = msgWndProc,
             .cbClsExtra = 0,
             .cbWndExtra = 0,
@@ -388,6 +403,7 @@ fn unregisterClasses(hinstance: c.HINSTANCE) void {
     _ = c.UnregisterClassW(Scrollbar.class_name, hinstance);
     _ = c.UnregisterClassW(Badge.class_name, hinstance);
     _ = c.UnregisterClassW(SearchBar.class_name, hinstance);
+    _ = c.UnregisterClassW(CommandPalette.class_name, hinstance);
     _ = c.UnregisterClassW(message_class, hinstance);
 }
 
@@ -588,7 +604,7 @@ fn handleIpc(self: *App, data: []const u8) bool {
 }
 
 /// Bring the given surface to the front, if it still exists.
-fn presentSurface(self: *App, surface: *CoreSurface) void {
+pub fn presentSurface(self: *App, surface: *CoreSurface) void {
     for (self.core_app.surfaces.items) |rt_surface| {
         if (rt_surface.core() == surface) {
             rt_surface.window.present(rt_surface);
@@ -860,6 +876,11 @@ pub fn performAction(
         .mouse_shape => switch (target) {
             .app => return false,
             .surface => |v| v.rt_surface.setMouseShape(value),
+        },
+
+        .toggle_command_palette => switch (target) {
+            .app => return false,
+            .surface => |v| v.rt_surface.toggleCommandPalette(),
         },
 
         .start_search => switch (target) {
