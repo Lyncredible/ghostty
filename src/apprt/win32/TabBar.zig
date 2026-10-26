@@ -13,6 +13,7 @@ const util = @import("util.zig");
 const c = util.c;
 const App = @import("App.zig");
 const Tab = @import("Tab.zig");
+const TabBarAccessibility = @import("TabBarAccessibility.zig");
 const Window = @import("Window.zig");
 const Menu = @import("Menu.zig");
 
@@ -31,6 +32,9 @@ hover: ?Hit = null,
 
 /// Whether we're tracking the mouse to get WM_MOUSELEAVE.
 tracking_mouse: bool = false,
+
+/// UI Automation for the tabs, created when a client first asks.
+accessibility: ?*TabBarAccessibility = null,
 
 /// The tooltip for the element under the mouse, such as a tab's full
 /// title when it's cut off, and the text we give it.
@@ -137,6 +141,8 @@ fn tooltipText(self: *TabBar, hit: Hit) []const u8 {
 }
 
 pub fn deinit(self: *TabBar) void {
+    if (self.accessibility) |a| a.detach();
+    self.accessibility = null;
     if (self.tooltip) |tooltip| _ = c.DestroyWindow(tooltip);
     _ = c.SetWindowLongPtrW(self.hwnd, util.GWLP_USERDATA, 0);
     if (self.font) |f| _ = c.DeleteObject(f);
@@ -230,6 +236,33 @@ fn layout(self: *const TabBar) Layout {
 }
 
 /// The rectangle of the close button of a tab.
+/// The rectangle of the tab at an index, on the screen.
+pub fn tabScreenRect(self: *const TabBar, idx: usize) c.RECT {
+    var client: c.RECT = undefined;
+    _ = c.GetClientRect(self.hwnd, &client);
+    const rect = self.layout().tabRect(idx, client.bottom);
+    var top_left: c.POINT = .{ .x = rect.left, .y = rect.top };
+    var bottom_right: c.POINT = .{ .x = rect.right, .y = rect.bottom };
+    _ = c.ClientToScreen(self.hwnd, &top_left);
+    _ = c.ClientToScreen(self.hwnd, &bottom_right);
+    return .{ .left = top_left.x, .top = top_left.y, .right = bottom_right.x, .bottom = bottom_right.y };
+}
+
+/// The index of the tab at a point on the screen, if any.
+pub fn tabAtScreen(self: *const TabBar, pt: c.POINT) ?usize {
+    var client_pt = pt;
+    _ = c.ScreenToClient(self.hwnd, &client_pt);
+    return switch (self.hitTest(client_pt.x, client_pt.y) orelse return null) {
+        .tab, .close => |i| i,
+        else => null,
+    };
+}
+
+/// Called when a tab is selected, to tell screen readers.
+pub fn tabSelected(self: *TabBar, tab: *Tab) void {
+    if (self.accessibility) |a| a.tabSelected(tab);
+}
+
 fn closeRect(self: *const TabBar, tab: c.RECT) c.RECT {
     const size = self.scale(16);
     const margin = self.scale(8);
@@ -696,6 +729,16 @@ pub fn wndProc(
 
     switch (msg) {
         c.WM_ERASEBKGND => return 1,
+
+        c.WM_GETOBJECT => {
+            if (self.accessibility == null) {
+                self.accessibility = TabBarAccessibility.create(self.window.app.core_app.alloc, self) catch null;
+            }
+            if (self.accessibility) |a| {
+                if (a.getObject(hwnd, wparam, lparam)) |result| return result;
+            }
+            return c.DefWindowProcW(hwnd, msg, wparam, lparam);
+        },
 
         c.WM_PAINT => {
             var ps: c.PAINTSTRUCT = undefined;
