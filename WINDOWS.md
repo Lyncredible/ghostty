@@ -104,6 +104,11 @@ Notes:
   - [x] Mouse buttons, motion, wheel, and cursor shapes.
   - [x] Plain text clipboard, with CRLF handling and unsafe paste
         confirmation.
+  - [x] Copying also writes HTML ("HTML Format", CF_HTML) when the core
+        provides it (`copy_to_clipboard` with `mixed`), so rich text
+        editors paste with colors and styles. Checked: Select All and Copy
+        put a well-formed CF_HTML document with the terminal's text on the
+        clipboard.
   - [x] Titles, maximize, borderless fullscreen, and initial size.
   - [x] Close confirmation, open URL/config, and config reload.
   - [x] Tabs: new, close (this/other/right), goto, and move.
