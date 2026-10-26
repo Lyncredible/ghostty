@@ -102,6 +102,9 @@ Notes:
         physical keys.
   - [x] Basic IME: the system composition window, placed at the cursor.
   - [x] Mouse buttons, motion, wheel, and cursor shapes.
+  - [x] Touch screens: a one finger vertical pan scrolls (with inertia)
+        through `WM_GESTURE`, instead of selecting text with emulated
+        mouse input. Needs a check on a touch screen.
   - [x] Plain text clipboard, with CRLF handling and unsafe paste
         confirmation.
   - [x] Copying also writes HTML ("HTML Format", CF_HTML) when the core
@@ -880,8 +883,8 @@ Reviewed the branch against this file and discussion #2563.
   screen reader, or another machine):
   - Quick terminal sliding out, the touch keyboard showing, the terminal
     IO export dialog
-  - Dragging files onto a terminal, `focus-follows-mouse`, and
-    `window-step-resize` while dragging an edge
+  - Dragging files onto a terminal, `focus-follows-mouse`,
+    `window-step-resize` while dragging an edge, and touch scrolling
   - Narrator announcing new output
   - A Start menu or Explorer launch opening at home
   - Installing the MSIX (`Add-AppxPackage -AllowUnsigned`)
