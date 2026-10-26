@@ -200,6 +200,9 @@ Notes:
     - [x] Close confirmation through WSL: an idle zsh (once its prompt
           was up) closed without asking; `wsl.exe -- sleep 100` showed
           "Close terminal?".
+    - [x] Typing into WSL through win32 input mode: posted keys for
+          `echo hi` and Enter printed "hi" in zsh (read back with UI
+          Automation).
 - [x] Choose a registered WSL distribution by name from the shell menu
 - [x] Choose Command Prompt, Windows PowerShell, PowerShell, WSL, or
       the configured command when opening a new tab from the tab bar
