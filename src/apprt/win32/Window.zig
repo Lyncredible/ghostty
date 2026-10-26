@@ -743,16 +743,29 @@ pub fn tearOffTab(self: *Window, tab: *Tab) !?*Window {
     return window;
 }
 
-/// Move a tab to another window and select it there. Like moving it to
-/// a new window, this does nothing if it's the only tab.
+/// Move a tab to another window and select it there. If it was our only
+/// tab, we close: the caller must not use this window afterwards.
 pub fn moveTabToWindow(self: *Window, tab: *Tab, target: *Window) !bool {
-    if (target == self or self.tabs.items.len <= 1) return false;
+    if (target == self) return false;
     const idx = self.tabIndex(tab) orelse return false;
     try target.tabs.ensureUnusedCapacity(self.app.core_app.alloc, 1);
-    self.detachTab(idx);
-    // We reserved room for the tab, so this can't fail.
+
+    if (self.tabs.items.len > 1) {
+        self.detachTab(idx);
+        // We reserved room for the tab, so this can't fail.
+        target.adoptTab(tab) catch unreachable;
+        target.present(tab.focused);
+        return true;
+    }
+
+    // Our last tab: hide first, while we still have a tab to answer
+    // focus messages with, then close without any tabs.
+    _ = c.ShowWindow(self.hwnd, c.SW_HIDE);
+    _ = self.tabs.orderedRemove(idx);
+    self.forgetReopened(tab);
     target.adoptTab(tab) catch unreachable;
     target.present(tab.focused);
+    self.destroy();
     return true;
 }
 
@@ -1909,6 +1922,8 @@ pub fn wndProc(
         },
 
         c.WM_SETFOCUS => {
+            // We have no tabs after moving our last one to another window.
+            if (self.tabs.items.len == 0) return 0;
             _ = c.SetFocus(self.activeSurface().hwnd);
             return 0;
         },

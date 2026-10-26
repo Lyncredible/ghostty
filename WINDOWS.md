@@ -258,7 +258,9 @@ Notes:
       pointer. Dragging down starts a drag too. Checked with posted
       mouse messages: dropping 700 px below made a new window with the
       tab, and dropping on that window (where the source didn't cover
-      it) moved another tab into it.
+      it) moved another tab into it. A window's only tab can be dropped
+      on another window too, which closes the emptied window: checked,
+      the target ended up with all three tabs.
 - [x] Background opacity/blur (DirectComposition swap chain)
   - [x] `toggle_background_opacity`. Checked with `PrintWindow` captures
         (background `#3060c0`, opacity 0.5, toggled by an F12 keybind):
