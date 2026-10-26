@@ -2175,7 +2175,9 @@ keybind: Keybinds = .{},
 ///   * `working-directory` - Set the subtitle to the working directory of the
 ///      surface.
 ///
-/// This feature is only supported on GTK.
+/// This feature is supported on GTK and Windows. On Windows, the title bar
+/// has a single line, so the subtitle follows the title after a dash,
+/// unless the title already contains it.
 ///
 /// Available since: 1.1.0
 @"window-subtitle": WindowSubtitle = .false,

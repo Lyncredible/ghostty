@@ -212,6 +212,12 @@ Notes:
       cmd banner (pixels brighter than half): 6,463 normally, 6,850 at
       strength 0, and 8,403 at 255; the text stays crisp.
 - [x] `window-show-tab-bar` is documented as working on Windows.
+- [x] `window-subtitle = working-directory`: the title bar has one line,
+      so the working directory follows the title after a dash, unless the
+      title already contains it; it updates on the core's `pwd` action.
+      Checked with `--title=Fixed`: "Fixed — C:\Code\ghostty", and
+      "Fixed — C:\Code" after typing `cd ..`; without the option the title
+      stayed "Fixed".
 
 ### Known limitations
 
