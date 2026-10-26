@@ -212,6 +212,19 @@ Notes:
       cmd banner (pixels brighter than half): 6,463 normally, 6,850 at
       strength 0, and 8,403 at 255; the text stays crisp.
 - [x] `window-show-tab-bar` is documented as working on Windows.
+- [x] Output throughput (2026-10-26, ReleaseFast, 20 MB of text):
+  - `cmd /c type` is slow everywhere: 19-27 s in Ghostty, 27-38 s in a
+    conhost window. cmd writes line by line through the console API.
+  - A program writing 64 KiB chunks with `WriteFile`: 0.6 s in conhost,
+    2.25 s in Ghostty (about 0.5 s of it startup). During a run Ghostty
+    used 0.44 s of CPU and the ConPTY host 1.55 s, so ConPTY (which
+    renders the output into its own buffer and re-encodes it as VT) is
+    the bottleneck, not our parser.
+  - The read thread now reads 64 KiB at a time instead of 1 KiB, which
+    took the run from 2.25 s to 2.0 s.
+  - This found that ReleaseFast builds failed: stripping also turned off
+    unwind tables, which MinGW's startup code needs for structured
+    exception handling. They're kept on Windows now.
 - [x] `split-preserve-zoom = navigation`, like GTK: navigating away from
       a zoomed split zooms the target instead of unzooming. Checked: with
       the option, `goto_split:previous` from the zoomed split showed only
