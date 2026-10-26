@@ -1145,7 +1145,7 @@ fn updateTheme(self: *Window) void {
 }
 
 /// Whether the user chose the dark app mode in the Windows settings.
-fn systemUsesDarkTheme() bool {
+pub fn systemUsesDarkTheme() bool {
     // HKEY_CURRENT_USER isn't a validly aligned pointer for Zig, so we
     // open the current user's key instead.
     var current_user: c.HKEY = null;
@@ -1535,6 +1535,7 @@ pub fn wndProc(
 
         // Sent when the system light/dark mode changes, among others.
         c.WM_SETTINGCHANGE => {
+            self.app.updateColorScheme();
             self.updateTheme();
             return c.DefWindowProcW(hwnd, msg, wparam, lparam);
         },
