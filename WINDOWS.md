@@ -213,6 +213,13 @@ Notes:
         POSIX paths).
     - [ ] Manual check: a Start menu or Explorer launch opens at home
 - [x] Global keybinds (`RegisterHotKey`)
+- [x] Screen readers (UI Automation), like the macOS app's accessibility
+      element: each terminal is a read-only Document named "Terminal"
+      whose Value is the visible text, served from `WM_GETOBJECT`.
+      Checked with the .NET UI Automation client: control type, name,
+      read-only, and the cmd banner and prompt as the value.
+  - [ ] Text pattern (ranges, selection, caret) and text change events,
+        so screen readers follow new output like in Windows Terminal
 - [x] Taskbar jump list with a "New Window" task, which starts
       `ghostty.exe` again (single instance opens the window in the running
       app). Checked: the shell wrote the custom destinations file with the
