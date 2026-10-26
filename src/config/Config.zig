@@ -2946,9 +2946,12 @@ keybind: Keybinds = .{},
 ///
 ///   * `detect` - Detect the shell based on the filename.
 ///
-///   * `bash`, `elvish`, `fish`, `nushell`, `powershell`, `zsh` - Use this
-///     specific shell injection scheme. `powershell` supports both PowerShell
-///     7+ (`pwsh`) and Windows PowerShell 5.1.
+///   * `bash`, `cmd`, `elvish`, `fish`, `nushell`, `powershell`, `zsh` - Use
+///     this specific shell injection scheme. `powershell` supports both
+///     PowerShell 7+ (`pwsh`) and Windows PowerShell 5.1. `cmd` is the
+///     Windows Command Prompt, integrated through its `PROMPT` variable, which
+///     marks prompts and reports the working directory but can't tell when a
+///     command starts or finishes.
 ///
 /// The default value is `detect`.
 @"shell-integration": ShellIntegration = .detect,
@@ -8916,6 +8919,7 @@ pub const ShellIntegration = enum {
     none,
     detect,
     bash,
+    cmd,
     elvish,
     fish,
     nushell,
