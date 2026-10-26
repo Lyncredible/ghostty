@@ -866,24 +866,28 @@ Reviewed the branch against this file and discussion #2563.
   detection, launches from PowerShell in `C:\Users` and then `C:\Code`
   opened windows in those directories (the second via forwarding).
 
-## Next steps (2026-10-25, evening)
+## Next steps (2026-10-26)
 
 - UI tests that type need a focus guard. Twice, `SetForegroundWindow`
   from the test script failed, and the synthetic keys ("line 3") went to
   the Claude Code terminal instead, interrupting the session. Prefer
   posting messages to Ghostty's own windows (`WM_KEYDOWN`/`WM_CHAR` to a
-  surface or edit control, `WM_SYSCOMMAND` for menu items), which is how
-  the menus, palette, search, inspector, and win32 input mode were
-  checked. Posted keys can't carry modifiers, since those come from
-  `GetKeyState`.
-- Pending manual checks (they need an unlocked desktop, real input, or
-  another machine):
-  - Quick terminal sliding out, the touch
-    keyboard showing, the terminal IO export dialog
+  surface or edit control, `WM_SYSCOMMAND` for menu items, mouse messages
+  to overlays), which is how most features here were checked. Posted keys
+  can't carry modifiers, since those come from `GetKeyState`. UI
+  Automation (the .NET client) works for checking accessibility.
+- Pending manual checks (they need an unlocked desktop, real input, a
+  screen reader, or another machine):
+  - Quick terminal sliding out, the touch keyboard showing, the terminal
+    IO export dialog
+  - Dragging files onto a terminal, `focus-follows-mouse`, and
+    `window-step-resize` while dragging an edge
+  - Narrator announcing new output
   - A Start menu or Explorer launch opening at home
+  - Installing the MSIX (`Add-AppxPackage -AllowUnsigned`)
   - Blur on Windows 10
-  - `conpty.dll` from the ConPTY package (Kitty graphics APCs)
+  - `conpty.dll` from the ConPTY package (Kitty graphics APCs); build with
+    `package.ps1 -BundleConpty` to try it
   - WSL `\wsl$` working directory inheritance through the UI,
     PowerShell 7
-- Remaining work: an MSIX package (needs the Windows SDK and signing),
-  and bundling `conpty.dll` once it's verified.
+- Remaining work: a signed package, which needs a certificate.
