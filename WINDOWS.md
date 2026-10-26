@@ -315,6 +315,10 @@ Notes:
         When the last window closes because its shell exited, the state
         is cleared. Checked: a split plus a second tab saved and restored
         as three terminals with their directories and focus.
+  - [x] `window-theme = ghostty` colors the title bar with the terminal's
+        background and foreground, or `window-titlebar-background` and
+        `-foreground` (`DWMWA_CAPTION_COLOR`/`DWMWA_TEXT_COLOR`, Windows
+        11). Checked: the caption pixel matched the background.
   - [x] `resize-overlay`, `resize-overlay-position`, and
         `resize-overlay-duration`: "columns x rows" when the grid changes,
         like GTK; with `after-first`, not while a new window is being
