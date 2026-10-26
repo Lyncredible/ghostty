@@ -19,7 +19,13 @@ pub fn init(b: *std.Build, cfg: *const Config, deps: *const SharedDeps) !Ghostty
             .optimize = cfg.optimize,
             .strip = cfg.strip,
             .omit_frame_pointer = cfg.omitFramePointer(),
-            .unwind_tables = if (cfg.strip) .none else .sync,
+            // Windows needs unwind tables for structured exception
+            // handling (MinGW's startup code registers a handler), so
+            // we keep them there even when stripping.
+            .unwind_tables = if (cfg.strip and cfg.target.result.os.tag != .windows)
+                .none
+            else
+                .sync,
         }),
         // Crashes on x86_64 self-hosted on 0.15.1
         .use_llvm = true,
