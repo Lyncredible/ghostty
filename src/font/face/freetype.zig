@@ -448,6 +448,17 @@ pub const Face = struct {
             _ = freetype.c.FT_Outline_Embolden(&glyph.*.outline, @intFromFloat(amount));
         }
 
+        // For `font-thicken`, like font smoothing with CoreText, we draw a
+        // slightly heavier stroke by emboldening the outline. FreeType
+        // widens it by the given amount in 26.6 units overall (half on
+        // each side): from a quarter of a pixel to a whole pixel,
+        // depending on the strength.
+        if (opts.thicken and glyph.*.format == freetype.c.FT_GLYPH_FORMAT_OUTLINE) {
+            const strength: f64 = @as(f64, @floatFromInt(opts.thicken_strength)) / 255.0;
+            const amount = @round(16.0 + 48.0 * strength);
+            _ = freetype.c.FT_Outline_Embolden(&glyph.*.outline, @intFromFloat(amount));
+        }
+
         // We get a rect that represents the position
         // and size of the glyph before constraints.
         const rect = getGlyphSize(glyph);
