@@ -100,6 +100,7 @@ pub const main = [_]Item{
     .act("&Reset", .reset),
     .act("F&ull Screen", .toggle_fullscreen),
     .separator,
+    .act("Command Pa&lette", .toggle_command_palette),
     .sub("C&onfig", &config_items),
     .separator,
     .act("&Quit", .quit),
@@ -230,7 +231,7 @@ fn actionAtInner(items: []const Item, i: *usize) ?Binding.Action {
 }
 
 /// Format a trigger like Windows menus do, for example "Ctrl+Shift+T".
-fn triggerText(buf: []u8, trigger: Binding.Trigger) ![]const u8 {
+pub fn triggerText(buf: []u8, trigger: Binding.Trigger) ![]const u8 {
     var writer: std.Io.Writer = .fixed(buf);
     if (trigger.mods.ctrl) try writer.writeAll("Ctrl+");
     if (trigger.mods.alt) try writer.writeAll("Alt+");
