@@ -110,6 +110,11 @@ Notes:
   - [x] Ctrl+C copies when there's a selection, like Windows Terminal,
         and is still an interrupt otherwise (a performable default
         keybind on Windows). Unit tested; needs a check with real keys.
+  - [x] Ctrl+V pastes too, like Windows Terminal: through ConPTY, cmd
+        otherwise gets a ^V instead of the console's paste. It's
+        performable, and `keybind = ctrl+v=unbind` gives it back to
+        programs such as Vim (visual block). The menus still show
+        Shift+Insert. Unit tested; needs a check with real keys.
   - [x] Copying also writes HTML ("HTML Format", CF_HTML) when the core
         provides it (`copy_to_clipboard` with `mixed`), so rich text
         editors paste with colors and styles. Checked: Select All and Copy

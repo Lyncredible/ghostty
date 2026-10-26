@@ -6753,6 +6753,17 @@ pub const Keybinds = struct {
                 .paste_from_clipboard,
                 .{ .performable = true },
             );
+
+            // On Windows, like Windows Terminal, ctrl+v pastes too. Through
+            // ConPTY, shells such as cmd would otherwise just get a ^V.
+            // Unbind it (`keybind = ctrl+v=unbind`) for programs that use
+            // it, such as Vim's visual block mode.
+            if (comptime builtin.target.os.tag == .windows) try self.set.putFlags(
+                alloc,
+                .{ .key = .{ .unicode = 'v' }, .mods = .{ .ctrl = true } },
+                .paste_from_clipboard,
+                .{ .performable = true },
+            );
         }
 
         // Increase font size mapping for keyboards with dedicated plus keys (like german)
@@ -10756,6 +10767,20 @@ test "default keybinds: ctrl+c copies a selection on Windows" {
         .mods = .{ .ctrl = true },
     }).?;
     try testing.expect(entry.value_ptr.*.leaf.action == .copy_to_clipboard);
+    try testing.expect(entry.value_ptr.*.leaf.flags.performable);
+}
+
+test "default keybinds: ctrl+v pastes on Windows" {
+    if (comptime builtin.target.os.tag != .windows) return error.SkipZigTest;
+    const testing = std.testing;
+
+    var config = try Config.default(testing.allocator);
+    defer config.deinit();
+    const entry = config.keybind.set.get(.{
+        .key = .{ .unicode = 'v' },
+        .mods = .{ .ctrl = true },
+    }).?;
+    try testing.expect(entry.value_ptr.*.leaf.action == .paste_from_clipboard);
     try testing.expect(entry.value_ptr.*.leaf.flags.performable);
 }
 
