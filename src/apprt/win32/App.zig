@@ -43,6 +43,9 @@ const log = std.log.scoped(.win32);
 /// Posted to our message window to wake up the event loop.
 const WM_GHOSTTY_WAKEUP = c.WM_APP + 1;
 
+/// Posted at startup to show configuration errors once a window is up.
+const WM_GHOSTTY_CONFIG_ERRORS = c.WM_APP + 3;
+
 /// The ID of the timer on our message window for the quit timer.
 const quit_timer_id = 1;
 
@@ -195,6 +198,9 @@ pub fn init(
     _ = c.SetWindowLongPtrW(msg_hwnd, util.GWLP_USERDATA, @bitCast(@intFromPtr(self)));
     self.global_keys.update(&self.config);
     JumpList.update();
+    if (self.config._diagnostics.items().len > 0) {
+        _ = c.PostMessageW(msg_hwnd, WM_GHOSTTY_CONFIG_ERRORS, 0, 0);
+    }
 }
 
 /// Hand this launch to the running instance of our class. Returns false if
@@ -548,6 +554,11 @@ fn msgWndProc(
     if (ptr != 0) {
         const self: *App = @ptrFromInt(@as(usize, @bitCast(ptr)));
         switch (msg) {
+            WM_GHOSTTY_CONFIG_ERRORS => {
+                self.showConfigErrors(&self.config);
+                return 0;
+            },
+
             WM_GHOSTTY_WAKEUP => {
                 self.core_app.tick(self) catch |err| {
                     log.err("error ticking app err={}", .{err});
@@ -1198,11 +1209,52 @@ fn reloadConfig(
         .surface => |core_surface| try core_surface.updateConfig(&config),
     }
 
+    if (config._diagnostics.items().len > 0) {
+        self.showConfigErrors(&config);
+        return;
+    }
+
     // Like GTK, tell each window.
     if (config.@"app-notifications".@"config-reload") {
         for (self.windows.items) |window| {
             if (window.tabs.items.len > 0) window.activeSurface().showToast("Reloaded the configuration");
         }
+    }
+}
+
+/// Like GTK, list configuration errors and offer to reload the
+/// configuration, for example after fixing them.
+fn showConfigErrors(self: *App, config: *const Config) void {
+    const alloc = self.core_app.alloc;
+    var text: std.Io.Writer.Allocating = .init(alloc);
+    defer text.deinit();
+    const writer = &text.writer;
+    writer.writeAll("One or more configuration errors were found:\n\n") catch return;
+
+    // Long lists don't fit a message box.
+    const max_shown = 15;
+    const diagnostics = config._diagnostics.items();
+    for (diagnostics[0..@min(diagnostics.len, max_shown)]) |diag| {
+        writer.print("{f}\n", .{diag}) catch return;
+    }
+    if (diagnostics.len > max_shown) {
+        writer.print("...and {d} more\n", .{diagnostics.len - max_shown}) catch return;
+    }
+    writer.writeAll("\nReload the configuration now? Choose No to ignore these errors.") catch return;
+
+    const message = util.utf16Alloc(alloc, text.written()) catch return;
+    defer alloc.free(message);
+    const owner = if (self.activeWindow()) |window| window.hwnd else null;
+    const choice = c.MessageBoxW(
+        owner,
+        message.ptr,
+        std.unicode.utf8ToUtf16LeStringLiteral("Configuration Errors"),
+        c.MB_YESNO | c.MB_ICONWARNING,
+    );
+    if (choice == c.IDYES) {
+        self.reloadConfig(.app, .{ .soft = false }) catch |err| {
+            log.err("error reloading config err={}", .{err});
+        };
     }
 }
 
