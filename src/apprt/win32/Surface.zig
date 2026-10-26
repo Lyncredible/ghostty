@@ -75,6 +75,11 @@ bell_features: configpkg.Config.BellFeatures = .{},
 /// True from a bell until this surface is focused or receives key input.
 /// This drives the `title` and `border` bell features.
 bell_pending: bool = false,
+
+/// The background and foreground colors set by the terminal (OSC 10 and
+/// 11), which the tab bar follows. Null for the configured colors.
+background_color: ?terminal.color.RGB = null,
+foreground_color: ?terminal.color.RGB = null,
 notify_on_command_finish: configpkg.Config.NotifyOnCommandFinish = .never,
 notify_on_command_finish_action: configpkg.Config.NotifyOnCommandFinishAction = .{},
 notify_on_command_finish_after: configpkg.Config.Duration = .{ .duration = 5 * std.time.ns_per_s },
@@ -472,6 +477,17 @@ pub fn setSearchTotal(self: *Surface, total: ?usize) void {
 pub fn setSearchSelected(self: *Surface, selected: ?usize) void {
     self.search_selected = selected;
     self.search_bar.setCount(selected, self.search_total);
+}
+
+/// The terminal's background or foreground color changed.
+pub fn colorChanged(self: *Surface, change: apprt.action.ColorChange) void {
+    const color: terminal.color.RGB = .{ .r = change.r, .g = change.g, .b = change.b };
+    switch (change.kind) {
+        .background => self.background_color = color,
+        .foreground => self.foreground_color = color,
+        else => return,
+    }
+    self.window.tab_bar.invalidate();
 }
 
 /// Show, hide, or toggle the terminal inspector's window.

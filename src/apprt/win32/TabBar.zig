@@ -203,9 +203,13 @@ const Colors = struct {
 };
 
 fn colors(self: *const TabBar) Colors {
+    // The active terminal's colors, which programs may have changed.
     const config = &self.window.app.config;
-    const bg: Rgb = .{ .r = config.background.r, .g = config.background.g, .b = config.background.b };
-    const fg: Rgb = .{ .r = config.foreground.r, .g = config.foreground.g, .b = config.foreground.b };
+    const surface = if (self.window.tabs.items.len > 0) self.window.activeSurface() else null;
+    const bg_color = if (surface) |s| s.background_color orelse config.background.toTerminalRGB() else config.background.toTerminalRGB();
+    const fg_color = if (surface) |s| s.foreground_color orelse config.foreground.toTerminalRGB() else config.foreground.toTerminalRGB();
+    const bg: Rgb = .{ .r = bg_color.r, .g = bg_color.g, .b = bg_color.b };
+    const fg: Rgb = .{ .r = fg_color.r, .g = fg_color.g, .b = fg_color.b };
     const black: Rgb = .{ .r = 0, .g = 0, .b = 0 };
     const bar = blend(bg, black, 0.25);
     return .{
