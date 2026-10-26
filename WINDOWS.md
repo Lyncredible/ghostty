@@ -229,8 +229,22 @@ Notes:
         PATH. No administrator rights or signing. Checked: install,
         uninstall, and `-AddToPath` leave nothing behind.
   - [ ] Installer or MSIX (needs signing and an app identity)
-- [ ] Unimplemented apprt actions (as of 2026-10-25)
-  - [ ] Window management
+- [x] Unimplemented apprt actions (as of 2026-10-25)
+  - [x] `show_on_screen_keyboard`: toggles the touch keyboard through the
+        shell's (undocumented) `ITipInvocation`, starting TabTip.exe if
+        needed. Checked that the action runs without errors when bound
+        (`--keybind=f12=show_on_screen_keyboard`); seeing the keyboard
+        needs an unlocked desktop.
+  - [x] `export_terminal_io`: the inspector's export, saved through the
+        standard Save As dialog (`GetSaveFileNameW`); the inspector skips
+        redraws while the modal dialog pumps messages. Not clicked
+        through yet.
+  - Not applicable on Windows: `undo`/`redo`, `secure_input`,
+    `check_for_updates`, `toggle_tab_overview`, `show_gtk_inspector`,
+    `render` (embedded), `selection_changed` (no primary selection).
+    Unhandled for now, as on GTK: `color_change` (the tab bar doesn't
+    follow OSC 10/11 color changes), `cell_size`, `pwd`.
+  - [x] Window management
     - [x] `reset_window_size`, `resize_window`, `size_limit`
     - [x] `goto_window`, `present_terminal`, `float_window`,
           `toggle_window_decorations` (and `window-decoration=none`)
