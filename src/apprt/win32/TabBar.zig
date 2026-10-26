@@ -555,7 +555,8 @@ fn dragMove(self: *TabBar, x: c_int, y: c_int) void {
 
 /// A dragged tab was dropped at a point in our client area. Dropped well
 /// above or below the tab bar, like in browsers, it moves to the window
-/// under the pointer, or to a new window there.
+/// under the pointer, or to a new window there. Moving our window's last
+/// tab to another window closes ours, and us with it.
 fn dropTab(self: *TabBar, tab: *Tab, x: c_int, y: c_int) void {
     var client: c.RECT = undefined;
     _ = c.GetClientRect(self.hwnd, &client);
