@@ -101,6 +101,7 @@ pub const main = [_]Item{
     .act("F&ull Screen", .toggle_fullscreen),
     .separator,
     .act("Command Pa&lette", .toggle_command_palette),
+    .act("Terminal &Inspector", .{ .inspector = .toggle }),
     .sub("C&onfig", &config_items),
     .separator,
     .act("&Quit", .quit),
