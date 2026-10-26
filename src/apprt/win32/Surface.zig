@@ -114,6 +114,9 @@ accessibility: ?*Accessibility = null,
 /// When we last got key input, in GetTickCount64 milliseconds.
 last_key_ms: u64 = 0,
 
+/// The vertical position of an ongoing touch pan, in screen pixels.
+pan_y: ?c_int = null,
+
 /// The handle to drag this split elsewhere, and the highlight where a
 /// dragged split would drop on us.
 drag_handle: SplitDrag.Handle = .{},
@@ -297,6 +300,15 @@ pub fn init(self: *Surface, app: *App, window: *Window, opts: Options) !void {
     errdefer if (self.accessibility) |a| a.detach();
     self.updateResizeOverlay(&config);
     c.DragAcceptFiles(hwnd, c.TRUE);
+
+    // A vertical one finger pan on a touch screen scrolls, with inertia,
+    // rather than selecting text with emulated mouse input.
+    var gesture: c.GESTURECONFIG = .{
+        .dwID = c.GID_PAN,
+        .dwWant = c.GC_PAN_WITH_SINGLE_FINGER_VERTICALLY | c.GC_PAN_WITH_INERTIA,
+        .dwBlock = c.GC_PAN_WITH_SINGLE_FINGER_HORIZONTALLY | c.GC_PAN_WITH_GUTTER,
+    };
+    _ = c.SetGestureConfig(hwnd, 0, 1, &gesture, @sizeOf(c.GESTURECONFIG));
     try self.search_bar.init(hwnd, app.hinstance, &config, self, searchEvent);
     errdefer self.search_bar.deinit();
     try self.command_palette.init(hwnd, app.hinstance, &config, self, commandPaletteChoice);
@@ -611,6 +623,35 @@ test commandRunsWsl {
     try testing.expect(commandRunsWsl(.{ .shell = "wsl.exe -d Ubuntu" }));
     try testing.expect(commandRunsWsl(.{ .shell = "\"C:\\Windows\\System32\\wsl.exe\" ~" }));
     try testing.expect(!commandRunsWsl(.{ .shell = "cmd.exe" }));
+}
+
+/// Scroll for a touch pan gesture. Returns false for other gestures,
+/// which go to DefWindowProc.
+fn panGesture(self: *Surface, lparam: c.LPARAM) bool {
+    var info: c.GESTUREINFO = undefined;
+    info.cbSize = @sizeOf(c.GESTUREINFO);
+    const handle = util.handle(c.HGESTUREINFO, lparam);
+    if (c.GetGestureInfo(handle, &info) == 0) return false;
+    if (info.dwID != c.GID_PAN) return false;
+    defer _ = c.CloseGestureInfoHandle(handle);
+
+    const y: c_int = info.ptsLocation.y;
+    if (info.dwFlags & c.GF_BEGIN != 0) {
+        self.pan_y = y;
+        return true;
+    }
+    const last = self.pan_y orelse y;
+    self.pan_y = if (info.dwFlags & c.GF_END != 0) null else y;
+
+    // Content follows the finger: moving down shows earlier lines, which
+    // is a positive (upward) scroll for the core.
+    const dy = y - last;
+    if (dy != 0 and self.core_initialized) {
+        self.core_surface.scrollCallback(0, @floatFromInt(dy), .{ .precision = true }) catch |err| {
+            log.err("error in scroll callback err={}", .{err});
+        };
+    }
+    return true;
 }
 
 /// Paste the paths of files dropped on us, quoted for our shell.
@@ -1420,6 +1461,8 @@ pub fn wndProc(
         c.WM_GETOBJECT => if (self.accessibility) |a| {
             if (a.getObject(hwnd, wparam, lparam)) |result| return result;
         },
+
+        c.WM_GESTURE => if (self.panGesture(lparam)) return 0,
 
         c.WM_DROPFILES => {
             self.dropFiles(util.handle(c.HDROP, wparam));
