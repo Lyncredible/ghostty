@@ -287,6 +287,13 @@ Notes:
         child of the surface, like the search bar. Checked natively: it
         opened from the menu, filtered, and Enter on `new_split:right`
         split the terminal.
+- [ ] Config options the Win32 apprt ignored (found 2026-10-25)
+  - [x] `focus-follows-mouse`: hovering a split focuses it when the
+        cursor really moves, the window is in front, no button is held,
+        and focus is on another terminal (never a search field, palette,
+        or dialog). Needs a check on an unlocked desktop.
+  - [ ] Dropping files on a terminal pastes their quoted paths
+  - [ ] `window-position-x` and `window-position-y`
 - [x] Share built-in compiled shader bytecode across surfaces
 - [x] Precompile the built-in HLSL at build time when the build host is
       Windows (`src/build/hlsl_compile.zig` calls `D3DCompile` with the

@@ -532,6 +532,25 @@ test underlay {
     try testing.expectEqual(@as(u8, 0), underlay(0, 0.5, true));
 }
 
+/// With focus-follows-mouse, take focus from another terminal in our
+/// window when the mouse moves over us. We check that the cursor really
+/// moved, since resizing a split under a still cursor also sends
+/// WM_MOUSEMOVE, and we never take focus from anything but a terminal,
+/// such as a search field or the command palette.
+fn focusFollowsMouse(self: *Surface, wparam: c.WPARAM) void {
+    if (!self.app.config.@"focus-follows-mouse") return;
+    const buttons = c.MK_LBUTTON | c.MK_RBUTTON | c.MK_MBUTTON;
+    if (wparam & buttons != 0) return;
+    if (c.GetForegroundWindow() != self.window.hwnd) return;
+    const focus = c.GetFocus() orelse return;
+    if (focus == self.hwnd) return;
+
+    var class: [64]u16 = undefined;
+    const len: usize = @intCast(@max(0, c.GetClassNameW(focus, &class, class.len)));
+    if (!std.mem.eql(u16, class[0..len], App.surface_class)) return;
+    _ = c.SetFocus(self.hwnd);
+}
+
 /// The terminal's background or foreground color changed.
 pub fn colorChanged(self: *Surface, change: apprt.action.ColorChange) void {
     const color: terminal.color.RGB = .{ .r = change.r, .g = change.g, .b = change.b };
@@ -1141,10 +1160,14 @@ pub fn wndProc(
                 if (c.TrackMouseEvent(&tme) != 0) self.tracking_mouse = true;
             }
 
-            self.cursorPosEvent(.{
+            const pos: apprt.CursorPos = .{
                 .x = @floatFromInt(util.loword(lparam)),
                 .y = @floatFromInt(util.hiword(lparam)),
-            });
+            };
+            if (pos.x != self.cursor_pos.x or pos.y != self.cursor_pos.y) {
+                self.focusFollowsMouse(wparam);
+            }
+            self.cursorPosEvent(pos);
             self.scrollbar.updateHover();
             return 0;
         },
