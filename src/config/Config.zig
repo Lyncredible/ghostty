@@ -2927,7 +2927,7 @@ keybind: Keybinds = .{},
 ///    window is currently focused.
 ///
 /// Only has an effect on Linux Wayland.
-/// On macOS the behavior is always equivalent to `on-demand`.
+/// On macOS and Windows the behavior is always equivalent to `on-demand`.
 ///
 /// Available since: 1.2.0
 @"quick-terminal-keyboard-interactivity": QuickTerminalKeyboardInteractivity = .@"on-demand",
