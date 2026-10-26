@@ -83,6 +83,19 @@ pub const context = [_]Item{
     .sub("C&onfig", &config_items),
 };
 
+/// The menu for right clicks on a tab, like GTK's. It runs on the tab's
+/// focused terminal.
+pub const tab = [_]Item{
+    .act("Change Tab &Title…", .prompt_tab_title),
+    .act("&New Tab", .new_tab),
+    .separator,
+    .act("&Move Tab to New Window", .move_tab_to_new_window),
+    .separator,
+    .act("&Close Tab", .{ .close_tab = .this }),
+    .act("Close &Other Tabs", .{ .close_tab = .other }),
+    .act("Close Tabs to the &Right", .{ .close_tab = .right }),
+};
+
 /// The window's main menu.
 pub const main = [_]Item{
     .act("&New Window", .new_window),

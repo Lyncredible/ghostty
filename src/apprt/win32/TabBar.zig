@@ -640,6 +640,23 @@ pub fn wndProc(
             return 0;
         },
 
+        c.WM_RBUTTONUP => {
+            var pt: c.POINT = .{ .x = util.loword(lparam), .y = util.hiword(lparam) };
+            const hit = self.hitTest(pt.x, pt.y);
+            _ = c.ClientToScreen(hwnd, &pt);
+            self.setHover(null);
+            if (hit) |h| switch (h) {
+                .tab, .close => |i| {
+                    const tab = self.window.tabs.items[i];
+                    Menu.track(&Menu.tab, tab.focused, self.window.hwnd, pt, 0);
+                    return 0;
+                },
+                else => {},
+            };
+            Menu.track(&Menu.main, self.window.activeSurface(), self.window.hwnd, pt, 0);
+            return 0;
+        },
+
         c.WM_MBUTTONUP => {
             const hit = self.hitTest(util.loword(lparam), util.hiword(lparam)) orelse return 0;
             switch (hit) {
