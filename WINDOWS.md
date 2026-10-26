@@ -221,6 +221,11 @@ Notes:
         key event (only the close actions may do that). Redo now closes
         from a posted message. Afterwards, seeds 1, 3, and 4 (400 steps
         each) ran without a panic or fault.
+  - [x] `close_all_windows` bound to a key crashed the same way (it
+        closed the terminal handling the key). It's posted now too.
+        Checked each closing action from a key binding: `close_all_windows`,
+        `quit`, and `close_window` quit cleanly, and `close_tab` left the
+        other tab, all without a fault.
 - [x] CLI actions on Windows: `+version`, `+list-fonts`, `+list-themes`,
       `+list-keybinds`, `+list-colors`, `+list-actions`, `+show-config`,
       `+validate-config`, `+help`, `+show-face`, `+explain-config`, and
