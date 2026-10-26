@@ -333,6 +333,10 @@ Notes:
         (`?missing.ghostty`) were already ignored. Unit test:
         `expandHomeWindows`; checked live: the `~/` include applied
         (37x81 cells).
+  - [x] The home directory is now `USERPROFILE` (the local profile, as
+        Windows tools use), falling back to HOMEDRIVE + HOMEPATH, which can
+        be a network share on domain-joined machines. This is also the
+        `working-directory = home` directory.
 - [x] Working directories with spaces and non-ASCII names: launched with
       `--working-directory` set to a folder named "dir 中文 é", the first
       tab's cmd prompt and a new tab's (inherited through OSC 7) both
