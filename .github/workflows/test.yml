@@ -951,6 +951,9 @@ jobs:
       - name: Build
         run: zig build
 
+      - name: Build for ARM64
+        run: zig build -Dtarget=aarch64-windows-gnu
+
       # An unofficial portable build of the Windows port, with its
       # per-user install script.
       - name: Package
