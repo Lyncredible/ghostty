@@ -144,3 +144,142 @@ pub fn send(
 
 /// The class of our message window. This must match App.zig.
 pub const message_class = std.unicode.utf8ToUtf16LeStringLiteral("GhosttyMessage");
+
+/// The result of claiming the single instance lock for an app class.
+pub const Claim = union(enum) {
+    /// We're the running instance. Hold the mutex until we exit.
+    primary: c.HANDLE,
+
+    /// Another instance of the class is running (or starting).
+    secondary,
+
+    /// The lock couldn't be created; run as our own instance.
+    failed,
+};
+
+/// Claim the single instance lock for an app class, a named mutex in
+/// the session's namespace. Unlike looking for the message window, this
+/// also detects an instance that is still starting.
+pub fn claim(class: []const u8) Claim {
+    const prefix = "Local\\ghostty-instance-";
+    var buf: [prefix.len + 256 + 1]u16 = undefined;
+    const n = std.unicode.utf8ToUtf16Le(&buf, prefix) catch unreachable;
+    const len = n + (std.unicode.utf8ToUtf16Le(buf[n .. buf.len - 1], class) catch return .failed);
+    // Backslashes are reserved in object names, except for the namespace.
+    for (buf[n..len]) |*ch| {
+        if (ch.* == '\\') ch.* = '_';
+    }
+    buf[len] = 0;
+
+    const mutex = c.CreateMutexW(null, c.FALSE, buf[0..len :0]) orelse return .failed;
+    if (c.GetLastError() == c.ERROR_ALREADY_EXISTS) {
+        _ = c.CloseHandle(mutex);
+        return .secondary;
+    }
+    return .{ .primary = mutex };
+}
+
+/// The arguments for a +new-window request that opens this launch's window
+/// in the running instance, or null if the launch has options that the
+/// running instance can't apply to a new window (such as --font-size), in
+/// which case it should run as its own instance.
+///
+/// The working directory, if any, comes first so that an explicit
+/// --working-directory argument takes precedence.
+pub fn launchArguments(
+    alloc: Allocator,
+    args: []const []const u8,
+    working_directory: ?[]const u8,
+) Allocator.Error!?[]const []const u8 {
+    var result: std.ArrayList([]const u8) = .empty;
+    if (working_directory) |wd| {
+        try result.append(alloc, try std.fmt.allocPrint(alloc, "--working-directory={s}", .{wd}));
+    }
+
+    // The options that Overrides applies to the new window.
+    const supported = [_][]const u8{
+        "--command=",
+        "--working-directory=",
+        "--title=",
+        "--shell-integration=",
+    };
+    for (args, 0..) |arg, i| {
+        if (std.mem.eql(u8, arg, "-e")) {
+            try result.appendSlice(alloc, args[i..]);
+            break;
+        }
+
+        // The class selects the instance.
+        if (std.mem.startsWith(u8, arg, "--class=")) continue;
+
+        for (supported) |prefix| {
+            if (std.mem.startsWith(u8, arg, prefix)) break;
+        } else return null;
+        try result.append(alloc, arg);
+    }
+    return try result.toOwnedSlice(alloc);
+}
+
+test launchArguments {
+    const testing = std.testing;
+    var arena: std.heap.ArenaAllocator = .init(testing.allocator);
+    defer arena.deinit();
+    const alloc = arena.allocator();
+
+    {
+        const args = (try launchArguments(alloc, &.{}, "C:\\src")).?;
+        try testing.expectEqual(1, args.len);
+        try testing.expectEqualStrings("--working-directory=C:\\src", args[0]);
+    }
+
+    {
+        const args = (try launchArguments(alloc, &.{
+            "--class=dev",
+            "--title=hi",
+            "-e",
+            "pwsh",
+            "--font-size=20",
+        }, null)).?;
+        try testing.expectEqual(4, args.len);
+        try testing.expectEqualStrings("--title=hi", args[0]);
+        try testing.expectEqualStrings("-e", args[1]);
+        try testing.expectEqualStrings("--font-size=20", args[3]);
+    }
+
+    try testing.expect(try launchArguments(alloc, &.{"--font-size=20"}, null) == null);
+    try testing.expect(try launchArguments(alloc, &.{"--title"}, null) == null);
+}
+
+/// Open this launch's window in the running instance of the class, waiting
+/// briefly for it to finish starting. Returns false if there's no running
+/// instance to take it.
+pub fn forwardLaunch(
+    alloc: Allocator,
+    class: []const u8,
+    arguments: []const []const u8,
+) bool {
+    var title_buf: [256]u16 = undefined;
+    const title = windowTitle(&title_buf, class) orelse return false;
+
+    // The instance holds the lock before it creates its message window.
+    const hwnd = for (0..100) |_| {
+        if (c.FindWindowW(message_class, title.ptr)) |hwnd| break hwnd;
+        c.Sleep(50);
+    } else {
+        log.warn("another instance holds the lock but has no message window", .{});
+        return false;
+    };
+
+    var pid: c.DWORD = 0;
+    _ = c.GetWindowThreadProcessId(hwnd, &pid);
+    if (pid != 0) _ = c.AllowSetForegroundWindow(pid);
+
+    const data = encode(alloc, .{ .kind = .new_window, .arguments = arguments }) catch return false;
+    defer alloc.free(data);
+    var copy: c.COPYDATASTRUCT = .{
+        .dwData = magic,
+        .cbData = @intCast(data.len),
+        .lpData = data.ptr,
+    };
+    return c.SendMessageW(hwnd, c.WM_COPYDATA, 0, @bitCast(@intFromPtr(&copy))) != 0;
+}
