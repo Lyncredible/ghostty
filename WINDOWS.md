@@ -258,6 +258,10 @@ Notes:
       text, with control characters shown as dots. Checked: pasting
       "echo one / echo two" showed both lines under the warning. Unit
       test: `writePreview`.
+- [x] `-e` arguments reach the program intact: Python launched with
+      `-e py -c "print(sys.argv[1:])" ...` printed exactly the arguments
+      given, for spaces, embedded quotes, trailing backslashes, an empty
+      argument, and `;` and `&` (read back with UI Automation).
 - [x] Font fallback check (2026-10-26): a UTF-8 file with emoji (with a
       skin tone, a flag, and a variation selector), Chinese, Japanese,
       Korean, box drawing and shades, math symbols, Arabic, Hebrew, and
