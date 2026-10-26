@@ -242,8 +242,10 @@ Notes:
   - Not applicable on Windows: `undo`/`redo`, `secure_input`,
     `check_for_updates`, `toggle_tab_overview`, `show_gtk_inspector`,
     `render` (embedded), `selection_changed` (no primary selection).
-    Unhandled for now, as on GTK: `color_change` (the tab bar doesn't
-    follow OSC 10/11 color changes), `cell_size`, `pwd`.
+    Unhandled, as on GTK: `cell_size`, `pwd`.
+  - [x] `color_change`: the tab bar follows the active terminal's
+        background and foreground when programs change them (OSC 10/11,
+        and their resets). Checked with a screenshot after OSC 11/10.
   - [x] Window management
     - [x] `reset_window_size`, `resize_window`, `size_limit`
     - [x] `goto_window`, `present_terminal`, `float_window`,
