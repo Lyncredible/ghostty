@@ -303,6 +303,14 @@ Notes:
         and "Reloaded the configuration" as a badge at the bottom of the
         terminal for two seconds, like GTK's toasts. Checked with
         screenshots after Reload Configuration and an OSC 52 write.
+  - [x] `window-save-state = always`: windows (placement, maximized,
+        active tab), tab title overrides, split layouts, the focused
+        terminal, and working directories are saved as JSON in
+        `%LOCALAPPDATA%\ghostty\window-state.json` on quit, close all,
+        or when the user closes the last window, and restored at startup.
+        When the last window closes because its shell exited, the state
+        is cleared. Checked: a split plus a second tab saved and restored
+        as three terminals with their directories and focus.
   - [x] `window-step-resize`: dragging a window edge resizes the active
         terminal in whole cells (`WM_SIZING`, with the cell size from the
         `cell_size` action), keeping the leftover padding. Unit tested;
