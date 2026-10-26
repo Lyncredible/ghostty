@@ -673,7 +673,7 @@ const Subprocess = struct {
             // Assume that the resources directory is adjacent to the terminfo
             // database
             var buf: [std.Io.Dir.max_path_bytes]u8 = undefined;
-            const dir = try std.mem.print(&buf, "{s}/terminfo", .{
+            const dir = try std.mem.print(&buf, "{s}" ++ std.fs.path.sep_str ++ "terminfo", .{
                 std.fs.path.dirname(base) orelse unreachable,
             });
             try env.put("TERMINFO", dir);
@@ -780,6 +780,12 @@ const Subprocess = struct {
         // We don't want our child processes to think we're running under VTE.
         // This is not apprt-specific, so we do it here.
         _ = env.orderedRemove("VTE_VERSION");
+
+        // Likewise for Windows Terminal, which programs detect with
+        // WT_SESSION to use its features, for example when Ghostty itself
+        // was started from Windows Terminal.
+        _ = env.orderedRemove("WT_SESSION");
+        _ = env.orderedRemove("WT_PROFILE_ID");
 
         // Setup our shell integration, if we can.
         const shell_command: configpkg.Command = shell: {
