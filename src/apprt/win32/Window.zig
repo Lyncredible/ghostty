@@ -147,6 +147,7 @@ pub fn init(self: *Window, app: *App, initial: Initial) !void {
     self.updateTheme();
     self.updateDecorations();
     self.updateBackdrop();
+    if (!quick and app.windows.items.len == 0) self.placeAtConfiguredPosition();
 
     try self.tab_bar.init(self);
     errdefer self.tab_bar.deinit();
@@ -1228,6 +1229,60 @@ fn setTerminalSize(self: *Window, width: u32, height: u32) void {
         h,
         c.SWP_NOMOVE | c.SWP_NOZORDER | c.SWP_NOACTIVATE,
     );
+}
+
+/// Move the first window to `window-position-x` and `window-position-y`,
+/// if both are set.
+fn placeAtConfiguredPosition(self: *Window) void {
+    const config = &self.app.config;
+    const x = config.@"window-position-x" orelse return;
+    const y = config.@"window-position-y" orelse return;
+
+    const primary = c.MonitorFromPoint(.{ .x = 0, .y = 0 }, c.MONITOR_DEFAULTTOPRIMARY);
+    var info: c.MONITORINFO = undefined;
+    info.cbSize = @sizeOf(c.MONITORINFO);
+    if (c.GetMonitorInfoW(primary, &info) == 0) return;
+    var dpi_x: c.UINT = util.USER_DEFAULT_SCREEN_DPI;
+    var dpi_y: c.UINT = util.USER_DEFAULT_SCREEN_DPI;
+    _ = c.GetDpiForMonitor(primary, c.MDT_EFFECTIVE_DPI, &dpi_x, &dpi_y);
+
+    var pt = configuredPosition(info.rcWork, dpi_x, x, y);
+
+    // Keep the window's corner on a monitor, so that it can't be lost.
+    if (c.MonitorFromPoint(pt, c.MONITOR_DEFAULTTONULL) == null) {
+        pt = .{ .x = info.rcWork.left, .y = info.rcWork.top };
+    }
+    // The window's rectangle includes its invisible resize borders, but
+    // the position is for what's visible.
+    var rect: c.RECT = undefined;
+    var visible: c.RECT = undefined;
+    const DWMWA_EXTENDED_FRAME_BOUNDS = 9;
+    if (c.GetWindowRect(self.hwnd, &rect) != 0 and
+        c.DwmGetWindowAttribute(self.hwnd, DWMWA_EXTENDED_FRAME_BOUNDS, &visible, @sizeOf(c.RECT)) >= 0)
+    {
+        pt.x -= visible.left - rect.left;
+        pt.y -= visible.top - rect.top;
+    }
+    _ = c.SetWindowPos(self.hwnd, null, pt.x, pt.y, 0, 0, c.SWP_NOSIZE | c.SWP_NOZORDER | c.SWP_NOACTIVATE);
+}
+
+/// The window position for `window-position-x` and `window-position-y`,
+/// which are in points from the top left of the primary monitor's work
+/// area (the screen without the taskbar), like macOS.
+fn configuredPosition(work: c.RECT, dpi: c.UINT, x: i16, y: i16) c.POINT {
+    const scale = struct {
+        fn f(v: i16, d: c.UINT) c_int {
+            return @divTrunc(@as(c_int, v) * @as(c_int, @intCast(d)), util.USER_DEFAULT_SCREEN_DPI);
+        }
+    }.f;
+    return .{ .x = work.left + scale(x, dpi), .y = work.top + scale(y, dpi) };
+}
+
+test configuredPosition {
+    const testing = std.testing;
+    const work: c.RECT = .{ .left = 0, .top = 48, .right = 2000, .bottom = 1200 };
+    try testing.expectEqual(c.POINT{ .x = 200, .y = 248 }, configuredPosition(work, 192, 100, 100));
+    try testing.expectEqual(c.POINT{ .x = -50, .y = 48 }, configuredPosition(work, 96, -50, 0));
 }
 
 /// Show a yes/no confirmation dialog. Returns true if the user confirmed.
