@@ -1172,6 +1172,8 @@ Reviewed the branch against this file and discussion #2563.
   4,082 passed, 61 skipped, 0 failed, exit 0.
 - Sixteenth full native test run, after the XDG fix (with its Windows
   test): 4,083 passed, 61 skipped, 0 failed, exit 0.
+- Seventeenth full native test run, after expanding `~/` on Windows (with
+  the `expandHomeWindows` test): 4,084 passed, 61 skipped, 0 failed, exit 0.
 - The inspector's buttons can't be clicked with posted messages: ImGui's
   Win32 backend calls `TrackMouseEvent` on mouse moves, and with the real
   cursor elsewhere Windows sends `WM_MOUSELEAVE` right away, so clicks
