@@ -110,6 +110,35 @@ test sharePath {
     try testing.expect(try sharePath(alloc, "C:\\Users") == null);
 }
 
+/// A Linux path in the WSL distribution of a share path, such as the
+/// working directory of a Windows program started from WSL, as a path in
+/// that distribution's share. Returns null if the share path isn't in a
+/// distribution's share or the Linux path isn't absolute.
+pub fn linuxToShare(alloc: Allocator, share_dir: []const u8, linux: []const u8) Allocator.Error!?[]u8 {
+    if (linux.len == 0 or linux[0] != '/') return null;
+    const share = try sharePath(alloc, share_dir) orelse return null;
+    defer alloc.free(share.linux);
+    const path = try std.fmt.allocPrint(alloc, "\\\\wsl.localhost\\{s}{s}", .{ share.distribution, linux });
+    std.mem.replaceScalar(u8, path, '/', '\\');
+    return path;
+}
+
+test linuxToShare {
+    const testing = std.testing;
+    const alloc = testing.allocator;
+
+    const tmp = (try linuxToShare(alloc, "\\\\wsl.localhost\\Ubuntu-24.04\\home\\me", "/tmp/x")).?;
+    defer alloc.free(tmp);
+    try testing.expectEqualStrings("\\\\wsl.localhost\\Ubuntu-24.04\\tmp\\x", tmp);
+
+    const root = (try linuxToShare(alloc, "\\\\wsl$\\Debian", "/")).?;
+    defer alloc.free(root);
+    try testing.expectEqualStrings("\\\\wsl.localhost\\Debian\\", root);
+
+    try testing.expect(try linuxToShare(alloc, "C:\\Users\\me", "/tmp") == null);
+    try testing.expect(try linuxToShare(alloc, "\\\\wsl.localhost\\Debian", "tmp") == null);
+}
+
 /// The name of the user's default WSL distribution, from the registry.
 /// The caller owns the returned memory.
 pub fn defaultDistribution(alloc: Allocator) !?[]u8 {
