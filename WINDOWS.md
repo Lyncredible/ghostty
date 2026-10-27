@@ -454,6 +454,12 @@ Notes:
     desktop notifications (the first showed; the second was rate limited,
     so it arrived too), OSC 9;4 progress reports (state set, value 42),
     OSC 8 hyperlinks, OSC 52 clipboard, and OSC 133 prompt marks.
+  - Mouse reporting passes too: a WSL program that enabled SGR mouse
+    tracking (DECSET 1000 and 1006) received `ESC [ < 0 ; 1 ; 1 m` for a
+    posted click. (With the real pointer elsewhere on this locked desktop,
+    TrackMouseEvent sends WM_MOUSELEAVE right after a posted move, so the
+    core sees the click at -1,-1: it drops the press and clamps the release
+    to 1;1. A real click needs a manual check for positions.)
 - No password input indicator: on Unix the IO thread polls the pty's
   termios for echo being off (`termiosTimer`), but ConPTY doesn't expose
   the console mode of the programs attached to it, so the timer isn't
