@@ -1348,6 +1348,8 @@ Reviewed the branch against this file and discussion #2563.
   position: 4,084 passed, 61 skipped, 0 failed, exit 0.
 - Thirty-first full native test run, after Ctrl+wheel changing the font
   size: 4,084 passed, 61 skipped, 0 failed, exit 0.
+- Thirty-second full native test run, after adding up partial notches for
+  Ctrl+wheel: 4,084 passed, 61 skipped, 0 failed, exit 0.
 - The inspector's buttons can't be clicked with posted messages: ImGui's
   Win32 backend calls `TrackMouseEvent` on mouse moves, and with the real
   cursor elsewhere Windows sends `WM_MOUSELEAVE` right away, so clicks
