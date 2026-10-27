@@ -199,6 +199,29 @@ pub fn threadMain(self: *Thread, io: *termio.Termio) void {
                 t.printString(str) catch {};
             },
 
+            // Starting the command failed because it doesn't exist or
+            // isn't allowed to run. This is reported this way on Windows.
+            error.FileNotFound,
+            error.AccessDenied,
+            => {
+                const str = alloc.print(
+                    \\The shell or command couldn't be started: {}
+                    \\
+                    \\Check that `command` in your configuration names a
+                    \\program that exists and can run, such as cmd.exe,
+                    \\powershell.exe, or wsl.exe.
+                    \\
+                    \\This terminal is non-functional. Please close it and try again.
+                ,
+                    .{err},
+                ) catch
+                    \\Out of memory. This terminal is non-functional. Please close it and try again.
+                ;
+
+                t.eraseDisplay(.complete, false);
+                t.printString(str) catch {};
+            },
+
             else => {
                 const str = alloc.print(
                     \\error starting IO thread: {}

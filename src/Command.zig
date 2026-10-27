@@ -430,7 +430,12 @@ fn startWindows(self: *Command, arena: Allocator) !void {
         if (cwd_w) |w| w.ptr else null,
         @ptrCast(&startup_info_ex.StartupInfo),
         &process_information,
-    ) == windows.FALSE) return windows.unexpectedError(windows.GetLastError());
+    ) == windows.FALSE) return switch (windows.GetLastError()) {
+        // So that we can say what's wrong, such as a misspelled command.
+        .FILE_NOT_FOUND, .PATH_NOT_FOUND => error.FileNotFound,
+        .ACCESS_DENIED => error.AccessDenied,
+        else => |err| windows.unexpectedError(err),
+    };
 
     // We only need the process's handle.
     _ = windows.exp.kernel32.CloseHandle(process_information.hThread);
