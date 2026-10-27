@@ -2897,7 +2897,7 @@ keybind: Keybinds = .{},
 ///
 /// The default value is `move`.
 ///
-/// Only implemented on macOS.
+/// Implemented on macOS, and on Windows for virtual desktops.
 /// On Linux the behavior is always equivalent to `move`.
 ///
 /// Available since: 1.1.0
