@@ -412,6 +412,13 @@ Notes:
     `~`: the running instance logged "starting WSL for a WSL working
     directory distribution=Ubuntu-24.04 path=/home/yuan/" and the new
     window showed zsh in `~`.
+  - [x] `--working-directory=/linux/path` for `+new-window` and
+        `+new-tab` from WSL: a Windows program can't resolve a Linux path
+        (it failed with BadPathName), so when our working directory is a
+        distribution's share, an absolute Linux path maps into that share
+        (`internal_os.wsl.linuxToShare`, unit tested). Checked:
+        `--working-directory=/tmp` from WSL opened a window that logged
+        "starting WSL ... distribution=Ubuntu-24.04 path=/tmp".
 - [x] CLI actions on Windows: `+version`, `+list-fonts`, `+list-themes`,
       `+list-keybinds`, `+list-colors`, `+list-actions`, `+show-config`,
       `+validate-config`, `+help`, `+show-face`, `+explain-config`, and
