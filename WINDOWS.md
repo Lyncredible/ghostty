@@ -243,6 +243,8 @@ Notes:
   - The inspector (its own Direct3D device and swap chain) doesn't leak:
     three rounds of opening and closing it three times left 486, 486, 485
     handles (the first round loads the Direct3D runtime's).
+  - Font size changes (new glyph atlases) don't leak: three rounds of 15
+    sizes up and back left 459 handles and 142.6-142.9 MB.
 - [x] Stress test: a script posts random operations to a debug build
       (new windows, tabs, and splits; closing splits and windows; undo and
       redo; the command palette; dragging tabs out; typing; resizing; and
