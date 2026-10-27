@@ -230,6 +230,12 @@ Notes:
       find a directory). Unit test: `windowsIsDirectory`. Checked:
       `--working-directory=C:\bad|name` logged "cannot access cwd,
       ignoring" and the window opened, instead of crashing.
+- [x] A `COMSPEC` that doesn't name a file broke every terminal ("The
+      underlying shell or command was unable to be started", FILE_NOT_FOUND).
+      The default shell now only uses COMSPEC when it's a file, and
+      otherwise searches for cmd.exe, with a warning. Unit test:
+      `windowsIsFile`. Checked: with COMSPEC unset, and with it set to a
+      missing file, cmd started (the second logged the warning).
   - Other paths with names that aren't valid don't crash: `config-file`,
     `background-image`, `custom-shader`, and `theme` set to
     `C:` + backslash + `bad|name...` each started normally with no panic.
