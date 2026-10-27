@@ -245,6 +245,10 @@ Notes:
     handles (the first round loads the Direct3D runtime's).
   - Font size changes (new glyph atlases) don't leak: three rounds of 15
     sizes up and back left 459 handles and 142.6-142.9 MB.
+  - The quick terminal, command palette, and search bar don't leak: three
+    rounds of showing and hiding each four times left 523 handles, 41 GDI
+    and 66 user objects, and 242.0 MB each time (the first round creates
+    the quick terminal, which is kept while hidden).
 - [x] Stress test: a script posts random operations to a debug build
       (new windows, tabs, and splits; closing splits and windows; undo and
       redo; the command palette; dragging tabs out; typing; resizing; and
