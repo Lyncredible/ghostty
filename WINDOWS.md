@@ -1298,6 +1298,8 @@ Reviewed the branch against this file and discussion #2563.
   reboot: 4,084 passed, 61 skipped, 0 failed, exit 0.
 - Twenty-sixth full native test run, after using a custom class as the
   AppUserModelID: 4,084 passed, 61 skipped, 0 failed, exit 0.
+- Twenty-seventh full native test run, after the jump list's class
+  argument: 4,084 passed, 61 skipped, 0 failed, exit 0.
 - The inspector's buttons can't be clicked with posted messages: ImGui's
   Win32 backend calls `TrackMouseEvent` on mouse moves, and with the real
   cursor elsewhere Windows sends `WM_MOUSELEAVE` right away, so clicks
