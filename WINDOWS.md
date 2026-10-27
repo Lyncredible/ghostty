@@ -240,6 +240,9 @@ Notes:
     472, 471, 471, 464 handles.
   - Config reloads don't leak: three rounds of ten reloads left 460
     handles, 25 GDI and 42 user objects, and 144.4 MB each time.
+  - The inspector (its own Direct3D device and swap chain) doesn't leak:
+    three rounds of opening and closing it three times left 486, 486, 485
+    handles (the first round loads the Direct3D runtime's).
 - [x] Stress test: a script posts random operations to a debug build
       (new windows, tabs, and splits; closing splits and windows; undo and
       redo; the command palette; dragging tabs out; typing; resizing; and
