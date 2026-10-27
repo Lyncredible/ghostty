@@ -228,7 +228,7 @@ Notes:
       come from anywhere (`--working-directory`, a program's OSC 7). On
       Windows it's now checked with GetFileAttributesW (which must also
       find a directory). Unit test: `windowsIsDirectory`. Checked:
-      `--working-directory=C:ad|name` logged "cannot access cwd,
+      `--working-directory=C:\bad|name` logged "cannot access cwd,
       ignoring" and the window opened, instead of crashing.
 - [x] Handle leak: opening and closing tabs leaked about four kernel
       handles per terminal (measured: 493, 528, 560, 594, 626 handles
