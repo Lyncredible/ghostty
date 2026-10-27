@@ -404,6 +404,8 @@ Notes:
       (right-to-left text in logical order, as in most terminals). Before
       `chcp 65001`, cmd decodes the file with the system code page (936
       here), as in Windows Terminal; that isn't ours to change.
+- [x] The CLI from WSL (through interop): `ghostty.exe +version` and
+      `+list-themes --plain` run and print from a WSL shell.
 - [x] CLI actions on Windows: `+version`, `+list-fonts`, `+list-themes`,
       `+list-keybinds`, `+list-colors`, `+list-actions`, `+show-config`,
       `+validate-config`, `+help`, `+show-face`, `+explain-config`, and
