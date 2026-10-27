@@ -444,6 +444,11 @@ Notes:
 
 ### Known limitations
 
+- No Kitty keyboard protocol for programs behind ConPTY (including WSL):
+  ConPTY answers or drops queries itself. Checked from bash in WSL:
+  `CSI ? u` (the Kitty keyboard query) got no reply, and `CSI c` was
+  answered by ConPTY (`?61;6;7;21;22;23;24;28;32;42c`), not Ghostty.
+  Keys reach console programs through win32 input mode instead.
 - No password input indicator: on Unix the IO thread polls the pty's
   termios for echo being off (`termiosTimer`), but ConPTY doesn't expose
   the console mode of the programs attached to it, so the timer isn't
