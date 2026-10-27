@@ -407,7 +407,7 @@ Notes:
 - [x] The CLI from WSL (through interop): `ghostty.exe +version` and
       `+list-themes --plain` run and print from a WSL shell.
   - `ghostty.exe +new-window` from WSL opens a WSL window where it was
-    run: interop starts it in the `\wsl.localhost\...` directory, which
+    run: interop starts it in the `\\wsl.localhost\...` directory, which
     `+new-window` sends, and a WSL directory starts WSL. Checked from
     `~`: the running instance logged "starting WSL for a WSL working
     directory distribution=Ubuntu-24.04 path=/home/yuan/" and the new
