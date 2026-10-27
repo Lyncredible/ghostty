@@ -474,6 +474,9 @@ Notes:
       WSL, the wheel went to the program instead (its reports lack the
       Ctrl bit only because posted messages can't set the key state the
       core reads).
+  - Touchpads and high resolution wheels send fractions of a notch,
+    which add up before changing the size (each event changed it by a
+    whole step at first). Checked: eight quarter notches made two steps.
 - No password input indicator: on Unix the IO thread polls the pty's
   termios for echo being off (`termiosTimer`), but ConPTY doesn't expose
   the console mode of the programs attached to it, so the timer isn't
