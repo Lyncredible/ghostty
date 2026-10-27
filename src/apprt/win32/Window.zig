@@ -2093,6 +2093,12 @@ pub fn wndProc(
             return 0;
         },
 
+        // The process ends after this, without quitting normally.
+        c.WM_ENDSESSION => {
+            if (wparam != 0) self.app.endSession();
+            return 0;
+        },
+
         c.WM_DESTROY => {
             // Tear down our surfaces while our window handles are still
             // valid, since the renderers are presenting to them.

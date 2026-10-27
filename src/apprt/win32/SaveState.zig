@@ -58,8 +58,8 @@ pub const NodeState = struct {
     right: u16 = 0,
 };
 
-/// Whether the config asks us to save and restore state. Windows has no
-/// system setting for `default` to follow, so only `always` does.
+/// Whether the config asks us to save and restore state on every launch.
+/// `default` only does so when Windows restarts us, see registerRestart.
 pub fn enabled(app: *const App) bool {
     return app.config.@"window-save-state" == .always;
 }
@@ -67,6 +67,36 @@ pub fn enabled(app: *const App) bool {
 /// Save the state of the app's windows, except the quick terminal.
 pub fn save(app: *App) void {
     if (!enabled(app)) return;
+    write(app);
+}
+
+/// Save the state when Windows ends the session (shutting down, restarting,
+/// or signing out, as for an update), since the process won't quit on its
+/// own. With `default`, Windows restarts us to restore it, see
+/// registerRestart; with `never`, we don't save.
+pub fn saveForEndSession(app: *App) void {
+    if (app.config.@"window-save-state" == .never) return;
+    write(app);
+}
+
+/// With `window-save-state = default`, follow the system setting to restart
+/// apps after signing in ("Automatically save my restartable apps"): Windows
+/// restarts us after a reboot or an update, with an argument that restores
+/// the windows saved when the session ended. Not after crashes or hangs.
+pub fn registerRestart(app: *const App) void {
+    if (app.config.@"window-save-state" != .default) return;
+    const RESTART_NO_CRASH = 1;
+    const RESTART_NO_HANG = 2;
+    const hr = RegisterApplicationRestart(
+        std.unicode.utf8ToUtf16LeStringLiteral("--window-save-state=always"),
+        RESTART_NO_CRASH | RESTART_NO_HANG,
+    );
+    if (hr < 0) log.warn("failed to register for restart hr={x}", .{hr});
+}
+
+extern "kernel32" fn RegisterApplicationRestart(command_line: ?[*:0]const u16, flags: u32) callconv(.winapi) c.HRESULT;
+
+fn write(app: *App) void {
     var arena: std.heap.ArenaAllocator = .init(app.core_app.alloc);
     defer arena.deinit();
     const alloc = arena.allocator();
