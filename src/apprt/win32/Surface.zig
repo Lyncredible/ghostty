@@ -1596,6 +1596,15 @@ fn mouseButtonEvent(
     wparam: c.WPARAM,
     lparam: c.LPARAM,
 ) c.LRESULT {
+    // Button messages carry the cursor position, which may differ from the
+    // last move we saw: after WM_MOUSELEAVE (the core then has the cursor
+    // outside), or with pen and touch input, which can press without
+    // moving first.
+    self.cursorPosEvent(.{
+        .x = @floatFromInt(util.loword(lparam)),
+        .y = @floatFromInt(util.hiword(lparam)),
+    });
+
     // Capture the mouse while a button is held so that we keep getting
     // events (e.g. while selecting) if the cursor leaves the window.
     // Clicking a surface (e.g. another split) also focuses it.
