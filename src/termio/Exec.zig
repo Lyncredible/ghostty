@@ -1911,13 +1911,26 @@ pub const ReadThread = struct {
 /// Whether a path is an existing directory, on Windows. Unlike the
 /// standard library, this doesn't panic on paths that aren't valid names.
 fn windowsIsDirectory(alloc: Allocator, path: []const u8) bool {
-    const path_w = std.unicode.wtf8ToWtf16LeAllocZ(alloc, path) catch return false;
-    defer alloc.free(path_w);
-    const attributes = GetFileAttributesW(path_w);
-    const INVALID_FILE_ATTRIBUTES: u32 = 0xFFFFFFFF;
-    const FILE_ATTRIBUTE_DIRECTORY: u32 = 0x10;
+    const attributes = windowsAttributes(alloc, path);
     return attributes != INVALID_FILE_ATTRIBUTES and attributes & FILE_ATTRIBUTE_DIRECTORY != 0;
 }
+
+/// Whether a path is an existing file (not a directory), on Windows.
+fn windowsIsFile(alloc: Allocator, path: []const u8) bool {
+    const attributes = windowsAttributes(alloc, path);
+    return attributes != INVALID_FILE_ATTRIBUTES and attributes & FILE_ATTRIBUTE_DIRECTORY == 0;
+}
+
+/// A path's attributes, or INVALID_FILE_ATTRIBUTES (which includes the
+/// directory bit, so check for it first) if it doesn't exist.
+fn windowsAttributes(alloc: Allocator, path: []const u8) u32 {
+    const path_w = std.unicode.wtf8ToWtf16LeAllocZ(alloc, path) catch return INVALID_FILE_ATTRIBUTES;
+    defer alloc.free(path_w);
+    return GetFileAttributesW(path_w);
+}
+
+const INVALID_FILE_ATTRIBUTES: u32 = 0xFFFFFFFF;
+const FILE_ATTRIBUTE_DIRECTORY: u32 = 0x10;
 
 extern "kernel32" fn GetFileAttributesW(path: [*:0]const u16) callconv(.winapi) u32;
 
@@ -1932,6 +1945,16 @@ test windowsIsDirectory {
     try testing.expect(!windowsIsDirectory(alloc, "C:\\bad|name"));
     try testing.expect(!windowsIsDirectory(alloc, "C:\\a\\b:c\\d"));
     try testing.expect(!windowsIsDirectory(alloc, "\\??\\x"));
+}
+
+test windowsIsFile {
+    if (comptime builtin.target.os.tag != .windows) return error.SkipZigTest;
+    const testing = std.testing;
+    const alloc = testing.allocator;
+    try testing.expect(windowsIsFile(alloc, "C:\\Windows\\System32\\cmd.exe"));
+    try testing.expect(!windowsIsFile(alloc, "C:\\Windows"));
+    try testing.expect(!windowsIsFile(alloc, "C:\\no\\such\\cmd.exe"));
+    try testing.expect(!windowsIsFile(alloc, "C:\\bad|name"));
 }
 
 /// Builds the argv array for the process we should exec for the
@@ -2118,10 +2141,17 @@ fn execCommand(
                     // documented path to the current command processor.
                     // Other values are passed as-is and resolved by
                     // `internal_os.path.expand` in Command.startWindows.
+                    // A COMSPEC that doesn't name a file (it's set by
+                    // hand, or the system moved) would fail every
+                    // terminal, so we search for cmd.exe then.
                     if (global.environ().getAlloc(alloc, "COMSPEC")) |comspec| {
                         defer alloc.free(comspec);
-                        alloc.free(args.items[0]);
-                        args.items[0] = try alloc.dupeSentinel(u8, comspec, 0);
+                        if (windowsIsFile(alloc, comspec)) {
+                            alloc.free(args.items[0]);
+                            args.items[0] = try alloc.dupeSentinel(u8, comspec, 0);
+                        } else {
+                            log.warn("COMSPEC isn't a file, searching for cmd.exe: {s}", .{comspec});
+                        }
                     } else |err| switch (err) {
                         error.OutOfMemory => return error.OutOfMemory,
                         else => {},
