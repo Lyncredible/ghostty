@@ -1553,6 +1553,25 @@ pub fn wndProc(
 
         c.WM_MOUSEWHEEL, c.WM_MOUSEHWHEEL => {
             const delta: f64 = @as(f64, @floatFromInt(util.hiword(wparam))) / c.WHEEL_DELTA;
+
+            // Like other Windows apps (and Windows Terminal), Ctrl+wheel
+            // changes the font size, unless a program reports the mouse,
+            // which then gets the wheel with Ctrl as usual.
+            if (msg == c.WM_MOUSEWHEEL and
+                util.loword(wparam) & c.MK_CONTROL != 0 and
+                !self.core_surface.mouseCaptured())
+            {
+                const steps: u16 = @intFromFloat(@max(1, @round(@abs(delta))));
+                const action: input.Binding.Action = if (delta > 0)
+                    .{ .increase_font_size = @floatFromInt(steps) }
+                else
+                    .{ .decrease_font_size = @floatFromInt(steps) };
+                _ = self.core_surface.performBindingAction(action) catch |err| {
+                    log.err("error changing the font size err={}", .{err});
+                };
+                return 0;
+            }
+
             const xoff: f64, const yoff: f64 = if (msg == c.WM_MOUSEWHEEL)
                 .{ 0, delta }
             else
