@@ -230,6 +230,9 @@ Notes:
       find a directory). Unit test: `windowsIsDirectory`. Checked:
       `--working-directory=C:\bad|name` logged "cannot access cwd,
       ignoring" and the window opened, instead of crashing.
+  - Other paths with names that aren't valid don't crash: `config-file`,
+    `background-image`, `custom-shader`, and `theme` set to
+    `C:` + backslash + `bad|name...` each started normally with no panic.
 - [x] Handle leak: opening and closing tabs leaked about four kernel
       handles per terminal (measured: 493, 528, 560, 594, 626 handles
       over four rounds of eight tabs). The child's thread handle from
