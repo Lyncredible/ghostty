@@ -373,6 +373,10 @@ Notes:
       `-e py -c "print(sys.argv[1:])" ...` printed exactly the arguments
       given, for spaces, embedded quotes, trailing backslashes, an empty
       argument, and `;` and `&` (read back with UI Automation).
+- [x] Saved windows on a monitor that's gone: restoring a saved window at
+      (-30000, -30000), off every monitor, put it on screen at (0, 0) with
+      its saved 1000x600 size (SetWindowPlacement moves windows that would
+      be off screen).
 - [x] Font fallback check (2026-10-26): a UTF-8 file with emoji (with a
       skin tone, a flag, and a variation selector), Chinese, Japanese,
       Korean, box drawing and shades, math symbols, Arabic, Hebrew, and
