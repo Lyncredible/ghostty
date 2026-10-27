@@ -166,6 +166,12 @@ pub fn init(
         _ = c.CloseHandle(mutex);
     };
 
+    // Like the class on Linux, a custom class gets its own taskbar group:
+    // the AppUserModelID groups windows, jump lists, and pins. The default
+    // class keeps Windows's ID from our executable's path, which our Start
+    // menu shortcut matches.
+    if (config.class) |custom| setAppUserModelId(custom);
+
     // Note: we render at the native resolution of each monitor. The
     // per-monitor DPI awareness for that is set by our application
     // manifest (dist/windows/ghostty.manifest).
@@ -222,6 +228,26 @@ pub fn init(
         _ = c.PostMessageW(msg_hwnd, WM_GHOSTTY_CONFIG_ERRORS, 0, 0);
     }
 }
+
+/// Set the process's AppUserModelID to the class, which must be a valid ID
+/// (at most 128 characters and no spaces), before any windows exist.
+fn setAppUserModelId(class: []const u8) void {
+    if (class.len == 0 or class.len > 128 or std.mem.indexOfScalar(u8, class, ' ') != null) {
+        log.warn("class isn't a valid AppUserModelID, not setting it class={s}", .{class});
+        return;
+    }
+    var buf: [129]u16 = undefined;
+    const n = std.unicode.utf8ToUtf16Le(buf[0..128], class) catch return;
+    buf[n] = 0;
+    const hr = SetCurrentProcessExplicitAppUserModelID(buf[0..n :0]);
+    if (hr < 0) {
+        log.warn("failed to set the AppUserModelID hr={x}", .{hr});
+    } else {
+        log.info("set the AppUserModelID id={s}", .{class});
+    }
+}
+
+extern "shell32" fn SetCurrentProcessExplicitAppUserModelID(id: [*:0]const u16) callconv(.winapi) c.HRESULT;
 
 /// Hand this launch to the running instance of our class. Returns false if
 /// we should run as our own instance instead, for example because the

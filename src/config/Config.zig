@@ -1560,7 +1560,9 @@ title: ?[:0]const u8 = null,
 ///
 /// The default is `com.mitchellh.ghostty`.
 ///
-/// This only affects GTK builds.
+/// This affects GTK builds and Windows. On Windows, launches with the same
+/// class open their windows in one running instance, and a custom class is
+/// also the AppUserModelID, so its windows get their own taskbar group.
 class: ?[:0]const u8 = null,
 
 /// This controls the instance name field of the `WM_CLASS` X11 property when
