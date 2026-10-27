@@ -383,6 +383,13 @@ Notes:
       "--window-save-state=always" with flags 3, a posted WM_ENDSESSION
       saved the state with two tabs, and a launch with that argument
       restored both.
+  - [x] Each custom class has its own state file
+        (`window-state-<class>.json`) and restarts as itself (the restart
+        arguments include `--class`). Checked with com.example.work: the
+        restart command was `--window-save-state=always
+        "--class=com.example.work"`, WM_ENDSESSION wrote its own file
+        (the default one wasn't touched), and a launch with those
+        arguments restored its two tabs.
 - [x] Saved windows on a monitor that's gone: restoring a saved window at
       (-30000, -30000), off every monitor, put it on screen at (0, 0) with
       its saved 1000x600 size (SetWindowPlacement moves windows that would
