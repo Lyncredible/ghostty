@@ -1559,6 +1559,15 @@ pub fn wndProc(
                 // Positive horizontal wheel deltas scroll right, which
                 // is a negative x offset for the core.
                 .{ -delta, 0 };
+
+            // Like button messages, wheel messages carry the cursor's
+            // position (on the screen), which mouse reports use.
+            var pt: c.POINT = .{ .x = util.loword(lparam), .y = util.hiword(lparam) };
+            if (c.ScreenToClient(hwnd, &pt) != 0) self.cursorPosEvent(.{
+                .x = @floatFromInt(pt.x),
+                .y = @floatFromInt(pt.y),
+            });
+
             self.core_surface.scrollCallback(xoff, yoff, .{}) catch |err| {
                 log.err("error in scroll callback err={}", .{err});
             };
