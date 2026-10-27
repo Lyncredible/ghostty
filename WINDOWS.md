@@ -377,6 +377,9 @@ Notes:
       (-30000, -30000), off every monitor, put it on screen at (0, 0) with
       its saved 1000x600 size (SetWindowPlacement moves windows that would
       be off screen).
+  - A saved terminal whose directory no longer exists starts anyway: it
+    logged "cannot access cwd, ignoring" and cmd started in the default
+    directory.
 - [x] Font fallback check (2026-10-26): a UTF-8 file with emoji (with a
       skin tone, a flag, and a variation selector), Chinese, Japanese,
       Korean, box drawing and shades, math symbols, Arabic, Hebrew, and
