@@ -545,6 +545,14 @@ Notes:
         directory. `SHELL` is ignored on Windows (Git Bash and MSYS2 set
         POSIX paths).
     - [ ] Manual check: a Start menu or Explorer launch opens at home
+  - [x] A custom `class` is also the process's AppUserModelID, so its
+        windows get their own taskbar group (with their own jump list and
+        pins), like the class on Linux. The default class keeps Windows's
+        ID from the executable's path, which the Start menu shortcut
+        matches. Classes that aren't valid IDs (spaces, over 128
+        characters) are skipped with a warning. Checked: "set the
+        AppUserModelID id=com.example.work", and a warning for
+        "has space".
 - [x] Global keybinds (`RegisterHotKey`)
 - [x] Screen readers (UI Automation), like the macOS app's accessibility
       element: each terminal is a read-only Document named "Terminal"
