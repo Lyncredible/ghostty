@@ -1375,6 +1375,12 @@ Reviewed the branch against this file and discussion #2563.
 - Thirty-fourth full native test run, after mapping Linux working
   directories from WSL (with the `linuxToShare` test): 4,085 passed, 61
   skipped, 0 failed, exit 0.
+- Package check (2026-10-26): `package.ps1` built a ReleaseSafe zip
+  from c3364da81 with `bin\ghostty.exe` (32 MB), `install.ps1`, the
+  README, and `share` (resources, terminfo, shell completions). The
+  extracted `ghostty.exe +version` reported that commit, and the app ran
+  with GHOSTTY_RESOURCES_DIR and TERMINFO pointing into the package's
+  `share` (with backslashes).
 - The inspector's buttons can't be clicked with posted messages: ImGui's
   Win32 backend calls `TrackMouseEvent` on mouse moves, and with the real
   cursor elsewhere Windows sends `WM_MOUSELEAVE` right away, so clicks
