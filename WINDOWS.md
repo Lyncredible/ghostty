@@ -680,6 +680,14 @@ Notes:
           left when reversing). The terminal size never changes. `center`
           appears in place. Sampled while sliding in: top -182, -73, -8,
           -2, then 0 and unclipped after ~140 ms.
+      - [x] `quick-terminal-space-behavior` with virtual desktops (the
+            counterpart of macOS Spaces): with `move` (the default),
+            showing the quick terminal moves it to the virtual desktop
+            the user is on (the foreground window's, through
+            `IVirtualDesktopManager`), instead of Windows switching to
+            the desktop it was on; `remain` leaves it. Checked that the
+            quick terminal still shows with one desktop; the move needs a
+            manual check with two desktops.
       - [ ] Manual check: sliding out (toggling hides only when the quick
             terminal is in front, which a locked test desktop never is)
   - [x] Command palette (`toggle_command_palette`): a field over an
