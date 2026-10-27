@@ -222,7 +222,7 @@ pub fn init(
 
     _ = c.SetWindowLongPtrW(msg_hwnd, util.GWLP_USERDATA, @bitCast(@intFromPtr(self)));
     self.global_keys.update(&self.config);
-    JumpList.update();
+    JumpList.update(self.config.class);
     SaveState.registerRestart(self);
     if (self.config._diagnostics.items().len > 0) {
         _ = c.PostMessageW(msg_hwnd, WM_GHOSTTY_CONFIG_ERRORS, 0, 0);
