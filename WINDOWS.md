@@ -221,6 +221,15 @@ Notes:
       cmd banner (pixels brighter than half): 6,463 normally, 6,850 at
       strength 0, and 8,403 at 255; the text stays crisp.
 - [x] `window-show-tab-bar` is documented as working on Windows.
+- [x] A crash report from a stress run (the new crash handler at work):
+      Zig's standard library panics on `OBJECT_NAME_INVALID` in debug and
+      safe builds, treating it as a programmer error, and the terminal's
+      working directory went to `Dir.access` without checking. It can
+      come from anywhere (`--working-directory`, a program's OSC 7). On
+      Windows it's now checked with GetFileAttributesW (which must also
+      find a directory). Unit test: `windowsIsDirectory`. Checked:
+      `--working-directory=C:ad|name` logged "cannot access cwd,
+      ignoring" and the window opened, instead of crashing.
 - [x] Handle leak: opening and closing tabs leaked about four kernel
       handles per terminal (measured: 493, 528, 560, 594, 626 handles
       over four rounds of eight tabs). The child's thread handle from

@@ -1027,6 +1027,16 @@ const Subprocess = struct {
                 break :cwd proposed;
             }
 
+            // On Windows, the standard library treats a syntactically invalid
+            // path (OBJECT_NAME_INVALID) as a programmer error and panics,
+            // but the working directory can come from anywhere, such as a
+            // program's OSC 7. GetFileAttributesW just fails.
+            if (comptime builtin.target.os.tag == .windows) {
+                if (windowsIsDirectory(alloc, proposed)) break :cwd proposed;
+                log.warn("cannot access cwd, ignoring: {s}", .{proposed});
+                break :cwd null;
+            }
+
             if (std.Io.Dir.cwd().access(global.io(), proposed, .{})) {
                 break :cwd proposed;
             } else |err| {
@@ -1897,6 +1907,32 @@ pub const ReadThread = struct {
         }
     }
 };
+
+/// Whether a path is an existing directory, on Windows. Unlike the
+/// standard library, this doesn't panic on paths that aren't valid names.
+fn windowsIsDirectory(alloc: Allocator, path: []const u8) bool {
+    const path_w = std.unicode.wtf8ToWtf16LeAllocZ(alloc, path) catch return false;
+    defer alloc.free(path_w);
+    const attributes = GetFileAttributesW(path_w);
+    const INVALID_FILE_ATTRIBUTES: u32 = 0xFFFFFFFF;
+    const FILE_ATTRIBUTE_DIRECTORY: u32 = 0x10;
+    return attributes != INVALID_FILE_ATTRIBUTES and attributes & FILE_ATTRIBUTE_DIRECTORY != 0;
+}
+
+extern "kernel32" fn GetFileAttributesW(path: [*:0]const u16) callconv(.winapi) u32;
+
+test windowsIsDirectory {
+    if (comptime builtin.target.os.tag != .windows) return error.SkipZigTest;
+    const testing = std.testing;
+    const alloc = testing.allocator;
+    try testing.expect(windowsIsDirectory(alloc, "C:\\Windows"));
+    try testing.expect(!windowsIsDirectory(alloc, "C:\\Windows\\notepad.exe"));
+    try testing.expect(!windowsIsDirectory(alloc, "C:\\no\\such\\dir"));
+    // Not valid names, which made the standard library panic.
+    try testing.expect(!windowsIsDirectory(alloc, "C:\\bad|name"));
+    try testing.expect(!windowsIsDirectory(alloc, "C:\\a\\b:c\\d"));
+    try testing.expect(!windowsIsDirectory(alloc, "\\??\\x"));
+}
 
 /// Builds the argv array for the process we should exec for the
 /// configured command. This isn't as straightforward as it seems since
