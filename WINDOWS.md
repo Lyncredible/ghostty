@@ -242,6 +242,11 @@ Notes:
       are now FileNotFound and AccessDenied, and the terminal says "The
       shell or command couldn't be started: error.FileNotFound" and to
       check `command`. Checked with `--command=nosuchprogram.exe`.
+  - An unquoted `command` path with spaces works: with
+    `C:` + backslash + `Program Files` + backslash + `Git` + backslash
+    + `bin` + backslash + `bash.exe`, it's split into two arguments, and
+    joined again on the command line, where CreateProcessW tries
+    `C:\Program` and then the whole path. Git Bash started.
   - Other paths with names that aren't valid don't crash: `config-file`,
     `background-image`, `custom-shader`, and `theme` set to
     `C:` + backslash + `bad|name...` each started normally with no panic.
