@@ -1390,6 +1390,10 @@ Reviewed the branch against this file and discussion #2563.
   extracted `ghostty.exe +version` reported that commit, and the app ran
   with GHOSTTY_RESOURCES_DIR and TERMINFO pointing into the package's
   `share` (with backslashes).
+- Thirty-fifth full native test run, after the invalid working directory
+  fix (with the `windowsIsDirectory` test): 4,086 passed, 61 skipped, 0
+  failed, exit 0. The packaged ReleaseSafe build also ran stress seeds 12
+  and 13 (350 steps) without a fault.
 - The inspector's buttons can't be clicked with posted messages: ImGui's
   Win32 backend calls `TrackMouseEvent` on mouse moves, and with the real
   cursor elsewhere Windows sends `WM_MOUSELEAVE` right away, so clicks
