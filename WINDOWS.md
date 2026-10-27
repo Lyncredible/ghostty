@@ -553,6 +553,10 @@ Notes:
         characters) are skipped with a warning. Checked: "set the
         AppUserModelID id=com.example.work", and a warning for
         "has space".
+    - [x] That jump list's "New Window" passes `--class=...`, so its
+          windows join the class's instance and taskbar group. Checked:
+          the class's jump list file (its own, since the ID differs) has
+          "New Window" with `--class=com.example.work`.
 - [x] Global keybinds (`RegisterHotKey`)
 - [x] Screen readers (UI Automation), like the macOS app's accessibility
       element: each terminal is a read-only Document named "Terminal"
