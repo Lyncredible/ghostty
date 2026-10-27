@@ -236,6 +236,12 @@ Notes:
       otherwise searches for cmd.exe, with a warning. Unit test:
       `windowsIsFile`. Checked: with COMSPEC unset, and with it set to a
       missing file, cmd started (the second logged the warning).
+- [x] A `command` that doesn't exist showed "error starting IO thread:
+      error.Unexpected ... usually due to exhausting a system resource".
+      CreateProcessW's FILE_NOT_FOUND, PATH_NOT_FOUND, and ACCESS_DENIED
+      are now FileNotFound and AccessDenied, and the terminal says "The
+      shell or command couldn't be started: error.FileNotFound" and to
+      check `command`. Checked with `--command=nosuchprogram.exe`.
   - Other paths with names that aren't valid don't crash: `config-file`,
     `background-image`, `custom-shader`, and `theme` set to
     `C:` + backslash + `bad|name...` each started normally with no panic.
