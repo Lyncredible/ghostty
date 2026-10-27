@@ -373,6 +373,16 @@ Notes:
       `-e py -c "print(sys.argv[1:])" ...` printed exactly the arguments
       given, for spaces, embedded quotes, trailing backslashes, an empty
       argument, and `;` and `&` (read back with UI Automation).
+- [x] `window-save-state = default` follows the system setting to restart
+      apps after signing in ("Automatically save my restartable apps"):
+      Ghostty registers with `RegisterApplicationRestart` to be restarted
+      with `--window-save-state=always` after a reboot or an update (not
+      after crashes or hangs), and saves its windows on `WM_ENDSESSION`
+      (with any setting but `never`, since the process then ends without
+      quitting). Checked: GetApplicationRestartSettings showed
+      "--window-save-state=always" with flags 3, a posted WM_ENDSESSION
+      saved the state with two tabs, and a launch with that argument
+      restored both.
 - [x] Saved windows on a monitor that's gone: restoring a saved window at
       (-30000, -30000), off every monitor, put it on screen at (0, 0) with
       its saved 1000x600 size (SetWindowPlacement moves windows that would

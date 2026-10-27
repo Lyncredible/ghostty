@@ -117,6 +117,10 @@ quitting: bool = false,
 /// True while closing every window at once, which saves the session first.
 closing_all: bool = false,
 
+/// Set once we've saved the windows for the end of the session, which
+/// each window is told about.
+session_saved: bool = false,
+
 /// The single instance lock for our app class, held while we run.
 instance_mutex: ?c.HANDLE = null,
 
@@ -213,6 +217,7 @@ pub fn init(
     _ = c.SetWindowLongPtrW(msg_hwnd, util.GWLP_USERDATA, @bitCast(@intFromPtr(self)));
     self.global_keys.update(&self.config);
     JumpList.update();
+    SaveState.registerRestart(self);
     if (self.config._diagnostics.items().len > 0) {
         _ = c.PostMessageW(msg_hwnd, WM_GHOSTTY_CONFIG_ERRORS, 0, 0);
     }
@@ -622,6 +627,13 @@ fn actionWindow(self: *const App, target: apprt.action.Target) ?*Window {
             return self.lastWindow();
         },
     }
+}
+
+/// Windows is ending the session: save the windows, once.
+pub fn endSession(self: *App) void {
+    if (self.session_saved) return;
+    self.session_saved = true;
+    SaveState.saveForEndSession(self);
 }
 
 /// The only window other than the quick terminal, if there's just one.
