@@ -420,6 +420,10 @@ Notes:
 
 ### Known limitations
 
+- No password input indicator: on Unix the IO thread polls the pty's
+  termios for echo being off (`termiosTimer`), but ConPTY doesn't expose
+  the console mode of the programs attached to it, so the timer isn't
+  started on Windows.
 - The inbox ConPTY drops APC sequences, so the Kitty graphics protocol
   doesn't work. OSC 8 hyperlinks do pass through on build 26100 (checked:
   a PowerShell `Write-Host` of an OSC 8 link reached `startHyperlink`).
