@@ -467,6 +467,13 @@ Notes:
         a posted wheel notch reached the WSL program as three wheel-up
         reports at 21;10 (`ESC [ < 64 ; 21 ; 10 M`, three per notch, as
         on other platforms).
+- [x] Ctrl+wheel changes the font size, like other Windows apps and
+      Windows Terminal, unless a program reports the mouse (it then gets
+      the wheel as usual). Checked: two posted Ctrl+wheel-up notches took
+      the cells from 19x42 to 21x46 to 22x49; with mouse tracking on in
+      WSL, the wheel went to the program instead (its reports lack the
+      Ctrl bit only because posted messages can't set the key state the
+      core reads).
 - No password input indicator: on Unix the IO thread polls the pty's
   termios for echo being off (`termiosTimer`), but ConPTY doesn't expose
   the console mode of the programs attached to it, so the timer isn't
