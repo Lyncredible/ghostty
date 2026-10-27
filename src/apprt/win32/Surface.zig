@@ -56,6 +56,10 @@ content_scale: apprt.ContentScale,
 /// The last known cursor position, in pixels.
 cursor_pos: apprt.CursorPos = .{ .x = -1, .y = -1 },
 
+/// Ctrl+wheel notches not yet applied to the font size: touchpads and
+/// high resolution wheels send fractions of a notch.
+pending_zoom: f64 = 0,
+
 /// Whether we're tracking the mouse to get WM_MOUSELEAVE.
 tracking_mouse: bool = false,
 
@@ -1561,11 +1565,16 @@ pub fn wndProc(
                 util.loword(wparam) & c.MK_CONTROL != 0 and
                 !self.core_surface.mouseCaptured())
             {
-                const steps: u16 = @intFromFloat(@max(1, @round(@abs(delta))));
-                const action: input.Binding.Action = if (delta > 0)
-                    .{ .increase_font_size = @floatFromInt(steps) }
+                // A change of direction starts over.
+                if (self.pending_zoom * delta < 0) self.pending_zoom = 0;
+                self.pending_zoom += delta;
+                const steps = @trunc(self.pending_zoom);
+                if (steps == 0) return 0;
+                self.pending_zoom -= steps;
+                const action: input.Binding.Action = if (steps > 0)
+                    .{ .increase_font_size = @floatCast(steps) }
                 else
-                    .{ .decrease_font_size = @floatFromInt(steps) };
+                    .{ .decrease_font_size = @floatCast(-steps) };
                 _ = self.core_surface.performBindingAction(action) catch |err| {
                     log.err("error changing the font size err={}", .{err});
                 };
