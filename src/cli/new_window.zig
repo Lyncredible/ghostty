@@ -78,6 +78,15 @@ pub const Options = struct {
             const stripped = std.mem.trim(u8, rest, &std.ascii.whitespace);
             if (std.mem.eql(u8, stripped, "home")) return try alloc.dupeSentinel(u8, arg, 0);
             if (std.mem.eql(u8, stripped, "inherit")) return try alloc.dupeSentinel(u8, arg, 0);
+            // From WSL, a Linux path is in the distribution we were
+            // started in (our working directory is in its share).
+            if (comptime @import("builtin").target.os.tag == .windows) wsl: {
+                var cwd_buf: [std.Io.Dir.max_path_bytes]u8 = undefined;
+                const cwd_path = cwd_buf[0 .. std.Io.Dir.cwd().realPathFile(global.io(), ".", &cwd_buf) catch break :wsl];
+                const share = try @import("../os/main.zig").wsl.linuxToShare(alloc, cwd_path, stripped) orelse break :wsl;
+                self._working_directory_seen = true;
+                return try alloc.printSentinel("--working-directory={s}", .{share}, 0);
+            }
             const cwd: std.Io.Dir = .cwd();
             var expandhome_buf: [std.Io.Dir.max_path_bytes]u8 = undefined;
             const expanded = expanded: {
