@@ -87,8 +87,18 @@ pub fn registerRestart(app: *const App) void {
     if (app.config.@"window-save-state" != .default) return;
     const RESTART_NO_CRASH = 1;
     const RESTART_NO_HANG = 2;
+
+    // A custom class restarts as that class, with its own state.
+    var utf8_buf: [300]u8 = undefined;
+    const args = if (app.config.class) |class|
+        std.fmt.bufPrint(&utf8_buf, "--window-save-state=always \"--class={s}\"", .{class}) catch return
+    else
+        "--window-save-state=always";
+    var buf: [300]u16 = undefined;
+    const n = std.unicode.utf8ToUtf16Le(buf[0 .. buf.len - 1], args) catch return;
+    buf[n] = 0;
     const hr = RegisterApplicationRestart(
-        std.unicode.utf8ToUtf16LeStringLiteral("--window-save-state=always"),
+        buf[0..n :0],
         RESTART_NO_CRASH | RESTART_NO_HANG,
     );
     if (hr < 0) log.warn("failed to register for restart hr={x}", .{hr});
@@ -106,7 +116,7 @@ fn write(app: *App) void {
         return;
     };
     const json = std.json.Stringify.valueAlloc(alloc, state, .{ .whitespace = .indent_2 }) catch return;
-    const file = path(alloc) orelse return;
+    const file = path(alloc, app.config.class) orelse return;
     if (std.fs.path.dirname(file)) |dir| std.Io.Dir.cwd().createDirPath(global.io(), dir) catch {};
     std.Io.Dir.cwd().writeFile(global.io(), .{ .sub_path = file, .data = json }) catch |err| {
         log.warn("error saving window state path={s} err={}", .{ file, err });
@@ -120,14 +130,14 @@ pub fn clear(app: *App) void {
     if (!enabled(app)) return;
     var arena: std.heap.ArenaAllocator = .init(app.core_app.alloc);
     defer arena.deinit();
-    const file = path(arena.allocator()) orelse return;
+    const file = path(arena.allocator(), app.config.class) orelse return;
     std.Io.Dir.cwd().deleteFile(global.io(), file) catch {};
 }
 
 /// Load the saved state, if there is any. It's allocated in the arena.
 pub fn load(arena: Allocator, app: *const App) ?State {
     if (!enabled(app)) return null;
-    const file = path(arena) orelse return null;
+    const file = path(arena, app.config.class) orelse return null;
     const json = std.Io.Dir.cwd().readFileAlloc(global.io(), file, arena, .limited(16 << 20)) catch return null;
     const state = std.json.parseFromSliceLeaky(State, arena, json, .{ .ignore_unknown_fields = true }) catch |err| {
         log.warn("ignoring invalid window state path={s} err={}", .{ file, err });
@@ -137,9 +147,16 @@ pub fn load(arena: Allocator, app: *const App) ?State {
     return state;
 }
 
-fn path(alloc: Allocator) ?[]const u8 {
+/// The state file. Each custom class has its own, like its own instance.
+fn path(alloc: Allocator, class: ?[]const u8) ?[]const u8 {
     const local = global.environ().getAlloc(alloc, "LOCALAPPDATA") catch return null;
-    return std.fs.path.join(alloc, &.{ local, "ghostty", "window-state.json" }) catch null;
+    const name = if (class) |v|
+        std.fmt.allocPrint(alloc, "window-state-{s}.json", .{v}) catch return null
+    else
+        "window-state.json";
+    // The class becomes part of a file name.
+    if (std.mem.indexOfAny(u8, name, "\\/:*?\"<>|") != null) return null;
+    return std.fs.path.join(alloc, &.{ local, "ghostty", name }) catch null;
 }
 
 fn capture(alloc: Allocator, app: *App) !State {
