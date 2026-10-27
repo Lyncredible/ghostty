@@ -60,6 +60,11 @@ cursor_pos: apprt.CursorPos = .{ .x = -1, .y = -1 },
 /// high resolution wheels send fractions of a notch.
 pending_zoom: f64 = 0,
 
+/// Horizontal wheel notches not yet scrolled. The core rounds horizontal
+/// wheel offsets to whole columns, which would drop a touchpad's
+/// fractions.
+pending_hscroll: f64 = 0,
+
 /// Whether we're tracking the mouse to get WM_MOUSELEAVE.
 tracking_mouse: bool = false,
 
@@ -1583,10 +1588,17 @@ pub fn wndProc(
 
             const xoff: f64, const yoff: f64 = if (msg == c.WM_MOUSEWHEEL)
                 .{ 0, delta }
-            else
+            else horizontal: {
                 // Positive horizontal wheel deltas scroll right, which
-                // is a negative x offset for the core.
-                .{ -delta, 0 };
+                // is a negative x offset for the core. We pass whole
+                // notches and keep the rest.
+                if (self.pending_hscroll * delta < 0) self.pending_hscroll = 0;
+                self.pending_hscroll += delta;
+                const whole = @trunc(self.pending_hscroll);
+                if (whole == 0) return 0;
+                self.pending_hscroll -= whole;
+                break :horizontal .{ -whole, 0 };
+            };
 
             // Like button messages, wheel messages carry the cursor's
             // position (on the screen), which mouse reports use.
