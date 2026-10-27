@@ -477,6 +477,11 @@ Notes:
   - Touchpads and high resolution wheels send fractions of a notch,
     which add up before changing the size (each event changed it by a
     whole step at first). Checked: eight quarter notches made two steps.
+- [x] Horizontal touchpad scrolling: the core rounds horizontal wheel
+      offsets to whole columns, so a touchpad's fractions of a notch were
+      dropped. We now add them up and pass whole notches. Checked: four
+      quarter notches right reached a WSL program as one wheel-right
+      report (`ESC [ < 67 ; 21 ; 10 M`).
 - No password input indicator: on Unix the IO thread polls the pty's
   termios for echo being off (`termiosTimer`), but ConPTY doesn't expose
   the console mode of the programs attached to it, so the timer isn't
