@@ -20,6 +20,7 @@ const Overrides = @import("Overrides.zig");
 const Menu = @import("Menu.zig");
 const SaveState = @import("SaveState.zig");
 const SplitDrag = @import("SplitDrag.zig");
+const winshell = @import("shell.zig");
 
 const log = std.log.scoped(.win32);
 
@@ -264,6 +265,14 @@ pub fn showQuick(self: *Window) void {
     if (c.IsWindowVisible(self.hwnd) == 0) self.quick_shown = 0;
     const target = self.quickTarget() orelse self.quick_target;
     self.quick_target = target;
+
+    // Like macOS Spaces: with `move`, the quick terminal comes to the
+    // virtual desktop the user is on. With `remain`, Windows switches to
+    // the desktop it's on when it's activated.
+    if (self.app.config.@"quick-terminal-space-behavior" == .move) {
+        winshell.moveToCurrentDesktop(self.hwnd);
+    }
+
     _ = util.SetWindowPos(
         self.hwnd,
         util.HWND_TOPMOST,

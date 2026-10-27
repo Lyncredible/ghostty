@@ -71,6 +71,33 @@ fn tipInvocation() ?*ITipInvocation {
 /// Ask where to save `contents` with the standard Save As dialog, and save
 /// it there. The dialog is modal and pumps messages. Returns false if the
 /// user canceled or saving failed.
+/// Move a window to the virtual desktop the user is on, which is that of
+/// the foreground window. Does nothing if it's already there, or if we
+/// can't tell, such as with no foreground window or virtual desktops.
+pub fn moveToCurrentDesktop(hwnd: c.HWND) void {
+    var manager: ?*c.IVirtualDesktopManager = null;
+    if (c.CoCreateInstance(
+        &c.CLSID_VirtualDesktopManager,
+        null,
+        c.CLSCTX_INPROC_SERVER,
+        &c.IID_IVirtualDesktopManager,
+        @ptrCast(&manager),
+    ) < 0) return;
+    const m = manager orelse return;
+    defer _ = m.lpVtbl.*.Release.?(m);
+    const vtbl = m.lpVtbl.*;
+
+    var on_current: c.WINBOOL = c.TRUE;
+    if (vtbl.IsWindowOnCurrentVirtualDesktop.?(m, hwnd, &on_current) < 0 or on_current != 0) return;
+
+    const foreground = c.GetForegroundWindow() orelse return;
+    if (foreground == hwnd) return;
+    var desktop: c.GUID = undefined;
+    if (vtbl.GetWindowDesktopId.?(m, foreground, &desktop) < 0) return;
+    const result = vtbl.MoveWindowToDesktop.?(m, hwnd, &desktop);
+    if (result < 0) log.warn("failed to move window to the current desktop result={x}", .{result});
+}
+
 /// Open a file in the app associated with its type, or in Notepad if
 /// there's none. Our config file's `.ghostty` type usually has no app, and
 /// Windows would only ask which app to use.
