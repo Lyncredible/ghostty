@@ -799,7 +799,7 @@ const Subprocess = struct {
             // directory inherited from a WSL terminal, and would fall back
             // to the Windows directory. A directory in WSL is best opened
             // in WSL, so we start a WSL shell there instead.
-            const default_shell_command: configpkg.Command = command: {
+            const unquoted_shell_command: configpkg.Command = command: {
                 if (comptime builtin.target.os.tag != .windows) break :command configured_command;
                 const cwd = cfg.working_directory orelse break :command configured_command;
                 if (!shell_integration.isCmdCommand(alloc, configured_command)) break :command configured_command;
@@ -812,6 +812,19 @@ const Subprocess = struct {
                 argv[4] = try alloc.dupeSentinel(u8, share.linux, 0);
                 log.info("starting WSL for a WSL working directory distribution={s} path={s}", .{ argv[2], argv[4] });
                 break :command .{ .direct = argv };
+            };
+
+            // An unquoted program path with spaces starts, but would be split
+            // at its first space when detecting the shell, so quote it.
+            const default_shell_command: configpkg.Command = command: {
+                if (comptime builtin.target.os.tag != .windows) break :command unquoted_shell_command;
+                const cmdline = switch (unquoted_shell_command) {
+                    .shell => |v| v,
+                    .direct => break :command unquoted_shell_command,
+                };
+                const quoted = try windowsQuoteProgram(alloc, cmdline) orelse break :command unquoted_shell_command;
+                log.debug("quoted the command's program path command={s}", .{quoted});
+                break :command .{ .shell = quoted };
             };
 
             // Always set up shell features (GHOSTTY_SHELL_FEATURES). These are
@@ -1961,6 +1974,77 @@ test windowsIsFile {
     try testing.expect(!windowsIsFile(alloc, "C:\\Windows"));
     try testing.expect(!windowsIsFile(alloc, "C:\\no\\such\\cmd.exe"));
     try testing.expect(!windowsIsFile(alloc, "C:\\bad|name"));
+}
+
+/// A command line with its program path quoted, if it starts with an
+/// unquoted path with spaces, such as C:\Program Files\Git\bin\bash.exe.
+/// CreateProcessW would find the program by trying each prefix that ends
+/// at a space, shortest first, but anything that splits the command into
+/// arguments (such as detecting the shell) would take C:\Program as the
+/// program. Returns null if the command line needs no change.
+fn windowsQuoteProgram(alloc: Allocator, cmdline: []const u8) Allocator.Error!?[:0]const u8 {
+    const trimmed = std.mem.trimStart(u8, cmdline, " \t");
+    if (trimmed.len == 0 or trimmed[0] == '"') return null;
+
+    // Only a path: a bare name is searched for in PATH, word by word.
+    const first_end = std.mem.indexOfAny(u8, trimmed, " \t") orelse return null;
+    if (std.mem.indexOfAny(u8, trimmed[0..first_end], "\\/:") == null) return null;
+
+    var end = first_end;
+    while (true) {
+        if (try windowsIsProgram(alloc, trimmed[0..end])) {
+            if (end == first_end) return null;
+            return try std.fmt.allocPrintSentinel(alloc, "\"{s}\"{s}", .{
+                trimmed[0..end],
+                trimmed[end..],
+            }, 0);
+        }
+        if (end == trimmed.len) return null;
+        end = if (std.mem.indexOfAnyPos(u8, trimmed, end + 1, " \t")) |next| next else trimmed.len;
+    }
+}
+
+/// Whether CreateProcessW would run a path, with or without .exe.
+fn windowsIsProgram(alloc: Allocator, path: []const u8) Allocator.Error!bool {
+    if (windowsIsFile(alloc, path)) return true;
+    const exe = try std.fmt.allocPrint(alloc, "{s}.exe", .{path});
+    defer alloc.free(exe);
+    return windowsIsFile(alloc, exe);
+}
+
+test windowsQuoteProgram {
+    if (comptime builtin.target.os.tag != .windows) return error.SkipZigTest;
+    const testing = std.testing;
+    const alloc = testing.allocator;
+
+    // Make "C:\...\a b\prog.exe" to find.
+    var tmp = testing.tmpDir(.{});
+    defer tmp.cleanup();
+    try tmp.dir.createDirPath(testing.io, "a b");
+    try tmp.dir.writeFile(testing.io, .{ .sub_path = "a b/prog.exe", .data = "" });
+    const base = try tmp.dir.realPathFileAlloc(testing.io, ".", alloc);
+    defer alloc.free(base);
+
+    const cmdline = try std.fmt.allocPrint(alloc, "{s}\\a b\\prog.exe -x y", .{base});
+    defer alloc.free(cmdline);
+    const quoted = (try windowsQuoteProgram(alloc, cmdline)).?;
+    defer alloc.free(quoted);
+    const expected = try std.fmt.allocPrint(alloc, "\"{s}\\a b\\prog.exe\" -x y", .{base});
+    defer alloc.free(expected);
+    try testing.expectEqualStrings(expected, quoted);
+
+    // Without .exe, as CreateProcessW also tries.
+    const no_ext = try std.fmt.allocPrint(alloc, "{s}\\a b\\prog", .{base});
+    defer alloc.free(no_ext);
+    const quoted_no_ext = (try windowsQuoteProgram(alloc, no_ext)).?;
+    defer alloc.free(quoted_no_ext);
+    try testing.expect(quoted_no_ext[0] == '"');
+
+    try testing.expect(try windowsQuoteProgram(alloc, "cmd.exe /k echo hi") == null);
+    try testing.expect(try windowsQuoteProgram(alloc, "C:\\Windows\\System32\\cmd.exe /k") == null);
+    try testing.expect(try windowsQuoteProgram(alloc, "\"C:\\a b\\c.exe\" x") == null);
+    try testing.expect(try windowsQuoteProgram(alloc, "C:\\no such\\thing.exe") == null);
+    try testing.expect(try windowsQuoteProgram(alloc, "C:\\Windows\\System32\\cmd.exe") == null);
 }
 
 /// Builds the argv array for the process we should exec for the
