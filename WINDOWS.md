@@ -1603,7 +1603,10 @@ Reviewed the branch against this file and discussion #2563.
   - Dragging files onto a terminal, `focus-follows-mouse`,
     `window-step-resize` while dragging an edge, and touch scrolling
   - Narrator announcing new output
-  - A Start menu or Explorer launch opening at home
+  - A Start menu or Explorer launch opening at home: checked by starting
+    `ghostty.exe` through `explorer.exe` (as a shortcut or double-click
+    does); cmd opened in `C:\Users\<user>`. The Start menu itself is
+    still unchecked.
   - Installing the MSIX (`Add-AppxPackage -AllowUnsigned`): done in the
     fork's CI, on a throwaway runner
   - Blur on Windows 10
