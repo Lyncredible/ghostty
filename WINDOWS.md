@@ -279,6 +279,9 @@ Notes:
     and after typing `cd /c/Windows/System32` the terminal pwd became
     `C:\Windows\System32` and the title showed the command while it ran,
     then `/c/Windows/System32`.
+    A new tab from there (F5 bound to `new_tab`) started Git Bash in
+    `C:\Windows\System32`: its first pwd report and prompt were
+    that folder.
 - [x] Handle leak: opening and closing tabs leaked about four kernel
       handles per terminal (measured: 493, 528, 560, 594, 626 handles
       over four rounds of eight tabs). The child's thread handle from
