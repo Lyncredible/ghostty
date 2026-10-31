@@ -1,4 +1,6 @@
 const std = @import("std");
+const builtin = @import("builtin");
+const internal_os = @import("../os/main.zig");
 const args = @import("args.zig");
 const Action = @import("ghostty.zig").Action;
 const Config = @import("../config/Config.zig");
@@ -178,7 +180,15 @@ pub fn run(gpa_alloc: std.mem.Allocator) !u8 {
 
     std.mem.sortUnstable(ThemeListElement, themes.items, {}, ThemeListElement.lessThan);
 
-    if (tui.can_pretty_print and !opts.plain and try stdout_file.isTty(global.io())) {
+    // On Windows, a console we borrowed from the shell that started us
+    // can't give us keys (see `attachParentConsole`), so list the themes.
+    const borrowed_console = if (comptime builtin.target.os.tag == .windows)
+        internal_os.windows.attached_parent_console
+    else
+        false;
+    if (tui.can_pretty_print and !opts.plain and !borrowed_console and
+        try stdout_file.isTty(global.io()))
+    {
         try preview(gpa_alloc, themes.items, opts.color);
         return 0;
     }
@@ -306,6 +316,12 @@ const Preview = struct {
         var loop: vaxis.Loop(Event) = .init(global.io(), &self.tty, &self.vx);
         try loop.start();
         defer loop.stop();
+
+        // On Windows, vaxis's loop only reports changes to the console's
+        // size, not its initial size, without which nothing is drawn.
+        if (comptime builtin.target.os.tag == .windows) {
+            try loop.postEvent(.{ .winsize = try self.tty.getWinsize() });
+        }
 
         const writer = self.tty.writer();
         try self.vx.enterAltScreen(writer);

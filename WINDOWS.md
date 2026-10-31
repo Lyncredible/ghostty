@@ -110,7 +110,9 @@ Notes:
         confirmation.
   - [x] Ctrl+C copies when there's a selection, like Windows Terminal,
         and is still an interrupt otherwise (a performable default
-        keybind on Windows). Unit tested; needs a check with real keys.
+        keybind on Windows). Unit tested, and checked with real keys in
+        the fork's CI (run 41250076747): with a selection it copied, and
+        without one it interrupted `ping -t`.
   - [x] Ctrl+V pastes too, like Windows Terminal: through ConPTY, cmd
         otherwise gets a ^V instead of the console's paste. It's
         performable, and `keybind = ctrl+v=unbind` gives it back to
@@ -314,6 +316,21 @@ Notes:
     clipboard (CRLF) and `paste_from_clipboard` bound to F6: zsh in WSL
     took it as one paste and ran both lines on Enter; cmd ran each line.
     Git Bash ran each line too, which was the missing terminfo below.
+- [x] `ghostty +list-themes` run from a shell in a terminal hung on a
+      blank screen. Two causes: vaxis's loop doesn't report the console's
+      initial size on Windows (only changes), so nothing was drawn (now
+      posted at start); and, since `ghostty.exe` is a GUI program, the
+      shell that started it doesn't wait and keeps reading the console's
+      input, so the preview could never get a key (not even `q`). When
+      Ghostty had to attach to the shell's console, it now prints the
+      plain list instead. Checked: in cmd in Ghostty it printed the list
+      and returned. (Colors were missing at first only because this
+      session's environment sets `NO_COLOR`.)
+  - [ ] A console-subsystem `ghostty.com` next to `ghostty.exe` (shells
+        run `.com` before `.exe` from PATH) that runs CLI actions with
+        the console's input and makes the shell wait, and starts the GUI
+        otherwise. That would make the theme preview and `+edit-config`
+        style actions work from shells.
 - [x] `ghostty +validate-config` always failed (exit 1, no output) when
       its output was a pipe or the console: it finished with
       `File.Writer.end`, which sets the output's length, and Windows

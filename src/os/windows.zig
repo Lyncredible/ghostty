@@ -414,6 +414,11 @@ pub fn ProcThreadAttributeValue(
         (if (additive) PROC_THREAD_ATTRIBUTE_ADDITIVE else 0);
 }
 
+/// Whether `attachParentConsole` attached to the parent's console. The
+/// parent (a shell) doesn't wait for a GUI program and keeps reading the
+/// console's input, so we can write to it but not read keys from it.
+pub var attached_parent_console = false;
+
 /// Ghostty is a GUI program on Windows, so it has no console of its own,
 /// and console shells don't connect its output to them. For CLI actions
 /// (such as +version) run from a console, attach to that console so the
@@ -425,6 +430,7 @@ pub fn attachParentConsole() void {
     const has_stderr = validHandle(params.hStdError);
     if (has_stdout and has_stderr) return;
     if (console.AttachConsole(console.ATTACH_PARENT_PROCESS) == FALSE) return;
+    attached_parent_console = true;
 
     const conout = std.unicode.utf8ToUtf16LeStringLiteral("CONOUT$");
     const handle = console.CreateFileW(
