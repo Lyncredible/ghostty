@@ -193,7 +193,15 @@ function __ghostty_precmd() {
   # command like cd /test && cat. PS0 is evaluated before cd is run.
   if [[ "$_ghostty_last_reported_cwd" != "$PWD" ]]; then
     _ghostty_last_reported_cwd="$PWD"
-    builtin printf "\e]7;kitty-shell-cwd://%s%s\a" "$HOSTNAME" "$PWD"
+    builtin local cwd="$PWD"
+    # On MSYS2 and Cygwin (such as Git Bash on Windows), paths outside the
+    # drive mounts (/c/...), such as /tmp or /usr, only exist for the shell,
+    # so report their Windows path (/C:/...).
+    if [[ "$OSTYPE" == msys* || "$OSTYPE" == cygwin* ]] && [[ ! "$PWD" =~ ^/[a-zA-Z](/|$) ]]; then
+      builtin local win
+      win=$(cygpath -m -- "$PWD" 2>/dev/null) && [[ -n "$win" ]] && cwd="/$win"
+    fi
+    builtin printf "\e]7;kitty-shell-cwd://%s%s\a" "$HOSTNAME" "$cwd"
   fi
 
   _ghostty_executing=0
