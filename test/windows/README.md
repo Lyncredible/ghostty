@@ -34,3 +34,15 @@ ghostty_info: <version string>
 The ghostty_info call verifies the DLL loads and the CRT is initialized.
 Before the fix, loading the DLL would crash with "access violation writing
 0x0000000000000024".
+
+## powershell-integration.ps1
+
+Loads the PowerShell shell integration without a terminal and checks the
+escape sequences its prompt writes (OSC 7, 2, and 133, and the cursor
+shape), including a failed command's exit code. CI runs it with both
+Windows PowerShell 5.1 and PowerShell 7.
+
+```
+powershell -NoProfile -ExecutionPolicy Bypass -File powershell-integration.ps1
+pwsh -NoProfile -File powershell-integration.ps1
+```

@@ -34,6 +34,14 @@ jobs:
       - name: Test
         run: zig build test -Dtarget=x86_64-windows-gnu --summary all
 
+      - name: Test PowerShell integration (5.1)
+        shell: powershell
+        run: ./test/windows/powershell-integration.ps1
+
+      - name: Test PowerShell integration (7)
+        shell: pwsh
+        run: ./test/windows/powershell-integration.ps1
+
       - name: Package
         shell: pwsh
         run: ./dist/windows/package.ps1 -OutDir zig-out/dist -Msix
