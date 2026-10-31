@@ -250,6 +250,21 @@ Notes:
   - Other paths with names that aren't valid don't crash: `config-file`,
     `background-image`, `custom-shader`, and `theme` set to
     `C:` + backslash + `bad|name...` each started normally with no panic.
+- [x] Git Bash (and MSYS2's bash) gets shell integration. It wasn't
+      detected because the program is `bash.exe`; on Windows a `.exe`
+      suffix is now ignored when detecting bash, elvish, fish, nu, and
+      zsh. Its OSC 7 also failed ("invalid url in OSC 7:
+      error.InvalidMacAddress"): Ghostty exported `PWD` as the Windows
+      working directory, MSYS bash kept it as `C:/Code/ghostty` rather
+      than `/c/Code/ghostty`, and the URL became
+      `kitty-shell-cwd://HOSTC:/...`, whose colon reads as a port.
+      `PWD` is no longer exported on Windows. Unit test: `detectShell`.
+      Checked: with a quoted Git Bash path, the log showed "shell
+      integration automatically injected shell=.bash" and "terminal pwd:
+      C:\Code\ghostty".
+  - An unquoted path with spaces still starts Git Bash but without
+    shell integration, because the program name comes out as
+    `C:\Program`. Quote the path, or use its short name.
 - [x] Handle leak: opening and closing tabs leaked about four kernel
       handles per terminal (measured: 493, 528, 560, 594, 626 handles
       over four rounds of eight tabs). The child's thread handle from
