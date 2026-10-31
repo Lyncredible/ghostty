@@ -193,12 +193,20 @@ function __ghostty_precmd() {
   # command like cd /test && cat. PS0 is evaluated before cd is run.
   if [[ "$_ghostty_last_reported_cwd" != "$PWD" ]]; then
     _ghostty_last_reported_cwd="$PWD"
+    builtin local cwd="$PWD"
+    # On MSYS2 and Cygwin (such as Git Bash on Windows), paths outside the
+    # drive mounts (/c/...), such as /tmp or /usr, only exist for the shell,
+    # so report their Windows path (/C:/...).
+    if [[ "$OSTYPE" == msys* || "$OSTYPE" == cygwin* ]] && [[ ! "$PWD" =~ ^/[a-zA-Z](/|$) ]]; then
+      builtin local win
+      win=$(cygpath -m -- "$PWD" 2>/dev/null) && [[ -n "$win" ]] && cwd="/$win"
+    fi
     # Remove control bytes from the hostname and directory before sending
     # them. A directory name that contains a raw ESC or BEL byte could
     # otherwise end our OSC 7 early and start a sequence of its own, such
     # as an OSC 52 clipboard write. Backslashes are safe here because
     # printf only expands escapes in the format string, not in %s values.
-    builtin printf "\e]7;kitty-shell-cwd://%s%s\a" "${HOSTNAME//[[:cntrl:]]/}" "${PWD//[[:cntrl:]]/}"
+    builtin printf "\e]7;kitty-shell-cwd://%s%s\a" "${HOSTNAME//[[:cntrl:]]/}" "${cwd//[[:cntrl:]]/}"
   fi
 
   _ghostty_executing=0
