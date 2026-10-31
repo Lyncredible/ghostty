@@ -190,9 +190,10 @@ Notes:
       pointers are 4-byte aligned on ARM64).
   - Still builds after this session's changes (2026-10-26, debug, 64 MB
     `ghostty.exe`).
-  - [ ] Run it on an ARM64 machine. The fork workflow now builds and runs
-        the tests natively on GitHub's `windows-11-arm` runner. Not yet
-        seen running.
+  - [x] Run it on an ARM64 machine. The fork workflow builds and runs the
+        tests natively on GitHub's `windows-11-arm` runner. Run
+        41226585460 (2026-10-31) passed: build 9 minutes, tests 25. The
+        app itself hasn't been opened on an ARM64 desktop.
 - [x] Light and dark themes: the app reports the Windows app mode
       (`AppsUseLightTheme`) to the core at startup and on
       `WM_SETTINGCHANGE`, so `theme = light:X,dark:Y` and color scheme
