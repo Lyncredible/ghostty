@@ -45,6 +45,24 @@ jobs:
           path: zig-out/dist/*.zip
           retention-days: 14
 
+  # The app on ARM64 hardware.
+  build-windows-arm64:
+    if: github.repository != 'ghostty-org/ghostty'
+    runs-on: windows-11-arm
+    timeout-minutes: 120
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Setup Zig
+        uses: mlugg/setup-zig@d1434d08867e3ee9daa34448df10607b98908d29 # v2.2.1
+
+      - name: Build
+        run: zig build -Dtarget=aarch64-windows-gnu
+
+      - name: Test
+        run: zig build test -Dtarget=aarch64-windows-gnu --summary all
+
   # libghostty-vt with the runner's native target, which is MSVC: GitHub's
   # Windows runners have Visual Studio and the Windows SDK.
   build-libghostty-vt-windows:
