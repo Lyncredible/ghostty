@@ -914,7 +914,13 @@ const Subprocess = struct {
         // https://bugs.kde.org/show_bug.cgi?id=242114
         // https://github.com/kovidgoyal/kitty/issues/1595
         // https://github.com/ghostty-org/ghostty/discussions/7769
-        if (cwd) |pwd| try env.put("PWD", pwd);
+        //
+        // Not on Windows: PWD means nothing to Windows programs, and MSYS2
+        // shells such as Git Bash keep an inherited C:\ path in $PWD instead
+        // of their own /c/ form, which breaks the OSC 7 URL they report.
+        if (comptime builtin.os.tag != .windows) {
+            if (cwd) |pwd| try env.put("PWD", pwd);
+        }
 
         return .{
             .arena = arena,

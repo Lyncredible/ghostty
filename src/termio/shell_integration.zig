@@ -177,7 +177,14 @@ fn detectShell(alloc: Allocator, command: config.Command) !?Shell {
     defer arg_iter.deinit();
 
     const arg0 = arg_iter.next() orelse return null;
-    const exe = std.fs.path.basename(arg0);
+    const exe = exe: {
+        const base = std.fs.path.basename(arg0);
+        // On Windows, shells such as Git Bash's or MSYS2's are bash.exe.
+        if (comptime builtin.target.os.tag == .windows) {
+            if (std.ascii.endsWithIgnoreCase(base, ".exe")) break :exe base[0 .. base.len - 4];
+        }
+        break :exe base;
+    };
 
     if (std.mem.eql(u8, "bash", exe)) {
         // Apple distributes their own patched version of Bash 3.2
@@ -234,6 +241,10 @@ test detectShell {
         try testing.expectEqual(.powershell, try detectShell(alloc, .{
             .shell = "\"C:\\Program Files\\PowerShell\\7\\pwsh.exe\" -NoLogo",
         }));
+        try testing.expectEqual(.bash, try detectShell(alloc, .{
+            .shell = "\"C:\\Program Files\\Git\\bin\\bash.exe\"",
+        }));
+        try testing.expectEqual(.zsh, try detectShell(alloc, .{ .shell = "zsh.EXE" }));
     }
 }
 
