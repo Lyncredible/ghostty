@@ -1464,6 +1464,8 @@ Reviewed the branch against this file and discussion #2563.
   integration fix: 4,087 passed, 61 skipped, 0 failed, exit 0.
 - Thirty-ninth full native test run, after quoting an unquoted command
   path: 4,089 passed, 61 skipped, 0 failed, exit 0.
+- Fortieth full native test run, after sending text without a key as a
+  key press: 4,089 passed, 61 skipped, 0 failed, exit 0.
 - The inspector's buttons can't be clicked with posted messages: ImGui's
   Win32 backend calls `TrackMouseEvent` on mouse moves, and with the real
   cursor elsewhere Windows sends `WM_MOUSELEAVE` right away, so clicks
