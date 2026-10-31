@@ -125,6 +125,18 @@ fn win32(
     // A dead key is reported with the character it composes.
     if (event.composing) return;
 
+    // Text with no key, such as an IME's result, is character-only events.
+    if (event.key == .unidentified) {
+        if (event.action == .release) return;
+        var units: [64]u16 = undefined;
+        const len = std.unicode.utf8ToUtf16Le(&units, event.utf8) catch return;
+        for (units[0..len]) |unit| {
+            try win32Record(writer, .{ .char = unit, .down = true });
+            try win32Record(writer, .{ .char = unit, .down = false });
+        }
+        return;
+    }
+
     const scan = win32ScanCode(event.key);
     const down = event.action != .release;
     const state = win32ControlKeyState(event.mods, scan > 0xFF);
@@ -289,6 +301,17 @@ test "win32 input: encode" {
 
     var buf: [128]u8 = undefined;
     {
+        // Text with no key, such as an IME's result: a down and up
+        // character-only event for each UTF-16 unit, and nothing on release.
+        var writer: std.Io.Writer = .fixed(&buf);
+        try encode(&writer, .{ .key = .unidentified, .utf8 = "a" }, .{ .win32_input = true });
+        try testing.expectEqualStrings("\x1b[0;0;97;1;0;1_\x1b[0;0;97;0;0;1_", writer.buffered());
+
+        writer = .fixed(&buf);
+        try encode(&writer, .{ .action = .release, .key = .unidentified, .utf8 = "a" }, .{ .win32_input = true });
+        try testing.expectEqualStrings("", writer.buffered());
+    }
+    {
         // Arrow keys are extended keys, independent of the layout.
         var writer: std.Io.Writer = .fixed(&buf);
         try encode(&writer, .{ .key = .arrow_up }, .{ .win32_input = true });
@@ -300,11 +323,12 @@ test "win32 input: encode" {
         try testing.expectEqualStrings("\x1b[13;28;0;0;0;1_", writer.buffered());
     }
     {
-        // Text beyond one UTF-16 unit follows as character events.
+        // Each UTF-16 unit of an emoji is a down and up character event.
         var writer: std.Io.Writer = .fixed(&buf);
         try encode(&writer, .{ .key = .unidentified, .utf8 = "😀" }, .{ .win32_input = true });
         try testing.expectEqualStrings(
-            "\x1b[0;0;55357;1;0;1_\x1b[0;0;56832;1;0;1_\x1b[0;0;56832;0;0;1_",
+            "\x1b[0;0;55357;1;0;1_\x1b[0;0;55357;0;0;1_" ++
+                "\x1b[0;0;56832;1;0;1_\x1b[0;0;56832;0;0;1_",
             writer.buffered(),
         );
     }
