@@ -813,7 +813,14 @@ fn setupBash(
 
     // Start accumulating arguments with the executable and initial flags.
     if (iter.next()) |exe| {
-        try cmd.appendArg(exe);
+        // On Windows, quote a path with spaces, such as Git Bash's in
+        // C:\Program Files, rather than leave CreateProcessW to guess.
+        const quote = comptime builtin.target.os.tag == .windows;
+        if (quote and std.mem.indexOfScalar(u8, exe, ' ') != null) {
+            const quoted = try std.fmt.allocPrint(alloc, "\"{s}\"", .{exe});
+            defer alloc.free(quoted);
+            try cmd.appendArg(quoted);
+        } else try cmd.appendArg(exe);
     } else return null;
     try cmd.appendArg("--posix");
 
@@ -930,6 +937,28 @@ test "bash" {
     try testing.expectEqualStrings(
         try std.mem.print(&path_buf, "{s}/ghostty.bash", .{res.shell_path}),
         env.get("ENV").?,
+    );
+}
+
+test "bash: Windows path with spaces" {
+    if (comptime builtin.target.os.tag != .windows) return error.SkipZigTest;
+    const testing = std.testing;
+    var arena = ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const alloc = arena.allocator();
+
+    var res: TmpResourcesDir = try .init(.bash);
+    defer res.deinit();
+
+    var env = EnvMap.init(alloc);
+    defer env.deinit();
+
+    const command = try setupBash(alloc, .{
+        .shell = "\"C:\\Program Files\\Git\\bin\\bash.exe\" -l",
+    }, res.path, &env);
+    try testing.expectEqualStrings(
+        "\"C:\\Program Files\\Git\\bin\\bash.exe\" --posix -l",
+        command.?.shell,
     );
 }
 

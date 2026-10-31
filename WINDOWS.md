@@ -262,9 +262,18 @@ Notes:
       Checked: with a quoted Git Bash path, the log showed "shell
       integration automatically injected shell=.bash" and "terminal pwd:
       C:\Code\ghostty".
-  - An unquoted path with spaces still starts Git Bash but without
-    shell integration, because the program name comes out as
-    `C:\Program`. Quote the path, or use its short name.
+  - An unquoted path with spaces also gets shell integration. It
+    started, but detection took `C:\Program` as the program. Now, on
+    Windows, a `command` that starts with an unquoted path whose first
+    word isn't a program has its path quoted: the shortest prefix
+    ending at a space that's a file (with or without `.exe`), the
+    same search CreateProcessW does. Bash's rebuilt command also
+    quotes a program path with spaces rather than leave it to that
+    search. Unit tests: `windowsQuoteProgram`, "bash: Windows path with
+    spaces". Checked: with `C:` + backslash + `Program Files` + ... +
+    `bash.exe` unquoted, the log showed the quoted path, "shell
+    integration automatically injected shell=.bash", and the terminal
+    pwd.
 - [x] Handle leak: opening and closing tabs leaked about four kernel
       handles per terminal (measured: 493, 528, 560, 594, 626 handles
       over four rounds of eight tabs). The child's thread handle from
