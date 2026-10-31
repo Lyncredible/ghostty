@@ -1616,6 +1616,7 @@ Reviewed the branch against this file and discussion #2563.
     `test/windows/powershell-integration.ps1` with both 5.1 and 7, which
     loads the integration and checks its prompt's escape sequences
     (OSC 7, 2, 133 with a failed command's exit code, and the cursor).
-    PowerShell 7 in a real terminal is still unchecked.
+    It passed with both in run 41238800703 (2026-10-31). PowerShell 7 in
+    a real terminal is still unchecked.
   - Switching the Windows app mode to dark while Ghostty runs
 - Remaining work: a signed package, which needs a certificate.
