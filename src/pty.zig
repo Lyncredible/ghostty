@@ -552,6 +552,13 @@ const WindowsPty = struct {
 
     /// Set the size of the pty.
     pub fn setSize(self: *Pty, size: winsize) SetSizeError!void {
+        // The pseudoconsole is closed when its process exits, and the
+        // terminal can still be resized after that.
+        if (self.console_closed) {
+            self.size = size;
+            return;
+        }
+
         const result = self.conpty.resize(
             self.pseudo_console,
             .{ .X = @intCast(size.ws_col), .Y = @intCast(size.ws_row) },
