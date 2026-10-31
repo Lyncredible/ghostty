@@ -175,7 +175,9 @@ Notes:
       statically (with `-DGHOSTTY_STATIC`, since the headers otherwise
       declare `dllimport`), both printed the parsed OSC title "hello".
   - [ ] The MSVC target: this machine has no Visual Studio or Windows SDK
-        ("LibCStdLibHeaderNotFound").
+        ("LibCStdLibHeaderNotFound"). GitHub's Windows runners have both, so
+        the fork workflow also runs upstream's libghostty-vt Windows job
+        there (native target, MSVC). Not yet seen running.
   - [x] `zig build test-lib-vt -Dtarget=x86_64-windows-gnu`: 6,943
         passed, 68 skipped, 0 failed (2026-10-26).
   - The examples' `build.zig` files don't pass their target to the
