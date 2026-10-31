@@ -1623,6 +1623,7 @@ Reviewed the branch against this file and discussion #2563.
     and checks the log for shell integration and the new pwd. In run
     41242035483 it passed with PowerShell 7 and Windows PowerShell. (The
     cmd run failed because cmd's `cd` doesn't change drives, and the
-    runner's checkout is on D:; it now uses `cd /d`.)
+    runner's checkout is on D:; it now uses `cd /d`.) Run 41244466094
+    passed with all three, and everything else.
   - Switching the Windows app mode to dark while Ghostty runs
 - Remaining work: a signed package, which needs a certificate.
