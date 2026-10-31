@@ -25,6 +25,7 @@ pub const Action = enum {
 
     // Other
     terminfo,
+    @"terminfo-compiled",
 };
 
 pub fn main(init: std.process.Init) !void {
@@ -46,6 +47,11 @@ pub fn main(init: std.process.Init) !void {
         .@"vim-ftplugin" => try writer.writeAll(@import("extra/vim.zig").ftplugin),
         .@"vim-compiler" => try writer.writeAll(@import("extra/vim.zig").compiler),
         .terminfo => try @import("terminfo/ghostty.zig").ghostty.encode(writer),
+        .@"terminfo-compiled" => try @import("terminfo/compiled.zig").encode(
+            alloc,
+            @import("terminfo/ghostty.zig").ghostty,
+            writer,
+        ),
     }
     try stdout_writer.end();
 }
