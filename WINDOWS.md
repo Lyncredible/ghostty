@@ -80,9 +80,10 @@ Notes:
   `checking cache failed: file_open Unexpected`. Rerunning works.
 - `ghostty.exe` is a GUI app. To see its logs, redirect stderr
   (`Start-Process ... -RedirectStandardError log.txt`).
-- `-Doptimize=ReleaseFast` with the GNU ABI fails inside Zig 0.17 while
-  compiling MinGW's own CRT (`.seh_ directive must appear within an active
-  frame`). This is a Zig bug. Use ReleaseSafe, or the MSVC ABI.
+- `-Doptimize=ReleaseFast` with the GNU ABI used to fail while compiling
+  MinGW's CRT (`.seh_ directive must appear within an active frame`),
+  because stripping turned off the unwind tables it needs. They're kept
+  on Windows now, and ReleaseFast builds work (built again 2026-10-31).
 - When scripting input from a DPI-unaware process, Windows scales mouse
   message coordinates for per-monitor-aware windows.
 
