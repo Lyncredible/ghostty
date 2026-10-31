@@ -57,6 +57,12 @@ jobs:
         shell: pwsh
         run: ./test/windows/smoke.ps1 -Exe zig-out/bin/ghostty.exe -Command "cmd.exe" -Prompt ">" -Cd "cd /d"
 
+      # Real keyboard and mouse input, which needs the foreground: typing,
+      # Ctrl+V, and focus-follows-mouse between splits.
+      - name: Desktop input test
+        shell: pwsh
+        run: ./test/windows/desktop-input.ps1 -Exe zig-out/bin/ghostty.exe
+
       - name: Package
         shell: pwsh
         run: ./dist/windows/package.ps1 -OutDir zig-out/dist -Msix
