@@ -1562,6 +1562,9 @@ Reviewed the branch against this file and discussion #2563.
   key press: 4,089 passed, 61 skipped, 0 failed, exit 0.
 - Forty-first full native test run, after compiling the terminfo entry:
   4,091 passed, 61 skipped, 0 failed, exit 0.
+- Fork CI run 41232795840 (2026-10-31), after the exit message and Git
+  Bash path fixes: the x64 and ARM64 test suites, the MSIX install, and
+  libghostty-vt with MSVC all passed.
 - The inspector's buttons can't be clicked with posted messages: ImGui's
   Win32 backend calls `TrackMouseEvent` on mouse moves, and with the real
   cursor elsewhere Windows sends `WM_MOUSELEAVE` right away, so clicks
