@@ -34,6 +34,21 @@ jobs:
       - name: Test
         run: zig build test -Dtarget=x86_64-windows-gnu --summary all
 
+      # CLI actions through the ghostty.com launcher, which waits for them
+      # and returns their exit code.
+      - name: Test CLI actions
+        shell: pwsh
+        run: |
+          $version = ./zig-out/bin/ghostty.com +version | Out-String
+          if ($LASTEXITCODE -ne 0 -or $version -notmatch 'Ghostty') { throw "+version failed: $version" }
+          Set-Content valid.conf 'font-size = 13'
+          ./zig-out/bin/ghostty.com +validate-config --config-file=valid.conf
+          if ($LASTEXITCODE -ne 0) { throw "+validate-config failed for a valid config" }
+          Set-Content invalid.conf 'font-sise = 13'
+          $out = ./zig-out/bin/ghostty.com +validate-config --config-file=invalid.conf | Out-String
+          if ($LASTEXITCODE -ne 1 -or $out -notmatch 'unknown field') { throw "+validate-config didn't report: $out" }
+          $global:LASTEXITCODE = 0
+
       - name: Test PowerShell integration (5.1)
         shell: powershell
         run: ./test/windows/powershell-integration.ps1
