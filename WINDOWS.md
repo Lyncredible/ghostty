@@ -311,6 +311,20 @@ Notes:
       Bash in Ghostty, readline has bracketed paste on, `tput colors`
       gives 256, `infocmp -x` shows the extended capabilities, and a two
       line paste waits for Enter. Unit tests: `encode`, `unescape`.
+- [x] Tab creation latency (from the discussion's list), ReleaseFast,
+      measured from posting a `new_tab` key to the prompt showing in UI
+      Automation, five tabs each: cmd 130-145 ms; Windows PowerShell 5.1
+      (`-NoProfile`) 750-790 ms; WSL (zsh with a theme) 540 ms. The first
+      window took 0.8 s (cmd), 1.2 s (PowerShell), 4.1 s (WSL starting).
+  - PowerShell's integration added about 180 ms per tab (590 ms with
+    `shell-integration = none`). Its first prompt used three things that
+    are slow the first time in 5.1: `New-Object` (63 ms), a regular
+    expression (`-replace`), and `Test-Path` on the `Function:` drive
+    (36 ms). Using `[StringBuilder]::new()`, `String.Replace`, and
+    `${function:...}` brought it to about 70 ms (650-680 ms per tab).
+    Checked: the pwd still followed `cd C:\Windows`, and `cmd /c exit 3`
+    still showed "Command Failed" with
+    `notify-on-command-finish-action=notify`.
 - [x] Handle leak: opening and closing tabs leaked about four kernel
       handles per terminal (measured: 493, 528, 560, 594, 626 handles
       over four rounds of eight tabs). The child's thread handle from
