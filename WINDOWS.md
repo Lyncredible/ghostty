@@ -656,6 +656,13 @@ Notes:
       dropped. We now add them up and pass whole notches. Checked: four
       quarter notches right reached a WSL program as one wheel-right
       report (`ESC [ < 67 ; 21 ; 10 M`).
+- WSL programs see `TERM=xterm-256color` (WSL's default, as in Windows
+  Terminal), not `xterm-ghostty`: `TERM` isn't in `WSLENV`, and
+  distributions don't ship the entry yet (Ubuntu 26.04 doesn't). Passing
+  it would also need `TERMINFO` pointing at the Windows install through
+  `/mnt/c`, and SSH from WSL to hosts without the entry would break. Git
+  Bash and other MSYS2 programs do get `xterm-ghostty` (see the compiled
+  terminfo above).
 - No password input indicator: on Unix the IO thread polls the pty's
   termios for echo being off (`termiosTimer`), but ConPTY doesn't expose
   the console mode of the programs attached to it, so the timer isn't
