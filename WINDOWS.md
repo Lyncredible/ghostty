@@ -115,7 +115,9 @@ Notes:
         otherwise gets a ^V instead of the console's paste. It's
         performable, and `keybind = ctrl+v=unbind` gives it back to
         programs such as Vim (visual block). The menus still show
-        Shift+Insert. Unit tested; needs a check with real keys.
+        Shift+Insert. Unit tested, and checked with real keys in the
+        fork's CI (`test/windows/desktop-input.ps1`, run 41247475902):
+        Ctrl+V pasted a command into cmd, which ran.
   - [x] Copying also writes HTML ("HTML Format", CF_HTML) when the core
         provides it (`copy_to_clipboard` with `mixed`), so rich text
         editors paste with colors and styles. Checked: Select All and Copy
@@ -970,7 +972,8 @@ Notes:
   - [x] `focus-follows-mouse`: hovering a split focuses it when the
         cursor really moves, the window is in front, no button is held,
         and focus is on another terminal (never a search field, palette,
-        or dialog). Needs a check on an unlocked desktop.
+        or dialog). Checked with real mouse moves on the CI runner's
+        desktop (`test/windows/desktop-input.ps1`, run 41247475902).
   - [x] Dropping files on a terminal pastes their paths through the
         normal paste path (bracketed paste, unsafe paste checks),
         separated by spaces like Windows Terminal. For cmd/PowerShell,
@@ -1600,7 +1603,8 @@ Reviewed the branch against this file and discussion #2563.
   screen reader, or another machine):
   - Quick terminal sliding out, the touch keyboard showing, the terminal
     IO export dialog
-  - Dragging files onto a terminal, `focus-follows-mouse`,
+  - Dragging files onto a terminal, (done in CI: `focus-follows-mouse`,
+    with real mouse moves between splits, run 41247475902),
     `window-step-resize` while dragging an edge, and touch scrolling
   - Narrator announcing new output
   - A Start menu or Explorer launch opening at home: checked by starting
