@@ -46,3 +46,16 @@ Windows PowerShell 5.1 and PowerShell 7.
 powershell -NoProfile -ExecutionPolicy Bypass -File powershell-integration.ps1
 pwsh -NoProfile -File powershell-integration.ps1
 ```
+
+## smoke.ps1
+
+Starts the app with a shell, waits for its prompt (through UI
+Automation), types `cd` to a directory by posting messages to the
+window, and checks Ghostty's debug log for shell integration and the new
+pwd. It needs a debug build and a desktop session, but not focus. CI
+runs it with PowerShell 7, Windows PowerShell, and cmd.
+
+```
+./smoke.ps1 -Exe ../../zig-out/bin/ghostty.exe -Command "pwsh.exe -NoLogo -NoProfile" -Prompt "PS "
+./smoke.ps1 -Exe ../../zig-out/bin/ghostty.exe -Command "cmd.exe" -Prompt ">"
+```
