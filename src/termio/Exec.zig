@@ -44,6 +44,15 @@ const FlatpakHostCommand = if (!build_config.flatpak) struct {
 /// The subprocess state for our exec backend.
 subprocess: Subprocess,
 
+/// Set by the read thread on Windows once the pseudoconsole's output has
+/// ended and all of it has been processed. See `windowsDrainOutput`.
+read_eof: if (builtin.target.os.tag == .windows) std.Io.Event else void =
+    if (builtin.target.os.tag == .windows) .unset else {},
+
+/// See `Config.wait_after_command`.
+wait_after_command: bool,
+abnormal_command_exit_runtime_ms: u32,
+
 /// Initialize the exec state. This will NOT start it, this only sets
 /// up the internal state necessary to start it later.
 pub fn init(
@@ -53,7 +62,11 @@ pub fn init(
     var subprocess = try Subprocess.init(alloc, cfg);
     errdefer subprocess.deinit();
 
-    return .{ .subprocess = subprocess };
+    return .{
+        .subprocess = subprocess,
+        .wait_after_command = cfg.wait_after_command,
+        .abnormal_command_exit_runtime_ms = cfg.abnormal_command_exit_runtime_ms,
+    };
 }
 
 pub fn deinit(self: *Exec) void {
@@ -152,11 +165,19 @@ pub fn threadEnter(
     errdefer termios_timer.deinit();
 
     // Start our read thread
-    const read_thread = try std.Thread.spawn(
-        .{},
-        if (builtin.target.os.tag == .windows) ReadThread.threadMainWindows else ReadThread.threadMainPosix,
-        .{ pty_fds.read, io, pipe[0] },
-    );
+    if (comptime builtin.target.os.tag == .windows) self.read_eof = .unset;
+    const read_thread = if (comptime builtin.target.os.tag == .windows)
+        try std.Thread.spawn(
+            .{},
+            ReadThread.threadMainWindows,
+            .{ pty_fds.read, io, pipe[0], &self.read_eof },
+        )
+    else
+        try std.Thread.spawn(
+            .{},
+            ReadThread.threadMainPosix,
+            .{ pty_fds.read, io, pipe[0] },
+        );
     read_thread.setName(global.io(), "io-reader") catch {};
 
     // Setup our threadata backend state to be our own
@@ -168,6 +189,12 @@ pub fn threadEnter(
         .read_thread_pipe = pipe[1],
         .read_thread_fd = pty_fds.read,
         .termios_timer = termios_timer,
+        .windows_drain = if (comptime builtin.target.os.tag == .windows) .{
+            .pty = if (self.subprocess.pty) |*pty| pty else null,
+            .read_eof = &self.read_eof,
+            .wait_after_command = self.wait_after_command,
+            .abnormal_command_exit_runtime_ms = self.abnormal_command_exit_runtime_ms,
+        } else {},
     } };
 
     // Start our process watcher. If we have an xev.Process use it.
@@ -304,6 +331,8 @@ fn processExitCommon(td: *termio.Termio.ThreadData, exit_code: u32) void {
     );
     log.debug("child process exited status={} runtime={}ms", .{ exit_code, runtime_ms });
 
+    if (comptime builtin.target.os.tag == .windows) windowsDrainOutput(execdata, exit_code, runtime_ms);
+
     // We always notify the surface immediately that the child has
     // exited and some metadata about the exit.
     _ = td.surface_mailbox.push(.{
@@ -312,6 +341,30 @@ fn processExitCommon(td: *termio.Termio.ThreadData, exit_code: u32) void {
             .runtime_ms = runtime_ms,
         },
     }, .{ .forever = {} });
+}
+
+/// On Windows the pseudoconsole outlives its process and can still have
+/// output for us, such as its final redraw, which would otherwise arrive
+/// after (and overwrite) the "Process exited" message. Closing it flushes
+/// that output and ends the stream, so we wait (briefly) for the read
+/// thread to process it. This can take most of a second (with WSL), so we
+/// only do it when the terminal stays open, as the surface decides.
+fn windowsDrainOutput(execdata: *ThreadData, exit_code: u32, runtime_ms: u64) void {
+    const drain = execdata.windows_drain;
+    const abnormal = exit_code != 0 and runtime_ms <= drain.abnormal_command_exit_runtime_ms;
+    if (!drain.wait_after_command and !abnormal) return;
+    const pty = drain.pty orelse return;
+    pty.closeConsole();
+
+    const timeout: std.Io.Timeout = .{ .duration = .{
+        .raw = .fromMilliseconds(100),
+        .clock = .awake,
+    } };
+    var waits: usize = 0;
+    while (!drain.read_eof.isSet() and waits < 20) : (waits += 1) {
+        drain.read_eof.waitTimeout(global.io(), timeout) catch {};
+    }
+    if (!drain.read_eof.isSet()) log.warn("pseudoconsole output didn't end after its process exited", .{});
 }
 
 fn processExit(
@@ -558,6 +611,15 @@ pub const ThreadData = struct {
     read_thread_pipe: posix.fd_t,
     read_thread_fd: posix.fd_t,
 
+    /// What we need on Windows to let the read thread finish the
+    /// pseudoconsole's output before reporting that the process exited.
+    windows_drain: if (builtin.target.os.tag == .windows) struct {
+        pty: ?*Pty,
+        read_eof: *std.Io.Event,
+        wait_after_command: bool,
+        abnormal_command_exit_runtime_ms: u32,
+    } else void,
+
     /// The timer to detect termios state changes.
     termios_timer: xev.Timer,
     termios_timer_c: xev.Completion = .{},
@@ -600,6 +662,12 @@ pub const Config = struct {
     working_directory: ?[]const u8 = null,
     resources_dir: ?[]const u8,
     term: []const u8,
+
+    /// When the terminal stays open after the command exits: always with
+    /// `wait-after-command`, or after an abnormal exit (a failure within
+    /// this many milliseconds). See `windowsDrainOutput`.
+    wait_after_command: bool = false,
+    abnormal_command_exit_runtime_ms: u32 = 0,
 
     rt_pre_exec_info: Command.RtPreExecInfo,
     rt_post_fork_info: Command.RtPostForkInfo,
@@ -1866,7 +1934,12 @@ pub const ReadThread = struct {
         return true;
     }
 
-    fn threadMainWindows(fd: posix.fd_t, io: *termio.Termio, quit: posix.fd_t) void {
+    fn threadMainWindows(
+        fd: posix.fd_t,
+        io: *termio.Termio,
+        quit: posix.fd_t,
+        eof: *std.Io.Event,
+    ) void {
         // Always close our end of the pipe when we exit.
         defer internal_os.closePipe(quit);
 
@@ -1894,6 +1967,7 @@ pub const ReadThread = struct {
                         // output has been read.
                         .BROKEN_PIPE => {
                             log.info("read thread got end of stream", .{});
+                            eof.set(global.io());
                             return;
                         },
 
