@@ -891,8 +891,9 @@ Notes:
       - The fork workflow installs it on GitHub's runner, which is thrown
         away after the job, checks the package and the `ghostty.exe`
         execution alias, runs `ghostty +version` through the alias, and
-        uninstalls it. The Start menu entry still needs a desktop. Not
-        yet seen running.
+        uninstalls it. The Start menu entry still needs a desktop. Run
+        41230068796 (2026-10-31) passed: `Add-AppxPackage -AllowUnsigned`
+        installed it on `windows-latest`, and the alias ran.
     - [ ] A signed package for Windows 10 and the Store (needs a
           certificate)
 - [x] Unimplemented apprt actions (as of 2026-10-25)
