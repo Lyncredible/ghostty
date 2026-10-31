@@ -282,6 +282,16 @@ Notes:
     A new tab from there (F5 bound to `new_tab`) started Git Bash in
     `C:\Windows\System32`: its first pwd report and prompt were
     that folder.
+- [x] Text without a key (an IME's result, the emoji panel, the touch
+      keyboard, or a program sending WM_CHAR) was sent as a paste, so with
+      bracketed paste on (zsh in WSL) each character arrived wrapped in
+      paste markers (`ESC [ 200 ~ e ESC [ 201 ~`). Like GTK, it's now a key
+      press with no key and the text, and win32 input mode sends it as a
+      down and up character-only event per UTF-16 unit, as Windows
+      Terminal does for IME text (the first unit had no up event). Unit
+      test: "win32 input: encode". Checked: `echo héllo 日本 $((6*7))` sent
+      as WM_CHARs to zsh in WSL printed `héllo 日本 42`, and to cmd
+      printed `héllo 日本`.
 - [x] Handle leak: opening and closing tabs leaked about four kernel
       handles per terminal (measured: 493, 528, 560, 594, 626 handles
       over four rounds of eight tabs). The child's thread handle from

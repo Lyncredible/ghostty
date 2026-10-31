@@ -1824,8 +1824,22 @@ fn charEvent(self: *Surface, unit: u16) void {
     var buf: [8]u8 = undefined;
     const text = key.utf16ToUtf8Buf(slice, &buf);
     if (text.len == 0) return;
-    _ = self.core_surface.textCallback(text) catch |err| {
-        log.err("error in text callback err={}", .{err});
+    self.commitText(text);
+}
+
+/// Send text that isn't from a key we've processed, such as an IME's
+/// result or the emoji panel's. Like GTK, it's a key press with no key
+/// rather than a paste, which bracketed paste would wrap in markers.
+fn commitText(self: *Surface, text: []const u8) void {
+    _ = self.core_surface.keyCallback(.{
+        .action = .press,
+        .key = .unidentified,
+        .mods = .{},
+        .consumed_mods = .{},
+        .composing = false,
+        .utf8 = text,
+    }) catch |err| {
+        log.err("error in key callback err={}", .{err});
     };
 }
 
@@ -1842,11 +1856,7 @@ fn imeComposition(self: *Surface, lparam: c.LPARAM) void {
         if (imeString(alloc, himc, c.GCS_RESULTSTR)) |result| {
             defer alloc.free(result);
             self.preedit(null);
-            if (result.len > 0) {
-                _ = self.core_surface.textCallback(result) catch |err| {
-                    log.err("error in text callback err={}", .{err});
-                };
-            }
+            if (result.len > 0) self.commitText(result);
         }
     }
 
