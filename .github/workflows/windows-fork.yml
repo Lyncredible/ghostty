@@ -1,0 +1,46 @@
+on:
+  push:
+    branches: [windows]
+  workflow_dispatch: {}
+
+name: Windows (fork)
+
+# The Test workflow's jobs run on Namespace runners, which only
+# ghostty-org/ghostty has, so forks working on the Windows port get no CI
+# from it. This runs the Windows build and tests on GitHub's runners
+# instead, and never in ghostty-org/ghostty.
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-windows:
+    if: github.repository != 'ghostty-org/ghostty'
+    runs-on: windows-latest
+    timeout-minutes: 120
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Setup Zig
+        uses: mlugg/setup-zig@d1434d08867e3ee9daa34448df10607b98908d29 # v2.2.1
+
+      # The app targets the GNU ABI (MinGW), as documented in WINDOWS.md;
+      # the runner's native target would be MSVC.
+      - name: Build
+        run: zig build -Dtarget=x86_64-windows-gnu
+
+      - name: Test
+        run: zig build test -Dtarget=x86_64-windows-gnu --summary all
+
+      - name: Package
+        shell: pwsh
+        run: ./dist/windows/package.ps1 -OutDir zig-out/dist
+
+      - name: Upload package
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: ghostty-windows-unofficial
+          path: zig-out/dist/*.zip
+          retention-days: 14
