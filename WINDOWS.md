@@ -331,6 +331,10 @@ Notes:
       in the config file and running `reload_config`, `stty size` in WSL
       matched Ghostty's grid (26x92 at 1774x1129 px, 19x71 at 1374x829 px,
       then 11x42 with the larger cells), so ConPTY passes the new size on.
+- [x] Exit detection (from the discussion's list): typing `exit` closed
+      the window (ReleaseFast, single tab) after 86 ms in cmd, 99 ms in
+      Windows PowerShell, 104 ms in WSL, and 196 ms in Git Bash, each
+      with exit code 0.
 - [x] Handle leak: opening and closing tabs leaked about four kernel
       handles per terminal (measured: 493, 528, 560, 594, 626 handles
       over four rounds of eight tabs). The child's thread handle from
