@@ -324,7 +324,9 @@ Notes:
       closed pseudoconsole. Checked: `cmd /c echo bye`, `wsl -e echo
       bye`, PowerShell, and Git Bash all showed their output and then
       the message; `cmd /c exit 7` showed the banner under its output.
-      Closing with `exit` still takes about 100 ms. (The Win32 app
+      Resizing the window three times after the message logged no
+      errors and kept it. Closing with `exit` still takes about 100 ms.
+      (The Win32 app
       leaves `show_child_exited` to the core's text message, as macOS
       does.)
 - [x] Git Bash paths outside the drive mounts, such as `/tmp` (the
