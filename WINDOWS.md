@@ -1604,10 +1604,15 @@ Reviewed the branch against this file and discussion #2563.
     `window-step-resize` while dragging an edge, and touch scrolling
   - Narrator announcing new output
   - A Start menu or Explorer launch opening at home
-  - Installing the MSIX (`Add-AppxPackage -AllowUnsigned`)
+  - Installing the MSIX (`Add-AppxPackage -AllowUnsigned`): done in the
+    fork's CI, on a throwaway runner
   - Blur on Windows 10
   - (Done: `conpty.dll` from the ConPTY package works, but doesn't pass
     Kitty graphics APCs either)
-  - PowerShell 7
+  - PowerShell 7: the fork's CI now runs
+    `test/windows/powershell-integration.ps1` with both 5.1 and 7, which
+    loads the integration and checks its prompt's escape sequences
+    (OSC 7, 2, 133 with a failed command's exit code, and the cursor).
+    PowerShell 7 in a real terminal is still unchecked.
   - Switching the Windows app mode to dark while Ghostty runs
 - Remaining work: a signed package, which needs a certificate.
