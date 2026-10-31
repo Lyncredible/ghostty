@@ -312,6 +312,18 @@ Notes:
     clipboard (CRLF) and `paste_from_clipboard` bound to F6: zsh in WSL
     took it as one paste and ran both lines on Enter; cmd ran each line.
     Git Bash ran each line too, which was the missing terminfo below.
+- [x] Git Bash paths outside the drive mounts, such as `/tmp` (the
+      user's temp folder) or `/usr/bin` (in Git's own folder), were
+      reported as-is in OSC 7, which Ghostty can't map to Windows, so it
+      forgot the pwd and new tabs started elsewhere. On MSYS2 and Cygwin
+      (`$OSTYPE` is `msys*` or `cygwin*`; Git Bash says `cygwin`), the
+      bash integration now reports such paths with `cygpath -m`, only
+      when the directory changes. Checked: starting in a temp folder
+      named `测试 dir`, then `cd /usr/bin` and a new tab, Ghostty's pwd
+      followed (`C:\Program Files\Git\usr\bin`) and the new tab opened
+      there. Non-ASCII paths also work for `--working-directory` and
+      `--config-file` in cmd, PowerShell, and Git Bash (this machine's
+      ANSI code page is 936).
 - [x] Compiled terminfo on Windows. Windows builds installed only the
       terminfo source (`share/terminfo/ghostty.terminfo`), since `tic`
       isn't available, so MSYS2 programs (Git Bash's bash, vim, less,
