@@ -1616,7 +1616,13 @@ Reviewed the branch against this file and discussion #2563.
     `test/windows/powershell-integration.ps1` with both 5.1 and 7, which
     loads the integration and checks its prompt's escape sequences
     (OSC 7, 2, 133 with a failed command's exit code, and the cursor).
-    It passed with both in run 41238800703 (2026-10-31). PowerShell 7 in
-    a real terminal is still unchecked.
+    It passed with both in run 41238800703 (2026-10-31).
+  - PowerShell 7 in the app: `test/windows/smoke.ps1` starts Ghostty with
+    a shell on the CI runner's desktop (no GPU, so the WARP software
+    renderer), waits for the prompt through UI Automation, types a `cd`,
+    and checks the log for shell integration and the new pwd. In run
+    41242035483 it passed with PowerShell 7 and Windows PowerShell. (The
+    cmd run failed because cmd's `cd` doesn't change drives, and the
+    runner's checkout is on D:; it now uses `cd /d`.)
   - Switching the Windows app mode to dark while Ghostty runs
 - Remaining work: a signed package, which needs a certificate.
