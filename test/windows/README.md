@@ -57,5 +57,5 @@ runs it with PowerShell 7, Windows PowerShell, and cmd.
 
 ```
 ./smoke.ps1 -Exe ../../zig-out/bin/ghostty.exe -Command "pwsh.exe -NoLogo -NoProfile" -Prompt "PS "
-./smoke.ps1 -Exe ../../zig-out/bin/ghostty.exe -Command "cmd.exe" -Prompt ">"
+./smoke.ps1 -Exe ../../zig-out/bin/ghostty.exe -Command "cmd.exe" -Prompt ">" -Cd "cd /d"
 ```

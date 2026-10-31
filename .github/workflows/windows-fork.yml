@@ -55,7 +55,7 @@ jobs:
 
       - name: Smoke test (cmd)
         shell: pwsh
-        run: ./test/windows/smoke.ps1 -Exe zig-out/bin/ghostty.exe -Command "cmd.exe" -Prompt ">"
+        run: ./test/windows/smoke.ps1 -Exe zig-out/bin/ghostty.exe -Command "cmd.exe" -Prompt ">" -Cd "cd /d"
 
       - name: Package
         shell: pwsh
