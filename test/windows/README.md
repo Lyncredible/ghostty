@@ -59,3 +59,10 @@ runs it with PowerShell 7, Windows PowerShell, and cmd.
 ./smoke.ps1 -Exe ../../zig-out/bin/ghostty.exe -Command "pwsh.exe -NoLogo -NoProfile" -Prompt "PS "
 ./smoke.ps1 -Exe ../../zig-out/bin/ghostty.exe -Command "cmd.exe" -Prompt ">" -Cd "cd /d"
 ```
+
+## desktop-input.ps1
+
+Checks typing, Ctrl+V pasting, and focus-follows-mouse between splits
+with real (synthesized) keyboard and mouse input. Since that input goes to
+the foreground window, it refuses to run unless `CI` is `true`; CI runs it
+on the runner's desktop.
