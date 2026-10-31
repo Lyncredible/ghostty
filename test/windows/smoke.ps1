@@ -13,6 +13,8 @@ param(
     [string]$Command = 'pwsh.exe -NoLogo -NoProfile',
     [string]$Prompt = 'PS ',
     [string]$Directory = $env:SystemRoot,
+    # cmd needs `cd /d` to change drives.
+    [string]$Cd = 'cd',
     [int]$TimeoutSeconds = 60
 )
 
@@ -75,7 +77,7 @@ try {
     Write-Host "The prompt appeared:"
     Write-Host (($surface.Text -split "`n" | Where-Object { $_.Trim() } | Select-Object -Last 3) -join "`n")
 
-    foreach ($ch in "cd `"$Directory`"".ToCharArray()) {
+    foreach ($ch in "$Cd `"$Directory`"".ToCharArray()) {
         [void][GhosttySmoke.Win32]::SendMessageW($surface.Handle, 0x0102, [IntPtr][int]$ch, [IntPtr]1) # WM_CHAR
     }
     [void][GhosttySmoke.Win32]::PostMessageW($surface.Handle, 0x0100, [IntPtr]0x0D, [IntPtr]0x001C0001) # WM_KEYDOWN Enter
