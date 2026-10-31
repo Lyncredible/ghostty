@@ -1,8 +1,8 @@
 # Checks of the Windows app with real (synthesized) keyboard and mouse
-# input, for CI: typing, Ctrl+V pasting, and focus-follows-mouse between
-# splits. SendInput goes to whatever window is in the foreground, so this
-# only runs in CI (where nothing else is on the desktop), never on a
-# developer's machine.
+# input, for CI: typing, Ctrl+V pasting, Ctrl+C copying and interrupting,
+# and focus-follows-mouse between splits. SendInput goes to whatever window
+# is in the foreground, so this only runs in CI (where nothing else is on
+# the desktop), never on a developer's machine.
 #
 #     $env:CI = 'true'; ./desktop-input.ps1 -Exe zig-out/bin/ghostty.exe
 
@@ -52,7 +52,8 @@ $log = Join-Path ([IO.Path]::GetTempPath()) "ghostty-desktop-$PID.log"
 $env:GHOSTTY_LOG = 'debug'
 $process = Start-Process -FilePath $Exe -PassThru -RedirectStandardError $log -ArgumentList `
     '--command=cmd.exe', '--window-save-state=never', '--focus-follows-mouse=true', `
-    '--clipboard-paste-protection=false', '--keybind=f8=new_split:right'
+    '--clipboard-paste-protection=false', '--keybind=f8=new_split:right', `
+    '--keybind=f9=select_all'
 
 function Fail([string]$message) {
     Write-Host "--- Ghostty's log ---"
@@ -111,6 +112,23 @@ try {
     [GhosttyDesktop.Win32]::Key(0x0D, $false); [GhosttyDesktop.Win32]::Key(0x0D, $true)
     [void](WaitFor { (Text $surface).Contains('pasted-ok') } 'pasted text to run')
     Write-Host 'Ctrl+V pastes.'
+
+    # Ctrl+C copies when there's a selection...
+    Set-Clipboard -Value 'nothing yet'
+    [GhosttyDesktop.Win32]::Key(0x78, $false); [GhosttyDesktop.Win32]::Key(0x78, $true)
+    Start-Sleep -Milliseconds 300
+    [GhosttyDesktop.Win32]::Key(0x11, $false); [GhosttyDesktop.Win32]::Key(0x43, $false)
+    [GhosttyDesktop.Win32]::Key(0x43, $true); [GhosttyDesktop.Win32]::Key(0x11, $true)
+    [void](WaitFor { "$(Get-Clipboard -Raw)".Contains('pasted-ok') } 'Ctrl+C to copy the selection')
+    Write-Host 'Ctrl+C copies a selection.'
+
+    # ...and interrupts otherwise (typing clears the selection).
+    TypeLine 'ping -t 127.0.0.1'
+    [void](WaitFor { ([regex]::Matches((Text $surface), 'Reply from 127').Count -ge 2) } 'ping to run')
+    [GhosttyDesktop.Win32]::Key(0x11, $false); [GhosttyDesktop.Win32]::Key(0x43, $false)
+    [GhosttyDesktop.Win32]::Key(0x43, $true); [GhosttyDesktop.Win32]::Key(0x11, $true)
+    [void](WaitFor { (Text $surface) -match 'Control-C' } 'Ctrl+C to interrupt ping')
+    Write-Host 'Ctrl+C interrupts without a selection.'
 
     # Focus follows the mouse between splits.
     [GhosttyDesktop.Win32]::Key(0x77, $false); [GhosttyDesktop.Win32]::Key(0x77, $true)
