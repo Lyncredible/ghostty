@@ -312,6 +312,21 @@ Notes:
     clipboard (CRLF) and `paste_from_clipboard` bound to F6: zsh in WSL
     took it as one paste and ran both lines on Enter; cmd ran each line.
     Git Bash ran each line too, which was the missing terminfo below.
+- [x] The "Process exited. Press any key to close the terminal." message
+      (and the abnormal exit banner) didn't show with
+      `wait-after-command`: the child's exit is seen at once, but the
+      pseudoconsole outlives it and its last output (its redraw) arrived
+      after the message and drew over it. When the terminal stays open
+      (`wait-after-command`, or an abnormal exit), the IO thread now
+      closes the pseudoconsole, which flushes its output and ends the
+      stream, and waits up to 2 s for the read thread to reach the end
+      before reporting the exit. Resizing after that is a no-op for the
+      closed pseudoconsole. Checked: `cmd /c echo bye`, `wsl -e echo
+      bye`, PowerShell, and Git Bash all showed their output and then
+      the message; `cmd /c exit 7` showed the banner under its output.
+      Closing with `exit` still takes about 100 ms. (The Win32 app
+      leaves `show_child_exited` to the core's text message, as macOS
+      does.)
 - [x] Git Bash paths outside the drive mounts, such as `/tmp` (the
       user's temp folder) or `/usr/bin` (in Git's own folder), were
       reported as-is in OSC 7, which Ghostty can't map to Windows, so it
