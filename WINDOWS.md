@@ -274,6 +274,11 @@ Notes:
     `bash.exe` unquoted, the log showed the quoted path, "shell
     integration automatically injected shell=.bash", and the terminal
     pwd.
+  - Also checked with `bash.exe --login -i` (as Windows Terminal's Git
+    Bash profile runs it): the login profile ran (the UCRT64 prompt),
+    and after typing `cd /c/Windows/System32` the terminal pwd became
+    `C:\Windows\System32` and the title showed the command while it ran,
+    then `/c/Windows/System32`.
 - [x] Handle leak: opening and closing tabs leaked about four kernel
       handles per terminal (measured: 493, 528, 560, 594, 626 handles
       over four rounds of eight tabs). The child's thread handle from
