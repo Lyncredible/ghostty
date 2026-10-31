@@ -325,6 +325,12 @@ Notes:
     Checked: the pwd still followed `cd C:\Windows`, and `cmd /c exit 3`
     still showed "Command Failed" with
     `notify-on-command-finish-action=notify`.
+- [x] Resizing and reloading the config with WSL running (from the
+      discussion's list). Checked at 200% scale with zsh in WSL: after
+      each window resize, and after changing `font-size` from 12 to 20
+      in the config file and running `reload_config`, `stty size` in WSL
+      matched Ghostty's grid (26x92 at 1774x1129 px, 19x71 at 1374x829 px,
+      then 11x42 with the larger cells), so ConPTY passes the new size on.
 - [x] Handle leak: opening and closing tabs leaked about four kernel
       handles per terminal (measured: 493, 528, 560, 594, 626 handles
       over four rounds of eight tabs). The child's thread handle from
