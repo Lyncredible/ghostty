@@ -326,11 +326,22 @@ Notes:
       plain list instead. Checked: in cmd in Ghostty it printed the list
       and returned. (Colors were missing at first only because this
       session's environment sets `NO_COLOR`.)
-  - [ ] A console-subsystem `ghostty.com` next to `ghostty.exe` (shells
-        run `.com` before `.exe` from PATH) that runs CLI actions with
-        the console's input and makes the shell wait, and starts the GUI
-        otherwise. That would make the theme preview and `+edit-config`
-        style actions work from shells.
+  - [x] A console-subsystem `ghostty.com` next to `ghostty.exe`
+        (`src/main_windows_launcher.zig`; shells run `.com` before `.exe`
+        for `ghostty`, from PATHEXT). For a CLI action (`+...`) it starts
+        `ghostty.exe`, passes on redirected handles, sets
+        `GHOSTTY_CONSOLE_LAUNCHER`, and waits, exiting with its code;
+        otherwise it starts the GUI and returns at once. Console handles
+        don't reach a GUI program through `STARTF_USESTDHANDLES` (they
+        arrived empty), so with that variable `ghostty.exe` attaches to
+        the launcher's console and opens `CONIN$` and `CONOUT$` itself;
+        since the launcher waits, the console's input is its own. The zip
+        includes it. Checked in cmd in Ghostty: `ghostty +list-themes`
+        showed the interactive preview, Down moved the selection (the
+        preview showed "3024 Day"'s palette), and `q` returned to cmd;
+        `ghostty.com` with no action opened a window and returned in
+        26 ms; piped `+version` output still works. Unit tests:
+        `argsAfterProgram`, `isAction`.
 - [x] `ghostty +validate-config` always failed (exit 1, no output) when
       its output was a pipe or the console: it finished with
       `File.Writer.end`, which sets the output's length, and Windows
