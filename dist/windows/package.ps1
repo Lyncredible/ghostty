@@ -55,6 +55,9 @@ if ($LASTEXITCODE -ne 0) { throw "zig build failed" }
 $package = Join-Path $staging $name
 New-Item -ItemType Directory -Force (Join-Path $package "bin") | Out-Null
 Copy-Item (Join-Path $prefix "bin\ghostty.exe") (Join-Path $package "bin")
+# The console launcher that shells run for `ghostty` (see
+# src/main_windows_launcher.zig).
+Copy-Item (Join-Path $prefix "bin\ghostty.com") (Join-Path $package "bin")
 Copy-Item -Recurse (Join-Path $prefix "share") $package
 Copy-Item (Join-Path $PSScriptRoot "install.ps1") $package
 
@@ -86,6 +89,9 @@ Run bin\ghostty.exe from this folder, or install it for the current user
 (Start menu shortcut, and uninstall from Settings > Apps):
 
     powershell -ExecutionPolicy Bypass -File install.ps1 [-AddToPath] [-ExplorerMenu]
+
+From a shell, "ghostty" runs bin\ghostty.com, which waits for CLI actions
+such as "ghostty +list-themes" and opens a window otherwise.
 "@ | Set-Content -Encoding utf8 (Join-Path $package "README.txt")
 
 New-Item -ItemType Directory -Force $OutDir | Out-Null
