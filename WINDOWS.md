@@ -159,12 +159,14 @@ Notes:
     build: the Windows runner's native target is MSVC, which isn't what
     the app is built and tested with (upstream's CI matrix also leaves
     `x86_64-windows-msvc` commented out).
-  - [ ] Forks get no CI from it: the Test workflow runs on Namespace
+  - [x] Forks get no CI from it: the Test workflow runs on Namespace
         runners, which only ghostty-org/ghostty has, so on this fork every
         run stayed queued or was cancelled by the next push. A fork-only
         workflow (`.github/workflows/windows-fork.yml`, skipped in
         ghostty-org/ghostty) builds, runs the native tests, and packages
-        the zip on GitHub's `windows-latest` runner. Not yet seen running.
+        the zip on GitHub's `windows-latest` runner. Its first run
+        (2026-10-31, run 41219931902) passed in 40 minutes: build 13,
+        tests 18, and packaging 8.
 - [x] libghostty-vt builds on Windows: `zig build -Demit-lib-vt
       -Dtarget=x86_64-windows-gnu` emits `ghostty-vt.dll` with its import
       library `ghostty-vt.lib`, and `ghostty-vt-static.lib`. Checked
