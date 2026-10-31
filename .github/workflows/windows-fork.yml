@@ -8,7 +8,7 @@ name: Windows (fork)
 # The Test workflow's jobs run on Namespace runners, which only
 # ghostty-org/ghostty has, so forks working on the Windows port get no CI
 # from it. This runs the Windows build and tests on GitHub's runners
-# instead, and never in ghostty-org/ghostty.
+# instead (and libghostty-vt with MSVC), and never in ghostty-org/ghostty.
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -44,3 +44,51 @@ jobs:
           name: ghostty-windows-unofficial
           path: zig-out/dist/*.zip
           retention-days: 14
+
+  # libghostty-vt with the runner's native target, which is MSVC: GitHub's
+  # Windows runners have Visual Studio and the Windows SDK.
+  build-libghostty-vt-windows:
+    if: github.repository != 'ghostty-org/ghostty'
+    runs-on: windows-latest
+    timeout-minutes: 60
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Setup Zig
+        uses: mlugg/setup-zig@d1434d08867e3ee9daa34448df10607b98908d29 # v2.2.1
+
+      - name: Test libghostty-vt
+        run: zig build test-lib-vt
+
+      - name: Build libghostty-vt
+        run: zig build -Demit-lib-vt
+
+      - name: Test static linking
+        working-directory: example/c-vt-static
+        run: zig build
+
+      # Run the example directly rather than through `zig build run`, so
+      # the DLL is loaded the way an embedder would load it.
+      - name: Build dynamic linking example
+        working-directory: example/c-vt-effects
+        shell: pwsh
+        run: |
+          zig build
+          # setup-zig moves the local cache out of the project directory.
+          $cache = if ($env:ZIG_LOCAL_CACHE_DIR) { $env:ZIG_LOCAL_CACHE_DIR } else { ".zig-cache" }
+          Get-ChildItem $cache -Recurse -Filter ghostty-vt.dll |
+            Sort-Object LastWriteTime |
+            Select-Object -Last 1 |
+            Copy-Item -Destination zig-out/bin
+
+      # pwsh reports the full NTSTATUS; `zig build run` and Git Bash
+      # truncate it to 8 bits.
+      - name: Test dynamic linking
+        working-directory: example/c-vt-effects
+        shell: pwsh
+        run: |
+          ./zig-out/bin/c_vt_effects.exe
+          $code = $LASTEXITCODE
+          "exit code: 0x{0:X8}" -f $code
+          exit $code
