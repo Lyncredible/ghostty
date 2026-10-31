@@ -53,8 +53,23 @@ pub fn init(b: *std.Build, cfg: *const Config, deps: *const SharedDeps) !Ghostty
             try steps.append(b.allocator, &source_install.step);
         }
 
-        // Windows doesn't have the binaries below.
-        if (os_tag == .windows) break :terminfo;
+        // Windows doesn't have the binaries below, so we compile the
+        // terminfo ourselves. Curses programs on Windows (MSYS2's, including
+        // Git for Windows') look entries up in directories named by the hex
+        // code of their first letter, as tic writes them on Windows.
+        if (os_tag == .windows) {
+            const compiled_run = b.addRunArtifact(build_data_exe);
+            compiled_run.addArg("+terminfo-compiled");
+            const compiled = compiled_run.captureStdOut(.{});
+            for ([_][]const u8{
+                "share/terminfo/78/xterm-ghostty",
+                "share/terminfo/67/ghostty",
+            }) |path| {
+                const compiled_install = b.addInstallFile(compiled, path);
+                try steps.append(b.allocator, &compiled_install.step);
+            }
+            break :terminfo;
+        }
 
         // Convert to termcap source format if thats helpful to people and
         // install it. The resulting value here is the termcap source in case

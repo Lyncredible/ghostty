@@ -294,8 +294,23 @@ Notes:
       printed `héllo 日本`.
   - Pasting still uses bracketed paste. Checked with a two line
     clipboard (CRLF) and `paste_from_clipboard` bound to F6: zsh in WSL
-    took it as one paste and ran both lines on Enter; Git Bash (whose
-    readline doesn't turn bracketed paste on) and cmd ran each line.
+    took it as one paste and ran both lines on Enter; cmd ran each line.
+    Git Bash ran each line too, which was the missing terminfo below.
+- [x] Compiled terminfo on Windows. Windows builds installed only the
+      terminfo source (`share/terminfo/ghostty.terminfo`), since `tic`
+      isn't available, so MSYS2 programs (Git Bash's bash, vim, less,
+      tput) couldn't find `xterm-ghostty` and treated the terminal as
+      dumb: readline turned bracketed paste off (a multi-line paste ran
+      its first line at once), and `tput colors` failed. The build now
+      compiles the entry itself (`src/terminfo/compiled.zig`, with the
+      capability order in `src/terminfo/caps.zig` taken from ncurses)
+      and installs it as `share/terminfo/78/xterm-ghostty` and
+      `67/ghostty`, the hex-named directories tic uses on Windows.
+      Checked: byte-identical to Git for Windows' `tic -x` (ncurses 6.5)
+      output for Ghostty's entry, and for the unit test's entry. In Git
+      Bash in Ghostty, readline has bracketed paste on, `tput colors`
+      gives 256, `infocmp -x` shows the extended capabilities, and a two
+      line paste waits for Enter. Unit tests: `encode`, `unescape`.
 - [x] Handle leak: opening and closing tabs leaked about four kernel
       handles per terminal (measured: 493, 528, 560, 594, 626 handles
       over four rounds of eight tabs). The child's thread handle from
