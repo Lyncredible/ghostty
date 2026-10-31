@@ -318,6 +318,8 @@ Notes:
       Bash in Ghostty, readline has bracketed paste on, `tput colors`
       gives 256, `infocmp -x` shows the extended capabilities, and a two
       line paste waits for Enter. Unit tests: `encode`, `unescape`.
+  - vim in Git Bash uses it: `&term` is `xterm-ghostty` and `&t_Co` 256,
+    it filled the screen, and quitting restored the shell's screen.
 - [x] Tab creation latency (from the discussion's list), ReleaseFast,
       measured from posting a `new_tab` key to the prompt showing in UI
       Automation, five tabs each: cmd 130-145 ms; Windows PowerShell 5.1
