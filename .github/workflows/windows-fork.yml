@@ -36,13 +36,32 @@ jobs:
 
       - name: Package
         shell: pwsh
-        run: ./dist/windows/package.ps1 -OutDir zig-out/dist
+        run: ./dist/windows/package.ps1 -OutDir zig-out/dist -Msix
+
+      # Install the unsigned MSIX on the runner (which is thrown away), and
+      # run the app through its execution alias.
+      - name: Install MSIX package
+        shell: powershell
+        run: |
+          $msix = Get-ChildItem zig-out/dist/*.msix | Select-Object -First 1
+          Add-AppxPackage -AllowUnsigned -Path $msix.FullName
+          $pkg = Get-AppxPackage GhosttyWindowsUnofficial
+          if (-not $pkg) { throw "the package isn't installed" }
+          $pkg | Format-List Name, Version, Architecture, Status, InstallLocation
+          $alias = Join-Path $env:LOCALAPPDATA "Microsoft\WindowsApps\ghostty.exe"
+          if (-not (Test-Path $alias)) { throw "no ghostty.exe execution alias" }
+          $version = & $alias +version 2>&1 | Out-String
+          $version
+          if ($version -notmatch "Ghostty") { throw "+version didn't run" }
+          Remove-AppxPackage $pkg.PackageFullName
 
       - name: Upload package
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: ghostty-windows-unofficial
-          path: zig-out/dist/*.zip
+          path: |
+            zig-out/dist/*.zip
+            zig-out/dist/*.msix
           retention-days: 14
 
   # The app on ARM64 hardware.

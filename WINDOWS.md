@@ -860,6 +860,11 @@ Notes:
     - [ ] Manual check: `Add-AppxPackage -AllowUnsigned <file>.msix` on
           Windows 11 (not done here, since it registers an app), then the
           Start menu entry and the `ghostty` alias
+      - The fork workflow installs it on GitHub's runner, which is thrown
+        away after the job, checks the package and the `ghostty.exe`
+        execution alias, runs `ghostty +version` through the alias, and
+        uninstalls it. The Start menu entry still needs a desktop. Not
+        yet seen running.
     - [ ] A signed package for Windows 10 and the Store (needs a
           certificate)
 - [x] Unimplemented apprt actions (as of 2026-10-25)
