@@ -22,7 +22,8 @@ $global:__GhosttyStartExitCode = $null
 
 # Without PSReadLine we can't see commands start, so we detect them from
 # new history entries instead.
-$global:__GhosttyReadLine = Test-Path Function:\PSConsoleHostReadLine
+# (Test-Path on the Function: drive is slow the first time.)
+$global:__GhosttyReadLine = $null -ne ${function:PSConsoleHostReadLine}
 $global:__GhosttyLastHistoryId = $null
 
 function global:__GhosttyOsc([string]$value) {
@@ -41,7 +42,9 @@ function global:prompt {
     $success = $?
     $exitCode = $global:LASTEXITCODE
 
-    $out = New-Object System.Text.StringBuilder
+    # New-Object and regular expressions are slow the first time, which
+    # delays the first prompt, so we avoid them here.
+    $out = [System.Text.StringBuilder]::new()
 
     # Report the previous command's result. $? only says whether it
     # failed. $LASTEXITCODE is only set by native commands, so we only use
@@ -69,7 +72,7 @@ function global:prompt {
     # Report the working directory. kitty-shell-cwd takes the raw path.
     $location = $executionContext.SessionState.Path.CurrentLocation
     if ($location.Provider.Name -eq 'FileSystem') {
-        $path = $location.ProviderPath -replace '\\', '/'
+        $path = $location.ProviderPath.Replace('\', '/')
         if (-not $path.StartsWith('/')) { $path = "/$path" }
         [void]$out.Append((__GhosttyOsc "7;kitty-shell-cwd://$([Environment]::MachineName)$path"))
     }
