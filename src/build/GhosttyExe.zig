@@ -10,6 +10,9 @@ exe: *std.Build.Step.Compile,
 /// The install step for the executable.
 install_step: *std.Build.Step.InstallArtifact,
 
+/// On Windows, the install step for the `ghostty.com` console launcher.
+launcher_install_step: ?*std.Build.Step.InstallArtifact = null,
+
 pub fn init(b: *std.Build, cfg: *const Config, deps: *const SharedDeps) !Ghostty {
     const exe: *std.Build.Step.Compile = b.addExecutable(.{
         .name = "ghostty",
@@ -58,9 +61,32 @@ pub fn init(b: *std.Build, cfg: *const Config, deps: *const SharedDeps) !Ghostty
         else => {},
     }
 
+    // On Windows, a console program installed as ghostty.com, which
+    // shells run for `ghostty` before ghostty.exe. See its source.
+    const launcher_install: ?*std.Build.Step.InstallArtifact = if (cfg.target.result.os.tag == .windows) launcher: {
+        const launcher = b.addExecutable(.{
+            .name = "ghostty-launcher",
+            .root_module = b.createModule(.{
+                .root_source_file = b.path("src/main_windows_launcher.zig"),
+                .target = cfg.target,
+                .optimize = cfg.optimize,
+                .strip = cfg.strip,
+            }),
+        });
+        launcher.subsystem = .console;
+        launcher.root_module.addWin32ResourceFile(.{
+            .file = b.path("dist/windows/ghostty.rc"),
+        });
+        break :launcher b.addInstallArtifact(launcher, .{
+            .dest_sub_path = "ghostty.com",
+            .pdb_dir = .disabled,
+        });
+    } else null;
+
     return .{
         .exe = exe,
         .install_step = install_step,
+        .launcher_install_step = launcher_install,
     };
 }
 
@@ -68,6 +94,7 @@ pub fn init(b: *std.Build, cfg: *const Config, deps: *const SharedDeps) !Ghostty
 pub fn install(self: *const Ghostty) void {
     const b = self.install_step.step.owner;
     b.getInstallStep().dependOn(&self.install_step.step);
+    if (self.launcher_install_step) |step| b.getInstallStep().dependOn(&step.step);
 }
 
 /// If we're in NixOS but not in the shell environment then we issue

@@ -281,6 +281,7 @@ test {
     _ = @import("simd/main.zig");
     _ = @import("synthetic/main.zig");
     _ = @import("unicode/main.zig");
+    if (comptime builtin.target.os.tag == .windows) _ = @import("main_windows_launcher.zig");
     _ = @import("unicode/props_uucode.zig");
     _ = @import("unicode/symbols_uucode.zig");
 

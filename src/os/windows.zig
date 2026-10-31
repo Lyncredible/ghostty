@@ -424,17 +424,45 @@ pub var attached_parent_console = false;
 /// (such as +version) run from a console, attach to that console so the
 /// output is visible. Output that's already redirected (a pipe or file)
 /// is left alone.
+///
+/// The `ghostty.com` launcher (src/main_windows_launcher.zig) waits for
+/// us and sets GHOSTTY_CONSOLE_LAUNCHER. Console handles don't reach a GUI
+/// program, so we open its console ourselves, including its input, which
+/// is ours to read since nothing else is reading it.
 pub fn attachParentConsole() void {
     const params = windows.peb().ProcessParameters;
+    const has_stdin = validHandle(params.hStdInput);
     const has_stdout = validHandle(params.hStdOutput);
     const has_stderr = validHandle(params.hStdError);
-    if (has_stdout and has_stderr) return;
+    const launched = launchedByConsoleLauncher();
+    if (has_stdout and has_stderr and (has_stdin or !launched)) return;
     if (console.AttachConsole(console.ATTACH_PARENT_PROCESS) == FALSE) return;
-    attached_parent_console = true;
+    attached_parent_console = !launched;
 
-    const conout = std.unicode.utf8ToUtf16LeStringLiteral("CONOUT$");
+    if (!has_stdout or !has_stderr) {
+        if (openConsole("CONOUT$")) |conout| {
+            if (!has_stdout) _ = console.SetStdHandle(console.STD_OUTPUT_HANDLE, conout);
+            if (!has_stderr) _ = console.SetStdHandle(console.STD_ERROR_HANDLE, conout);
+        }
+    }
+    if (launched and !has_stdin) {
+        if (openConsole("CONIN$")) |conin| _ = console.SetStdHandle(console.STD_INPUT_HANDLE, conin);
+    }
+}
+
+fn launchedByConsoleLauncher() bool {
+    const name = std.unicode.utf8ToUtf16LeStringLiteral("GHOSTTY_CONSOLE_LAUNCHER");
+    var value: [2]u16 = undefined;
+    const len = console.GetEnvironmentVariableW(name, &value, value.len);
+    if (len == 0) return false;
+    // Don't pass it on to anything we start.
+    _ = console.SetEnvironmentVariableW(name, null);
+    return len == 1 and value[0] == '1';
+}
+
+fn openConsole(comptime name: []const u8) ?HANDLE {
     const handle = console.CreateFileW(
-        conout,
+        std.unicode.utf8ToUtf16LeStringLiteral(name),
         console.GENERIC_READ | console.GENERIC_WRITE,
         console.FILE_SHARE_READ | console.FILE_SHARE_WRITE,
         null,
@@ -442,9 +470,8 @@ pub fn attachParentConsole() void {
         0,
         null,
     );
-    if (handle == windows.INVALID_HANDLE_VALUE) return;
-    if (!has_stdout) _ = console.SetStdHandle(console.STD_OUTPUT_HANDLE, handle);
-    if (!has_stderr) _ = console.SetStdHandle(console.STD_ERROR_HANDLE, handle);
+    if (handle == windows.INVALID_HANDLE_VALUE) return null;
+    return handle;
 }
 
 fn validHandle(handle: HANDLE) bool {
@@ -461,6 +488,10 @@ const console = struct {
     const FILE_SHARE_READ: DWORD = 0x1;
     const FILE_SHARE_WRITE: DWORD = 0x2;
     const OPEN_EXISTING: DWORD = 3;
+    const STD_INPUT_HANDLE: DWORD = @bitCast(@as(i32, -10));
+
+    extern "kernel32" fn GetEnvironmentVariableW(name: [*:0]const u16, buffer: [*]u16, size: DWORD) callconv(.winapi) DWORD;
+    extern "kernel32" fn SetEnvironmentVariableW(name: [*:0]const u16, value: ?[*:0]const u16) callconv(.winapi) BOOL;
 
     extern "kernel32" fn AttachConsole(process_id: DWORD) callconv(.winapi) BOOL;
     extern "kernel32" fn SetStdHandle(std_handle: DWORD, handle: HANDLE) callconv(.winapi) BOOL;
