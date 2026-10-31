@@ -44,7 +44,9 @@ pub fn run(alloc: std.mem.Allocator) !u8 {
     var stdout_writer = std.Io.File.stdout().writer(global.io(), &buffer);
     const stdout = &stdout_writer.interface;
     const result = runInner(alloc, opts, stdout);
-    try stdout_writer.end();
+    // Not `end`, which would set the length of stdout, and that fails for
+    // pipes and consoles on Windows (FileTooBig).
+    try stdout.flush();
     return result;
 }
 

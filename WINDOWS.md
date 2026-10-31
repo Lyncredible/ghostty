@@ -314,6 +314,17 @@ Notes:
     clipboard (CRLF) and `paste_from_clipboard` bound to F6: zsh in WSL
     took it as one paste and ran both lines on Enter; cmd ran each line.
     Git Bash ran each line too, which was the missing terminfo below.
+- [x] `ghostty +validate-config` always failed (exit 1, no output) when
+      its output was a pipe or the console: it finished with
+      `File.Writer.end`, which sets the output's length, and Windows
+      reports that as FileTooBig for pipes and consoles (other platforms
+      give NonResizable, which `end` ignores). It flushes instead now,
+      like the other actions, and so does `+explain-config`'s usage
+      message. Checked: a valid config exits 0, and a misspelled option
+      prints "font-sise: unknown field" and exits 1. The other actions
+      (`+list-fonts`, `+list-themes`, `+list-keybinds`, `+show-config`,
+      `+list-colors`, `+list-actions`, `+show-face`, `+explain-config`,
+      `+help`, `+version`, `+crash-report`) all ran and exited 0.
 - [x] The "Process exited. Press any key to close the terminal." message
       (and the abnormal exit banner) didn't show with
       `wait-after-command`: the child's exit is seen at once, but the
