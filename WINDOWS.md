@@ -292,6 +292,10 @@ Notes:
       test: "win32 input: encode". Checked: `echo héllo 日本 $((6*7))` sent
       as WM_CHARs to zsh in WSL printed `héllo 日本 42`, and to cmd
       printed `héllo 日本`.
+  - Pasting still uses bracketed paste. Checked with a two line
+    clipboard (CRLF) and `paste_from_clipboard` bound to F6: zsh in WSL
+    took it as one paste and ran both lines on Enter; Git Bash (whose
+    readline doesn't turn bracketed paste on) and cmd ran each line.
 - [x] Handle leak: opening and closing tabs leaked about four kernel
       handles per terminal (measured: 493, 528, 560, 594, 626 handles
       over four rounds of eight tabs). The child's thread handle from
