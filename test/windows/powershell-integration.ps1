@@ -35,3 +35,6 @@ $out = prompt
 if (-not $out.Contains("$esc]133;D;3$bel")) { throw "missing the exit code in the prompt" }
 
 "PowerShell $($PSVersionTable.PSVersion): the integration's prompt is as expected"
+
+# Don't exit with the failed command's code above.
+exit 0
