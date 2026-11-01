@@ -2055,6 +2055,15 @@ pub fn wndProc(
                 rect.bottom - rect.top,
                 c.SWP_NOZORDER | c.SWP_NOACTIVATE,
             );
+            var after: c.RECT = undefined;
+            _ = c.GetWindowRect(hwnd, &after);
+            log.debug("dpi changed dpi={} suggested={}x{} now={}x{}", .{
+                util.loword(wparam),
+                rect.right - rect.left,
+                rect.bottom - rect.top,
+                after.right - after.left,
+                after.bottom - after.top,
+            });
             return 0;
         },
 
