@@ -137,6 +137,7 @@ try {
     $ratio = $newDpi / $dpi
     $grown = WaitFor { $c = CellSize; if ($c.Height -gt $cell.Height) { $c } } 'larger cells after the DPI change'
     $newWidth = ClientWidth $surface.Window
+    Select-String -Path $log -Pattern 'dpi changed .*' | ForEach-Object { Notice $_.Matches[0].Value }
     Write-Host "After: DPI $newDpi, client width $newWidth px, cells $($grown.Width)x$($grown.Height) px."
 
     # The font keeps its size in points, so cells grow with the DPI (to
