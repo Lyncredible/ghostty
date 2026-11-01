@@ -88,3 +88,9 @@ PowerShell (an STA thread).
 Fills cmd with numbered lines, drags a software finger down the terminal
 with `InjectTouchInput`, and checks that earlier lines scrolled into
 view. It only runs in CI.
+
+## ime.ps1
+
+Installs the Japanese IME, switches a terminal running cmd to it, types
+"nihon" with real keys, converts and commits it, and checks that the kanji
+reached cmd. It only runs in CI.
