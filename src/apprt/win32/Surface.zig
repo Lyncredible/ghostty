@@ -1703,6 +1703,23 @@ pub fn performMenuAction(self: *Surface, action: input.Binding.Action) void {
     };
 }
 
+/// Open a new tab or window from this surface that runs the shell, or the
+/// configured command when null, as chosen from a shell menu.
+pub fn openShell(self: *Surface, target: Menu.Target, shell: ?configpkg.Command) void {
+    if (!self.core_initialized) return;
+    switch (target) {
+        .tab => _ = self.window.addTabWithShell(&self.core_surface, shell) catch |err| {
+            log.warn("error opening a shell tab err={}", .{err});
+        },
+        .window => _ = self.app.newWindow(.{ .shell = .{
+            .parent = &self.core_surface,
+            .shell = shell,
+        } }) catch |err| {
+            log.warn("error opening a shell window err={}", .{err});
+        },
+    }
+}
+
 /// Handle a key message. Returns true if the message was handled and
 /// shouldn't be passed on to DefWindowProc.
 fn keyEvent(
