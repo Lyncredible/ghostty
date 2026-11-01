@@ -15,6 +15,12 @@ param(
 $ErrorActionPreference = 'Stop'
 if ($env:CI -ne 'true') { throw "this sends real keys and adds a virtual desktop, so it only runs in CI" }
 
+# Report any error, with where it happened, as an annotation.
+trap {
+    Write-Host "::error title=quick-terminal::$($_.Exception.Message) ($($_.InvocationInfo.ScriptLineNumber): $($_.InvocationInfo.Line.Trim()))"
+    break
+}
+
 Add-Type -Namespace GhosttyQuick -Name Win32 -MemberDefinition @'
 [StructLayout(LayoutKind.Sequential)] public struct RECT { public int l, t, r, b; }
 [StructLayout(LayoutKind.Sequential)] public struct KEYBDINPUT { public ushort wVk; public ushort wScan; public uint dwFlags; public uint time; public System.IntPtr dwExtraInfo; }
@@ -79,7 +85,6 @@ function Notice([string]$message) { Write-Host "::notice title=quick-terminal::$
 function Fail([string]$message) {
     Write-Host "--- Ghostty's log ---"
     if (Test-Path $log) { Get-Content $log -Tail 40 | Write-Host }
-    Write-Host "::error title=quick-terminal::$message"
     throw $message
 }
 
