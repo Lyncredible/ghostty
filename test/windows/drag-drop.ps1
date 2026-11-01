@@ -24,11 +24,14 @@ Add-Type -Namespace GhosttyDrop -Name Win32 -MemberDefinition @'
 [DllImport("user32.dll")] public static extern bool GetWindowRect(System.IntPtr h, out RECT r);
 [DllImport("user32.dll")] public static extern bool SetCursorPos(int x, int y);
 [DllImport("user32.dll")] public static extern void mouse_event(uint flags, int dx, int dy, uint data, System.IntPtr extra);
-// Press the left button at (x, y), then, on another thread, move to
-// (tx, ty) and release it, while the caller's thread runs DoDragDrop.
-public static void DragTo(int x, int y, int tx, int ty) {
+// Press the left button at (x, y).
+public static void Press(int x, int y) {
   SetCursorPos(x, y);
   mouse_event(0x0002, 0, 0, 0, System.IntPtr.Zero);
+}
+// On another thread, move from (x, y) to (tx, ty) and release the button,
+// while the caller's thread runs DoDragDrop.
+public static void MoveAndRelease(int x, int y, int tx, int ty) {
   new System.Threading.Thread(() => {
     System.Threading.Thread.Sleep(300);
     for (int i = 1; i <= 20; i++) {
@@ -88,7 +91,18 @@ try {
     $form.TopMost = $true
     $form.Add_Shown({
         $form.Activate()
-        [GhosttyDrop.Win32]::DragTo($form.Left + 100, $form.Top + 100, $target.X, $target.Y)
+        $x = $form.Left + 100; $y = $form.Top + 100
+        [GhosttyDrop.Win32]::Press($x, $y)
+
+        # DoDragDrop drops at once unless the button is already down for
+        # this thread, so wait until the press has arrived.
+        $deadline = (Get-Date).AddSeconds(5)
+        while (([System.Windows.Forms.Control]::MouseButtons -band [System.Windows.Forms.MouseButtons]::Left) -eq 0) {
+            if ((Get-Date) -gt $deadline) { throw "the mouse button press didn't arrive" }
+            [System.Windows.Forms.Application]::DoEvents()
+            Start-Sleep -Milliseconds 20
+        }
+        [GhosttyDrop.Win32]::MoveAndRelease($x, $y, $target.X, $target.Y)
 
         $data = New-Object System.Windows.Forms.DataObject
         $files = New-Object System.Collections.Specialized.StringCollection
