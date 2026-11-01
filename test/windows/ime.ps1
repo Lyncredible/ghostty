@@ -50,6 +50,13 @@ public static long Layout(System.IntPtr h) { uint pid; return GetKeyboardLayout(
 public static long ImeControl(System.IntPtr h, int command, long value) {
   return SendMessageW(ImmGetDefaultIMEWnd(h), 0x0283, (System.IntPtr)command, (System.IntPtr)value).ToInt64();
 }
+// Press keys together, then release them in reverse.
+public static void Chord(params ushort[] vks) {
+  int size = System.Runtime.InteropServices.Marshal.SizeOf(typeof(INPUT));
+  foreach (var vk in vks) { var d = new INPUT[1]; d[0].type = 1; d[0].u.ki.wVk = vk; SendInput(1, d, size); System.Threading.Thread.Sleep(30); }
+  for (int k = vks.Length - 1; k >= 0; k--) { var u = new INPUT[1]; u[0].type = 1; u[0].u.ki.wVk = vks[k]; u[0].u.ki.dwFlags = 2; SendInput(1, u, size); System.Threading.Thread.Sleep(30); }
+  System.Threading.Thread.Sleep(300);
+}
 public static void Key(ushort vk) {
   var i = new INPUT[2];
   i[0].type = 1; i[0].u.ki.wVk = vk;
@@ -100,12 +107,21 @@ try {
     # "echo " in direct input, before switching to the IME.
     foreach ($vk in 0x45, 0x43, 0x48, 0x4F, 0x20) { [GhosttyIme.Win32]::Key($vk) }
 
-    # Switch the terminal (the window with the focus) to Japanese and turn
-    # the IME on with VK_IME_ON, which Microsoft's IMEs take since
-    # Windows 10 (the Kanji key needs a Japanese keyboard).
-    $hkl = [GhosttyIme.Win32]::LoadKeyboardLayoutW('00000411', 1)
-    [void][GhosttyIme.Win32]::PostMessageW($surface.Handle, 0x0050, [IntPtr]::Zero, $hkl) # WM_INPUTLANGCHANGEREQUEST
+    # Switch to Japanese the way a user does, with Win+Space (or Alt+Shift):
+    # Windows sends the focused window WM_INPUTLANGCHANGEREQUEST, which the
+    # terminal leaves to DefWindowProc. (Posting that message from another
+    # process didn't switch it.) Then turn the IME on with VK_IME_ON, which
+    # Microsoft's IMEs take since Windows 10 (the Kanji key needs a
+    # Japanese keyboard).
+    $japanese = { ([GhosttyIme.Win32]::Layout($surface.Handle) -band 0xFFFF) -eq 0x0411 }
+    [GhosttyIme.Win32]::Chord(0x5B, 0x20) # Win+Space
     Start-Sleep -Seconds 1
+    Notice ("after Win+Space: layout {0:X}" -f [GhosttyIme.Win32]::Layout($surface.Handle))
+    if (-not (& $japanese)) {
+        [GhosttyIme.Win32]::Chord(0xA4, 0xA0) # Left Alt+Left Shift
+        Start-Sleep -Seconds 1
+        Notice ("after Alt+Shift: layout {0:X}" -f [GhosttyIme.Win32]::Layout($surface.Handle))
+    }
     [GhosttyIme.Win32]::Key(0x16) # VK_IME_ON
     Start-Sleep -Milliseconds 500
     # Also open it and choose Hiragana directly: IMC_SETOPENSTATUS, and
