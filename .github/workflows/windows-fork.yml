@@ -97,6 +97,10 @@ jobs:
           $version = & $alias +version 2>&1 | Out-String
           $version
           if ($version -notmatch "Ghostty") { throw "+version didn't run" }
+          $cli = Join-Path $env:LOCALAPPDATA "Microsoft\WindowsApps\ghostty-cli.exe"
+          if (-not (Test-Path $cli)) { throw "no ghostty-cli.exe execution alias" }
+          $version = & $cli +version 2>&1 | Out-String
+          if ($LASTEXITCODE -ne 0 -or $version -notmatch "Ghostty") { throw "ghostty-cli +version failed: $version" }
           Remove-AppxPackage $pkg.PackageFullName
 
       - name: Upload package
