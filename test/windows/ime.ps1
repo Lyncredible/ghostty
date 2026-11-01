@@ -89,11 +89,13 @@ try {
     # "echo " in direct input, before switching to the IME.
     foreach ($vk in 0x45, 0x43, 0x48, 0x4F, 0x20) { [GhosttyIme.Win32]::Key($vk) }
 
-    # Switch the window to Japanese and turn the IME on (the Kanji key).
+    # Switch the terminal (the window with the focus) to Japanese and turn
+    # the IME on with VK_IME_ON, which Microsoft's IMEs take since
+    # Windows 10 (the Kanji key needs a Japanese keyboard).
     $hkl = [GhosttyIme.Win32]::LoadKeyboardLayoutW('00000411', 1)
-    [void][GhosttyIme.Win32]::PostMessageW($surface.Window, 0x0050, [IntPtr]::Zero, $hkl) # WM_INPUTLANGCHANGEREQUEST
+    [void][GhosttyIme.Win32]::PostMessageW($surface.Handle, 0x0050, [IntPtr]::Zero, $hkl) # WM_INPUTLANGCHANGEREQUEST
     Start-Sleep -Seconds 1
-    [GhosttyIme.Win32]::Key(0x19) # VK_KANJI
+    [GhosttyIme.Win32]::Key(0x16) # VK_IME_ON
     Start-Sleep -Milliseconds 500
 
     # n i h o n, convert (Space), commit (Enter).
@@ -105,7 +107,7 @@ try {
     Start-Sleep -Milliseconds 500
 
     # Turn the IME off and run the command.
-    [GhosttyIme.Win32]::Key(0x19)
+    [GhosttyIme.Win32]::Key(0x1A) # VK_IME_OFF
     Start-Sleep -Milliseconds 300
     [GhosttyIme.Win32]::Key(0x0D)
 

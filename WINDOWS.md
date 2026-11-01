@@ -1638,6 +1638,11 @@ Reviewed the branch against this file and discussion #2563.
   and later runs restored it. The ARM64 job no longer uses the saved
   cache (`use-cache: false`), and run 41278668829 passed in full. If the
   x64 jobs ever fail the same way, do the same there.
+- IME in CI (`test/windows/ime.ps1`, allowed to fail while new): run
+  41284416999 installed the Japanese language capability on the runner
+  (about 15 minutes) and added the Microsoft IME, but the keys arrived as
+  plain "nihonn": the IME wasn't on. The script now posts the language
+  change to the focused terminal and turns the IME on with VK_IME_ON.
 - The inspector's buttons can't be clicked with posted messages: ImGui's
   Win32 backend calls `TrackMouseEvent` on mouse moves, and with the real
   cursor elsewhere Windows sends `WM_MOUSELEAVE` right away, so clicks
