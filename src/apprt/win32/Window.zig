@@ -18,6 +18,7 @@ const Tab = @import("Tab.zig");
 const TabBar = @import("TabBar.zig");
 const Overrides = @import("Overrides.zig");
 const Menu = @import("Menu.zig");
+const shells = @import("shells.zig");
 const SaveState = @import("SaveState.zig");
 const SplitDrag = @import("SplitDrag.zig");
 const winshell = @import("shell.zig");
@@ -94,6 +95,11 @@ closed_expires: u64 = 0,
 /// follow them and are rebuilt each time the menu opens.
 system_menu_base: c_int = 0,
 
+/// The shells our system menu items were last built with, which its
+/// commands refer to by index, and the arena that holds them.
+system_menu_arena: ?std.heap.ArenaAllocator = null,
+system_menu_shells: []const shells.Shell = &.{},
+
 /// The saved window state while we're fullscreen, used to restore it.
 fullscreen: ?struct {
     style: c.LONG_PTR,
@@ -154,6 +160,10 @@ pub const Initial = union(enum) {
     /// A new tab with overrides from +new-window.
     overrides: Overrides,
 
+    /// A new tab with a shell chosen from a shell menu, or the configured
+    /// command when null.
+    shell: struct { parent: ?*CoreSurface, shell: ?configpkg.Command },
+
     /// The quick terminal, with a new tab.
     quick,
 
@@ -209,6 +219,7 @@ pub fn init(self: *Window, app: *App, initial: Initial) !void {
         .parent => |parent| _ = try self.addTab(parent),
         .tab => |tab| try self.adoptTab(tab),
         .overrides => |overrides| _ = try self.addTabWith(null, null, overrides),
+        .shell => |shell| _ = try self.addTabWithShell(shell.parent, shell.shell),
         .quick => {
             // Size the window first, since popup windows start out empty
             // and the first surface's size sets the initial pty size.
@@ -240,6 +251,7 @@ pub fn deinit(self: *Window) void {
     self.closed.deinit(alloc);
     self.reopened.deinit(alloc);
     self.tab_bar.deinit();
+    if (self.system_menu_arena) |*arena| arena.deinit();
 }
 
 /// Show the window for the first time.
@@ -1900,9 +1912,23 @@ fn updateSystemMenu(self: *Window, menu: c.HMENU) void {
         if (c.DeleteMenu(menu, @intCast(self.system_menu_base), c.MF_BYPOSITION) == 0) break;
     }
 
+    // The shells stay until the menu is next built, for WM_SYSCOMMAND.
+    if (self.system_menu_arena) |*shells_arena| {
+        _ = shells_arena.reset(.retain_capacity);
+    } else {
+        self.system_menu_arena = .init(self.app.core_app.alloc);
+    }
+    self.system_menu_shells = Menu.shellsFor(self.system_menu_arena.?.allocator(), &Menu.main);
+
     var arena: std.heap.ArenaAllocator = .init(self.app.core_app.alloc);
     defer arena.deinit();
-    Menu.appendToSystemMenu(arena.allocator(), menu, &Menu.main, self.activeSurface()) catch |err| {
+    Menu.appendToSystemMenu(
+        arena.allocator(),
+        menu,
+        &Menu.main,
+        self.activeSurface(),
+        self.system_menu_shells,
+    ) catch |err| {
         log.warn("error building system menu err={}", .{err});
     };
 }
@@ -2102,8 +2128,8 @@ pub fn wndProc(
             if (@intFromPtr(menu) == wparam) self.updateSystemMenu(menu);
         },
 
-        c.WM_SYSCOMMAND => if (Menu.systemCommand(&Menu.main, wparam)) |action| {
-            self.activeSurface().performMenuAction(action);
+        c.WM_SYSCOMMAND => if (Menu.systemCommand(&Menu.main, wparam)) |choice| {
+            Menu.perform(self.activeSurface(), choice, self.system_menu_shells);
             return 0;
         },
 
