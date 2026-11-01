@@ -109,6 +109,15 @@ in and out, and checks that it ends up hidden. Then it adds a virtual
 desktop (Ctrl+Win+D) and checks that showing the quick terminal shows it
 there, without Windows switching back. It sends real keys, so it only runs in CI.
 
+## translucent.ps1
+
+Opens an opaque red Ghostty window, then a half transparent one on top of
+it (`-Blur` adds `background-blur`), splits it, and scrolls the left pane.
+Both panes must show red through them, and the scrollbar's thumb must be
+drawn with the red still showing around it. It only sends messages to
+Ghostty's windows, so it can run locally, but it reads the screen, so the
+desktop must be unlocked.
+
 ## dpi-change.ps1
 
 Raises the display's scale while a terminal runs (as the Settings app

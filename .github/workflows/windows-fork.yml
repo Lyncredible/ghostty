@@ -103,6 +103,12 @@ jobs:
           ./test/windows/quick-terminal.ps1 -Exe zig-out/bin/ghostty.exe
           ./test/windows/quick-terminal.ps1 -Exe zig-out/bin/ghostty.exe -Remain
 
+      - name: Translucent split and scrollbar test
+        shell: pwsh
+        run: |
+          ./test/windows/translucent.ps1 -Exe zig-out/bin/ghostty.exe
+          ./test/windows/translucent.ps1 -Exe zig-out/bin/ghostty.exe -Blur
+
       # Raises the display's scale while a terminal runs.
       - name: DPI change test
         shell: pwsh
