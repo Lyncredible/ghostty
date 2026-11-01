@@ -9,6 +9,9 @@
 
 param(
     [Parameter(Mandatory)] [string]$Exe,
+    # Run with quick-terminal-space-behavior=remain, which on Windows works
+    # like move (the quick terminal isn't on a desktop).
+    [switch]$Remain,
     [int]$TimeoutSeconds = 30
 )
 
@@ -77,8 +80,9 @@ public static bool OnCurrentDesktop(System.IntPtr h) {
 [void][GhosttyQuick.Win32]::SetProcessDPIAware()
 
 $log = Join-Path ([IO.Path]::GetTempPath()) "ghostty-quick-$PID.log"
-$process = Start-Process -FilePath $Exe -PassThru -RedirectStandardError $log -ArgumentList `
-    '--command=cmd.exe', '--window-save-state=never', '--quick-terminal-animation-duration=0.4'
+$arguments = @('--command=cmd.exe', '--window-save-state=never', '--quick-terminal-animation-duration=0.4')
+if ($Remain) { $arguments += '--quick-terminal-space-behavior=remain' }
+$process = Start-Process -FilePath $Exe -PassThru -RedirectStandardError $log -ArgumentList $arguments
 
 function Notice([string]$message) { Write-Host "::notice title=quick-terminal::$message" }
 

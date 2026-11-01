@@ -1035,10 +1035,19 @@ Notes:
             the user is on (the foreground window's, through
             `IVirtualDesktopManager`), instead of Windows switching to
             the desktop it was on; `remain` leaves it. Checked that the
-            quick terminal still shows with one desktop; the move needs a
-            manual check with two desktops.
-      - [ ] Manual check: sliding out (toggling hides only when the quick
-            terminal is in front, which a locked test desktop never is)
+            quick terminal still shows with one desktop.
+        - The fork's CI (`test/windows/quick-terminal.ps1`) adds a desktop
+          with Ctrl+Win+D and toggles the quick terminal there: it shows
+          in front, and Windows stays on the new desktop (run
+          41334351453). But Windows doesn't put the quick terminal on any
+          desktop (`GetWindowDesktopId` fails with
+          `TYPE_E_ELEMENTNOTFOUND`, as for tool windows), so it follows the
+          user without the move, and `remain` has no effect on Windows.
+      - [x] Sliding out (toggling hides only when the quick terminal is in
+            front, which a locked test desktop never is): the same CI test
+            toggles it over IPC and samples its top. Sliding in: -354,
+            -275, -152, ... -2, -1, 0. Sliding out: 0, -46, -161, ...
+            -396, -400, then hidden.
   - [x] Command palette (`toggle_command_palette`): a field over an
         owner-drawn list of the `command-palette-entry` commands (title,
         description, shortcut) and "Focus: <title>" entries for every
