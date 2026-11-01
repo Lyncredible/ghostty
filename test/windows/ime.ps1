@@ -39,6 +39,17 @@ Add-Type -Namespace GhosttyIme -Name Win32 -MemberDefinition @'
 [DllImport("user32.dll")] public static extern bool SetForegroundWindow(System.IntPtr h);
 [DllImport("user32.dll")] public static extern System.IntPtr LoadKeyboardLayoutW(string id, uint flags);
 [DllImport("user32.dll")] public static extern bool PostMessageW(System.IntPtr h, uint m, System.IntPtr w, System.IntPtr l);
+[DllImport("user32.dll")] public static extern System.IntPtr SendMessageW(System.IntPtr h, uint m, System.IntPtr w, System.IntPtr l);
+[DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(System.IntPtr h, out uint pid);
+[DllImport("user32.dll")] public static extern System.IntPtr GetKeyboardLayout(uint thread);
+[DllImport("imm32.dll")] public static extern System.IntPtr ImmGetDefaultIMEWnd(System.IntPtr h);
+// The keyboard layout of the window's thread.
+public static long Layout(System.IntPtr h) { uint pid; return GetKeyboardLayout(GetWindowThreadProcessId(h, out pid)).ToInt64(); }
+// WM_IME_CONTROL to the window's default IME window, which works from
+// another process.
+public static long ImeControl(System.IntPtr h, int command, long value) {
+  return SendMessageW(ImmGetDefaultIMEWnd(h), 0x0283, (System.IntPtr)command, (System.IntPtr)value).ToInt64();
+}
 public static void Key(ushort vk) {
   var i = new INPUT[2];
   i[0].type = 1; i[0].u.ki.wVk = vk;
@@ -97,6 +108,15 @@ try {
     Start-Sleep -Seconds 1
     [GhosttyIme.Win32]::Key(0x16) # VK_IME_ON
     Start-Sleep -Milliseconds 500
+    # Also open it and choose Hiragana directly: IMC_SETOPENSTATUS, and
+    # IMC_SETCONVERSIONMODE with IME_CMODE_NATIVE | IME_CMODE_FULLSHAPE.
+    [void][GhosttyIme.Win32]::ImeControl($surface.Handle, 0x0006, 1)
+    [void][GhosttyIme.Win32]::ImeControl($surface.Handle, 0x0002, 0x9)
+    Start-Sleep -Milliseconds 300
+    $layout = '{0:X}' -f [GhosttyIme.Win32]::Layout($surface.Handle)
+    $open = [GhosttyIme.Win32]::ImeControl($surface.Handle, 0x0005, 0)  # IMC_GETOPENSTATUS
+    $mode = [GhosttyIme.Win32]::ImeControl($surface.Handle, 0x0001, 0)  # IMC_GETCONVERSIONMODE
+    Notice "layout $layout, IME open $open, conversion mode $mode"
 
     # n i h o n, convert (Space), commit (Enter).
     foreach ($vk in 0x4E, 0x49, 0x48, 0x4F, 0x4E, 0x4E) { [GhosttyIme.Win32]::Key($vk) }
