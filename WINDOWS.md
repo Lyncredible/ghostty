@@ -1641,8 +1641,15 @@ Reviewed the branch against this file and discussion #2563.
 - IME in CI (`test/windows/ime.ps1`, allowed to fail while new): run
   41284416999 installed the Japanese language capability on the runner
   (about 15 minutes) and added the Microsoft IME, but the keys arrived as
-  plain "nihonn": the IME wasn't on. The script now posts the language
-  change to the focused terminal and turns the IME on with VK_IME_ON.
+  plain "nihonn": the IME wasn't on. A language change request posted
+  from another process left the terminal's layout US (04090409), so the
+  script now switches with Win+Space, as a user does (the terminal leaves
+  WM_INPUTLANGCHANGEREQUEST to DefWindowProc), then opens the IME in
+  Hiragana. Run 41293609693 passed: the layout became 04110411, and
+  typing "nihon", Space, and Enter put the kanji (U+65E5 U+672C) into cmd
+  through the IME's composition and result strings. This is the IME
+  check from the discussion's list, done with a real IME; the step stays
+  allowed to fail since it depends on the runner image's languages.
 - The inspector's buttons can't be clicked with posted messages: ImGui's
   Win32 backend calls `TrackMouseEvent` on mouse moves, and with the real
   cursor elsewhere Windows sends `WM_MOUSELEAVE` right away, so clicks
