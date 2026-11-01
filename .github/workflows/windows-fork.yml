@@ -138,6 +138,29 @@ jobs:
             zig-out/dist/*.msix
           retention-days: 14
 
+  # The app on Windows Server 2022 (build 20348), from before Windows 11's
+  # system backdrops: background blur takes the Windows 10 path there.
+  build-windows-2022:
+    if: github.repository != 'ghostty-org/ghostty'
+    runs-on: windows-2022
+    timeout-minutes: 90
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Setup Zig
+        uses: mlugg/setup-zig@d1434d08867e3ee9daa34448df10607b98908d29 # v2.2.1
+
+      - name: Build
+        run: zig build -Dtarget=x86_64-windows-gnu
+
+      - name: Smoke test with background blur
+        shell: pwsh
+        run: >
+          ./test/windows/smoke.ps1 -Exe zig-out/bin/ghostty.exe -Command "cmd.exe" -Prompt ">" -Cd "cd /d"
+          -Extra "--background-opacity=0.8","--background-blur=true"
+          -ExpectLog "background blur=true with the blur behind accent build=\d+ ok=true"
+
   # The app on ARM64 hardware.
   build-windows-arm64:
     if: github.repository != 'ghostty-org/ghostty'

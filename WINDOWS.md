@@ -811,6 +811,11 @@ Notes:
         `SetWindowCompositionAttribute`
     - [ ] Manual check on Windows 10 (the dev machine is build 26100,
           which takes the system backdrop path)
+      - The path taken is now logged ("background blur=true with the
+        blur behind accent build=... ok=..."). The fork's CI runs the
+        smoke test with blur on `windows-2022` (Windows Server 2022, build
+        20348, which has no system backdrop) and expects the accent path
+        to succeed. Seeing the blur itself still needs a desktop.
 - [x] Single instance and IPC
   - [x] `+new-window` and `+new-tab` (with `-e`, `--working-directory`,
         `--title`, `--shell-integration`)
