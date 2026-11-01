@@ -956,7 +956,8 @@ Notes:
       - The fork workflow installs it on GitHub's runner, which is thrown
         away after the job, checks the package and the `ghostty.exe`
         execution alias, runs `ghostty +version` through the alias, and
-        uninstalls it. The Start menu entry still needs a desktop. Run
+        uninstalls it. Its Start menu entry (by app ID) opens a window
+        too (run 41263133923). Run
         41230068796 (2026-10-31) passed: `Add-AppxPackage -AllowUnsigned`
         installed it on `windows-latest`, and the alias ran.
     - [ ] A signed package for Windows 10 and the Store (needs a
@@ -1663,8 +1664,12 @@ Reviewed the branch against this file and discussion #2563.
   - Narrator announcing new output
   - A Start menu or Explorer launch opening at home: checked by starting
     `ghostty.exe` through `explorer.exe` (as a shortcut or double-click
-    does); cmd opened in `C:\Users\<user>`. The Start menu itself is
-    still unchecked.
+    does); cmd opened in `C:\Users\<user>`. Starting it the way the
+    Start menu does is checked in the fork's CI
+    (`test/windows/start-menu.ps1`, run 41263133923): the MSIX by its app
+    ID, and the zip's `install.ps1` shortcut, each opened a window from
+    the installed location, and `install.ps1 -Uninstall` removed the
+    shortcut and the files.
   - Installing the MSIX (`Add-AppxPackage -AllowUnsigned`): done in the
     fork's CI, on a throwaway runner
   - Blur on Windows 10
