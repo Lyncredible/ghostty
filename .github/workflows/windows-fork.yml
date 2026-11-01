@@ -93,6 +93,10 @@ jobs:
         shell: pwsh
         run: ./test/windows/dark-mode.ps1 -Exe zig-out/bin/ghostty.exe
 
+      - name: Tab tooltips test
+        shell: pwsh
+        run: ./test/windows/tab-tooltips.ps1 -Exe zig-out/bin/ghostty.exe
+
       # Typing through the Japanese IME, which it installs first. Allowed to
       # fail while it's new, since it depends on the runner image having
       # the language capability.
