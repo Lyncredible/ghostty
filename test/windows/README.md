@@ -67,3 +67,10 @@ interrupting (without), and focus-follows-mouse between splits
 with real (synthesized) keyboard and mouse input. Since that input goes to
 the foreground window, it refuses to run unless `CI` is `true`; CI runs it
 on the runner's desktop.
+
+## start-menu.ps1
+
+Starts an installed Ghostty the way the Start menu does (the MSIX by its
+app ID, or the zip's `install.ps1` shortcut) and checks that a window
+opens from the installed location; for the zip it also uninstalls. It
+only runs in CI.
