@@ -1500,8 +1500,10 @@ Reviewed the branch against this file and discussion #2563.
   `os.wsl` unit tests (argument parsing, path building, registry smoke
   test) and the uri and shell integration tests pass. On this machine the
   registry gives `Ubuntu`, and `wsl.exe` started with the working directory
-  `\\wsl$\Ubuntu\home\yuan` reports `/home/yuan`. Not yet tested through
-  the Ghostty UI.
+  `\\wsl$\Ubuntu\home\yuan` reports `/home/yuan`. Since then also checked
+  through the Ghostty UI (see "Shell integration for wsl" above): `~`
+  reports as `\\wsl$\Ubuntu-24.04\home\yuan`, and a new tab there opens
+  WSL in `~`.
 - `+new-window` and `+new-tab`: each instance's hidden message window is
   titled with its app class (`class`, default `ghostty`), so the CLI finds
   it with `FindWindowW` (any instance for `detect`). It grants foreground
