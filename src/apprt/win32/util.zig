@@ -179,8 +179,9 @@ pub fn setMenuTheme(dark: bool) void {
 /// 11, which don't have system backdrops.
 ///
 /// SetWindowCompositionAttribute is undocumented, but user32 has exported
-/// it by name since Windows 7 and it's widely used for this.
-pub fn setBlurBehindAccent(hwnd: c.HWND, enable: bool) void {
+/// it by name since Windows 7 and it's widely used for this. Returns
+/// whether it succeeded.
+pub fn setBlurBehindAccent(hwnd: c.HWND, enable: bool) bool {
     const AccentPolicy = extern struct {
         state: c_int,
         flags: c_int = 0,
@@ -194,8 +195,8 @@ pub fn setBlurBehindAccent(hwnd: c.HWND, enable: bool) void {
     };
     const SetWindowCompositionAttribute = *const fn (c.HWND, *CompositionData) callconv(.winapi) c.BOOL;
 
-    const user32 = c.GetModuleHandleW(std.unicode.utf8ToUtf16LeStringLiteral("user32.dll")) orelse return;
-    const set: SetWindowCompositionAttribute = @ptrCast(@alignCast(c.GetProcAddress(user32, "SetWindowCompositionAttribute") orelse return));
+    const user32 = c.GetModuleHandleW(std.unicode.utf8ToUtf16LeStringLiteral("user32.dll")) orelse return false;
+    const set: SetWindowCompositionAttribute = @ptrCast(@alignCast(c.GetProcAddress(user32, "SetWindowCompositionAttribute") orelse return false));
 
     const ACCENT_DISABLED = 0;
     const ACCENT_ENABLE_BLURBEHIND = 3;
@@ -206,7 +207,7 @@ pub fn setBlurBehindAccent(hwnd: c.HWND, enable: bool) void {
         .data = &policy,
         .size = @sizeOf(AccentPolicy),
     };
-    _ = set(hwnd, &data);
+    return set(hwnd, &data) != c.FALSE;
 }
 
 /// A handle (HWND, HDC, ...) passed in a message's WPARAM or LPARAM.

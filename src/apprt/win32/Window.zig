@@ -1444,7 +1444,12 @@ fn updateBackdrop(self: *Window) void {
         &backdrop,
         @sizeOf(c.DWORD),
     );
-    if (!system_backdrop) util.setBlurBehindAccent(self.hwnd, blur);
+    if (system_backdrop) {
+        log.debug("background blur={} with the system backdrop build={}", .{ blur, util.windowsBuild() });
+    } else {
+        const ok = util.setBlurBehindAccent(self.hwnd, blur);
+        log.debug("background blur={} with the blur behind accent build={} ok={}", .{ blur, util.windowsBuild(), ok });
+    }
 
     const region = if (translucent and !blur) c.CreateRectRgn(0, 0, -1, -1) else null;
     defer if (region != null) {
