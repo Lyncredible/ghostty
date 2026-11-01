@@ -94,8 +94,8 @@ try {
         $files = New-Object System.Collections.Specialized.StringCollection
         [void]$files.Add($file)
         $data.SetFileDropList($files)
-        $result = $form.DoDragDrop($data, [System.Windows.Forms.DragDropEffects]::Copy)
-        Write-Host "DoDragDrop returned $result"
+        $script:dropResult = $form.DoDragDrop($data, [System.Windows.Forms.DragDropEffects]::Copy)
+        Write-Host "DoDragDrop returned $script:dropResult"
         $form.Close()
     })
     [void]$form.ShowDialog()
@@ -103,6 +103,13 @@ try {
     [void](WaitFor { (SurfaceText).Text.Contains('drop test.txt') } 'the dropped path in the terminal')
     Write-Host 'Dropping a file pasted its path:'
     Write-Host (((SurfaceText).Text -split "`n" | Where-Object { $_.Trim() } | Select-Object -Last 1))
+} catch {
+    # Show why on the run's page (as an annotation), since the job log
+    # needs signing in.
+    $screen = ''
+    try { $screen = (((SurfaceText).Text -split "`n" | Where-Object { $_.Trim() } | Select-Object -Last 3) -join ' / ') } catch {}
+    Write-Host "::error title=drag-drop::$($_.Exception.Message); DoDragDrop: $script:dropResult; screen: $screen"
+    throw
 } finally {
     if (-not $process.HasExited) { Stop-Process -Id $process.Id -Force }
     Remove-Item $file -ErrorAction SilentlyContinue
