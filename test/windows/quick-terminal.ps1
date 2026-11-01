@@ -2,7 +2,7 @@
 # (+toggle-quick-terminal) and samples its position while it slides in from
 # the top and back out, then checks that it's hidden. Then it switches to a
 # new virtual desktop (Ctrl+Win+D) and checks that showing the quick
-# terminal again moves it there (quick-terminal-space-behavior = move). It
+# terminal again shows it there, without Windows switching back. It
 # sends real keys and adds a virtual desktop, so it only runs in CI.
 #
 #     ./quick-terminal.ps1 -Exe zig-out/bin/ghostty.exe
@@ -137,48 +137,28 @@ try {
     if ($out[-1] -ne 'hidden') { Fail "the quick terminal didn't hide after sliding out" }
     if (-not ($out | Where-Object { $_ -is [int] -and $_ -lt 0 })) { Fail "the quick terminal didn't slide out above the screen" }
 
-    # A new virtual desktop, which Ctrl+Win+D creates and switches to.
-    # (Windows doesn't say which desktop a hidden window is on, so we take
-    # the normal window's.)
-    $first = [GhosttyQuick.Win32]::Desktop($process.MainWindowHandle)
+    # A new virtual desktop, which Ctrl+Win+D creates and switches to: the
+    # normal window is then on another desktop.
+    $main = $process.MainWindowHandle
     [GhosttyQuick.Win32]::Chord(0x11, 0x5B, 0x44)
-    Start-Sleep -Seconds 2
+    [void](WaitFor { -not [GhosttyQuick.Win32]::OnCurrentDesktop($main) } 'a new virtual desktop')
+    Start-Sleep -Seconds 1
 
-    # On an empty desktop the foreground window is the taskbar, which is on
-    # every desktop, so we only report what happens there.
+    # Showing the quick terminal shows it in front on this desktop, without
+    # Windows switching back to the one it was shown on before.
     Toggle
-    [void](WaitFor { [GhosttyQuick.Win32]::IsWindowVisible($quick) } 'the quick terminal')
+    [void](WaitFor { [GhosttyQuick.Win32]::IsWindowVisible($quick) -and [GhosttyQuick.Win32]::GetForegroundWindow() -eq $quick } 'the quick terminal in front on the new desktop')
     Start-Sleep -Milliseconds 800
-    $moved = [GhosttyQuick.Win32]::Desktop($quick) -ne $first
-    Notice "on an empty desktop, showing the quick terminal moved it: $moved"
-    if (-not $moved) {
-        # It's in front on its own desktop, so this hides it.
-        Toggle
-        [void](WaitFor { -not [GhosttyQuick.Win32]::IsWindowVisible($quick) } 'the quick terminal to hide')
-        # If Windows switched back to the first desktop to show it, go to
-        # the new one again (Ctrl+Win+Right).
-        if ([GhosttyQuick.Win32]::OnCurrentDesktop($process.MainWindowHandle)) {
-            Notice 'Windows switched back to the first desktop'
-            [GhosttyQuick.Win32]::Chord(0x11, 0x5B, 0x27)
-            Start-Sleep -Seconds 1
-        }
-
-        # With a window on the new desktop, as there usually is.
-        $cmd = Start-Process cmd.exe -PassThru
-        [void](WaitFor { $cmd.Refresh(); $cmd.MainWindowHandle -ne 0 -or (Get-Process -Name WindowsTerminal -ErrorAction SilentlyContinue) } 'a cmd window')
-        Start-Sleep -Seconds 1
-        Toggle
-        [void](WaitFor { [GhosttyQuick.Win32]::IsWindowVisible($quick) } 'the quick terminal on the new desktop')
-        Start-Sleep -Milliseconds 800
+    if ([GhosttyQuick.Win32]::OnCurrentDesktop($main)) { Fail "Windows switched back to the first desktop to show the quick terminal" }
+    if (-not [GhosttyQuick.Win32]::IsWindowVisible($quick)) { Fail "the quick terminal isn't visible on the new desktop" }
+    try {
+        Notice "Windows puts the quick terminal on desktop $([GhosttyQuick.Win32]::Desktop($quick)) (the first is $([GhosttyQuick.Win32]::Desktop($main)))"
+    } catch {
+        Notice "Windows doesn't put the quick terminal on a desktop ($($_.Exception.Message))"
     }
-    $after = [GhosttyQuick.Win32]::Desktop($quick)
-    Write-Host "The quick terminal was on desktop $first, and is now on $after."
-    if ($after -eq $first) { Fail "the quick terminal stayed on its desktop (did Ctrl+Win+D add one?)" }
-    if (-not [GhosttyQuick.Win32]::OnCurrentDesktop($quick)) { Fail "the quick terminal isn't on the current desktop" }
-    Write-Host 'Showing the quick terminal moved it to the new desktop.'
+    Write-Host 'The quick terminal shows on the new desktop.'
 } finally {
     if (-not $process.HasExited) { Stop-Process -Id $process.Id -Force }
-    if ($cmd -and -not $cmd.HasExited) { Stop-Process -Id $cmd.Id -Force }
     # Close the desktop we added (Ctrl+Win+F4).
     [GhosttyQuick.Win32]::Chord(0x11, 0x5B, 0x73)
 }
