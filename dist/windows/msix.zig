@@ -24,7 +24,7 @@ const Object = extern struct {
     vtbl: [*]const *const anyopaque,
 
     fn method(self: *Object, comptime T: type, index: usize) T {
-        return @ptrCast(self.vtbl[index]);
+        return @ptrCast(@alignCast(self.vtbl[index]));
     }
 
     fn release(self: *Object) void {
