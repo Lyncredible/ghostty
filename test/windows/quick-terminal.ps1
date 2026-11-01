@@ -126,19 +126,21 @@ try {
     Toggle
     $quick = WaitFor { $h = [GhosttyQuick.Win32]::QuickTerminal($process.Id); if ($h -ne 0 -and [GhosttyQuick.Win32]::IsWindowVisible($h)) { $h } } 'the quick terminal'
     $in = SampleTops $quick
-    Write-Host "Sliding in, its top was: $($in -join ', ')"
+    Notice "sliding in, its top was: $($in -join ', ')"
     if ($in[-1] -ne 0) { Fail "the quick terminal ended at $($in[-1]), not the top of the screen" }
     if (-not ($in | Where-Object { $_ -is [int] -and $_ -lt 0 })) { Fail "the quick terminal didn't slide in from above the screen" }
 
     [void](WaitFor { [GhosttyQuick.Win32]::GetForegroundWindow() -eq $quick } 'the quick terminal to be in front')
     Toggle
     $out = SampleTops $quick
-    Write-Host "Sliding out, its top was: $($out -join ', ')"
+    Notice "sliding out, its top was: $($out -join ', ')"
     if ($out[-1] -ne 'hidden') { Fail "the quick terminal didn't hide after sliding out" }
     if (-not ($out | Where-Object { $_ -is [int] -and $_ -lt 0 })) { Fail "the quick terminal didn't slide out above the screen" }
 
     # A new virtual desktop, which Ctrl+Win+D creates and switches to.
-    $first = [GhosttyQuick.Win32]::Desktop($quick)
+    # (Windows doesn't say which desktop a hidden window is on, so we take
+    # the normal window's.)
+    $first = [GhosttyQuick.Win32]::Desktop($process.MainWindowHandle)
     [GhosttyQuick.Win32]::Chord(0x11, 0x5B, 0x44)
     Start-Sleep -Seconds 2
 
