@@ -134,8 +134,13 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
+      # Without the saved Zig cache: after a build that failed to fetch a
+      # dependency, the cache it saved made every later build fail while
+      # configuring ("configuration failed: FileNotFound").
       - name: Setup Zig
         uses: mlugg/setup-zig@d1434d08867e3ee9daa34448df10607b98908d29 # v2.2.1
+        with:
+          use-cache: false
 
       # On failure, put the end of the output on the run's page, since the
       # job log needs signing in.
@@ -143,6 +148,7 @@ jobs:
         shell: pwsh
         run: |
           zig version
+          git --version
           zig build -Dtarget=aarch64-windows-gnu 2>&1 | Tee-Object -FilePath build.log
           if ($LASTEXITCODE -ne 0) {
             $tail = (Get-Content build.log -Tail 6) -join ' / '
