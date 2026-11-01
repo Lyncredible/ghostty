@@ -1664,7 +1664,10 @@ Reviewed the branch against this file and discussion #2563.
   screen reader, or another machine):
   - Quick terminal sliding out, the touch keyboard showing, the terminal
     IO export dialog
-  - Touch scrolling. Done in CI: `window-step-resize` while dragging the
+  - Done in CI: touch scrolling (a software finger injected with
+    `InjectTouchInput` panned down, and earlier lines scrolled into view,
+    `test/windows/touch-scroll.ps1`, run 41281536372),
+    `window-step-resize` while dragging the
     window's corner (a real 137x91 px drag changed the client area by
     whole cells, `test/windows/desktop-input.ps1`, run 41273699216),
     dragging a file onto a terminal (a real OLE drag with the
