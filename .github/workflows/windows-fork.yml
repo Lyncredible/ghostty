@@ -89,6 +89,14 @@ jobs:
         shell: pwsh
         run: ./test/windows/touch-scroll.ps1 -Exe zig-out/bin/ghostty.exe
 
+      # Typing through the Japanese IME, which it installs first. Allowed to
+      # fail while it's new, since it depends on the runner image having
+      # the language capability.
+      - name: IME test
+        shell: powershell
+        continue-on-error: true
+        run: ./test/windows/ime.ps1 -Exe zig-out/bin/ghostty.exe
+
       - name: Package
         shell: pwsh
         run: ./dist/windows/package.ps1 -OutDir zig-out/dist -Msix
