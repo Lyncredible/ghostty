@@ -101,7 +101,14 @@ jobs:
           if (-not (Test-Path $cli)) { throw "no ghostty-cli.exe execution alias" }
           $version = & $cli +version 2>&1 | Out-String
           if ($LASTEXITCODE -ne 0 -or $version -notmatch "Ghostty") { throw "ghostty-cli +version failed: $version" }
+          ./test/windows/start-menu.ps1 -Msix
           Remove-AppxPackage $pkg.PackageFullName
+
+      # Install the zip with its install.ps1, start it from its Start menu
+      # shortcut, and uninstall it.
+      - name: Install zip
+        shell: powershell
+        run: ./test/windows/start-menu.ps1 -Zip (Get-ChildItem zig-out/dist/*.zip | Select-Object -First 1).FullName
 
       - name: Upload package
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
