@@ -815,7 +815,8 @@ Notes:
         blur behind accent build=... ok=..."). The fork's CI runs the
         smoke test with blur on `windows-2022` (Windows Server 2022, build
         20348, which has no system backdrop) and expects the accent path
-        to succeed. Seeing the blur itself still needs a desktop.
+        to succeed. It passed in run 41296536006. Seeing the blur itself
+        still needs a desktop.
 - [x] Single instance and IPC
   - [x] `+new-window` and `+new-tab` (with `-e`, `--working-directory`,
         `--title`, `--shell-integration`)
