@@ -84,6 +84,11 @@ jobs:
         shell: powershell
         run: ./test/windows/drag-drop.ps1 -Exe zig-out/bin/ghostty.exe
 
+      # A one-finger touch pan (injected with InjectTouchInput) scrolls.
+      - name: Touch scroll test
+        shell: pwsh
+        run: ./test/windows/touch-scroll.ps1 -Exe zig-out/bin/ghostty.exe
+
       - name: Package
         shell: pwsh
         run: ./dist/windows/package.ps1 -OutDir zig-out/dist -Msix

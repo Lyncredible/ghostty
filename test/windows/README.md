@@ -82,3 +82,9 @@ Drags a file (a real OLE drag, as from Explorer) from a window of its own
 onto a terminal running cmd, and checks that its path was pasted. It moves
 the mouse and holds its button, so it only runs in CI, with Windows
 PowerShell (an STA thread).
+
+## touch-scroll.ps1
+
+Fills cmd with numbered lines, drags a software finger down the terminal
+with `InjectTouchInput`, and checks that earlier lines scrolled into
+view. It only runs in CI.
