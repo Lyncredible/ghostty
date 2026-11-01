@@ -2903,8 +2903,9 @@ keybind: Keybinds = .{},
 ///
 /// The default value is `move`.
 ///
-/// Implemented on macOS, and on Windows for virtual desktops.
-/// On Linux the behavior is always equivalent to `move`.
+/// Implemented on macOS. On Linux and Windows the behavior is always
+/// equivalent to `move` (on Windows, the quick terminal isn't on any
+/// virtual desktop, so it shows on the one the user is on).
 ///
 /// Available since: 1.1.0
 @"quick-terminal-space-behavior": QuickTerminalSpaceBehavior = .move,
