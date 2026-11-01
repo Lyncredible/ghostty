@@ -99,6 +99,15 @@ Notes:
       shaders.
 - [x] Win32 apprt: window, message loop, and cross-thread wakeups.
   - [x] Per-monitor DPI, resizing, focus, and occlusion.
+    - [x] A DPI change while running: the fork's CI runs
+          `test/windows/dpi-change.ps1`, which switches the runner's
+          display to 1920x1080 and raises its scale to 125%
+          (`SPI_SETLOGICALDPIOVERRIDE`, as the Settings app does). Cells
+          grew with the DPI, and the window took the size `WM_DPICHANGED`
+          suggested, which the window now logs (run 41317959654). For a
+          scale change Windows suggests the same size in pixels.
+    - [ ] Manual check with two monitors at different scales: moving a
+          window between them, where Windows suggests a scaled size
   - [x] Keyboard: layouts, dead keys, Ctrl/Alt/AltGr handling, and
         physical keys.
   - [x] Basic IME: the system composition window, placed at the cursor.
