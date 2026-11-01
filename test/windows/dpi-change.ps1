@@ -4,8 +4,9 @@
 # as moving them to a monitor with another scale, and checks that the
 # window kept its size in inches and the font its size in points (cells
 # grow with the DPI). A small display only offers 100%, so it first
-# switches to the largest display mode. It changes the desktop, so it only
-# runs in CI.
+# switches to the largest display mode, and the window starts small enough
+# to grow on it (Windows keeps the suggested size on the screen). It
+# changes the desktop, so it only runs in CI.
 #
 #     ./dpi-change.ps1 -Exe zig-out/bin/ghostty.exe
 
@@ -70,7 +71,7 @@ if ($largest.dmPelsWidth * $largest.dmPelsHeight -gt $originalMode.dmPelsWidth *
 
 $log = Join-Path ([IO.Path]::GetTempPath()) "ghostty-dpi-$PID.log"
 $process = Start-Process -FilePath $Exe -PassThru -RedirectStandardError $log -ArgumentList `
-    '--command=cmd.exe', '--window-save-state=never', '--font-size=12'
+    '--command=cmd.exe', '--window-save-state=never', '--font-size=12', '--window-width=60', '--window-height=15'
 
 function Fail([string]$message) {
     Write-Host "--- Ghostty's log ---"
