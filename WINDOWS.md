@@ -356,7 +356,7 @@ Notes:
           Start menu) with the alias `ghostty-cli.exe`, for
           `ghostty-cli +list-themes` and the like. The package reader
           accepted it; CI installs it and runs `ghostty-cli +version`
-          through the alias.
+          through the alias, which passed in run 41260077738.
 - [x] `ghostty +validate-config` always failed (exit 1, no output) when
       its output was a pipe or the console: it finished with
       `File.Writer.end`, which sets the output's length, and Windows
