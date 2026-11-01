@@ -1043,6 +1043,9 @@ Notes:
           desktop (`GetWindowDesktopId` fails with
           `TYPE_E_ELEMENTNOTFOUND`, as for tool windows), so it follows the
           user without the move, and `remain` has no effect on Windows.
+          The same test with `remain` passed too (run 41339529039), so the
+          move (`IVirtualDesktopManager.MoveWindowToDesktop`) is removed,
+          and the option's docs say Windows always behaves like `move`.
       - [x] Sliding out (toggling hides only when the quick terminal is in
             front, which a locked test desktop never is): the same CI test
             toggles it over IPC and samples its top. Sliding in: -354,
