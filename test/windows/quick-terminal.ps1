@@ -9,8 +9,8 @@
 
 param(
     [Parameter(Mandatory)] [string]$Exe,
-    # Run with quick-terminal-space-behavior=remain, which on Windows works
-    # like move (the quick terminal isn't on a desktop).
+    # Run with quick-terminal-space-behavior=remain, which on Windows
+    # behaves like move (the quick terminal isn't on any desktop).
     [switch]$Remain,
     [int]$TimeoutSeconds = 30
 )
