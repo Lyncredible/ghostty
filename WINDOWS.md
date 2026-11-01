@@ -1632,6 +1632,12 @@ Reviewed the branch against this file and discussion #2563.
 - Fork CI run 41232795840 (2026-10-31), after the exit message and Git
   Bash path fixes: the x64 and ARM64 test suites, the MSIX install, and
   libghostty-vt with MSVC all passed.
+- The fork CI's ARM64 job failed twice in a row within seconds while
+  configuring ("configuration failed: FileNotFound"), after one run failed
+  to fetch a dependency: setup-zig had saved that run's incomplete cache,
+  and later runs restored it. The ARM64 job no longer uses the saved
+  cache (`use-cache: false`), and run 41278668829 passed in full. If the
+  x64 jobs ever fail the same way, do the same there.
 - The inspector's buttons can't be clicked with posted messages: ImGui's
   Win32 backend calls `TrackMouseEvent` on mouse moves, and with the real
   cursor elsewhere Windows sends `WM_MOUSELEAVE` right away, so clicks
