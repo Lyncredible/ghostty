@@ -73,8 +73,8 @@ on the runner's desktop.
 
 Starts an installed Ghostty the way the Start menu does (the MSIX by its
 app ID, or the zip's `install.ps1` shortcut) and checks that a window
-opens from the installed location; for the zip it also uninstalls. It
-only runs in CI.
+opens from the installed location with its shell in the home directory;
+for the zip it also uninstalls. It only runs in CI.
 
 ## drag-drop.ps1
 
@@ -88,6 +88,13 @@ PowerShell (an STA thread).
 Fills cmd with numbered lines, drags a software finger down the terminal
 with `InjectTouchInput`, and checks that earlier lines scrolled into
 view. It only runs in CI.
+
+## dark-mode.ps1
+
+Starts Ghostty with a light and a dark theme, switches Windows between
+light and dark app mode while it runs, and checks the terminal's
+background color from the screen. It changes the whole desktop, so it
+only runs in CI.
 
 ## ime.ps1
 
