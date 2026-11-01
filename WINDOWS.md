@@ -1154,6 +1154,13 @@ Notes:
         `title` and `cursor` features
   - [x] UI check: closing an idle cmd window doesn't ask; closing one
         running `cmd /k ping -t localhost` shows "Close terminal?"
+- [ ] Reconcile how a user chooses which shell to start for a new tab or
+      window. The tab bar's shell dropdown ("New Tab With a Shell") offers
+      Command Prompt, PowerShell, WSL, and so on, but the main menu has no
+      such choice, and the dropdown only shows in the multi-tab view (when
+      the tab bar is visible). So to start a WSL tab from a single-tab
+      window, the user first has to open a new tab (Command Prompt), then
+      use the dropdown.
 
 ## Development log (2026-10-24)
 
