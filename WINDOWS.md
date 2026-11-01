@@ -209,14 +209,16 @@ Notes:
     - [x] The app on an ARM64 desktop: the same job runs the cmd smoke
           test (a real window, shell integration and OSC 7), which passed
           in run 41348634447.
-    - [ ] An ARM64 zip and MSIX from CI: `package.ps1 -Target
+    - [x] An ARM64 zip and MSIX from CI: `package.ps1 -Target
           aarch64-windows-gnu -Msix` works cross-compiled here (it made
           `GhosttyWindowsUnofficial_1.0.18744.0_arm64__ddpcdxnmqgtp8`) but
           failed natively on the ARM64 runner (run 41348634447): the MSIX
           tool, which runs on the build machine, cast COM vtable entries
           to function pointers without `@alignCast`, which ARM64 needs
-          (as `GetProcAddress` results did). Fixed; it now builds for
-          ARM64.
+          (as `GetProcAddress` results did). With that fixed, run
+          41357100381 packaged it, installed the MSIX on the runner
+          (`ghostty-cli.exe +version` ran from it), and uploaded the
+          `ghostty-windows-unofficial-arm64` artifact.
 - [x] Light and dark themes: the app reports the Windows app mode
       (`AppsUseLightTheme`) to the core at startup and on
       `WM_SETTINGCHANGE`, so `theme = light:X,dark:Y` and color scheme
