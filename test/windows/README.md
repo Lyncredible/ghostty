@@ -96,6 +96,12 @@ light and dark app mode while it runs, and checks the terminal's
 background color from the screen. It changes the whole desktop, so it
 only runs in CI.
 
+## tab-tooltips.ps1
+
+Opens a terminal with the tab bar shown, moves the real cursor over the
+"New Tab" button and then the tab, and checks that each shows a tooltip
+with its name. It moves the mouse, so it only runs in CI.
+
 ## ime.ps1
 
 Installs the Japanese IME, switches a terminal running cmd to it, types
