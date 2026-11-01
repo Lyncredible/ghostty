@@ -97,11 +97,11 @@ jobs:
         shell: pwsh
         run: ./test/windows/tab-tooltips.ps1 -Exe zig-out/bin/ghostty.exe
 
-      # Allowed to fail while it's new, so that the steps after it run.
       - name: Quick terminal test
         shell: pwsh
-        continue-on-error: true
-        run: ./test/windows/quick-terminal.ps1 -Exe zig-out/bin/ghostty.exe
+        run: |
+          ./test/windows/quick-terminal.ps1 -Exe zig-out/bin/ghostty.exe
+          ./test/windows/quick-terminal.ps1 -Exe zig-out/bin/ghostty.exe -Remain
 
       # Raises the display's scale while a terminal runs.
       - name: DPI change test
