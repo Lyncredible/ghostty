@@ -1658,9 +1658,11 @@ Reviewed the branch against this file and discussion #2563.
   screen reader, or another machine):
   - Quick terminal sliding out, the touch keyboard showing, the terminal
     IO export dialog
-  - Dragging files onto a terminal, (done in CI: `focus-follows-mouse`,
-    with real mouse moves between splits, run 41247475902),
-    `window-step-resize` while dragging an edge, and touch scrolling
+  - `window-step-resize` while dragging an edge, and touch scrolling.
+    Done in CI: dragging a file onto a terminal (a real OLE drag with the
+    real mouse, `test/windows/drag-drop.ps1`, run 41270878360, which
+    pasted its quoted path into cmd), and `focus-follows-mouse` (real
+    mouse moves between splits, run 41247475902)
   - Narrator announcing new output
   - A Start menu or Explorer launch opening at home: checked by starting
     `ghostty.exe` through `explorer.exe` (as a shortcut or double-click
