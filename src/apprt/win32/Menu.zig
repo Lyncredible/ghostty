@@ -3,7 +3,8 @@
 //! window's system menu (the title bar menu, also opened with Alt+Space).
 //!
 //! Items run keybind actions on a surface, so they do the same thing as
-//! the equivalent keybind and show its shortcut, like GTK's menus.
+//! the equivalent keybind and show its shortcut, like GTK's menus. Shell
+//! submenus open a new tab or window with one of the shells.
 const std = @import("std");
 const Allocator = std.mem.Allocator;
 const input = @import("../../input.zig");
@@ -12,6 +13,7 @@ const Binding = input.Binding;
 const util = @import("util.zig");
 const c = util.c;
 const Surface = @import("Surface.zig");
+const shells = @import("shells.zig");
 
 const log = std.log.scoped(.win32);
 
@@ -19,6 +21,9 @@ pub const Item = union(enum) {
     action: Action,
     submenu: Submenu,
     separator,
+
+    /// A submenu of the shells, which opens the chosen one.
+    shells: Shells,
 
     pub const Action = struct {
         label: []const u8,
@@ -30,6 +35,11 @@ pub const Item = union(enum) {
         items: []const Item,
     };
 
+    pub const Shells = struct {
+        label: []const u8,
+        target: Target,
+    };
+
     fn act(label: []const u8, action: Binding.Action) Item {
         return .{ .action = .{ .label = label, .action = action } };
     }
@@ -37,7 +47,26 @@ pub const Item = union(enum) {
     fn sub(label: []const u8, items: []const Item) Item {
         return .{ .submenu = .{ .label = label, .items = items } };
     }
+
+    fn shellsIn(label: []const u8, target: Target) Item {
+        return .{ .shells = .{ .label = label, .target = target } };
+    }
 };
+
+/// Where a shell from a shell submenu opens.
+pub const Target = enum { tab, window };
+
+/// What a menu item does: run an action, or open a shell, by its index in
+/// the list of shells the menu was built with.
+pub const Choice = union(enum) {
+    action: Binding.Action,
+    shell: struct { target: Target, index: usize },
+};
+
+/// Shell items have IDs from here, a block of `max_shells` for each target,
+/// after the actions'. Shifted for the system menu, they stay below 0xF000.
+const shell_id_base = 0x100;
+const max_shells = 0x100;
 
 const split_items = [_]Item{
     .act("Change &Title…", .prompt_surface_title),
@@ -53,6 +82,7 @@ const split_items = [_]Item{
 const tab_items = [_]Item{
     .act("Change Tab &Title…", .prompt_tab_title),
     .act("&New Tab", .new_tab),
+    .shellsIn("New Tab With S&hell", .tab),
     .act("&Close Tab", .{ .close_tab = .this }),
 };
 
@@ -88,6 +118,7 @@ pub const context = [_]Item{
 pub const tab = [_]Item{
     .act("Change Tab &Title…", .prompt_tab_title),
     .act("&New Tab", .new_tab),
+    .shellsIn("New Tab With S&hell", .tab),
     .act("Reo&pen Closed Tab", .undo),
     .separator,
     .act("&Move Tab to New Window", .move_tab_to_new_window),
@@ -101,6 +132,8 @@ pub const tab = [_]Item{
 pub const main = [_]Item{
     .act("&New Window", .new_window),
     .act("New &Tab", .new_tab),
+    .shellsIn("New Window &With Shell", .window),
+    .shellsIn("New Tab With S&hell", .tab),
     .sub("&Split", &split_items),
     .separator,
     .act("&Copy", .{ .copy_to_clipboard = .mixed }),
@@ -138,10 +171,12 @@ pub fn track(
 ) void {
     var arena: std.heap.ArenaAllocator = .init(surface.app.core_app.alloc);
     defer arena.deinit();
+    const alloc = arena.allocator();
     const menu = c.CreatePopupMenu() orelse return;
     defer _ = c.DestroyMenu(menu);
+    const list = shellsFor(alloc, items);
     var next_id: usize = 1;
-    build(arena.allocator(), menu, items, surface, &next_id, 0) catch |err| {
+    build(alloc, menu, items, surface, list, &next_id, 0) catch |err| {
         log.warn("error building menu err={}", .{err});
         return;
     };
@@ -158,21 +193,78 @@ pub fn track(
         null,
     );
     if (selected <= 0 or c.GetWindowLongPtrW(hwnd, util.GWLP_USERDATA) != identity) return;
-    if (actionAt(items, @intCast(selected - 1))) |action| surface.performMenuAction(action);
+    if (choiceAt(items, @intCast(selected))) |choice| perform(surface, choice, list);
+}
+
+/// Do what a chosen item does on the surface, with the shells the menu was
+/// built with.
+pub fn perform(surface: *Surface, choice: Choice, list: []const shells.Shell) void {
+    switch (choice) {
+        .action => |action| surface.performMenuAction(action),
+        .shell => |shell| if (shell.index < list.len) {
+            surface.openShell(shell.target, list[shell.index].command);
+        },
+    }
+}
+
+/// The shells for the items' shell submenus, if they have any.
+pub fn shellsFor(alloc: Allocator, items: []const Item) []const shells.Shell {
+    if (!hasShells(items)) return &.{};
+    return shells.list(alloc) catch |err| {
+        log.warn("error listing shells err={}", .{err});
+        return &.{};
+    };
+}
+
+fn hasShells(items: []const Item) bool {
+    for (items) |item| switch (item) {
+        .shells => return true,
+        .submenu => |s| if (hasShells(s.items)) return true,
+        else => {},
+    };
+    return false;
+}
+
+/// Append the shells to a menu with consecutive IDs (shifted left by
+/// `shift`) from `first_id`, with a separator after the configured one.
+pub fn appendShells(
+    alloc: Allocator,
+    menu: c.HMENU,
+    list: []const shells.Shell,
+    first_id: usize,
+    shift: u6,
+) !void {
+    for (list, 0..) |shell, i| {
+        _ = c.AppendMenuW(
+            menu,
+            c.MF_STRING,
+            (first_id + i) << shift,
+            (try util.utf16Alloc(alloc, shell.label)).ptr,
+        );
+        if (i == 0 and list.len > 1) _ = c.AppendMenuW(menu, c.MF_SEPARATOR, 0, null);
+    }
 }
 
 /// Add the items to the end of a window's system menu, after a separator.
-pub fn appendToSystemMenu(alloc: Allocator, menu: c.HMENU, items: []const Item, surface: ?*Surface) !void {
+/// Its shell submenus list `list`, which perform needs when the command
+/// comes.
+pub fn appendToSystemMenu(
+    alloc: Allocator,
+    menu: c.HMENU,
+    items: []const Item,
+    surface: ?*Surface,
+    list: []const shells.Shell,
+) !void {
     _ = c.AppendMenuW(menu, c.MF_SEPARATOR, 0, null);
     var next_id: usize = 1;
-    try build(alloc, menu, items, surface, &next_id, sys_id_shift);
+    try build(alloc, menu, items, surface, list, &next_id, sys_id_shift);
 }
 
-/// The action for a system menu command, if it's one of our items.
-pub fn systemCommand(items: []const Item, wparam: c.WPARAM) ?Binding.Action {
+/// What a system menu command does, if it's one of our items.
+pub fn systemCommand(items: []const Item, wparam: c.WPARAM) ?Choice {
     const id = wparam & 0xFFF0;
     if (id == 0 or id >= 0xF000) return null;
-    return actionAt(items, (id >> sys_id_shift) - 1);
+    return choiceAt(items, id >> sys_id_shift);
 }
 
 /// Append items to a menu. Actions get consecutive IDs (shifted left by
@@ -183,6 +275,7 @@ fn build(
     menu: c.HMENU,
     items: []const Item,
     surface: ?*Surface,
+    list: []const shells.Shell,
     next_id: *usize,
     shift: u6,
 ) !void {
@@ -206,10 +299,26 @@ fn build(
         },
         .submenu => |s| {
             const submenu = c.CreatePopupMenu() orelse return error.CreateMenuFailed;
-            try build(alloc, submenu, s.items, surface, next_id, shift);
+            try build(alloc, submenu, s.items, surface, list, next_id, shift);
             _ = c.AppendMenuW(
                 menu,
                 c.MF_POPUP,
+                @intFromPtr(submenu),
+                (try util.utf16Alloc(alloc, s.label)).ptr,
+            );
+        },
+        .shells => |s| {
+            const submenu = c.CreatePopupMenu() orelse return error.CreateMenuFailed;
+            const first = shell_id_base + @as(usize, @backingInt(s.target)) * max_shells;
+            try appendShells(alloc, submenu, list[0..@min(list.len, max_shells)], first, shift);
+            var flags: c_uint = c.MF_POPUP;
+            if (list.len == 0) flags |= c.MF_GRAYED;
+            if (surface) |sf| if (!sf.core_initialized) {
+                flags |= c.MF_GRAYED;
+            };
+            _ = c.AppendMenuW(
+                menu,
+                flags,
                 @intFromPtr(submenu),
                 (try util.utf16Alloc(alloc, s.label)).ptr,
             );
@@ -227,6 +336,18 @@ fn enabled(surface: *Surface, action: Binding.Action) bool {
     };
 }
 
+/// What the item with the given ID (from 1, unshifted) does.
+fn choiceAt(items: []const Item, id: usize) ?Choice {
+    if (id >= shell_id_base) {
+        const offset = id - shell_id_base;
+        const target = std.enums.fromInt(Target, offset / max_shells) orelse return null;
+        return .{ .shell = .{ .target = target, .index = offset % max_shells } };
+    }
+    if (id == 0) return null;
+    const action = actionAt(items, id - 1) orelse return null;
+    return .{ .action = action };
+}
+
 /// The action of the item with the given index, counting actions in
 /// depth-first order.
 fn actionAt(items: []const Item, index: usize) ?Binding.Action {
@@ -242,6 +363,7 @@ fn actionAtInner(items: []const Item, i: *usize) ?Binding.Action {
             i.* -= 1;
         },
         .submenu => |s| if (actionAtInner(s.items, i)) |a| return a,
+        .shells => {},
     };
     return null;
 }
@@ -342,7 +464,27 @@ test actionAt {
 
 test systemCommand {
     const testing = std.testing;
-    try testing.expectEqual(Binding.Action.new_window, systemCommand(&main, 1 << sys_id_shift).?);
+    try testing.expectEqual(Choice{ .action = .new_window }, systemCommand(&main, 1 << sys_id_shift).?);
     try testing.expect(systemCommand(&main, 0xF060) == null);
     try testing.expect(systemCommand(&main, 0) == null);
+
+    // Shells, after the actions, for each target.
+    try testing.expectEqual(
+        Choice{ .shell = .{ .target = .tab, .index = 2 } },
+        systemCommand(&main, (shell_id_base + 2) << sys_id_shift).?,
+    );
+    try testing.expectEqual(
+        Choice{ .shell = .{ .target = .window, .index = 0 } },
+        systemCommand(&main, (shell_id_base + max_shells) << sys_id_shift).?,
+    );
+    try testing.expect(((shell_id_base + 2 * max_shells) << sys_id_shift) <= 0xF000);
+}
+
+test "menus have fewer actions than the first shell ID" {
+    const testing = std.testing;
+    for ([_][]const Item{ &main, &context, &tab }) |items| {
+        var count: usize = 0;
+        while (actionAt(items, count) != null) count += 1;
+        try testing.expect(count < shell_id_base);
+    }
 }
