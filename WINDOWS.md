@@ -1154,13 +1154,25 @@ Notes:
         `title` and `cursor` features
   - [x] UI check: closing an idle cmd window doesn't ask; closing one
         running `cmd /k ping -t localhost` shows "Close terminal?"
-- [ ] Reconcile how a user chooses which shell to start for a new tab or
+- [x] Reconcile how a user chooses which shell to start for a new tab or
       window. The tab bar's shell dropdown ("New Tab With a Shell") offers
       Command Prompt, PowerShell, WSL, and so on, but the main menu has no
       such choice, and the dropdown only shows in the multi-tab view (when
       the tab bar is visible). So to start a WSL tab from a single-tab
       window, the user first has to open a new tab (Command Prompt), then
       use the dropdown.
+  - Now the main menu (the tab bar's menu button and the title bar menu,
+    Alt+Space, which a single-tab window still has) has "New Window With
+    Shell" and "New Tab With Shell" submenus, and the terminal's Tab
+    submenu and a tab's right-click menu have "New Tab With Shell". They
+    list the same shells as the dropdown (`shells.zig`): the configured
+    default, Command Prompt, Windows PowerShell, PowerShell, WSL, and each
+    WSL distribution.
+  - Checked by building the title bar menu (`WM_INITMENUPOPUP`) and
+    sending its commands (`WM_SYSCOMMAND`) to a single-tab window: "New
+    Tab With Shell > Windows PowerShell" opened a second tab running
+    `powershell.exe`, and "New Window With Shell > Command Prompt" opened
+    a second window running `cmd.exe`.
 
 ## Development log (2026-10-24)
 
