@@ -214,6 +214,37 @@ jobs:
       - name: Test
         run: zig build test -Dtarget=aarch64-windows-gnu --summary all
 
+      # The app in a real window on an ARM64 desktop.
+      - name: Smoke test (cmd)
+        shell: pwsh
+        run: ./test/windows/smoke.ps1 -Exe zig-out/bin/ghostty.exe -Command "cmd.exe" -Prompt ">" -Cd "cd /d"
+
+      - name: Package
+        shell: pwsh
+        run: ./dist/windows/package.ps1 -Target aarch64-windows-gnu -OutDir zig-out/dist -Msix
+
+      # Installed on the runner, which is thrown away after the job.
+      - name: Install MSIX package
+        shell: pwsh
+        run: |
+          $msix = Get-ChildItem zig-out/dist/*.msix | Select-Object -First 1
+          Add-AppxPackage -AllowUnsigned $msix.FullName
+          $package = Get-AppxPackage GhosttyWindowsUnofficial
+          Write-Host "Installed $($package.PackageFullName)"
+          if ($package.Architecture -ne 'Arm64') { throw "the package is for $($package.Architecture), not Arm64" }
+          ghostty-cli.exe +version
+          if ($LASTEXITCODE -ne 0) { throw "ghostty-cli +version failed" }
+          Remove-AppxPackage $package.PackageFullName
+
+      - name: Upload package
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: ghostty-windows-unofficial-arm64
+          path: |
+            zig-out/dist/*.zip
+            zig-out/dist/*.msix
+          retention-days: 14
+
   # libghostty-vt with the runner's native target, which is MSVC: GitHub's
   # Windows runners have Visual Studio and the Windows SDK.
   build-libghostty-vt-windows:
