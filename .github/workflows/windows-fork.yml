@@ -97,6 +97,13 @@ jobs:
         shell: pwsh
         run: ./test/windows/tab-tooltips.ps1 -Exe zig-out/bin/ghostty.exe
 
+      # Raises the display's scale while a terminal runs. Allowed to fail
+      # while we learn what the runner's display offers.
+      - name: DPI change test
+        shell: pwsh
+        continue-on-error: true
+        run: ./test/windows/dpi-change.ps1 -Exe zig-out/bin/ghostty.exe
+
       # Typing through the Japanese IME, which it installs first. Allowed to
       # fail while it's new, since it depends on the runner image having
       # the language capability.
