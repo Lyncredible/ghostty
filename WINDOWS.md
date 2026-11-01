@@ -342,6 +342,11 @@ Notes:
         `ghostty.com` with no action opened a window and returned in
         26 ms; piped `+version` output still works. Unit tests:
         `argsAfterProgram`, `isAction`.
+        Fork CI run 41254453745 (with the launcher) passed: the x64 and
+        ARM64 tests, the smoke and desktop input tests, the MSIX install,
+        and libghostty-vt with MSVC. CI now also runs `+version` and
+        `+validate-config` (a valid and an invalid config) through
+        `ghostty.com`.
 - [x] `ghostty +validate-config` always failed (exit 1, no output) when
       its output was a pipe or the console: it finished with
       `File.Writer.end`, which sets the output's length, and Windows
