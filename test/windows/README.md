@@ -106,8 +106,8 @@ with its name. It moves the mouse, so it only runs in CI.
 
 Raises the display's scale while a terminal runs (as the Settings app
 does), which sends the window the same `WM_DPICHANGED` as moving it to a
-monitor with another scale, and checks that its cells and its window grew
-with the DPI. It changes the display's resolution and scale, so it only
+monitor with another scale, and checks that its cells grew with the DPI
+and that the window took the size Windows suggested. It changes the display's resolution and scale, so it only
 runs in CI.
 
 ## ime.ps1

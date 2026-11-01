@@ -1,12 +1,11 @@
 # Checks, for CI, that a terminal follows a DPI change while it runs: it
 # raises the display's scale the way the Settings app does
 # (SPI_SETLOGICALDPIOVERRIDE), which sends windows the same WM_DPICHANGED
-# as moving them to a monitor with another scale, and checks that the
-# window kept its size in inches and the font its size in points (cells
-# grow with the DPI). A small display only offers 100%, so it first
-# switches to the largest display mode, and the window starts small enough
-# to grow on it (Windows keeps the suggested size on the screen). It
-# changes the desktop, so it only runs in CI.
+# as moving them to a monitor with another scale, and checks that the font
+# kept its size in points (cells grow with the DPI) and the window took
+# the size Windows suggested. A small display only offers 100%, so it
+# first switches to the largest display mode. It changes the desktop, so it
+# only runs in CI.
 #
 #     ./dpi-change.ps1 -Exe zig-out/bin/ghostty.exe
 
@@ -138,17 +137,23 @@ try {
     $ratio = $newDpi / $dpi
     $grown = WaitFor { $c = CellSize; if ($c.Height -gt $cell.Height) { $c } } 'larger cells after the DPI change'
     $newWidth = ClientWidth $surface.Window
-    Select-String -Path $log -Pattern 'dpi changed .*' | ForEach-Object { Notice $_.Matches[0].Value }
     Write-Host "After: DPI $newDpi, client width $newWidth px, cells $($grown.Width)x$($grown.Height) px."
 
     # The font keeps its size in points, so cells grow with the DPI (to
-    # within rounding), and so does the window, which keeps its size in
-    # inches (Windows suggests the new size in WM_DPICHANGED).
+    # within rounding).
     $cellRatio = $grown.Height / $cell.Height
     if ([math]::Abs($cellRatio - $ratio) -gt 0.2) { Fail "cells grew by $cellRatio for a DPI change of $ratio" }
-    $widthRatio = $newWidth / $width
-    if ([math]::Abs($widthRatio - $ratio) -gt 0.1) { Fail "the window grew by $widthRatio for a DPI change of $ratio" }
-    Write-Host "A DPI change of $ratio grew cells by $([math]::Round($cellRatio, 2)) and the window by $([math]::Round($widthRatio, 2))."
+    Write-Host "A DPI change of $ratio grew cells by $([math]::Round($cellRatio, 2))."
+
+    # The window takes the size Windows suggests in WM_DPICHANGED. (For a
+    # scale change, unlike a move to another monitor, Windows suggests the
+    # same size in pixels, so we can't check that it keeps its size in
+    # inches here.)
+    $change = Select-String -Path $log -Pattern 'dpi changed dpi=\d+ suggested=(\d+x\d+) now=(\d+x\d+)' | Select-Object -Last 1
+    if (-not $change) { Fail "no DPI change in the log" }
+    $suggested = $change.Matches[0].Groups[1].Value; $now = $change.Matches[0].Groups[2].Value
+    if ($suggested -ne $now) { Fail "Windows suggested $suggested but the window is $now" }
+    Write-Host "The window took the size Windows suggested, $suggested."
 } finally {
     if (-not $process.HasExited) { Stop-Process -Id $process.Id -Force }
     [void][GhosttyDpi.Win32]::SetScaleStep($originalStep)
