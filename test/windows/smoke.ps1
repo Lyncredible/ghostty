@@ -15,7 +15,10 @@ param(
     [string]$Directory = $env:SystemRoot,
     # cmd needs `cd /d` to change drives.
     [string]$Cd = 'cd',
-    [int]$TimeoutSeconds = 60
+    [int]$TimeoutSeconds = 60,
+    # More arguments for Ghostty, and a pattern its log must contain.
+    [string[]]$Extra = @(),
+    [string]$ExpectLog = ''
 )
 
 $ErrorActionPreference = 'Stop'
@@ -31,7 +34,7 @@ $env:GHOSTTY_LOG = 'debug'
 # command (escaping its own quotes) for the Windows command line.
 $commandArg = '"--command=' + $Command.Replace('"', '\"') + '"'
 $process = Start-Process -FilePath $Exe -PassThru -RedirectStandardError $log `
-    -ArgumentList $commandArg, '--window-save-state=never'
+    -ArgumentList (@($commandArg, '--window-save-state=never') + $Extra)
 
 function Fail([string]$message) {
     Write-Host "--- Ghostty's log ---"
@@ -89,6 +92,11 @@ try {
         Fail "shell integration wasn't injected"
     }
     Write-Host "Shell integration was injected and the pwd followed cd to $Directory."
+    if ($ExpectLog) {
+        $line = Select-String -Path $log -Pattern $ExpectLog | Select-Object -First 1
+        if (-not $line) { Fail "the log has nothing matching $ExpectLog" }
+        Write-Host "The log has: $($line.Line)"
+    }
 } finally {
     if (-not $process.HasExited) { Stop-Process -Id $process.Id -Force }
 }
