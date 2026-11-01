@@ -137,8 +137,18 @@ jobs:
       - name: Setup Zig
         uses: mlugg/setup-zig@d1434d08867e3ee9daa34448df10607b98908d29 # v2.2.1
 
+      # On failure, put the end of the output on the run's page, since the
+      # job log needs signing in.
       - name: Build
-        run: zig build -Dtarget=aarch64-windows-gnu
+        shell: pwsh
+        run: |
+          zig version
+          zig build -Dtarget=aarch64-windows-gnu 2>&1 | Tee-Object -FilePath build.log
+          if ($LASTEXITCODE -ne 0) {
+            $tail = (Get-Content build.log -Tail 6) -join ' / '
+            Write-Host "::error title=arm64 build::$tail"
+            exit 1
+          }
 
       - name: Test
         run: zig build test -Dtarget=aarch64-windows-gnu --summary all
