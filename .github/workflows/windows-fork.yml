@@ -221,7 +221,14 @@ jobs:
 
       - name: Package
         shell: pwsh
-        run: ./dist/windows/package.ps1 -Target aarch64-windows-gnu -OutDir zig-out/dist -Msix
+        run: |
+          try {
+            ./dist/windows/package.ps1 -Target aarch64-windows-gnu -OutDir zig-out/dist -Msix *>&1 | Tee-Object -FilePath package.log
+          } catch {
+            $tail = (Get-Content package.log -Tail 8) -join ' / '
+            Write-Host "::error title=arm64 package::$($_.Exception.Message) / $tail"
+            throw
+          }
 
       # Installed on the runner, which is thrown away after the job.
       - name: Install MSIX package
