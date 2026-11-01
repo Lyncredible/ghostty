@@ -68,9 +68,6 @@ fn tipInvocation() ?*ITipInvocation {
     return tip;
 }
 
-/// Ask where to save `contents` with the standard Save As dialog, and save
-/// it there. The dialog is modal and pumps messages. Returns false if the
-/// user canceled or saving failed.
 /// Move a window to the virtual desktop the user is on, which is that of
 /// the foreground window. Does nothing if it's already there, or if we
 /// can't tell, such as with no foreground window or virtual desktops.
@@ -158,6 +155,9 @@ extern "shlwapi" fn AssocQueryStringW(
     out_len: *u32,
 ) callconv(.winapi) i32;
 
+/// Ask where to save `contents` with the standard Save As dialog, and save
+/// it there. The dialog is modal and pumps messages. Returns false if the
+/// user canceled or saving failed.
 pub fn saveAs(
     alloc: Allocator,
     owner: c.HWND,
