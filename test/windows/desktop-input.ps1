@@ -1,8 +1,9 @@
 # Checks of the Windows app with real (synthesized) keyboard and mouse
 # input, for CI: typing, Ctrl+V pasting, Ctrl+C copying and interrupting,
-# and focus-follows-mouse between splits. SendInput goes to whatever window
-# is in the foreground, so this only runs in CI (where nothing else is on
-# the desktop), never on a developer's machine.
+# focus-follows-mouse between splits, and window-step-resize while dragging
+# the window's corner. SendInput goes to whatever window is in the
+# foreground, so this only runs in CI (where nothing else is on the
+# desktop), never on a developer's machine.
 #
 #     $env:CI = 'true'; ./desktop-input.ps1 -Exe zig-out/bin/ghostty.exe
 
@@ -33,6 +34,8 @@ Add-Type -Namespace GhosttyDesktop -Name Win32 -MemberDefinition @'
 [DllImport("user32.dll")] public static extern bool GetGUIThreadInfo(uint tid, ref GUITHREADINFO info);
 [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(System.IntPtr h, out uint pid);
 [DllImport("user32.dll")] public static extern bool SetProcessDPIAware();
+[DllImport("user32.dll")] public static extern bool GetClientRect(System.IntPtr h, out RECT r);
+[DllImport("user32.dll")] public static extern void mouse_event(uint flags, int dx, int dy, uint data, System.IntPtr extra);
 public static void Key(ushort vk, bool up) {
   var i = new INPUT[1]; i[0].type = 1; i[0].u.ki.wVk = vk; i[0].u.ki.dwFlags = up ? 2u : 0u;
   SendInput(1, i, System.Runtime.InteropServices.Marshal.SizeOf(typeof(INPUT))); }
@@ -53,7 +56,7 @@ $env:GHOSTTY_LOG = 'debug'
 $process = Start-Process -FilePath $Exe -PassThru -RedirectStandardError $log -ArgumentList `
     '--command=cmd.exe', '--window-save-state=never', '--focus-follows-mouse=true', `
     '--clipboard-paste-protection=false', '--keybind=f8=new_split:right', `
-    '--keybind=f9=select_all'
+    '--keybind=f9=select_all', '--window-step-resize=true'
 
 function Fail([string]$message) {
     Write-Host "--- Ghostty's log ---"
@@ -144,6 +147,32 @@ try {
     [void][GhosttyDesktop.Win32]::SetCursorPos($x, $y)
     [void](WaitFor { [GhosttyDesktop.Win32]::Focus($window) -eq $handle } 'focus to follow the mouse')
     Write-Host 'Focus follows the mouse.'
+
+    # window-step-resize: dragging the bottom-right corner by an amount
+    # that isn't whole cells changes the terminal by whole cells.
+    $cell = [regex]::Matches((Get-Content $log -Raw), '\.cell = \.\{ \.width = (\d+), \.height = (\d+)') | Select-Object -Last 1
+    if (-not $cell) { Fail "no cell size in the log" }
+    $cellW = [int]$cell.Groups[1].Value; $cellH = [int]$cell.Groups[2].Value
+    $before = New-Object GhosttyDesktop.Win32+RECT
+    [void][GhosttyDesktop.Win32]::GetClientRect($window, [ref]$before)
+    [void][GhosttyDesktop.Win32]::GetWindowRect($window, [ref]$rect)
+    $x = $rect.r - 2; $y = $rect.b - 2
+    [void][GhosttyDesktop.Win32]::SetCursorPos($x, $y)
+    Start-Sleep -Milliseconds 200
+    [GhosttyDesktop.Win32]::mouse_event(0x0002, 0, 0, 0, [IntPtr]::Zero)
+    foreach ($i in 1..10) {
+        [void][GhosttyDesktop.Win32]::SetCursorPos($x + [int](137 * $i / 10), $y + [int](91 * $i / 10))
+        Start-Sleep -Milliseconds 50
+    }
+    [GhosttyDesktop.Win32]::mouse_event(0x0004, 0, 0, 0, [IntPtr]::Zero)
+    Start-Sleep -Milliseconds 500
+    $after = New-Object GhosttyDesktop.Win32+RECT
+    [void][GhosttyDesktop.Win32]::GetClientRect($window, [ref]$after)
+    $dw = $after.r - $before.r; $dh = $after.b - $before.b
+    Write-Host "Dragging the corner by 137x91 px changed the client area by ${dw}x${dh} px (cells are ${cellW}x${cellH})."
+    if ($dw -eq 0 -or $dh -eq 0) { Fail "the corner drag didn't resize the window" }
+    if ($dw % $cellW -ne 0 -or $dh % $cellH -ne 0) { Fail "the resize wasn't whole cells" }
+    Write-Host 'window-step-resize resizes by whole cells.'
 } finally {
     if (-not $process.HasExited) { Stop-Process -Id $process.Id -Force }
 }
