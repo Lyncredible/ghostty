@@ -205,8 +205,14 @@ Notes:
     `ghostty.exe`).
   - [x] Run it on an ARM64 machine. The fork workflow builds and runs the
         tests natively on GitHub's `windows-11-arm` runner. Run
-        41226585460 (2026-10-31) passed: build 9 minutes, tests 25. The
-        app itself hasn't been opened on an ARM64 desktop.
+        41226585460 (2026-10-31) passed: build 9 minutes, tests 25.
+    - [x] The app on an ARM64 desktop: the same job runs the cmd smoke
+          test (a real window, shell integration and OSC 7), which passed
+          in run 41348634447.
+    - [ ] An ARM64 zip and MSIX from CI: `package.ps1 -Target
+          aarch64-windows-gnu -Msix` works cross-compiled here (it made
+          `GhosttyWindowsUnofficial_1.0.18744.0_arm64__ddpcdxnmqgtp8`) but
+          failed natively on the ARM64 runner (run 41348634447).
 - [x] Light and dark themes: the app reports the Windows app mode
       (`AppsUseLightTheme`) to the core at startup and on
       `WM_SETTINGCHANGE`, so `theme = light:X,dark:Y` and color scheme
