@@ -74,3 +74,10 @@ Starts an installed Ghostty the way the Start menu does (the MSIX by its
 app ID, or the zip's `install.ps1` shortcut) and checks that a window
 opens from the installed location; for the zip it also uninstalls. It
 only runs in CI.
+
+## drag-drop.ps1
+
+Drags a file (a real OLE drag, as from Explorer) from a window of its own
+onto a terminal running cmd, and checks that its path was pasted. It moves
+the mouse and holds its button, so it only runs in CI, with Windows
+PowerShell (an STA thread).
