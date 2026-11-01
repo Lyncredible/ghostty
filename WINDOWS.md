@@ -792,7 +792,10 @@ Notes:
       (`TTN_GETDISPINFOW`) based on what's under the mouse. Checked that
       the tooltip is created; it follows the real cursor, so showing it
       needs a manual check.
-  - [ ] Manual check: hover a tab and the buttons
+  - [x] Hover a tab and the buttons: the fork's CI runs
+        `test/windows/tab-tooltips.ps1`, which moves the real cursor over
+        the "New Tab" button and the tab and reads each tooltip through UI
+        Automation (run 41303787849).
 - [x] Move a tab to a new window (`move_tab_to_new_window`)
 - [x] Drag a tab out of the tab bar, like in browsers: dropped well
       above or below the tab bar, it moves to the Ghostty window under
