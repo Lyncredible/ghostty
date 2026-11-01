@@ -103,6 +103,9 @@ if ($Msix) {
     $layout = Join-Path $staging "msix"
     New-Item -ItemType Directory -Force $layout | Out-Null
     Copy-Item -Recurse (Join-Path $package "bin"), (Join-Path $package "share"), (Join-Path $package "README.txt") $layout
+    # Packaged applications and their aliases must be .exe files, so the
+    # console launcher (ghostty.com) is also bin\ghostty-cli.exe here.
+    Copy-Item (Join-Path $package "bin\ghostty.com") (Join-Path $layout "bin\ghostty-cli.exe")
 
     # Logos, from the executable's icon.
     $assets = Join-Path $layout "Assets"
@@ -163,6 +166,21 @@ if ($Msix) {
         <uap5:Extension Category="windows.appExecutionAlias">
           <uap5:AppExecutionAlias>
             <uap5:ExecutionAlias Alias="ghostty.exe" />
+          </uap5:AppExecutionAlias>
+        </uap5:Extension>
+      </Extensions>
+    </Application>
+    <Application Id="Cli" Executable="bin\ghostty-cli.exe" EntryPoint="Windows.FullTrustApplication">
+      <uap:VisualElements DisplayName="Ghostty CLI (unofficial Windows build)"
+                          Description="Runs Ghostty's CLI actions from a shell, such as ghostty-cli +list-themes."
+                          BackgroundColor="transparent"
+                          AppListEntry="none"
+                          Square150x150Logo="Assets\Square150x150Logo.png"
+                          Square44x44Logo="Assets\Square44x44Logo.png" />
+      <Extensions>
+        <uap5:Extension Category="windows.appExecutionAlias">
+          <uap5:AppExecutionAlias>
+            <uap5:ExecutionAlias Alias="ghostty-cli.exe" />
           </uap5:AppExecutionAlias>
         </uap5:Extension>
       </Extensions>

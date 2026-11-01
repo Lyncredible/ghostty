@@ -347,13 +347,16 @@ Notes:
         and libghostty-vt with MSVC. CI now also runs `+version` and
         `+validate-config` (a valid and an invalid config) through
         `ghostty.com`; run 41257271537 passed.
-    - [ ] The MSIX package's execution alias is `ghostty.exe` (aliases
+    - [x] The MSIX package's execution alias is `ghostty.exe` (aliases
           must end in `.exe`), so from an MSIX install, `ghostty` in a
           shell runs the GUI program directly: CLI actions work but
           don't make the shell wait, and the theme preview falls back to
-          the list. A second application in the manifest with a console
-          alias (for example `ghostty-cli.exe`, pointing at the
-          launcher) would fix it.
+          the list. The package now also has the launcher as
+          `bin\ghostty-cli.exe`, a second application (hidden from the
+          Start menu) with the alias `ghostty-cli.exe`, for
+          `ghostty-cli +list-themes` and the like. The package reader
+          accepted it; CI installs it and runs `ghostty-cli +version`
+          through the alias.
 - [x] `ghostty +validate-config` always failed (exit 1, no output) when
       its output was a pipe or the console: it finished with
       `File.Writer.end`, which sets the output's length, and Windows
