@@ -102,6 +102,13 @@ Opens a terminal with the tab bar shown, moves the real cursor over the
 "New Tab" button and then the tab, and checks that each shows a tooltip
 with its name. It moves the mouse, so it only runs in CI.
 
+## quick-terminal.ps1
+
+Toggles the quick terminal over IPC, samples its position while it slides
+in and out, and checks that it ends up hidden. Then it adds a virtual
+desktop (Ctrl+Win+D) and checks that showing the quick terminal moves it
+there. It sends real keys, so it only runs in CI.
+
 ## dpi-change.ps1
 
 Raises the display's scale while a terminal runs (as the Settings app
