@@ -204,8 +204,12 @@ Notes:
       reports (mode 2031) follow the system. Checked with
       `--theme=light:Builtin Light,dark:Builtin Dark` in light mode: the
       background was white, and a settings change message kept it.
-  - [ ] Switch Windows to dark mode while it runs (not done here, since
-        it changes the whole desktop)
+  - [x] Switch Windows to dark mode while it runs (not done here, since
+        it changes the whole desktop): the fork's CI runs
+        `test/windows/dark-mode.ps1`, which flips `AppsUseLightTheme`,
+        broadcasts the settings change, and checks the terminal's
+        background color from the screen, dark and back to light. It
+        passed in run 41301043212.
 - [x] `toggle_tab_overview`: the command palette lists the window's tabs
       ("Tab N: title") to filter and switch to. Checked with three tabs:
       F9 bound to the action showed them, and choosing "Tab 1" made the
@@ -834,7 +838,10 @@ Notes:
         `explorer.exe` (or has exited). Forwarded launches carry the
         directory. `SHELL` is ignored on Windows (Git Bash and MSYS2 set
         POSIX paths).
-    - [ ] Manual check: a Start menu or Explorer launch opens at home
+    - [x] A Start menu launch opens at home: `test/windows/start-menu.ps1`
+          checks that the installed MSIX, started by its app ID, shows a
+          prompt in the home directory (run 41301043212). The zip's
+          shortcut sets its working directory to home anyway.
   - [x] A custom `class` is also the process's AppUserModelID, so its
         windows get their own taskbar group (with their own jump list and
         pins), like the class on Linux. The default class keeps Windows's
