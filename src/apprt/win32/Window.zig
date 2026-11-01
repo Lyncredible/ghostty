@@ -21,7 +21,6 @@ const Menu = @import("Menu.zig");
 const shells = @import("shells.zig");
 const SaveState = @import("SaveState.zig");
 const SplitDrag = @import("SplitDrag.zig");
-const winshell = @import("shell.zig");
 
 const log = std.log.scoped(.win32);
 
@@ -278,12 +277,9 @@ pub fn showQuick(self: *Window) void {
     const target = self.quickTarget() orelse self.quick_target;
     self.quick_target = target;
 
-    // Like macOS Spaces: with `move`, the quick terminal comes to the
-    // virtual desktop the user is on. With `remain`, Windows switches to
-    // the desktop it's on when it's activated.
-    if (self.app.config.@"quick-terminal-space-behavior" == .move) {
-        winshell.moveToCurrentDesktop(self.hwnd);
-    }
+    // Windows doesn't put tool windows on a virtual desktop, so the quick
+    // terminal shows on whichever one the user is on, as with
+    // `quick-terminal-space-behavior = move`.
 
     _ = util.SetWindowPos(
         self.hwnd,
