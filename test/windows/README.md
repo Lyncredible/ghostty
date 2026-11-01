@@ -106,8 +106,8 @@ with its name. It moves the mouse, so it only runs in CI.
 
 Toggles the quick terminal over IPC, samples its position while it slides
 in and out, and checks that it ends up hidden. Then it adds a virtual
-desktop (Ctrl+Win+D) and checks that showing the quick terminal moves it
-there. It sends real keys, so it only runs in CI.
+desktop (Ctrl+Win+D) and checks that showing the quick terminal shows it
+there, without Windows switching back. It sends real keys, so it only runs in CI.
 
 ## dpi-change.ps1
 
