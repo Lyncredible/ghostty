@@ -31,8 +31,9 @@ mailbox: termio.Mailbox,
 renderer_state: *renderer.State,
 
 /// A handle to wake up the renderer. This hints to the renderer that
-/// a repaint should happen.
-renderer_wakeup: xev.Async,
+/// a repaint should happen. It points to the renderer thread's own
+/// handle, since with some backends (IOCP) a copy can't wake the thread.
+renderer_wakeup: *xev.Async,
 
 /// The mailbox for renderer messages.
 renderer_mailbox: *renderer.Thread.Mailbox,
