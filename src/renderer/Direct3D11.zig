@@ -78,6 +78,11 @@ composition: Composition,
 swap_chain_width: u32,
 swap_chain_height: u32,
 
+/// Whether the last present found nothing of the window shown, such as
+/// while the session is locked, and when it was (QueryPerformanceCounter).
+occluded: bool = false,
+last_present: i64 = 0,
+
 /// Fixed function state shared by all render passes.
 rasterizer: *c.ID3D11RasterizerState,
 default_sampler: Sampler,
@@ -403,12 +408,35 @@ pub fn present(self: *Direct3D11, target: Target) !void {
         });
     }
 
+    // While the window isn't shown, Present returns at once rather than
+    // at the next refresh, and output would have us draw hundreds of
+    // frames a second, so we sleep before presents that come quickly.
+    // Sleep rounds up to the system timer's tick (about 15.6 ms), so this
+    // spaces them about a refresh apart, and animations, which are timed
+    // with the same tick, never wait.
+    if (self.occluded) {
+        const elapsed_ms = @divTrunc((qpc() - self.last_present) * 1000, qpcFrequency());
+        if (elapsed_ms >= 0 and elapsed_ms < 10) c.Sleep(1);
+    }
+
     // Present, waiting for vsync. This can return success codes such as
-    // DXGI_STATUS_OCCLUDED which we're fine to ignore.
-    try com.check(
-        com.call(self.swap_chain, "Present", .{ 1, 0 }),
-        "IDXGISwapChain::Present",
-    );
+    // DXGI_STATUS_OCCLUDED, which only tells us to draw less.
+    const hr = com.call(self.swap_chain, "Present", .{ 1, 0 });
+    self.occluded = hr == c.DXGI_STATUS_OCCLUDED;
+    self.last_present = qpc();
+    try com.check(hr, "IDXGISwapChain::Present");
+}
+
+fn qpc() i64 {
+    var v: c.LARGE_INTEGER = undefined;
+    _ = c.QueryPerformanceCounter(&v);
+    return v.QuadPart;
+}
+
+fn qpcFrequency() i64 {
+    var v: c.LARGE_INTEGER = undefined;
+    _ = c.QueryPerformanceFrequency(&v);
+    return v.QuadPart;
 }
 
 /// Returns the options to use when constructing buffers.
