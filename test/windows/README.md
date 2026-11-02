@@ -151,4 +151,5 @@ Floods a terminal with output from cmd, which changes the title with each
 line, and sends the window `WM_NULL` messages meanwhile: most must be
 answered within 200 ms. Run it on a release build (`-Exe`, or the
 package's with `-Zip`); the debug build is too slow to show a hang. It
-only sends messages to Ghostty's window, so it can run locally.
+only sends messages to Ghostty's window, so it can run locally; in CI it
+also presses Ctrl+C and checks that the flood stops.
