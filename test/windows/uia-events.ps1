@@ -43,7 +43,7 @@ $AE = [System.Windows.Automation.AutomationElement]
 $Scope = [System.Windows.Automation.TreeScope]
 
 $process = Start-Process -FilePath $Exe -PassThru -RedirectStandardError $Log -ArgumentList '--command=cmd.exe',
-    '--window-save-state=never', '--keybind=f5=select_all', '--keybind=f6=new_tab'
+    '--window-save-state=never', '--window-show-tab-bar=always', '--keybind=f5=select_all', '--keybind=f6=new_tab'
 $listener = $null
 $out = Join-Path $work 'events.txt'
 

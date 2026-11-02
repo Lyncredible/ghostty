@@ -927,9 +927,26 @@ Notes:
         screen's 109 characters. Unit test: `viewportSelection`. This
         fixed a crash freeing text snapshots (the UTF-16 text lost its
         sentinel, so the free had the wrong length).
-    - [ ] Manual check that screen readers get the event: on this
-          locked desktop no UIA events reach the .NET client, even from
-          a standard Edit control.
+    - [x] Screen readers get the events: `test/windows/uia-events.ps1`
+          listens with `uia_events.c`, a client of the native UI
+          Automation API (as screen readers are), and gets the output
+          notification, `TextSelectionChanged` after `select_all`, and the
+          tab bar's `ElementSelected` for a new tab (locally, and in CI).
+          Before, no client got any of them: both providers declared
+          `ProviderOptions_ServerSideProvider` as 0x1, which is
+          `ClientSideProvider` (server-side is 0x2). Every `UiaRaise*`
+          returned `S_OK`, but UI Automation then asked the window for its
+          provider again and couldn't connect (a UIA trace showed
+          `CreateFile` failing for `UIA_PIPE_<pid>_<cookie>`), so the
+          events never left Ghostty's process. Found by reducing to a C
+          provider that worked and swapping its methods into a Zig one:
+          only `get_ProviderOptions` mattered. (The old note here, that a
+          locked desktop stops UIA events, was wrong: focus events from
+          Windows arrive here too.)
+      - [x] The announcement after Enter no longer starts with the rest
+            of the typed command ("840 uia-20840"): skipped typing updates
+            still became the last snapshot.
+      - [ ] Hearing it in Narrator (a person, with audio).
 - [x] Taskbar jump list with a "New Window" task, which starts
       `ghostty.exe` again (single instance opens the window in the running
       app). Checked: the shell wrote the custom destinations file with the
