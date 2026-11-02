@@ -91,6 +91,8 @@ try {
         $W::Type($surfaceHandle, "echo uia-$PID`r")
         $note = WaitFor { Events | Where-Object { $_ -like 'notification:*' -and $_ -match "uia-$PID" } | Select-Object -First 1 } 'a notification with the output'
         Write-Host "::notice title=uia-events::$note"
+        # Screen readers speak typing themselves, so only the output is new.
+        if (([regex]::Matches($note, "uia-$PID")).Count -ne 1) { throw "the announcement repeats the typed command: $note" }
     } catch {
         $text = $found.Surface.GetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern).Current.Value
         $failures += "$($_.Exception.Message); the screen has uia-$PID $(([regex]::Matches($text, "uia-$PID")).Count) times"
