@@ -460,6 +460,13 @@ Notes:
         It's now written on a thread of its own: the window showed after
         174 ms, the prompt after 220. Checked: the launch still rewrote the
         `CustomDestinations` file with the "New Window" task.
+  - [x] Telling whether Explorer started us (which picks the home
+        directory) took a snapshot of every process, about 5 ms with 240
+        of them. We now ask for the parent directly (0.07 ms). Checked: cmd
+        started in the current directory when run from a shell, and in
+        `C:\Users\<user>` when started through `explorer.exe`. With all
+        three, warm starts showed the window after 166-174 ms (from 330)
+        and the prompt after 201-228 ms (from 362).
   - PowerShell's integration added about 180 ms per tab (590 ms with
     `shell-integration = none`). Its first prompt used three things that
     are slow the first time in 5.1: `New-Object` (63 ms), a regular
