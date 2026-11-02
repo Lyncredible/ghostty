@@ -304,6 +304,17 @@ pub const exp = struct {
             hSnapshot: HANDLE,
             lppe: *PROCESSENTRY32W,
         ) callconv(.winapi) BOOL;
+        pub extern "kernel32" fn OpenProcess(
+            dwDesiredAccess: DWORD,
+            bInheritHandle: BOOL,
+            dwProcessId: DWORD,
+        ) callconv(.winapi) ?HANDLE;
+        pub extern "kernel32" fn QueryFullProcessImageNameW(
+            hProcess: HANDLE,
+            dwFlags: DWORD,
+            lpExeName: [*]u16,
+            lpdwSize: *DWORD,
+        ) callconv(.winapi) BOOL;
         /// https://learn.microsoft.com/en-us/windows/win32/api/fileapi/nf-fileapi-getfinalpathnamebyhandlew
         pub extern "kernel32" fn GetFinalPathNameByHandleW(
             hFile: HANDLE,
