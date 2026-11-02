@@ -29,6 +29,9 @@ const quick_slide_timer_id = 2;
 const undo_timer_id = 3;
 const closed_window_timer_id = 4;
 
+/// Posted to update the title bar and tab bar after title changes.
+const WM_GHOSTTY_TITLE_CHANGED = c.WM_APP + 20;
+
 /// A closed tab or split that `undo` can reopen until it expires.
 const Closed = struct {
     what: What,
@@ -124,6 +127,9 @@ destroying: bool = false,
 
 /// Explorer sends TaskbarButtonCreated after the window's button exists.
 taskbar_ready: bool = false,
+
+/// True while a WM_GHOSTTY_TITLE_CHANGED is posted and not yet handled.
+title_change_posted: bool = false,
 
 /// A title set by the user, which takes precedence over the active tab's.
 title_override: ?[:0]const u8 = null,
@@ -1224,8 +1230,22 @@ pub fn updateTaskbarProgress(self: *Window) void {
 pub fn surfaceTitleChanged(self: *Window, surface: *Surface) void {
     const tab = self.tabOf(surface) orelse return;
     if (tab.focused != surface) return;
+
+    // Programs can change the title with every command (cmd puts the
+    // command in it), and the core handles all queued messages before
+    // returning to our message loop. Updating the title bar each time
+    // was slower than the titles arrived, so the window stopped
+    // responding while output flooded in. We update once, later.
+    if (self.title_change_posted) return;
+    if (c.PostMessageW(self.hwnd, WM_GHOSTTY_TITLE_CHANGED, 0, 0) != 0) {
+        self.title_change_posted = true;
+    } else self.titleChanged();
+}
+
+fn titleChanged(self: *Window) void {
+    self.title_change_posted = false;
     self.tab_bar.invalidate();
-    if (tab == self.activeTab()) self.updateWindowTitle();
+    self.updateWindowTitle();
 }
 
 /// Set or clear (with null or an empty title) the user's title override.
@@ -1963,6 +1983,11 @@ pub fn wndProc(
         },
         c.WM_SIZE => {
             self.layout();
+            return 0;
+        },
+
+        WM_GHOSTTY_TITLE_CHANGED => {
+            self.titleChanged();
             return 0;
         },
 
