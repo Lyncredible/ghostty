@@ -1283,7 +1283,37 @@ Notes:
   native UI. The focused split stays undimmed when its window loses focus.
   Also verified custom fill, disabling with opacity 1, re-enabling via
   live config reload, and closing the focused split without a crash.
-  Performance with heavy custom shaders and images still needs profiling.
+  Performance with heavy custom shaders and images: see below.
+- [x] Profiled custom shaders and background images (ReleaseFast, an
+      NVIDIA GT 750M at 1024x768 and 59 Hz, the window about 800x600).
+      Frames counted from the DXGI ETW provider's Present events (no admin
+      needed), CPU from the process, GPU from the `GPU Engine` 3D counter:
+      | Case | Frames/s | CPU | GPU 3D |
+      | --- | --- | --- | --- |
+      | No shader, idle (cursor blink) | 1.8 | 0% | 3% |
+      | Background image 3840x2160, cover | 1.6 | 0.4% | 4% |
+      | Pass-through shader, animated | 65-71 | 5-7% | 43% |
+      | Light shader (tint by time) | 65 | 5% | 42% |
+      | Heavy shader (64 samples per pixel) | 65 | 5% | 82% |
+      | Heavy shader, 4 splits | 65 each | 20% | 84% |
+      | Heavy shader, maximized | 43 | 6% | 100% |
+      | Background image + heavy, maximized | 42 | 8% | 100% |
+      Animated shaders hold the refresh rate until the GPU is full, and an
+      image costs nothing while idle. Each split has its own swap chain and
+      runs the shader itself, as on other platforms. The 43% for a shader
+      that only copies its input is this old GPU's base cost per frame (it
+      doesn't grow with the shader's work until the GPU is full).
+  - [x] Found while profiling: the window stopped responding while cmd
+        flooded output (`for /l %i in (1,1,999999999) do @echo %i`):
+        0 of 40 `WM_NULL` messages answered within 5 s. Sampling the UI
+        thread's stack showed every title change setting the window text
+        and invalidating the tab bar, while cmd changed the title with each
+        line ("cmd.exe - echo 10813"), and the core's tick handles every
+        queued message before returning to the message loop. Title changes
+        now post one message that updates the title bar later. Checked:
+        median 0.6 ms, max 21 ms, and the title still follows cmd.
+        `test/windows/flood.ps1` runs this in CI on the package's release
+        build (the debug build was too slow to hang).
 - The tab bar now has a shell dropdown next to the new-tab button. It lists
   shells whose executables are found in PATH and always offers the configured
   default. An explicit choice uses the resolved executable path and is
