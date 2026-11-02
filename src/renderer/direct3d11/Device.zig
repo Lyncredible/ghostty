@@ -69,11 +69,74 @@ fn chooseAdapter() ?*c.IDXGIAdapter1 {
     return adapter;
 }
 
-/// Create a new ID3D11Device and its immediate context.
-pub fn createDevice(self: *const Device) !struct {
+pub const Created = struct {
     device: *c.ID3D11Device,
     context: *c.ID3D11DeviceContext,
-} {
+};
+
+/// Create a new ID3D11Device and its immediate context. The first one
+/// is the device `warmup` made, if it started.
+pub fn createDevice(self: *const Device) !Created {
+    if (warm.take()) |created| return created;
+    return create(@ptrCast(self.adapter));
+}
+
+/// Run on a thread at startup by the core. The first device in a process
+/// loads the graphics driver, which took about 115 ms on a GeForce GT 750M
+/// against 24 ms for later ones, and releasing it let the driver unload
+/// some of it again. So we create the first surface's device here, while
+/// the app loads its config and fonts, and keep it for `createDevice`.
+pub fn warmup() void {
+    if (!warm.start()) return;
+    const adapter = chooseAdapter();
+    defer com.releaseOpt(adapter);
+    warm.finish(create(@ptrCast(adapter)) catch null);
+}
+
+/// The device made by `warmup`, until the first surface takes it.
+var warm: Warm = .{};
+
+const Warm = struct {
+    // SRWLOCK_INIT and CONDITION_VARIABLE_INIT are zeroes (which
+    // translate-c can't translate).
+    lock: c.SRWLOCK = std.mem.zeroes(c.SRWLOCK),
+    cond: c.CONDITION_VARIABLE = std.mem.zeroes(c.CONDITION_VARIABLE),
+    state: enum { idle, warming, ready, taken } = .idle,
+    created: ?Created = null,
+
+    /// Whether to warm up: not if a surface already made its device.
+    fn start(self: *Warm) bool {
+        c.AcquireSRWLockExclusive(&self.lock);
+        defer c.ReleaseSRWLockExclusive(&self.lock);
+        if (self.state != .idle) return false;
+        self.state = .warming;
+        return true;
+    }
+
+    fn finish(self: *Warm, created: ?Created) void {
+        c.AcquireSRWLockExclusive(&self.lock);
+        defer c.ReleaseSRWLockExclusive(&self.lock);
+        self.created = created;
+        self.state = .ready;
+        c.WakeAllConditionVariable(&self.cond);
+    }
+
+    /// The warm device, waiting for it if the warmup is still running.
+    /// Later calls (and calls before a warmup starts) get null.
+    fn take(self: *Warm) ?Created {
+        c.AcquireSRWLockExclusive(&self.lock);
+        defer c.ReleaseSRWLockExclusive(&self.lock);
+        while (self.state == .warming) {
+            _ = c.SleepConditionVariableSRW(&self.cond, &self.lock, c.INFINITE, 0);
+        }
+        const created = if (self.state == .ready) self.created else null;
+        self.state = .taken;
+        self.created = null;
+        return created;
+    }
+};
+
+fn create(adapter: ?*c.IDXGIAdapter) !Created {
     const feature_levels = [_]c.D3D_FEATURE_LEVEL{
         c.D3D_FEATURE_LEVEL_11_1,
         c.D3D_FEATURE_LEVEL_11_0,
@@ -98,17 +161,14 @@ pub fn createDevice(self: *const Device) !struct {
     for (attempts) |attempt| {
         // If we were given an adapter, D3D requires the driver type to be
         // unknown. WARP is a software driver with its own adapter.
-        const adapter: ?*c.IDXGIAdapter = if (attempt.driver == c.D3D_DRIVER_TYPE_HARDWARE)
-            @ptrCast(self.adapter)
-        else
-            null;
-        const driver: c.D3D_DRIVER_TYPE = if (adapter != null) c.D3D_DRIVER_TYPE_UNKNOWN else attempt.driver;
+        const attempt_adapter = if (attempt.driver == c.D3D_DRIVER_TYPE_HARDWARE) adapter else null;
+        const driver: c.D3D_DRIVER_TYPE = if (attempt_adapter != null) c.D3D_DRIVER_TYPE_UNKNOWN else attempt.driver;
 
         var device: ?*c.ID3D11Device = null;
         var context: ?*c.ID3D11DeviceContext = null;
         var level: c.D3D_FEATURE_LEVEL = undefined;
         const hr = c.D3D11CreateDevice(
-            adapter,
+            attempt_adapter,
             driver,
             null,
             attempt.flags,
