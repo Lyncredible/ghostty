@@ -1556,8 +1556,11 @@ Reviewed the branch against this file and discussion #2563.
   runner drew the acrylic as solid gray (rgb(29, 29, 29)) even with
   transparency effects on: its only display adapter is Microsoft Hyper-V
   Video, and Windows doesn't blur without a GPU. So blur is only checked
-  for the split and scrollbar there. Not yet tested: other overlays over
-  a translucent terminal, and Windows 10.
+  for the split and scrollbar there. The same test opens the search bar
+  and the command palette, which stayed opaque in run 41376035602 (no
+  red pixels across the search bar; 23 of 481 across the palette, the
+  same count as over the gray blur, so they're its own content). Not yet
+  tested: Windows 10.
 - Quick terminal: a `WS_POPUP` + `WS_EX_TOOLWINDOW` + topmost window,
   so it has no frame or taskbar button. It's placed in the work area of
   the primary monitor (or the mouse's, with `quick-terminal-screen = mouse`)
