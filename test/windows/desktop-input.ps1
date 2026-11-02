@@ -59,6 +59,8 @@ $process = Start-Process -FilePath $Exe -PassThru -RedirectStandardError $log -A
     '--keybind=f9=select_all', '--window-step-resize=true'
 
 function Fail([string]$message) {
+    Write-Host "::error title=desktop-input::$message"
+    $script:reported = $true
     Write-Host "--- Ghostty's log ---"
     if (Test-Path $log) { Get-Content $log -Tail 40 | Write-Host }
     throw $message
@@ -136,11 +138,19 @@ try {
     # ...including a flood of output that changes the title with each line,
     # which once stopped the window from handling input.
     TypeLine 'for /l %i in (1,1,999999999) do @echo flood-%i'
-    [void](WaitFor { (Text $surface) -match 'flood-\d{4}' } 'the flood to run')
+    [void](WaitFor { try { (Text $surface) -match 'flood-\d{4}' } catch { $false } } 'the flood to run')
     $sw = [Diagnostics.Stopwatch]::StartNew()
     [GhosttyDesktop.Win32]::Key(0x11, $false); [GhosttyDesktop.Win32]::Key(0x43, $false)
     [GhosttyDesktop.Win32]::Key(0x43, $true); [GhosttyDesktop.Win32]::Key(0x11, $true)
-    [void](WaitFor { ((Text $surface).TrimEnd() -split "`n")[-1] -match '>\s*$' } 'Ctrl+C to stop the flood and show the prompt')
+    $stopped = $false
+    $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
+    while (-not $stopped -and (Get-Date) -lt $deadline) {
+        # Reading the screen can time out while the output floods in.
+        try { $lines = (Text $surface).TrimEnd() -split "`n" } catch { $lines = @("($($_.Exception.Message))") }
+        $stopped = $lines[-1] -match '>\s*$'
+        if (-not $stopped) { Start-Sleep -Milliseconds 250 }
+    }
+    if (-not $stopped) { Fail "Ctrl+C didn't stop the flood; the screen ends with: $(($lines | Select-Object -Last 3) -join ' | ')" }
     Write-Host "Ctrl+C stops a flood of output ($($sw.ElapsedMilliseconds) ms)."
 
     # Focus follows the mouse between splits.
@@ -183,6 +193,9 @@ try {
     if ($dw -eq 0 -or $dh -eq 0) { Fail "the corner drag didn't resize the window" }
     if ($dw % $cellW -ne 0 -or $dh % $cellH -ne 0) { Fail "the resize wasn't whole cells" }
     Write-Host 'window-step-resize resizes by whole cells.'
+} catch {
+    if (-not $script:reported) { Write-Host "::error title=desktop-input::$($_.Exception.Message)" }
+    throw
 } finally {
     if (-not $process.HasExited) { Stop-Process -Id $process.Id -Force }
 }
