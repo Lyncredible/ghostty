@@ -107,7 +107,7 @@ with its name. It moves the mouse, so it only runs in CI.
 Listens for the UI Automation events a screen reader gets: types `echo`
 (as `WM_CHAR` messages) and waits for the output's notification event,
 runs `select_all` for `TextSelectionChanged`, and opens a tab for the tab
-bar's `ElementSelected`. The listener is `uia_events.c`, a client of the
+bar's `ElementSelected` (with the tab bar shown from the start). The listener is `uia_events.c`, a client of the
 native UI Automation COM API (as screen readers are), which the script
 builds with `zig cc`. It only sends messages to Ghostty's windows, but
 needs an unlocked desktop.
