@@ -97,11 +97,9 @@ jobs:
         shell: pwsh
         run: ./test/windows/tab-tooltips.ps1 -Exe zig-out/bin/ghostty.exe
 
-      # The UI Automation events screen readers listen for. Allowed to fail
-      # while it's new: no events have reached its .NET client yet.
+      # The UI Automation events screen readers listen for.
       - name: UI Automation events test
         shell: powershell
-        continue-on-error: true
         run: ./test/windows/uia-events.ps1 -Exe zig-out/bin/ghostty.exe
 
       - name: Quick terminal test
