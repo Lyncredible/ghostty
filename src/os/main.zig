@@ -2,6 +2,7 @@
 //! system. These aren't restricted to syscalls or low-level operations, butos/main.zig
 //! also OS-specific features and conventions.
 
+const std = @import("std");
 const builtin = @import("builtin");
 
 const dbus = @import("dbus.zig");
@@ -59,6 +60,17 @@ pub const ResourcesDir = resourcesdir.ResourcesDir;
 pub const ShellEscapeWriter = shell.ShellEscapeWriter;
 pub const getKernelInfo = kernel_info.getKernelInfo;
 pub const getConfigEditCommand = edit.getConfigEditCommand;
+
+/// How to spawn threads that live as long as a surface. On Windows, Zig
+/// passes the stack size to the kernel as the stack to commit, so each
+/// thread committed the whole 16 MiB default up front: three threads made
+/// 48 MiB of every new tab's commit charge. We commit a little and let the
+/// stack grow into the executable's reservation (also 16 MiB) as usual.
+/// Elsewhere the stack size is the reservation, so we keep the default.
+pub const thread_spawn_config: std.Thread.SpawnConfig = if (builtin.target.os.tag == .windows)
+    .{ .stack_size = 64 * 1024 }
+else
+    .{};
 
 test {
     _ = file;

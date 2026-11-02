@@ -475,6 +475,24 @@ Notes:
         goes. cmd's new tab to prompt: 98-125 ms (from 128-143). Checked:
         the tab bar, a new tab, and right and down splits got the same
         sizes and positions as before.
+- [x] Memory per tab: each new tab raised the commit charge (private
+      bytes) by about 110 MB, while the working set grew by 10 MB. Listing
+      the committed regions showed three 16 MB thread stacks per tab: on
+      Windows, Zig's `std.Thread` passes the stack size to
+      `NtCreateThreadEx` as the stack to commit, so the 16 MiB default was
+      committed up front. Surface threads (renderer, IO, reader, search)
+      now commit 64 KiB and grow into the executable's 16 MiB reservation
+      as usual (`internal_os.thread_spawn_config`). ReleaseFast, a window
+      2854x1456 pixels: 1 tab 88 MB (from 136), 10 tabs 658 MB (from
+      1,135). Checked: a flood, a search (30 matches on its thread), and
+      the UI Automation events test.
+  - [ ] Most of what's left per tab scales with the window (31 MB per tab
+        for 80x24 cells, 63 MB for the large window): each surface has
+        three offscreen frame targets (`swap_chain_count`, as on Metal and
+        OpenGL) and a two-buffer swap chain, and this NVIDIA driver backs
+        the targets with process memory. Direct3D 11 tracks hazards on the
+        immediate context itself, so fewer targets may do; that needs a
+        look at what the generic renderer assumes about them.
   - PowerShell's integration added about 180 ms per tab (590 ms with
     `shell-integration = none`). Its first prompt used three things that
     are slow the first time in 5.1: `New-Object` (63 ms), a regular
