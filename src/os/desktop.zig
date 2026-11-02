@@ -75,33 +75,34 @@ fn parentIsExplorer() bool {
     const windows = @import("windows.zig");
     const kernel32 = windows.exp.kernel32;
 
-    const snapshot = kernel32.CreateToolhelp32Snapshot(windows.TH32CS_SNAPPROCESS, 0);
-    if (snapshot == windows.INVALID_HANDLE_VALUE) return false;
-    defer _ = kernel32.CloseHandle(snapshot);
+    // We ask for our parent directly: a snapshot of every process took
+    // about 5 ms with 240 processes.
+    var info: std.os.windows.PROCESS.BASIC_INFORMATION = undefined;
+    if (std.os.windows.ntdll.NtQueryInformationProcess(
+        std.os.windows.GetCurrentProcess(),
+        .BasicInformation,
+        &info,
+        @sizeOf(@TypeOf(info)),
+        null,
+    ) != .SUCCESS) return false;
+    const parent = std.math.cast(windows.DWORD, info.InheritedFromUniqueProcessId) orelse return false;
 
-    // Find our parent, then the parent's entry.
-    const pid = windows.GetCurrentProcessId();
-    var parent: ?windows.DWORD = null;
-    for (0..2) |_| {
-        var entry: windows.PROCESSENTRY32W = undefined;
-        entry.dwSize = @sizeOf(windows.PROCESSENTRY32W);
-        var ok = kernel32.Process32FirstW(snapshot, &entry);
-        while (ok != windows.FALSE) : (ok = kernel32.Process32NextW(snapshot, &entry)) {
-            if (parent) |parent_pid| {
-                if (entry.th32ProcessID != parent_pid) continue;
-                const name = std.mem.sliceTo(&entry.szExeFile, 0);
-                return std.ascii.eqlIgnoreCase(
-                    std.mem.sliceAsBytes(name),
-                    std.mem.sliceAsBytes(std.unicode.utf8ToUtf16LeStringLiteral("explorer.exe")),
-                );
-            } else if (entry.th32ProcessID == pid) {
-                parent = entry.th32ParentProcessID;
-                break;
-            }
-        }
-        if (parent == null) return false;
-    }
-    return true;
+    const PROCESS_QUERY_LIMITED_INFORMATION = 0x1000;
+    const process = kernel32.OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, windows.FALSE, parent) orelse {
+        // ERROR_INVALID_PARAMETER: there's no such process anymore.
+        return windows.GetLastError() == .INVALID_PARAMETER;
+    };
+    defer _ = kernel32.CloseHandle(process);
+
+    var buf: [windows.MAX_PATH]u16 = undefined;
+    var len: windows.DWORD = buf.len;
+    if (kernel32.QueryFullProcessImageNameW(process, 0, &buf, &len) == windows.FALSE) return false;
+    const path = buf[0..len];
+    const name = if (std.mem.lastIndexOfScalar(u16, path, '\\')) |i| path[i + 1 ..] else path;
+    return std.ascii.eqlIgnoreCase(
+        std.mem.sliceAsBytes(name),
+        std.mem.sliceAsBytes(std.unicode.utf8ToUtf16LeStringLiteral("explorer.exe")),
+    );
 }
 
 /// The list of desktop environments that we detect. New Linux desktop
