@@ -3,6 +3,7 @@
 # black one on top of it, splits it, prints enough lines to scroll, and
 # scrolls with the wheel. Both panes must show the red window through them,
 # and the scrollbar's thumb must be drawn over the translucent background.
+# Then the search bar and the command palette must be drawn opaque over it.
 # With -Blur (acrylic) it only reports the colors: Windows draws acrylic as
 # a solid color without a GPU, as on GitHub's runners. It only sends
 # messages to Ghostty's windows, but it reads the screen, so the desktop
@@ -29,6 +30,21 @@ Add-Type -Namespace GhosttyTranslucent -Name Win32 -MemberDefinition @'
 [DllImport("user32.dll")] public static extern System.IntPtr GetSystemMenu(System.IntPtr h, bool revert);
 [DllImport("user32.dll")] public static extern System.IntPtr SendMessageW(System.IntPtr h, uint m, System.IntPtr w, System.IntPtr l);
 [DllImport("user32.dll")] public static extern bool PostMessageW(System.IntPtr h, uint m, System.IntPtr w, System.IntPtr l);
+[DllImport("user32.dll")] public static extern bool IsWindowVisible(System.IntPtr h);
+[DllImport("user32.dll", CharSet = CharSet.Unicode)] public static extern int GetClassNameW(System.IntPtr h, System.Text.StringBuilder s, int n);
+public delegate bool EnumProc(System.IntPtr h, System.IntPtr l);
+[DllImport("user32.dll")] public static extern bool EnumChildWindows(System.IntPtr h, EnumProc f, System.IntPtr l);
+// The first visible window of a class under a window.
+public static System.IntPtr VisibleChild(System.IntPtr parent, string cls) {
+  System.IntPtr found = System.IntPtr.Zero;
+  EnumChildWindows(parent, (h, l) => {
+    var s = new System.Text.StringBuilder(64);
+    GetClassNameW(h, s, 64);
+    if (s.ToString() == cls && IsWindowVisible(h)) { found = h; return false; }
+    return true;
+  }, System.IntPtr.Zero);
+  return found;
+}
 '@
 $W = [GhosttyTranslucent.Win32]
 [void]$W::SetProcessDPIAware()
@@ -129,6 +145,21 @@ try {
         }
     } 'the scrollbar over the translucent background'
     Notice "scrollbar at $found"
+
+    # Overlays, from the window menu: Find… (the eleventh command) and
+    # Command Palette (the seventeenth). Each must hide the red behind it.
+    foreach ($overlay in @(@{ Class = 'GhosttySearchBar'; Command = 11 }, @{ Class = 'GhosttyCommandPalette'; Command = 17 })) {
+        [void]$W::SendMessageW($s.Window, 0x0117, $menu, [IntPtr]0)
+        [void]$W::SendMessageW($s.Window, 0x0112, [IntPtr]($overlay.Command -shl 4), [IntPtr]0)
+        $handle = WaitFor { $h = $W::VisibleChild($s.Window, $overlay.Class); if ($h -ne [IntPtr]::Zero) { $h } } $overlay.Class
+        Start-Sleep -Milliseconds 500
+        $o = Rect $handle
+        $row = [int](($o.t + $o.b) / 2)
+        $pixels = foreach ($x in ($o.l + 2)..($o.r - 3)) { (Column $x $row ($row + 1))[0] }
+        $red = @($pixels | Where-Object { $_.R -gt 40 -and $_.R -gt $_.G + 30 -and $_.R -gt $_.B + 30 })
+        Notice "$($overlay.Class) at x=$($o.l)..$($o.r): $($red.Count) of $($pixels.Count) pixels show red"
+        if ($red.Count -gt $pixels.Count / 10) { throw "$($overlay.Class) is translucent: $($red.Count) of $($pixels.Count) pixels show the red window" }
+    }
     if ($Blur) { Notice "display adapters: $((Get-CimInstance Win32_VideoController).Name -join ', ')" }
 } catch {
     Write-Host "::error title=$title::$($_.Exception.Message)"
