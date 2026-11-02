@@ -194,7 +194,7 @@ const VT_I4 = 3;
 const VT_BSTR = 8;
 const VT_BOOL = 11;
 
-const ProviderOptions_ServerSideProvider = 0x1;
+const ProviderOptions_ServerSideProvider = 0x2;
 const ProviderOptions_UseComThreading = 0x20;
 const UIA_ValuePatternId = 10002;
 const UIA_TextPatternId = 10014;

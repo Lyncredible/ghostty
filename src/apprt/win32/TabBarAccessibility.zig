@@ -695,7 +695,7 @@ const UiaRect = extern struct {
     }
 };
 
-const ProviderOptions_ServerSideProvider = 0x1;
+const ProviderOptions_ServerSideProvider = 0x2;
 const ProviderOptions_UseComThreading = 0x20;
 const UiaAppendRuntimeId = 3;
 const UIA_InvokePatternId = 10000;
