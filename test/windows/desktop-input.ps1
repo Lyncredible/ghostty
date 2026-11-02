@@ -1,9 +1,9 @@
 # Checks of the Windows app with real (synthesized) keyboard and mouse
-# input, for CI: typing, Ctrl+V pasting, Ctrl+C copying and interrupting,
-# focus-follows-mouse between splits, and window-step-resize while dragging
-# the window's corner. SendInput goes to whatever window is in the
-# foreground, so this only runs in CI (where nothing else is on the
-# desktop), never on a developer's machine.
+# input, for CI: typing, Ctrl+V pasting, Ctrl+C copying and interrupting
+# (also a flood of output), focus-follows-mouse between splits, and
+# window-step-resize while dragging the window's corner. SendInput goes
+# to whatever window is in the foreground, so this only runs in CI (where
+# nothing else is on the desktop), never on a developer's machine.
 #
 #     $env:CI = 'true'; ./desktop-input.ps1 -Exe zig-out/bin/ghostty.exe
 
@@ -132,6 +132,16 @@ try {
     [GhosttyDesktop.Win32]::Key(0x43, $true); [GhosttyDesktop.Win32]::Key(0x11, $true)
     [void](WaitFor { (Text $surface) -match 'Control-C' } 'Ctrl+C to interrupt ping')
     Write-Host 'Ctrl+C interrupts without a selection.'
+
+    # ...including a flood of output that changes the title with each line,
+    # which once stopped the window from handling input.
+    TypeLine 'for /l %i in (1,1,999999999) do @echo flood-%i'
+    [void](WaitFor { (Text $surface) -match 'flood-\d{4}' } 'the flood to run')
+    $sw = [Diagnostics.Stopwatch]::StartNew()
+    [GhosttyDesktop.Win32]::Key(0x11, $false); [GhosttyDesktop.Win32]::Key(0x43, $false)
+    [GhosttyDesktop.Win32]::Key(0x43, $true); [GhosttyDesktop.Win32]::Key(0x11, $true)
+    [void](WaitFor { ((Text $surface).TrimEnd() -split "`n")[-1] -match '>\s*$' } 'Ctrl+C to stop the flood and show the prompt')
+    Write-Host "Ctrl+C stops a flood of output ($($sw.ElapsedMilliseconds) ms)."
 
     # Focus follows the mouse between splits.
     [GhosttyDesktop.Win32]::Key(0x77, $false); [GhosttyDesktop.Win32]::Key(0x77, $true)
