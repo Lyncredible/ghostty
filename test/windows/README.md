@@ -153,3 +153,10 @@ answered within 200 ms. Run it on a release build (`-Exe`, or the
 package's with `-Zip`); the debug build is too slow to show a hang. It
 only sends messages to Ghostty's window, so it can run locally; in CI it
 also presses Ctrl+C and checks that the flood stops.
+
+## output-frames.ps1
+
+Starts a program that prints a letter every 250 ms and counts Ghostty's
+frames with the DXGI ETW provider (`logman`, no input needed): there must
+be about one frame per letter. Cursor blinks alone give about 10 in the 6
+seconds, which is what a build gets when output doesn't wake the renderer.
