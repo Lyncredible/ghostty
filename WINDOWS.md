@@ -1398,7 +1398,11 @@ Notes:
         the key, the delayed echo 63 ms after (when it arrives), and output
         gets its own frames. `test/windows/output-frames.ps1` (in CI on
         the package) counts frames while a letter prints every 250 ms: 24
-        of 24 now, 10 (blinks only) on a build without the fix.
+        of 24 now, 10 (blinks only) on a build without the fix. Drawing
+        with output didn't slow output down (release builds differing only
+        by the fix, alternating): 20 MB with `cmd /c type` took 24.4-25.0 s
+        (median 24.6) with it and 17.2-29.4 s (median 23.4) without, and
+        a program writing 64 KiB chunks took 1.9 s with both.
 - The tab bar now has a shell dropdown next to the new-tab button. It lists
   shells whose executables are found in PATH and always offers the configured
   default. An explicit choice uses the resolved executable path and is
