@@ -1371,6 +1371,18 @@ Notes:
         build (the debug build was too slow to hang). In CI it also
         presses Ctrl+C during the flood: run 41468741186 answered in
         0.4 ms (median) and the flood stopped within 249 ms.
+  - [x] Resizing: each resize of the window (60 `SetWindowPos` calls
+        from another process, one split) took 24 ms (median), more than a
+        60 Hz frame. Stack samples put most of it in resizing each
+        surface's dim overlay and bell border, layered windows whose
+        bitmaps Windows resizes even while they're hidden. Hidden
+        overlays now take the new size when they're shown: 12-13 ms per
+        resize (max 23-26 ms, was 39-44), with about two frames each as
+        before. Checked natively that a dimmed split's overlay matches its
+        split after resizes, also when it's first shown afterward, and
+        that the bell border does too. Most of what's left is the
+        surface's own paint (`FillRect` under the swap chain), which
+        translucency needs.
 - The tab bar now has a shell dropdown next to the new-tab button. It lists
   shells whose executables are found in PATH and always offers the configured
   default. An explicit choice uses the resolved executable path and is

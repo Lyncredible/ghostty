@@ -14,6 +14,8 @@ hwnd: c.HWND = null,
 brush: c.HBRUSH = null,
 alpha: u8 = 0,
 dimmed: bool = false,
+width: c_int = 0,
+height: c_int = 0,
 
 pub fn init(self: *DimOverlay, parent: c.HWND, instance: c.HINSTANCE, config: *const Config) !void {
     self.hwnd = c.CreateWindowExW(
@@ -62,8 +64,18 @@ pub fn updateConfig(self: *DimOverlay, config: *const Config) !void {
     self.updateVisibility();
 }
 
+/// Resizing a layered window resizes its bitmap, which costs several
+/// milliseconds even while it's hidden, so a hidden overlay only takes
+/// the new size when it's shown.
 pub fn resize(self: *DimOverlay, width: c_int, height: c_int) void {
-    _ = c.MoveWindow(self.hwnd, 0, 0, width, height, c.TRUE);
+    self.width = width;
+    self.height = height;
+    if (self.shown()) _ = c.MoveWindow(self.hwnd, 0, 0, width, height, c.TRUE);
+}
+
+fn shown(self: *const DimOverlay) bool {
+    // IsWindowVisible also checks the parents, which can be hidden tabs.
+    return c.GetWindowLongPtrW(self.hwnd, c.GWL_STYLE) & c.WS_VISIBLE != 0;
 }
 
 pub fn setDimmed(self: *DimOverlay, dimmed: bool) void {
@@ -73,9 +85,9 @@ pub fn setDimmed(self: *DimOverlay, dimmed: bool) void {
 
 fn updateVisibility(self: *DimOverlay) void {
     const visible = self.dimmed and self.alpha != 0;
-    // IsWindowVisible also checks the parents, which can be hidden tabs.
-    const shown = c.GetWindowLongPtrW(self.hwnd, c.GWL_STYLE) & c.WS_VISIBLE != 0;
-    if (visible != shown) _ = c.ShowWindow(self.hwnd, if (visible) c.SW_SHOWNA else c.SW_HIDE);
+    if (visible == self.shown()) return;
+    if (visible) _ = c.MoveWindow(self.hwnd, 0, 0, self.width, self.height, c.FALSE);
+    _ = c.ShowWindow(self.hwnd, if (visible) c.SW_SHOWNA else c.SW_HIDE);
 }
 
 pub fn wndProc(hwnd: c.HWND, msg: c.UINT, wparam: c.WPARAM, lparam: c.LPARAM) callconv(.c) c.LRESULT {
