@@ -75,6 +75,7 @@ jobs:
       # Real keyboard and mouse input, which needs the foreground: typing,
       # Ctrl+V, and focus-follows-mouse between splits.
       - name: Desktop input test
+        timeout-minutes: 10
         shell: pwsh
         run: ./test/windows/desktop-input.ps1 -Exe zig-out/bin/ghostty.exe
 
@@ -162,6 +163,7 @@ jobs:
       # The window keeps responding while output floods in, on the
       # package's release build (the debug build was too slow to show it).
       - name: Flood test
+        timeout-minutes: 10
         shell: powershell
         run: ./test/windows/flood.ps1 -Zip (Get-ChildItem zig-out/dist/*.zip | Select-Object -First 1).FullName
 
