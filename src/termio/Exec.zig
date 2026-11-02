@@ -168,13 +168,13 @@ pub fn threadEnter(
     if (comptime builtin.target.os.tag == .windows) self.read_eof = .unset;
     const read_thread = if (comptime builtin.target.os.tag == .windows)
         try std.Thread.spawn(
-            .{},
+            internal_os.thread_spawn_config,
             ReadThread.threadMainWindows,
             .{ pty_fds.read, io, pipe[0], &self.read_eof },
         )
     else
         try std.Thread.spawn(
-            .{},
+            internal_os.thread_spawn_config,
             ReadThread.threadMainPosix,
             .{ pty_fds.read, io, pipe[0] },
         );
