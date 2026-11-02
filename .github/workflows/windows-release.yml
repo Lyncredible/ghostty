@@ -1,4 +1,8 @@
 on:
+  # A tag like windows-unofficial-2026.11.01 makes a draft release for it.
+  push:
+    tags: ["windows-unofficial-*"]
+  # Starting it by hand needs this file on the default branch.
   workflow_dispatch:
     inputs:
       draft_release:
@@ -10,9 +14,10 @@ name: Windows release (fork)
 
 # Builds the unofficial Windows packages (portable zip and unsigned MSIX)
 # for x64 and ARM64 in ReleaseSafe, with SHA-256 checksums, and keeps them
-# as a 90 day artifact. With draft_release, it also creates a draft release
-# with them, which stays private until someone publishes it. It only runs
-# when started by hand, and never in ghostty-org/ghostty.
+# as a 90 day artifact. For a tag, or with draft_release, it also creates a
+# draft release with them, which stays private until someone publishes it.
+# It only runs for those tags or when started by hand, and never in
+# ghostty-org/ghostty.
 
 permissions:
   contents: read
@@ -79,7 +84,7 @@ jobs:
             zig-out/dist/SHA256SUMS-*.txt
 
   draft-release:
-    if: github.repository != 'ghostty-org/ghostty' && inputs.draft_release
+    if: github.repository != 'ghostty-org/ghostty' && (inputs.draft_release || github.ref_type == 'tag')
     needs: package
     runs-on: ubuntu-latest
     permissions:
@@ -98,10 +103,14 @@ jobs:
         run: |
           cat dist/SHA256SUMS-*.txt > dist/SHA256SUMS.txt
           rm dist/SHA256SUMS-*.txt
-          name="windows-unofficial-$(date -u +%Y%m%d)-${GITHUB_SHA::9}"
+          if [ "$GITHUB_REF_TYPE" = tag ]; then
+            name="$GITHUB_REF_NAME"
+          else
+            name="windows-unofficial-$(date -u +%Y%m%d)-${GITHUB_SHA::9}"
+          fi
           gh release create "$name" dist/* \
             --repo "$GITHUB_REPOSITORY" \
             --target "$GITHUB_SHA" \
             --draft \
             --title "Ghostty for Windows (unofficial) $name" \
-            --notes "Unofficial Windows build of $GITHUB_SHA from the $GITHUB_REF_NAME branch. The MSIX is unsigned: install it with Add-AppxPackage -AllowUnsigned. See WINDOWS.md."
+            --notes "Unofficial Windows build of $GITHUB_SHA ($GITHUB_REF_NAME). The MSIX is unsigned: install it with Add-AppxPackage -AllowUnsigned. See WINDOWS.md."
