@@ -159,6 +159,12 @@ jobs:
         shell: powershell
         run: ./test/windows/start-menu.ps1 -Zip (Get-ChildItem zig-out/dist/*.zip | Select-Object -First 1).FullName
 
+      # The window keeps responding while output floods in, on the
+      # package's release build (the debug build was too slow to show it).
+      - name: Flood test
+        shell: powershell
+        run: ./test/windows/flood.ps1 -Zip (Get-ChildItem zig-out/dist/*.zip | Select-Object -First 1).FullName
+
       - name: Upload package
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:

@@ -144,3 +144,11 @@ runs in CI.
 Installs the Japanese IME, switches a terminal running cmd to it, types
 "nihon" with real keys, converts and commits it, and checks that the kanji
 reached cmd. It only runs in CI.
+
+## flood.ps1
+
+Floods a terminal with output from cmd, which changes the title with each
+line, and sends the window `WM_NULL` messages meanwhile: most must be
+answered within 200 ms. Run it on a release build (`-Exe`, or the
+package's with `-Zip`); the debug build is too slow to show a hang. It
+only sends messages to Ghostty's window, so it can run locally.
