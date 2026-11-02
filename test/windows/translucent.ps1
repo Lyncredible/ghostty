@@ -4,7 +4,9 @@
 # scrolls with the wheel. Both panes must show the red window through them,
 # and the scrollbar's thumb must be drawn over the translucent background.
 # It only sends messages to Ghostty's windows, but it reads the screen, so
-# the desktop must be unlocked.
+# the desktop must be unlocked. With -Blur it also turns on Windows's
+# transparency effects (without them acrylic is drawn as a solid color), so
+# that only runs in CI.
 #
 #     ./translucent.ps1 -Exe zig-out/bin/ghostty.exe [-Blur]
 
@@ -16,6 +18,7 @@ param(
 
 $ErrorActionPreference = 'Stop'
 $title = if ($Blur) { 'translucent (blur)' } else { 'translucent' }
+if ($Blur -and $env:CI -ne 'true') { throw "-Blur turns on transparency effects for the desktop, so it only runs in CI" }
 
 Add-Type -AssemblyName UIAutomationClient, UIAutomationTypes, System.Drawing
 Add-Type -Namespace GhosttyTranslucent -Name Win32 -MemberDefinition @'
@@ -26,11 +29,27 @@ Add-Type -Namespace GhosttyTranslucent -Name Win32 -MemberDefinition @'
 [DllImport("user32.dll")] public static extern System.IntPtr GetSystemMenu(System.IntPtr h, bool revert);
 [DllImport("user32.dll")] public static extern System.IntPtr SendMessageW(System.IntPtr h, uint m, System.IntPtr w, System.IntPtr l);
 [DllImport("user32.dll")] public static extern bool PostMessageW(System.IntPtr h, uint m, System.IntPtr w, System.IntPtr l);
+[DllImport("user32.dll", CharSet = CharSet.Unicode)] public static extern System.IntPtr SendMessageTimeoutW(
+  System.IntPtr h, uint m, System.IntPtr w, string l, uint flags, uint timeout, out System.IntPtr result);
+public static void BroadcastColorSet() {
+  System.IntPtr result;
+  SendMessageTimeoutW((System.IntPtr)0xFFFF, 0x001A, System.IntPtr.Zero, "ImmersiveColorSet", 0x2, 5000, out result);
+}
 '@
 $W = [GhosttyTranslucent.Win32]
 [void]$W::SetProcessDPIAware()
 $AE = [System.Windows.Automation.AutomationElement]
 $Scope = [System.Windows.Automation.TreeScope]
+
+$personalize = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize'
+$originalTransparency = $null
+if ($Blur) {
+    if (-not (Test-Path $personalize)) { New-Item -Force $personalize | Out-Null }
+    $originalTransparency = (Get-ItemProperty $personalize -ErrorAction SilentlyContinue).EnableTransparency
+    Write-Host "::notice title=$title::transparency effects were $(if ($null -eq $originalTransparency) { 'unset' } else { $originalTransparency })"
+    Set-ItemProperty $personalize -Name EnableTransparency -Value 1 -Type DWord
+    $W::BroadcastColorSet()
+}
 
 $common = '--window-save-state=never', '--window-position-x=100', '--window-position-y=100',
     '--window-width=100', '--window-height=30', '--scrollbar=system'
@@ -80,7 +99,11 @@ function Column([int]$x, [int]$top, [int]$bottom) {
 }
 
 # The red window through black at 50%: red, but darker than the red itself.
-function IsShowingRed($pixel) { $pixel.R -gt 40 -and $pixel.R -lt 180 -and $pixel.G -lt 40 -and $pixel.B -lt 40 }
+# Acrylic tints and adds noise, so with blur it only needs to be mostly red.
+function IsShowingRed($pixel) {
+    if ($Blur) { return $pixel.R -gt 40 -and $pixel.R -gt $pixel.G + 30 -and $pixel.R -gt $pixel.B + 30 }
+    $pixel.R -gt 40 -and $pixel.R -lt 180 -and $pixel.G -lt 40 -and $pixel.B -lt 40
+}
 function Describe($pixel) { "rgb($($pixel.R), $($pixel.G), $($pixel.B))" }
 
 try {
@@ -106,7 +129,7 @@ try {
         $x = $r.r - [int](($r.r - $r.l) / 4)
         $pixel = (Column $x ([int](($r.t + $r.b) / 2)) ([int](($r.t + $r.b) / 2) + 1))[0]
         if (-not (IsShowingRed $pixel)) { throw "a pane at x=$x doesn't show the red window through it: $(Describe $pixel)" }
-        Write-Host "Pane at x=$($r.l)..$($r.r): $(Describe $pixel)."
+        Write-Host "::notice title=$title::pane at x=$($r.l)..$($r.r): $(Describe $pixel)"
     }
 
     # Scroll the left pane up, which shows its scrollbar along its right edge.
@@ -125,10 +148,15 @@ try {
             if ($thumb.Count -gt 10 -and $track.Count -gt 10) { return "x=${x}: $($thumb.Count) thumb pixels, $($track.Count) showing red" }
         }
     } 'the scrollbar over the translucent background'
-    Write-Host "Scrollbar: $found."
+    Write-Host "::notice title=$title::scrollbar at $found"
 } catch {
     Write-Host "::error title=$title::$($_.Exception.Message)"
     throw
 } finally {
     foreach ($p in @($front, $back)) { if ($p -and -not $p.HasExited) { Stop-Process -Id $p.Id -Force } }
+    if ($Blur) {
+        if ($null -eq $originalTransparency) { Remove-ItemProperty $personalize -Name EnableTransparency -ErrorAction SilentlyContinue }
+        else { Set-ItemProperty $personalize -Name EnableTransparency -Value $originalTransparency -Type DWord }
+        $W::BroadcastColorSet()
+    }
 }
