@@ -28,13 +28,16 @@ $etl = Join-Path ([IO.Path]::GetTempPath()) "$session.etl"
 $process = Start-Process -FilePath $Exe -PassThru -ArgumentList '--window-save-state=never',
     '"--command=powershell.exe -NoProfile -Command Start-Sleep 3; while (1) { [Console]::Write([char]120); Start-Sleep -Milliseconds 250 }"'
 
+$tracing = $false
 try {
     Start-Sleep 5
     if ($process.HasExited) { throw "Ghostty exited" }
     logman start $session -p Microsoft-Windows-DXGI 0xFFFFFFFF 5 -o $etl -ets | Out-Null
     if ($LASTEXITCODE -ne 0) { throw "logman couldn't start the trace" }
+    $tracing = $true
     Start-Sleep $Seconds
     logman stop $session -ets | Out-Null
+    $tracing = $false
     tracerpt $etl -o "$etl.xml" -of XML -y | Out-Null
     [xml]$xml = Get-Content "$etl.xml"
     # Event 42 is the start of IDXGISwapChain::Present.
@@ -50,6 +53,8 @@ try {
     Write-Host "::error title=output-frames::$($_.Exception.Message)"
     throw
 } finally {
-    logman stop $session -ets 2>$null | Out-Null
+    # Actions' PowerShell steps exit with the last native exit code, so
+    # only stop a trace that's still running.
+    if ($tracing) { logman stop $session -ets | Out-Null }
     if (-not $process.HasExited) { Stop-Process -Id $process.Id -Force }
 }
