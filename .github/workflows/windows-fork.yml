@@ -167,6 +167,12 @@ jobs:
         shell: powershell
         run: ./test/windows/flood.ps1 -Zip (Get-ChildItem zig-out/dist/*.zip | Select-Object -First 1).FullName
 
+      # Output alone makes Ghostty draw, not just the next cursor blink.
+      - name: Output frames test
+        timeout-minutes: 5
+        shell: powershell
+        run: ./test/windows/output-frames.ps1 -Zip (Get-ChildItem zig-out/dist/*.zip | Select-Object -First 1).FullName
+
       - name: Upload package
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
