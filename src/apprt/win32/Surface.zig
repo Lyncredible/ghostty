@@ -1449,7 +1449,9 @@ pub fn wndProc(
 
         c.WM_CHAR, c.WM_SYSCHAR => {
             // Characters that aren't attached to a key event we've
-            // processed, such as text committed by an IME.
+            // processed, such as text committed by an IME. It's still the
+            // user's typing, which screen readers already speak.
+            self.last_key_ms = c.GetTickCount64();
             self.charEvent(@truncate(wparam));
             return 0;
         },
