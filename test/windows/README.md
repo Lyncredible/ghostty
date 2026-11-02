@@ -102,6 +102,14 @@ Opens a terminal with the tab bar shown, moves the real cursor over the
 "New Tab" button and then the tab, and checks that each shows a tooltip
 with its name. It moves the mouse, so it only runs in CI.
 
+## uia-events.ps1
+
+Listens for the UI Automation events a screen reader gets: types `echo`
+(as `WM_CHAR` messages) and waits for the output's notification event,
+runs `select_all` for `TextSelectionChanged`, and opens a tab for the tab
+bar's `ElementSelected`. It only sends messages to Ghostty's windows, but
+UIA events don't reach clients on a locked desktop.
+
 ## quick-terminal.ps1
 
 Toggles the quick terminal over IPC, samples its position while it slides
