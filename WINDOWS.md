@@ -946,6 +946,10 @@ Notes:
       - [x] The announcement after Enter no longer starts with the rest
             of the typed command ("840 uia-20840"): skipped typing updates
             still became the last snapshot.
+      - [x] Characters without a key press (`WM_CHAR` alone, as from an
+            IME or the test) count as typing too, so the command isn't
+            read back. The test fails if the announcement has it; CI run
+            41421935996 got just "uia-9064  D:\a\ghostty\ghostty>".
       - [ ] Hearing it in Narrator (a person, with audio).
 - [x] Taskbar jump list with a "New Window" task, which starts
       `ghostty.exe` again (single instance opens the window in the running
