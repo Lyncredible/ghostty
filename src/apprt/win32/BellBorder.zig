@@ -18,6 +18,8 @@ const transparent_key: c.COLORREF = 0x00FF00FF;
 
 hwnd: c.HWND = null,
 visible: bool = false,
+surface_width: c_int = 0,
+surface_height: c_int = 0,
 
 pub fn init(self: *BellBorder, parent: c.HWND, instance: c.HINSTANCE) !void {
     self.hwnd = c.CreateWindowExW(
@@ -48,14 +50,21 @@ pub fn deinit(self: *BellBorder) void {
     self.* = .{};
 }
 
+/// Like the dim overlay, a hidden border only takes the new size when
+/// it's shown, since resizing a layered window's bitmap is slow.
 pub fn resize(self: *BellBorder, w: c_int, h: c_int) void {
-    _ = c.MoveWindow(self.hwnd, 0, 0, w, h, c.TRUE);
+    self.surface_width = w;
+    self.surface_height = h;
+    if (self.visible) _ = c.MoveWindow(self.hwnd, 0, 0, w, h, c.TRUE);
 }
 
 pub fn setVisible(self: *BellBorder, visible: bool) void {
     if (visible == self.visible) return;
     self.visible = visible;
-    if (visible) _ = c.InvalidateRect(self.hwnd, null, c.FALSE);
+    if (visible) {
+        _ = c.MoveWindow(self.hwnd, 0, 0, self.surface_width, self.surface_height, c.FALSE);
+        _ = c.InvalidateRect(self.hwnd, null, c.FALSE);
+    }
     _ = c.ShowWindow(self.hwnd, if (visible) c.SW_SHOWNA else c.SW_HIDE);
 }
 
