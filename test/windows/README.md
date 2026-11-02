@@ -114,11 +114,11 @@ there, without Windows switching back. It sends real keys, so it only runs in CI
 Opens an opaque red Ghostty window, then a half transparent one on top of
 it (`-Blur` adds `background-blur`), splits it, and scrolls the left pane.
 Both panes must show red through them, and the scrollbar's thumb must be
-drawn with the red still showing around it. It only sends messages to
+drawn with the red still showing around it. With `-Blur` it only reports
+the colors, since Windows draws acrylic as a solid color without a GPU (as
+on GitHub's runners). It only sends messages to
 Ghostty's windows, so it can run locally, but it reads the screen, so the
-desktop must be unlocked. `-Blur` also turns on Windows's transparency
-effects (without them, acrylic is drawn as a solid gray), so it only runs
-in CI.
+desktop must be unlocked.
 
 ## dpi-change.ps1
 
