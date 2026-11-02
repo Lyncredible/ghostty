@@ -39,7 +39,7 @@ pub const StreamHandler = struct {
 
     /// A handle to wake up the renderer. This hints to the renderer that
     /// a repaint should happen.
-    renderer_wakeup: xev.Async,
+    renderer_wakeup: *xev.Async,
 
     /// The response to use for ENQ requests. The memory is owned by
     /// whoever owns StreamHandler.
