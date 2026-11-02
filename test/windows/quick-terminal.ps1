@@ -143,8 +143,15 @@ try {
 
     # A new virtual desktop, which Ctrl+Win+D creates and switches to: the
     # normal window is then on another desktop.
+    # Windows sometimes misses the shortcut, so press it up to three times.
     $main = $process.MainWindowHandle
-    [GhosttyQuick.Win32]::Chord(0x11, 0x5B, 0x44)
+    foreach ($attempt in 1..3) {
+        [GhosttyQuick.Win32]::Chord(0x11, 0x5B, 0x44)
+        $deadline = (Get-Date).AddSeconds(10)
+        while ((Get-Date) -lt $deadline -and [GhosttyQuick.Win32]::OnCurrentDesktop($main)) { Start-Sleep -Milliseconds 250 }
+        if (-not [GhosttyQuick.Win32]::OnCurrentDesktop($main)) { break }
+        Notice "Ctrl+Win+D didn't switch to a new desktop (attempt $attempt)"
+    }
     [void](WaitFor { -not [GhosttyQuick.Win32]::OnCurrentDesktop($main) } 'a new virtual desktop')
     Start-Sleep -Seconds 1
 
