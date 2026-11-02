@@ -444,6 +444,17 @@ Notes:
       Automation, five tabs each: cmd 130-145 ms; Windows PowerShell 5.1
       (`-NoProfile`) 750-790 ms; WSL (zsh with a theme) 540 ms. The first
       window took 0.8 s (cmd), 1.2 s (PowerShell), 4.1 s (WSL starting).
+  - [x] Startup: sampling the main thread's stack while starting showed
+        the first `D3D11CreateDevice` (the driver loading and Windows
+        checking its signature) on the main thread just before the window
+        showed. A test program took about 115 ms for the first device in a
+        process and 24 ms for later ones (67 ms if the first was released).
+        The renderer's `Device.warmup`, which the core runs on a thread at
+        startup (Metal has one), now creates the first surface's device
+        while config and fonts load, and `createDevice` takes it (waiting
+        if it isn't done). ReleaseFast, cmd, five warm runs: the window
+        showed after 242 ms instead of 330, the prompt after 280 instead
+        of 362. Tabs, splits, and windows after it still create their own.
   - PowerShell's integration added about 180 ms per tab (590 ms with
     `shell-integration = none`). Its first prompt used three things that
     are slow the first time in 5.1: `New-Object` (63 ms), a regular
