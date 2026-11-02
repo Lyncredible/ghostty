@@ -1313,7 +1313,9 @@ Notes:
         now post one message that updates the title bar later. Checked:
         median 0.6 ms, max 21 ms, and the title still follows cmd.
         `test/windows/flood.ps1` runs this in CI on the package's release
-        build (the debug build was too slow to hang).
+        build (the debug build was too slow to hang). In CI it also
+        presses Ctrl+C during the flood: run 41468741186 answered in
+        0.4 ms (median) and the flood stopped within 249 ms.
 - The tab bar now has a shell dropdown next to the new-tab button. It lists
   shells whose executables are found in PATH and always offers the configured
   default. An explicit choice uses the resolved executable path and is
