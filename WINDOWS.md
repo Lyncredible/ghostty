@@ -1403,6 +1403,20 @@ Notes:
         by the fix, alternating): 20 MB with `cmd /c type` took 24.4-25.0 s
         (median 24.6) with it and 17.2-29.4 s (median 23.4) without, and
         a program writing 64 KiB chunks took 1.9 s with both.
+  - [x] With output drawn as it arrives, a flood drew 307 frames a second
+        here (133% CPU, 86% GPU, at 59 Hz): every present on this locked
+        desktop returns `DXGI_STATUS_OCCLUDED` at once instead of at the
+        next refresh. While occluded, a present that comes within 10 ms
+        of the last now sleeps first (a timer tick, about 15.6 ms): 64
+        frames a second (44% CPU, 23% GPU), with animated shaders still
+        at 63-65 and throughput unchanged. `output-frames.ps1` reports
+        the flood's frame rate, which shows what an unlocked desktop does
+        (CI). Tried and dropped: a frame latency waitable object didn't
+        limit occluded presents, and
+        `D3D11_CREATE_DEVICE_PREVENT_INTERNAL_THREADING_OPTIMIZATIONS`
+        took NVIDIA's 11 threads per surface device down to 1 (10 idle
+        tabs: 150 threads to 50) but raised CPU with GPU-bound shaders
+        from 9% to 41%, and would keep WARP to one thread.
 - The tab bar now has a shell dropdown next to the new-tab button. It lists
   shells whose executables are found in PATH and always offers the configured
   default. An explicit choice uses the resolved executable path and is
