@@ -86,7 +86,16 @@ pub fn announceOutput(self: *Accessibility, typing: bool) void {
     if (change.text.len == 0) return;
     if (typing and change.only_last_line) return;
 
-    const text16 = util.utf16Alloc(self.alloc, change.text) catch return;
+    // After typing, the rest of the line that was being typed on (such as
+    // the end of a command when Enter is pressed) is the user's own echo.
+    var announced = change.text;
+    if (typing and change.continues_line) {
+        const nl = std.mem.indexOfScalar(u8, announced, '\n') orelse return;
+        announced = announced[nl + 1 ..];
+        if (announced.len == 0) return;
+    }
+
+    const text16 = util.utf16Alloc(self.alloc, announced) catch return;
     defer self.alloc.free(text16);
     const display = SysAllocStringLen(text16.ptr, @intCast(text16.len)) orelse return;
     defer SysFreeString(display);
@@ -105,6 +114,8 @@ pub const Change = struct {
     text: []const u8,
     /// Whether only the last non-empty line changed, such as while typing.
     only_last_line: bool,
+    /// Whether the text starts on the old last line, which grew.
+    continues_line: bool = false,
 };
 
 pub fn newOutput(old: []const u8, new: []const u8) Change {
@@ -118,10 +129,13 @@ pub fn newOutput(old: []const u8, new: []const u8) Change {
     var rest = old_trimmed;
     while (true) {
         if (std.mem.startsWith(u8, new_trimmed, rest)) {
-            const added = std.mem.trimStart(u8, new_trimmed[rest.len..], " \n");
+            const after = new_trimmed[rest.len..];
+            const added = std.mem.trimStart(u8, after, " \n");
             const last_line_start = if (std.mem.lastIndexOfScalar(u8, rest, '\n')) |i| i + 1 else 0;
             const only_last = shift == 0 and std.mem.indexOfScalar(u8, new_trimmed[last_line_start..], '\n') == null;
-            return .{ .text = added, .only_last_line = only_last };
+            const continues = rest.len > 0 and
+                std.mem.indexOfScalar(u8, after[0 .. after.len - added.len], '\n') == null;
+            return .{ .text = added, .only_last_line = only_last, .continues_line = continues };
         }
         const nl = std.mem.indexOfScalar(u8, rest, '\n') orelse break;
         rest = rest[nl + 1 ..];
@@ -150,11 +164,20 @@ test newOutput {
     change = newOutput("a\nC:\\> di", "a\nC:\\> dir");
     try testing.expectEqualStrings("r", change.text);
     try testing.expect(change.only_last_line);
+    try testing.expect(change.continues_line);
+
+    // Enter after typing more of a command since the last snapshot: the
+    // change starts with the rest of the command.
+    change = newOutput("C:\\> echo hel", "C:\\> echo hello\nhello\nC:\\>");
+    try testing.expectEqualStrings("lo\nhello\nC:\\>", change.text);
+    try testing.expect(change.continues_line);
+    try testing.expect(!change.only_last_line);
 
     // Scrolled by two lines.
     change = newOutput("1\n2\n3\n4", "3\n4\n5\n6");
     try testing.expectEqualStrings("5\n6", change.text);
     try testing.expect(!change.only_last_line);
+    try testing.expect(!change.continues_line);
 
     // Nothing new.
     try testing.expectEqualStrings("", newOutput("a\nb  \n", "a\nb\n\n").text);
