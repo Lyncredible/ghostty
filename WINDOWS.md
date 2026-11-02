@@ -1538,8 +1538,17 @@ Reviewed the branch against this file and discussion #2563.
   they stay opaque. App config reloads re-apply this. Native test
   (launch-only screenshots): opaque rendering unchanged, the bell border
   overlay still above the terminal, and the desktop visible through 60%
-  opacity with and without blur. Not yet tested: splits, the scrollbar
-  and other overlays over a translucent terminal, and Windows 10.
+  opacity with and without blur. Splits and the scrollbar over a
+  translucent terminal: `test/windows/translucent.ps1` (in CI) puts a 50%
+  black window over an opaque red one and splits it. In run 41372237868
+  both panes showed red through them (rgb(96, 0, 0), and rgb(67, 0, 0) for
+  the unfocused one, which `unfocused-split-opacity` dims), and the
+  scrollbar's thumb was drawn with red showing around it. With blur the
+  runner drew the acrylic as solid gray (rgb(29, 29, 29)) even with
+  transparency effects on: its only display adapter is Microsoft Hyper-V
+  Video, and Windows doesn't blur without a GPU. So blur is only checked
+  for the split and scrollbar there. Not yet tested: other overlays over
+  a translucent terminal, and Windows 10.
 - Quick terminal: a `WS_POPUP` + `WS_EX_TOOLWINDOW` + topmost window,
   so it has no frame or taskbar button. It's placed in the work area of
   the primary monitor (or the mouse's, with `quick-terminal-screen = mouse`)
