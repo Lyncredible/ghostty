@@ -999,6 +999,15 @@ Notes:
         installed it on `windows-latest`, and the alias ran.
     - [ ] A signed package for Windows 10 and the Store (needs a
           certificate)
+  - [ ] Release builds from CI (the discussion's "GitHub Actions for
+        release"): `.github/workflows/windows-release.yml`, started by
+        hand, packages x64 and ARM64 (ReleaseSafe, natively on each
+        runner, full history for the version), checks that the zip's
+        `ghostty.com +version` runs, writes SHA-256 checksums, and keeps
+        it all as a 90 day artifact. With `draft_release` it also creates
+        a draft GitHub release, which stays private until someone
+        publishes it. Not run yet: starting it is up to the repository's
+        owner.
 - [x] Unimplemented apprt actions (as of 2026-10-25)
   - [x] `show_on_screen_keyboard`: toggles the touch keyboard through the
         shell's (undocumented) `ITipInvocation`, starting TabTip.exe if
