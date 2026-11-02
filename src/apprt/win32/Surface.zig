@@ -234,18 +234,20 @@ pub fn init(self: *Surface, app: *App, window: *Window, opts: Options) !void {
         .cursor = util.loadSystemCursor(util.IDC_IBEAM),
     };
 
-    var parent_rect: c.RECT = undefined;
-    _ = c.GetClientRect(window.hwnd, &parent_rect);
+    // Where a new tab's surface goes, so that laying it out (or a split
+    // half of it) moves it less. Moving a new surface took the window
+    // manager about 10 ms of each new tab.
+    const area = window.surfaceArea();
 
     const hwnd = c.CreateWindowExW(
         0,
         App.surface_class,
         null,
         c.WS_CHILD | c.WS_VISIBLE | c.WS_CLIPSIBLINGS,
-        0,
-        0,
-        parent_rect.right - parent_rect.left,
-        parent_rect.bottom - parent_rect.top,
+        area.left,
+        area.top,
+        area.right - area.left,
+        area.bottom - area.top,
         window.hwnd,
         null,
         app.hinstance,
