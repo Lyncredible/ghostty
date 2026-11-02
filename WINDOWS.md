@@ -1383,6 +1383,22 @@ Notes:
         that the bell border does too. Most of what's left is the
         surface's own paint (`FillRect` under the swap chain), which
         translucency needs.
+  - [x] Output wasn't drawn until the next cursor blink. Typing into cmd
+        showed a frame 0.2 ms after each key (the key's own redraw) and
+        none for the echo, which reached the terminal about 2 ms later;
+        with an echo delayed by 50 ms, the letter appeared only with the
+        next blink, 100-600 ms later, and a program printing once a second
+        gave frames on the blink's 605 ms beat alone. Timestamped logs
+        showed output processed without a draw. The IO thread had a copy
+        of the renderer thread's wakeup handle, made before the renderer
+        waited on it; libxev's IOCP `Async` keeps its waiter in the
+        struct, so the copy never woke anything (eventfd and mach port
+        handles copy fine on other platforms). Termio now holds a pointer
+        to the renderer's handle. After: cmd's echo is drawn 0.5 ms after
+        the key, the delayed echo 63 ms after (when it arrives), and output
+        gets its own frames. `test/windows/output-frames.ps1` (in CI on
+        the package) counts frames while a letter prints every 250 ms: 24
+        of 24 now, 10 (blinks only) on a build without the fix.
 - The tab bar now has a shell dropdown next to the new-tab button. It lists
   shells whose executables are found in PATH and always offers the configured
   default. An explicit choice uses the resolved executable path and is
