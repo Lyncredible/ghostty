@@ -10,6 +10,34 @@ const util = @import("util.zig");
 
 const log = std.log.scoped(.win32);
 
+/// Replace the jump list's tasks on another thread. It takes the shell
+/// tens of milliseconds, which delayed the first window. `class` is the
+/// app's class, if it's custom.
+pub fn updateInBackground(class: ?[]const u8) void {
+    const Thread = struct {
+        // Classes are AppUserModelIDs, at most 128 characters.
+        var class_buf: [128]u8 = undefined;
+
+        fn run(len: ?usize) void {
+            const hr = c.CoInitializeEx(null, c.COINIT_MULTITHREADED);
+            defer if (hr >= 0) c.CoUninitialize();
+            update(if (len) |n| class_buf[0..n] else null);
+        }
+    };
+
+    var len: ?usize = null;
+    if (class) |v| {
+        if (v.len > Thread.class_buf.len) return;
+        @memcpy(Thread.class_buf[0..v.len], v);
+        len = v.len;
+    }
+    const thread = std.Thread.spawn(.{}, Thread.run, .{len}) catch |err| {
+        log.warn("error starting the jump list thread err={}", .{err});
+        return;
+    };
+    thread.detach();
+}
+
 /// Replace the jump list's tasks. COM must be initialized. `class` is the
 /// app's class, if it's custom.
 pub fn update(class: ?[]const u8) void {

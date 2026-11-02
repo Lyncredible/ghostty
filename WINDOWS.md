@@ -455,6 +455,11 @@ Notes:
         if it isn't done). ReleaseFast, cmd, five warm runs: the window
         showed after 242 ms instead of 330, the prompt after 280 instead
         of 362. Tabs, splits, and windows after it still create their own.
+  - [x] The jump list was written on the main thread at startup (shell
+        COM objects and a file replace, a third of the busy samples left).
+        It's now written on a thread of its own: the window showed after
+        174 ms, the prompt after 220. Checked: the launch still rewrote the
+        `CustomDestinations` file with the "New Window" task.
   - PowerShell's integration added about 180 ms per tab (590 ms with
     `shell-integration = none`). Its first prompt used three things that
     are slow the first time in 5.1: `New-Object` (63 ms), a regular
