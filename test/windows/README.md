@@ -116,7 +116,9 @@ it (`-Blur` adds `background-blur`), splits it, and scrolls the left pane.
 Both panes must show red through them, and the scrollbar's thumb must be
 drawn with the red still showing around it. It only sends messages to
 Ghostty's windows, so it can run locally, but it reads the screen, so the
-desktop must be unlocked.
+desktop must be unlocked. `-Blur` also turns on Windows's transparency
+effects (without them, acrylic is drawn as a solid gray), so it only runs
+in CI.
 
 ## dpi-change.ps1
 
