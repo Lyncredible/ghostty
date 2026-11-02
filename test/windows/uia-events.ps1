@@ -9,7 +9,9 @@
 
 param(
     [Parameter(Mandatory)] [string]$Exe,
-    [int]$TimeoutSeconds = 60
+    [int]$TimeoutSeconds = 20,
+    # Where to write Ghostty's log.
+    [string]$Log = (Join-Path ([IO.Path]::GetTempPath()) "ghostty-uia-$PID.log")
 )
 
 $ErrorActionPreference = 'Stop'
@@ -26,7 +28,27 @@ using System.Windows.Automation;
 public static class GhosttyUiaEvents {
   public static readonly ConcurrentQueue<string> Events = new ConcurrentQueue<string>();
 
-  public static void Listen(AutomationElement surface, AutomationElement window) {
+  // Registers from an MTA thread: handlers registered on PowerShell's STA
+  // thread get their events through it, and it doesn't pump messages while
+  // the script waits.
+  static void OnMta(Action action) {
+    Exception error = null;
+    var thread = new System.Threading.Thread(() => { try { action(); } catch (Exception e) { error = e; } });
+    thread.SetApartmentState(System.Threading.ApartmentState.MTA);
+    thread.Start();
+    thread.Join();
+    if (error != null) throw error;
+  }
+
+  // Any window opening, to tell whether events reach this client at all.
+  public static void ListenForWindows() { OnMta(ListenForWindowsMta); }
+  static void ListenForWindowsMta() {
+    Automation.AddAutomationEventHandler(WindowPattern.WindowOpenedEvent, AutomationElement.RootElement, TreeScope.Subtree,
+      (s, e) => { string name = "?"; try { name = ((AutomationElement)s).Current.ClassName; } catch {} Events.Enqueue("window:" + name); });
+  }
+
+  public static void Listen(AutomationElement surface, AutomationElement window) { OnMta(() => ListenMta(surface, window)); }
+  static void ListenMta(AutomationElement surface, AutomationElement window) {
     Automation.AddAutomationEventHandler(TextPattern.TextSelectionChangedEvent, surface, TreeScope.Element,
       (s, e) => Events.Enqueue("selection"));
     Automation.AddAutomationEventHandler(AutomationElement.NotificationEvent, surface, TreeScope.Element,
@@ -37,6 +59,21 @@ public static class GhosttyUiaEvents {
 
   [DllImport("user32.dll")] public static extern bool PostMessageW(IntPtr h, uint m, IntPtr w, IntPtr l);
   [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr h);
+  [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();
+  [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr h, out uint pid);
+  [StructLayout(LayoutKind.Sequential)] public struct RECT { public int l, t, r, b; }
+  [StructLayout(LayoutKind.Sequential)] public struct GUITHREADINFO {
+    public int cbSize; public int flags; public IntPtr hwndActive; public IntPtr hwndFocus;
+    public IntPtr hwndCapture; public IntPtr hwndMenuOwner; public IntPtr hwndMoveSize;
+    public IntPtr hwndCaret; public RECT rcCaret; }
+  [DllImport("user32.dll")] public static extern bool GetGUIThreadInfo(uint tid, ref GUITHREADINFO info);
+
+  // The window with keyboard focus on a window's thread.
+  public static IntPtr Focus(IntPtr w) {
+    uint pid; uint tid = GetWindowThreadProcessId(w, out pid);
+    var i = new GUITHREADINFO(); i.cbSize = Marshal.SizeOf(i);
+    GetGUIThreadInfo(tid, ref i); return i.hwndFocus;
+  }
 
   public static void Type(IntPtr h, string text) {
     foreach (char c in text) { PostMessageW(h, 0x0102, (IntPtr)c, (IntPtr)1); System.Threading.Thread.Sleep(20); }  // WM_CHAR
@@ -55,7 +92,8 @@ $AE = [System.Windows.Automation.AutomationElement]
 $Scope = [System.Windows.Automation.TreeScope]
 $U = [GhosttyUiaEvents]
 
-$process = Start-Process -FilePath $Exe -PassThru -ArgumentList '--command=cmd.exe', '--window-save-state=never',
+$U::ListenForWindows()
+$process = Start-Process -FilePath $Exe -PassThru -RedirectStandardError $Log -ArgumentList '--command=cmd.exe', '--window-save-state=never',
     '--keybind=f5=select_all', '--keybind=f6=new_tab'
 
 function Find {
@@ -70,46 +108,64 @@ function Find {
     }
 }
 
-function WaitFor([scriptblock]$condition, [string]$what) {
-    $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
-    while ((Get-Date) -lt $deadline) {
-        if ($process.HasExited) { throw "Ghostty exited while waiting for $what" }
-        $result = & $condition
-        if ($result) { return $result }
-        Start-Sleep -Milliseconds 250
-    }
-    throw "timed out waiting for $what (events: $($script:seen -join '; '))"
-}
-
 $script:seen = @()
-# The events that arrived since the last call, kept in $seen.
+# Moves the events that arrived into $seen, and returns them all.
 function Drain {
     $item = $null
     while ($U::Events.TryDequeue([ref]$item)) { $script:seen += $item }
     $script:seen
 }
 
+function WaitFor([scriptblock]$condition, [string]$what, [int]$seconds = $TimeoutSeconds) {
+    $deadline = (Get-Date).AddSeconds($seconds)
+    while ((Get-Date) -lt $deadline) {
+        if ($process.HasExited) { throw "Ghostty exited while waiting for $what" }
+        $result = & $condition
+        if ($result) { return $result }
+        Start-Sleep -Milliseconds 250
+    }
+    throw "timed out waiting for $what (events: $((Drain) -join '; '))"
+}
+
 try {
-    $found = WaitFor { Find } 'the prompt'
+    $found = WaitFor { Find } 'the prompt' 60
+    $windowHandle = [IntPtr]$found.Window.Current.NativeWindowHandle
     $surfaceHandle = [IntPtr]$found.Surface.Current.NativeWindowHandle
-    [void]$U::SetForegroundWindow([IntPtr]$found.Window.Current.NativeWindowHandle)
+    [void]$U::SetForegroundWindow($windowHandle)
     $U::Listen($found.Surface, $found.Window)
     Start-Sleep -Seconds 1
+    Write-Host ("::notice title=uia-events::before the checks: foreground is ours: $($U::GetForegroundWindow() -eq $windowHandle), " +
+        "focus is the surface: $($U::Focus($windowHandle) -eq $surfaceHandle), events: $((Drain) -join '; ')")
+
+    # Each check runs even if one before it failed.
+    $failures = @()
 
     # New output is announced (the typed command itself isn't, on the
     # cursor's line, but its output is).
-    $U::Type($surfaceHandle, "echo uia-$PID`r")
-    $note = WaitFor { Drain | Where-Object { $_ -like 'notification:*' -and $_ -match "uia-$PID" } | Select-Object -First 1 } 'a notification with the output'
-    Write-Host "::notice title=uia-events::$note"
+    try {
+        $U::Type($surfaceHandle, "echo uia-$PID`r")
+        $note = WaitFor { Drain | Where-Object { $_ -like 'notification:*' -and $_ -match "uia-$PID" } | Select-Object -First 1 } 'a notification with the output'
+        Write-Host "::notice title=uia-events::$note"
+    } catch {
+        $text = $found.Surface.GetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern).Current.Value
+        $ran = ([regex]::Matches($text, "uia-$PID")).Count
+        $failures += "$($_.Exception.Message); the screen has uia-$PID $ran times"
+    }
 
-    $U::Key($surfaceHandle, 0x74, 0x3F)   # F5: select_all
-    [void](WaitFor { Drain | Where-Object { $_ -eq 'selection' } } 'TextSelectionChanged after select_all')
-    Write-Host "::notice title=uia-events::TextSelectionChanged after select_all"
+    try {
+        $U::Key($surfaceHandle, 0x74, 0x3F)   # F5: select_all
+        [void](WaitFor { Drain | Where-Object { $_ -eq 'selection' } } 'TextSelectionChanged after select_all')
+        Write-Host "::notice title=uia-events::TextSelectionChanged after select_all"
+    } catch { $failures += $_.Exception.Message }
 
-    $script:seen = @()
-    $U::Key($surfaceHandle, 0x75, 0x40)   # F6: new_tab
-    $tab = WaitFor { Drain | Where-Object { $_ -like 'tab:*' } | Select-Object -First 1 } 'ElementSelected for the new tab'
-    Write-Host "::notice title=uia-events::ElementSelected: $tab"
+    try {
+        $script:seen = @()
+        $U::Key($surfaceHandle, 0x75, 0x40)   # F6: new_tab
+        $tab = WaitFor { Drain | Where-Object { $_ -like 'tab:*' } | Select-Object -First 1 } 'ElementSelected for the new tab'
+        Write-Host "::notice title=uia-events::ElementSelected: $tab"
+    } catch { $failures += $_.Exception.Message }
+
+    if ($failures) { throw ($failures -join ' / ') }
 } catch {
     Write-Host "::error title=uia-events::$($_.Exception.Message)"
     throw
