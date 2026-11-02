@@ -467,6 +467,14 @@ Notes:
         `C:\Users\<user>` when started through `explorer.exe`. With all
         three, warm starts showed the window after 166-174 ms (from 330)
         and the prompt after 201-228 ms (from 362).
+  - [x] New tabs: sampling the UI thread while opening ten showed about
+        34 ms of its own work per tab (the rest is ConPTY and the shell
+        starting), a third of it in the kernel moving the new surface,
+        which was created over the whole client area and then moved below
+        the tab bar. Surfaces are now created where a new tab's surface
+        goes. cmd's new tab to prompt: 98-125 ms (from 128-143). Checked:
+        the tab bar, a new tab, and right and down splits got the same
+        sizes and positions as before.
   - PowerShell's integration added about 180 ms per tab (590 ms with
     `shell-integration = none`). Its first prompt used three things that
     are slow the first time in 5.1: `New-Object` (63 ms), a regular
