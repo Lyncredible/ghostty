@@ -486,13 +486,19 @@ Notes:
       2854x1456 pixels: 1 tab 88 MB (from 136), 10 tabs 658 MB (from
       1,135). Checked: a flood, a search (30 matches on its thread), and
       the UI Automation events test.
-  - [ ] Most of what's left per tab scales with the window (31 MB per tab
-        for 80x24 cells, 63 MB for the large window): each surface has
-        three offscreen frame targets (`swap_chain_count`, as on Metal and
-        OpenGL) and a two-buffer swap chain, and this NVIDIA driver backs
-        the targets with process memory. Direct3D 11 tracks hazards on the
-        immediate context itself, so fewer targets may do; that needs a
-        look at what the generic renderer assumes about them.
+  - [x] Most of what was left per tab scaled with the window (31 MB per
+        tab for 80x24 cells, 63 MB for the large window): each surface had
+        three copies of its frame state (`swap_chain_count`, as on Metal
+        and OpenGL), each with an offscreen target and copies of the glyph
+        atlases, and this NVIDIA driver backs them with process memory.
+        The copies let Metal and OpenGL build a frame while the GPU draws
+        an earlier one, but Direct3D 11 completes a frame when it presents
+        it, so only one was ever in use, and the driver orders our updates
+        (`Map` with `WRITE_DISCARD`, `UpdateSubresource`) against queued
+        draws itself. Direct3D 11 now keeps one. 1 tab 50 MB (from 88), 10
+        tabs 296 MB (from 658). Frame rates were the same (light shader 69
+        fps, heavy 69, four splits 274 in all, maximized heavy 49), and so
+        was output throughput (about 1 MB/s through ConPTY either way).
   - PowerShell's integration added about 180 ms per tab (590 ms with
     `shell-integration = none`). Its first prompt used three things that
     are slow the first time in 5.1: `New-Object` (63 ms), a regular

@@ -40,8 +40,14 @@ pub const custom_shader_target: shadertoy.Target = .hlsl;
 // The fragCoord for Direct3D shaders is +Y = down.
 pub const custom_shader_y_is_down = true;
 
-/// Triple buffering.
-pub const swap_chain_count = 3;
+/// One copy of the frame state. Other backends keep three so they can build
+/// a frame while the GPU draws earlier ones, but our frames complete when
+/// they're presented, so only one was ever in use. The driver orders our
+/// updates (`Map` with `WRITE_DISCARD`, `UpdateSubresource`) against draws
+/// still queued on the immediate context. Each copy has a target and glyph
+/// atlases, which some drivers back with process memory: three copies made
+/// a tab of a large window cost about 63 MB instead of 30.
+pub const swap_chain_count = 1;
 
 /// The number of buffers in the DXGI swap chain. Flip model swap chains
 /// require at least two.
