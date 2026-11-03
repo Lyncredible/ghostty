@@ -745,6 +745,14 @@ Notes:
         consoles report synchronous handles and are unchanged. Tests:
         `os/stdio.zig` (a file stays synchronous, an overlapped pipe
         becomes nonblocking).
+    - [x] libghostty-vt's raw stderr writer (`os/stderr.zig`, for its
+          logs and panics) called `NtWriteFile` and returned; on such a
+          pipe the write can still be pending then, and the kernel later
+          writes its result into the stack frame that's gone. It now waits
+          until the write's status block says it's done, and writes the
+          rest of a partial write. Test: a 16 KB write to an overlapped
+          pipe that's read only after 200 ms must take that long and
+          arrive whole; without the wait it crashed.
 - [x] Output throughput (2026-10-26, ReleaseFast, 20 MB of text):
   - `cmd /c type` is slow everywhere: 19-27 s in Ghostty, 27-38 s in a
     conhost window. cmd writes line by line through the console API.
