@@ -88,6 +88,13 @@ jobs:
         shell: pwsh
         run: ./test/windows/paste-race.ps1 -Exe zig-out/bin/ghostty.exe
 
+      # "Close terminal?" and "Change Terminal Title" from keybindings:
+      # OK closes, and the shell exiting while one is open doesn't crash.
+      - name: Keybinding dialogs test
+        timeout-minutes: 5
+        shell: pwsh
+        run: ./test/windows/dialog-race.ps1 -Exe zig-out/bin/ghostty.exe
+
       # Ctrl+clicking hyperlinks from terminal output: a text file opens,
       # a script is blocked, and another app's scheme asks first.
       - name: Links test

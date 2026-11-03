@@ -1206,6 +1206,14 @@ Notes:
         standard Save As dialog (`GetSaveFileNameW`); the inspector skips
         redraws while the modal dialog pumps messages. Not clicked
         through yet.
+    - [x] The inspector asked while it held the terminal's lock, so with
+          the dialog open the terminal stopped, and anything else that
+          needed the lock on the UI thread (typing in the terminal)
+          would hang. The contents are now copied and the dialog shown
+          from a posted message (`WM_GHOSTTY_EXPORT`). Builds and the
+          unit tests pass; clicking Export still needs a person (the
+          inspector has no keyboard navigation, and posted clicks don't
+          reach ImGui).
   - Not applicable on Windows: `undo`/`redo`, `secure_input`,
     `check_for_updates`, `toggle_tab_overview`, `show_gtk_inspector`,
     `render` (embedded), `selection_changed` (no primary selection).
@@ -1462,6 +1470,13 @@ Notes:
         a second request while one waits is denied. CI then passed
         (run 41705029879): the shell exited with the dialog open and
         Ghostty closed cleanly, and Ctrl+V pasting still works.
+  - [ ] Two more dialogs ran inside the core's key handling, which goes
+        on using the core surface afterwards: "Close terminal?"
+        (`close_surface`) and "Change Terminal Title"
+        (`prompt_*_title`). Both now run from messages the surface posts
+        to itself (`WM_GHOSTTY_CONFIRM_CLOSE`, `WM_GHOSTTY_PROMPT_TITLE`).
+        CI test `dialog-race.ps1`: OK closes, and the shell exiting with
+        either dialog open must not crash.
 - Bell handling now copies each surface's `bell-features` (including on
   reload), gates `MessageBeep` on `system`, and requests taskbar attention
   only for background windows. `FLASHW_TIMERNOFG` stops the flash on

@@ -173,6 +173,9 @@ drop_shell: drop.Shell = .windows,
 /// and the core would then go on using it.
 pending_clipboard: ?PendingClipboard = null,
 
+/// Whether we've posted ourselves a message to ask before closing.
+close_pending: bool = false,
+
 /// A pending high surrogate from a standalone WM_CHAR.
 high_surrogate: ?u16 = null,
 
@@ -414,14 +417,34 @@ pub fn rtApp(self: *const Surface) *App {
 /// Close this surface. If `process_active` is true then the user is
 /// asked for confirmation first.
 pub fn close(self: *Surface, process_active: bool) void {
+    if (!process_active) {
+        self.window.closeSurface(self);
+        return;
+    }
+
+    // The core asks from its key handling, which goes on using the core
+    // surface after we return, so a dialog here would let it be destroyed
+    // underneath (the shell exiting meanwhile). Ask once this message is
+    // done instead.
+    if (self.close_pending) return;
+    if (c.PostMessageW(self.hwnd, WM_GHOSTTY_CONFIRM_CLOSE, 0, 0) == 0) {
+        log.warn("couldn't ask to close the terminal", .{});
+        return;
+    }
+    self.close_pending = true;
+}
+
+fn confirmClose(self: *Surface) void {
+    self.close_pending = false;
     const hwnd = self.hwnd;
     const identity = c.GetWindowLongPtrW(hwnd, util.GWLP_USERDATA);
-    if (process_active and !Window.confirm(
+    if (!Window.confirm(
         self.window,
         "Close terminal?",
         "A process is still running in this terminal. Closing it will kill the process.",
     )) return;
 
+    // We may have been closed while the dialog was open.
     if (c.GetWindowLongPtrW(hwnd, util.GWLP_USERDATA) != identity) return;
 
     self.window.closeSurface(self);
@@ -454,8 +477,15 @@ pub fn setTitleOverride(self: *Surface, title: ?[]const u8) void {
     self.window.surfaceTitleChanged(self);
 }
 
-/// Prompt for a new surface, tab or window title override.
-pub fn promptTitle(self: *Surface, kind: apprt.action.PromptTitle) !void {
+/// Prompt for a new surface, tab or window title override. The core asks
+/// from its key handling, so, as for `close`, we ask once that's done.
+pub fn promptTitle(self: *Surface, kind: apprt.action.PromptTitle) void {
+    if (c.PostMessageW(self.hwnd, WM_GHOSTTY_PROMPT_TITLE, @intCast(@backingInt(kind)), 0) == 0) {
+        log.warn("couldn't ask for a title", .{});
+    }
+}
+
+fn showTitlePrompt(self: *Surface, kind: apprt.action.PromptTitle) !void {
     const alloc = self.app.core_app.alloc;
     const window = self.window;
     const initial: []const u8 = switch (kind) {
@@ -1274,6 +1304,13 @@ pub const WM_GHOSTTY_SELECTION_CHANGED = c.WM_APP + 10;
 
 /// Posted to the surface to ask about its `pending_clipboard`.
 const WM_GHOSTTY_CONFIRM_CLIPBOARD = c.WM_APP + 11;
+
+/// Posted to the surface to ask before closing it.
+const WM_GHOSTTY_CONFIRM_CLOSE = c.WM_APP + 12;
+
+/// Posted to the surface to ask for a title, with an
+/// `apprt.action.PromptTitle` as the wparam.
+const WM_GHOSTTY_PROMPT_TITLE = c.WM_APP + 13;
 const accessibility_ms = 500;
 
 fn updateResizeOverlay(self: *Surface, config: *const configpkg.Config) void {
@@ -1546,6 +1583,19 @@ pub fn wndProc(
 
         WM_GHOSTTY_CONFIRM_CLIPBOARD => {
             self.confirmClipboard();
+            return 0;
+        },
+
+        WM_GHOSTTY_CONFIRM_CLOSE => {
+            self.confirmClose();
+            return 0;
+        },
+
+        WM_GHOSTTY_PROMPT_TITLE => {
+            const kind = std.enums.fromInt(apprt.action.PromptTitle, wparam) orelse return 0;
+            self.showTitlePrompt(kind) catch |err| {
+                log.err("error prompting for a title err={}", .{err});
+            };
             return 0;
         },
 

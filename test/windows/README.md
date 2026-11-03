@@ -104,6 +104,15 @@ flashes with a shell hook window of its own (`HSHELL_FLASH`): with
 background and not while it's in front; with `no-attention`, it doesn't
 flash. It changes the foreground window, so it only runs in CI.
 
+## dialog-race.ps1
+
+Opens the dialogs that keybindings show, with keys posted to the
+terminal: "Close terminal?" (`close_surface` while `ping` runs), whose OK
+must close the terminal, and then that dialog and "Change Terminal
+Title" (`prompt_surface_title`) while the shell exits, after which
+Ghostty must exit cleanly or stay responsive. It shows dialogs, so it
+refuses to run unless `CI` is `true`.
+
 ## start-menu.ps1
 
 Starts an installed Ghostty the way the Start menu does (the MSIX by its
