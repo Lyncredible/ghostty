@@ -23,4 +23,5 @@ test {
     _ = @import("win32/Accessibility.zig");
     _ = @import("win32/TabBarAccessibility.zig");
     _ = @import("win32/TextRange.zig");
+    _ = @import("win32/link.zig");
 }

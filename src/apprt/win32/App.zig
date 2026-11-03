@@ -32,6 +32,7 @@ const SaveState = @import("SaveState.zig");
 const JumpList = @import("JumpList.zig");
 const SplitDrag = @import("SplitDrag.zig");
 const shell = @import("shell.zig");
+const link = @import("link.zig");
 const Ipc = @import("Ipc.zig");
 const Overrides = @import("Overrides.zig");
 const Taskbar = @import("Taskbar.zig");
@@ -1348,7 +1349,7 @@ pub fn performAction(
             .surface => |v| v,
         }, value.title, value.body),
 
-        .open_url => openUrl(self.core_app.alloc, value.url),
+        .open_url => self.openUrl(value),
 
         .config_change => switch (target) {
             .surface => |v| v.rt_surface.configChanged(value.config),
@@ -1474,15 +1475,83 @@ fn showConfigErrors(self: *App, config: *const Config) void {
     }
 }
 
-/// Open a URL or path with the default handler.
-fn openUrl(alloc: Allocator, url: []const u8) void {
-    const url16 = util.utf16Alloc(alloc, url) catch return;
-    defer alloc.free(url16);
-    const open = std.unicode.utf8ToUtf16LeStringLiteral("open");
-    const result = c.ShellExecuteW(null, open, url16, null, null, c.SW_SHOWNORMAL);
-    if (@intFromPtr(result) <= 32) {
-        log.warn("failed to open url={s} result={}", .{ url, @intFromPtr(result) });
+/// Open a URL or path with the default handler. Links from terminal
+/// output are checked first (see link.zig).
+fn openUrl(self: *App, value: apprt.action.OpenUrl) void {
+    const alloc = self.core_app.alloc;
+    switch (value.kind) {
+        .text, .html => {
+            const url16 = util.utf16Alloc(alloc, value.url) catch return;
+            defer alloc.free(url16);
+            shellOpen(url16);
+            return;
+        },
+        .unknown, .osc8 => {},
     }
+
+    const decision = link.check(alloc, value.url, value.kind == .unknown) catch return;
+    defer decision.deinit(alloc);
+    const owner = if (self.activeWindow()) |window| window.hwnd else null;
+    switch (decision) {
+        .allow => |target| shellOpen(target),
+        .confirm => |target| if (self.confirmLink(owner, value.url)) shellOpen(target),
+        .deny => |reason| {
+            log.warn("not opening link reason={t}", .{reason});
+            self.showBlockedLink(owner, value.url, reason);
+        },
+    }
+}
+
+fn shellOpen(target: [:0]const u16) void {
+    const open = std.unicode.utf8ToUtf16LeStringLiteral("open");
+    const result = c.ShellExecuteW(null, open, target.ptr, null, null, c.SW_SHOWNORMAL);
+    if (@intFromPtr(result) <= 32) {
+        log.warn("failed to open url={f} result={}", .{
+            std.unicode.fmtUtf16Le(target),
+            @intFromPtr(result),
+        });
+    }
+}
+
+/// Ask before opening a link whose scheme goes to another app.
+fn confirmLink(self: *App, owner: c.HWND, url: []const u8) bool {
+    const alloc = self.core_app.alloc;
+    const shown = link.display(alloc, url) catch return false;
+    defer alloc.free(shown);
+    const text = std.fmt.allocPrint(
+        alloc,
+        "Open this link?\n\n{s}\n\nIt will be opened by the app that handles \"{s}:\" links.",
+        .{ shown, url[0 .. std.mem.indexOfScalar(u8, url, ':') orelse 0] },
+    ) catch return false;
+    defer alloc.free(text);
+    const text16 = util.utf16Alloc(alloc, text) catch return false;
+    defer alloc.free(text16);
+    return c.MessageBoxW(
+        owner,
+        text16.ptr,
+        std.unicode.utf8ToUtf16LeStringLiteral("Open Link"),
+        c.MB_YESNO | c.MB_DEFBUTTON2 | c.MB_ICONWARNING,
+    ) == c.IDYES;
+}
+
+fn showBlockedLink(self: *App, owner: c.HWND, url: []const u8, reason: link.Reason) void {
+    const alloc = self.core_app.alloc;
+    const shown = link.display(alloc, url) catch return;
+    defer alloc.free(shown);
+    const text = std.fmt.allocPrint(
+        alloc,
+        "Ghostty didn't open this link.\n\n{s}\n\n{s}",
+        .{ shown, reason.message() },
+    ) catch return;
+    defer alloc.free(text);
+    const text16 = util.utf16Alloc(alloc, text) catch return;
+    defer alloc.free(text16);
+    _ = c.MessageBoxW(
+        owner,
+        text16.ptr,
+        std.unicode.utf8ToUtf16LeStringLiteral("Link Blocked"),
+        c.MB_OK | c.MB_ICONWARNING,
+    );
 }
 
 /// Send the given IPC to a running Ghostty. Returns `true` if the action was

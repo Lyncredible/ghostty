@@ -643,6 +643,34 @@ Notes:
     (exit code 3).
   - The default config path mixed separators (`ghostty/config.ghostty`);
     it's joined with the platform's separator now.
+- [x] Links from terminal output: Ctrl+clicking an OSC 8 hyperlink (or
+      text a `link` entry matched) went straight to `ShellExecute`, which
+      runs programs and scripts, so any program's output could make a
+      click run `file:///C:/.../run.vbs`, send Windows to a network share
+      (`file://host/...`, which also signs in to it), or start any app
+      registered for a scheme. They now follow the macOS app's policy
+      (`UntrustedURL.swift`), in `apprt/win32/link.zig`:
+  - `http`, `https` (with a host) and `mailto` open; other schemes ask
+    first ("Open Link", No by default).
+  - Files open only by an absolute local path (no `\\host`, `\\?\`, or
+    alternate data stream), if they exist and are a regular file or
+    folder. The type is checked on the file Windows actually opens
+    (`GetFinalPathNameByHandleW`, so trailing dots, short names and
+    symlinks don't hide it), and that path is what's opened. Types that
+    run code are blocked: Windows' list (`AssocIsDangerous`), `PATHEXT`,
+    and ours (`.vbs`, `.ps1`, `.lnk`, `.url`, `.msc`, `.appinstaller`,
+    `.settingcontent-ms` and others). Folders named `name.{CLSID}` too.
+  - Control, invisible and text-reversing characters are refused, and
+    the dialogs show them escaped (`\u{202E}`).
+  - Blocked links show "Link Blocked" with the reason, and are logged.
+  - Unit tests: `apprt.win32.link` (web, mail and other schemes; unsafe
+    characters; remote and relative paths; local files, including
+    `run.bat.`, `run.bat .. `, `data.PS1`, a stream, a CLSID folder and
+    `calc.exe`). CI test `links.ps1` Ctrl+clicks real links: a `.txt`
+    opens in Notepad, a `.vbs` is blocked and doesn't run, and
+    `ms-settings:` asks.
+  - Not covered: a local symlink that points to a network share is
+    still followed while it's checked.
 - [x] The child environment (printed by Python under `-e`): `TERM`,
       `COLORTERM`, `TERM_PROGRAM`, `TERM_PROGRAM_VERSION`,
       `GHOSTTY_RESOURCES_DIR`, `GHOSTTY_BIN_DIR`, `GHOSTTY_SHELL_FEATURES`,
