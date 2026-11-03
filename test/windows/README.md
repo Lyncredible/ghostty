@@ -80,6 +80,14 @@ with real (synthesized) keyboard and mouse input. Since that input goes to
 the foreground window, it refuses to run unless `CI` is `true`; CI runs it
 on the runner's desktop.
 
+## links.ps1
+
+Ctrl+clicks OSC 8 hyperlinks and checks the checks for links from
+terminal output: a link to a text file opens it in Notepad, a link to a
+`.vbs` script shows "Link Blocked" and the script doesn't run, and an
+`ms-settings:` link asks first (the script answers No). It sends real
+input and opens apps, so it refuses to run unless `CI` is `true`.
+
 ## start-menu.ps1
 
 Starts an installed Ghostty the way the Start menu does (the MSIX by its

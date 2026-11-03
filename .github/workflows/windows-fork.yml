@@ -81,6 +81,13 @@ jobs:
         shell: pwsh
         run: ./test/windows/desktop-input.ps1 -Exe zig-out/bin/ghostty.exe
 
+      # Ctrl+clicking hyperlinks from terminal output: a text file opens,
+      # a script is blocked, and another app's scheme asks first.
+      - name: Links test
+        timeout-minutes: 5
+        shell: pwsh
+        run: ./test/windows/links.ps1 -Exe zig-out/bin/ghostty.exe
+
       # A real OLE drag of a file onto a terminal (Windows PowerShell's
       # thread is STA, as drag and drop needs).
       - name: Drag and drop test
