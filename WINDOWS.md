@@ -1417,6 +1417,16 @@ Notes:
         took NVIDIA's 11 threads per surface device down to 1 (10 idle
         tabs: 150 threads to 50) but raised CPU with GPU-bound shaders
         from 9% to 41%, and would keep WARP to one thread.
+  - [x] Minimizing: the window laid out its empty client area, which
+        resized each terminal of the active tab to a tiny grid ("very
+        small terminal grid" in the log, two extra resizes for ConPTY),
+        and the renderer kept rebuilding frames for output with nothing to
+        draw them on: 78% CPU during a flood, more than the 45-52% shown.
+        Minimizing now skips the layout and tells the active tab's
+        surfaces they aren't seen (their windows stay, for the taskbar
+        preview): no resize, 36% CPU (parsing the output), and drawing
+        resumes on restore. `test/windows/minimize.ps1` checks this in CI;
+        it fails on the build before ("minimized 0x0").
 - The tab bar now has a shell dropdown next to the new-tab button. It lists
   shells whose executables are found in PATH and always offers the configured
   default. An explicit choice uses the resolved executable path and is
