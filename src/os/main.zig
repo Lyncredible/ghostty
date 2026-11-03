@@ -31,6 +31,7 @@ pub const windows = @import("windows.zig");
 pub const macos = @import("macos.zig");
 pub const shell = @import("shell.zig");
 pub const stderr = @import("stderr.zig");
+pub const stdio = @import("stdio.zig");
 pub const uri = @import("uri.zig");
 pub const wsl = @import("wsl.zig");
 
@@ -75,6 +76,7 @@ else
 test {
     _ = file;
     _ = stderr;
+    _ = stdio;
     _ = edit;
     _ = i18n;
     _ = path;

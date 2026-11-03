@@ -24,6 +24,7 @@ const new_window = @import("new_window.zig");
 const new_tab = @import("new_tab.zig");
 const toggle_quick_terminal = @import("toggle_quick_terminal.zig");
 const global = @import("../global.zig");
+const internal_os = @import("../os/main.zig");
 
 /// Special commands that can be invoked via CLI flags. These are all
 /// invoked by using `+<action>` as a CLI flag. The only exception is
@@ -125,7 +126,7 @@ pub const Action = enum {
 
                     if (std.mem.eql(u8, field, @tagName(self))) {
                         var buffer: [1024]u8 = undefined;
-                        var stdout_writer = std.Io.File.stdout().writer(
+                        var stdout_writer = internal_os.stdio.stdout().writer(
                             global.io(),
                             &buffer,
                         );

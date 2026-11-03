@@ -8,6 +8,7 @@ const font = @import("../font/main.zig");
 const configpkg = @import("../config.zig");
 const Config = configpkg.Config;
 const global = @import("../global.zig");
+const internal_os = @import("../os/main.zig");
 
 pub const Options = struct {
     /// This is set by the CLI parser for deinit.
@@ -67,11 +68,11 @@ pub fn run(alloc: Allocator) !u8 {
     defer iter.deinit();
 
     var stdout_buffer: [1024]u8 = undefined;
-    var stdout_writer = std.Io.File.stdout().writer(global.io(), &stdout_buffer);
+    var stdout_writer = internal_os.stdio.stdout().writer(global.io(), &stdout_buffer);
     const stdout = &stdout_writer.interface;
 
     var stderr_buffer: [1024]u8 = undefined;
-    var stderr_writer = std.Io.File.stdout().writer(global.io(), &stderr_buffer);
+    var stderr_writer = internal_os.stdio.stdout().writer(global.io(), &stderr_buffer);
     const stderr = &stderr_writer.interface;
 
     const result = runArgs(
