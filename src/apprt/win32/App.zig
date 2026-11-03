@@ -54,6 +54,10 @@ const WM_GHOSTTY_REDO = c.WM_APP + 4;
 /// Posted to close all windows.
 const WM_GHOSTTY_CLOSE_ALL = c.WM_APP + 5;
 
+/// Posted to check and open a link from terminal output, with a
+/// `*PendingLink` as the lparam.
+const WM_GHOSTTY_OPEN_LINK = c.WM_APP + 6;
+
 /// The ID of the timer on our message window for the quit timer.
 const quit_timer_id = 1;
 
@@ -729,6 +733,13 @@ fn msgWndProc(
 
             WM_GHOSTTY_CLOSE_ALL => {
                 self.closeAllWindows();
+                return 0;
+            },
+
+            WM_GHOSTTY_OPEN_LINK => {
+                const pending: *PendingLink = @ptrFromInt(@as(usize, @bitCast(lparam)));
+                defer pending.destroy(self.core_app.alloc);
+                self.openUntrustedLink(pending.url, pending.plain_paths);
                 return 0;
             },
 
@@ -1489,15 +1500,43 @@ fn openUrl(self: *App, value: apprt.action.OpenUrl) void {
         .unknown, .osc8 => {},
     }
 
-    const decision = link.check(alloc, value.url, value.kind == .unknown) catch return;
+    // The core asks us to open links while it holds the terminal's lock,
+    // and a dialog's message loop would then deadlock on it (painting
+    // needs the lock), so check and ask once this message is done.
+    const pending = PendingLink.create(alloc, value.url, value.kind == .unknown) catch return;
+    if (c.PostMessageW(self.msg_hwnd, WM_GHOSTTY_OPEN_LINK, 0, @bitCast(@intFromPtr(pending))) == 0) {
+        pending.destroy(alloc);
+    }
+}
+
+const PendingLink = struct {
+    url: []const u8,
+    plain_paths: bool,
+
+    fn create(alloc: Allocator, url: []const u8, plain_paths: bool) Allocator.Error!*PendingLink {
+        const self = try alloc.create(PendingLink);
+        errdefer alloc.destroy(self);
+        self.* = .{ .url = try alloc.dupe(u8, url), .plain_paths = plain_paths };
+        return self;
+    }
+
+    fn destroy(self: *PendingLink, alloc: Allocator) void {
+        alloc.free(self.url);
+        alloc.destroy(self);
+    }
+};
+
+fn openUntrustedLink(self: *App, url: []const u8, plain_paths: bool) void {
+    const alloc = self.core_app.alloc;
+    const decision = link.check(alloc, url, plain_paths) catch return;
     defer decision.deinit(alloc);
     const owner = if (self.activeWindow()) |window| window.hwnd else null;
     switch (decision) {
         .allow => |target| shellOpen(target),
-        .confirm => |target| if (self.confirmLink(owner, value.url)) shellOpen(target),
+        .confirm => |target| if (self.confirmLink(owner, url)) shellOpen(target),
         .deny => |reason| {
             log.warn("not opening link reason={t}", .{reason});
-            self.showBlockedLink(owner, value.url, reason);
+            self.showBlockedLink(owner, url, reason);
         },
     }
 }
