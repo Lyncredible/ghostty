@@ -11,6 +11,7 @@ const input = @import("../input.zig");
 const tui = @import("tui.zig");
 const Binding = input.Binding;
 const global = @import("../global.zig");
+const internal_os = @import("../os/main.zig");
 
 pub const Options = struct {
     /// If `true`, print out the default keybinds instead of the ones configured
@@ -66,7 +67,7 @@ pub fn run(alloc: Allocator) !u8 {
     defer config.deinit();
 
     var buffer: [1024]u8 = undefined;
-    const stdout: std.Io.File = .stdout();
+    const stdout: std.Io.File = internal_os.stdio.stdout();
     var stdout_writer = stdout.writer(global.io(), &buffer);
     const writer = &stdout_writer.interface;
 

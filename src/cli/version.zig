@@ -17,7 +17,7 @@ pub const Options = struct {};
 /// either `+version` or `--version`.
 pub fn run(alloc: Allocator) !u8 {
     var buffer: [1024]u8 = undefined;
-    const stdout_file: std.Io.File = .stdout();
+    const stdout_file: std.Io.File = internal_os.stdio.stdout();
     var stdout_writer = stdout_file.writer(global.io(), &buffer);
 
     var environ_map = try global.environMap();

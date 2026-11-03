@@ -6,6 +6,7 @@ const global = @import("../global.zig");
 const Action = @import("ghostty.zig").Action;
 const Duration = @import("../config.zig").Config.Duration;
 const terminfopkg = @import("../terminfo/main.zig");
+const internal_os = @import("../os/main.zig");
 pub const Entry = @import("ssh-cache/Entry.zig");
 pub const DiskCache = @import("ssh-cache/DiskCache.zig");
 
@@ -71,12 +72,12 @@ pub fn run(alloc_gpa: Allocator) !u8 {
     defer opts.deinit();
 
     var stdout_buffer: [1024]u8 = undefined;
-    var stdout_file: std.Io.File = .stdout();
+    var stdout_file: std.Io.File = internal_os.stdio.stdout();
     var stdout_writer = stdout_file.writer(global.io(), &stdout_buffer);
     const stdout = &stdout_writer.interface;
 
     var stderr_buffer: [1024]u8 = undefined;
-    var stderr_file: std.Io.File = .stderr();
+    var stderr_file: std.Io.File = internal_os.stdio.stderr();
     var stderr_writer = stderr_file.writer(global.io(), &stderr_buffer);
     const stderr = &stderr_writer.interface;
 
