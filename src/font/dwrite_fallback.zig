@@ -302,7 +302,7 @@ test findFamily {
     const font = findFamily(testing.allocator, "Consolas", true, false) orelse return error.SkipZigTest;
     defer testing.allocator.free(font.path);
     try testing.expect(std.ascii.endsWithIgnoreCase(font.path, "consolab.ttf"));
-    try testing.expectEqual(c.DWRITE_FONT_WEIGHT_BOLD, font.weight);
+    try testing.expectEqual(@as(u32, c.DWRITE_FONT_WEIGHT_BOLD), font.weight);
     try testing.expect(findFamily(testing.allocator, "No Such Font Family", false, false) == null);
 }
 
