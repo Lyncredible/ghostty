@@ -86,6 +86,27 @@ pub const Face = struct {
         return if (i == 0) null else i;
     }
 
+    /// A character code in the current charmap and its glyph index.
+    pub const CharGlyph = struct { char: u32, glyph: u32 };
+
+    /// The first character code in the current charmap, or null if it
+    /// has none. With `getNextChar`, this visits every code in order.
+    pub fn getFirstChar(self: Face) ?CharGlyph {
+        var glyph: c.FT_UInt = 0;
+        const char = c.FT_Get_First_Char(self.handle, &glyph);
+        if (glyph == 0) return null;
+        return .{ .char = @intCast(char), .glyph = glyph };
+    }
+
+    /// The character code after `char` in the current charmap, or null
+    /// if there are no more.
+    pub fn getNextChar(self: Face, char: u32) ?CharGlyph {
+        var glyph: c.FT_UInt = 0;
+        const next = c.FT_Get_Next_Char(self.handle, char, &glyph);
+        if (glyph == 0) return null;
+        return .{ .char = @intCast(next), .glyph = glyph };
+    }
+
     /// Load a glyph into the glyph slot of a face object.
     pub fn loadGlyph(self: Face, glyph_index: u32, load_flags: LoadFlags) Error!void {
         return intToError(c.FT_Load_Glyph(
