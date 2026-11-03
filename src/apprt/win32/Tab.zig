@@ -222,6 +222,16 @@ pub fn setVisible(self: *Tab, visible: bool) void {
     }
 }
 
+/// Tell the shown surfaces whether anyone can see them, when the window
+/// is minimized or restored. Their windows stay shown, so the taskbar's
+/// preview keeps the last frame.
+pub fn setMinimized(self: *Tab, minimized: bool) void {
+    var it = self.tree.iterator();
+    while (it.next()) |entry| {
+        if (self.isShown(entry.handle)) entry.view.setVisible(!minimized);
+    }
+}
+
 /// Whether the given leaf is shown, which is all of them unless a
 /// split is zoomed.
 fn isShown(self: *const Tab, handle: Tree.Node.Handle) bool {
