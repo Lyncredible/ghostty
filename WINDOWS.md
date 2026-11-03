@@ -1464,10 +1464,22 @@ Notes:
         consolab, consolai and consolaz, and Inconsolata (regular and bold
         files here) synthesizes italic and bold italic. Startup with
         Consolas is unchanged (181-192 ms). Test: "windows styles".
-        Still slow: a family that isn't installed walks the font folders
-        once per style (Cascadia Mono, absent here: 540 ms to the window
-        against 170), as does a per-user font, which comes after all of
-        the system fonts.
+  - [x] Font family lookups: a family the folder walk didn't find took a
+        walk per style (Cascadia Mono: 540 ms to the window against 170),
+        as did a style a family lacks (Inconsolata's italics: 413-422 ms)
+        and would a per-user font, which comes after all of the system
+        fonts. Name queries now ask DirectWrite's index of installed fonts
+        for the family's face for the style first (`findFamily` in
+        `src/font/dwrite_fallback.zig`, a simulated style counts as
+        missing), and look up anything else in the coverage index, which
+        now also notes each face's names and style: Cascadia Mono 277-286
+        ms, Inconsolata 271-273 ms (most of it building the index), and
+        Consolas 171-181 ms. DirectWrite also knows fonts that packaged apps
+        register, which the walk never saw: here Cascadia Mono comes from
+        Windows Terminal's package. Its bold is the variable font's weight
+        axis, which DirectWrite reports without a simulation but FreeType's
+        flags call regular, so bold is synthesized; using the font's own
+        bold instance would be better.
 - The tab bar now has a shell dropdown next to the new-tab button. It lists
   shells whose executables are found in PATH and always offers the configured
   default. An explicit choice uses the resolved executable path and is

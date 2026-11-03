@@ -985,13 +985,13 @@ pub const CoreText = struct {
 /// FreeType's family_name field (with a fallback to the SFNT name
 /// table when family_name is missing).
 ///
-/// No external service is used; each name query walks the directories,
-/// opening candidate files with FreeType only as needed. For typical
-/// Windows installations (~300 fonts) a name query is in the tens of
-/// milliseconds. A codepoint query first asks DirectWrite's fallback,
-/// then looks in `Coverage`, which opens every font once per process to
-/// note its characters: probing every font for each codepoint made
-/// characters that no font has cost about 25 ms each.
+/// A name query first asks DirectWrite for the family's face for the
+/// style, and a codepoint query asks DirectWrite's fallback. Anything
+/// DirectWrite doesn't answer is looked up in `Coverage`, which opens
+/// every font once per process to note its names, styles, and characters:
+/// probing every font for each query made a family that isn't installed
+/// cost a walk per style (about 90 ms each with 900 font files), and a
+/// character that no font has about 25 ms.
 pub const Windows = struct {
     lib: Library,
 
@@ -1013,8 +1013,14 @@ pub const Windows = struct {
             .lib = self.lib,
             .desc = desc,
             .variations = desc.variations,
-            // For a codepoint, first ask Windows which font it would use.
-            .state = if (desc.codepoint != 0 and desc.family == null) .dwrite else .system,
+            // First ask Windows which font it would use for a codepoint,
+            // or which face of a family it has for a style.
+            .state = if (desc.family != null)
+                .dwrite_family
+            else if (desc.codepoint != 0)
+                .dwrite
+            else
+                .system,
             .coverage_next = 0,
             .dir = null,
             .iter = null,
@@ -1047,7 +1053,7 @@ pub const Windows = struct {
         /// The next face in `Coverage` to check, in the coverage state.
         coverage_next: usize,
 
-        const State = enum { dwrite, coverage, system, user, done };
+        const State = enum { dwrite, dwrite_family, coverage, system, user, done };
 
         pub fn deinit(self: *DiscoverIterator) void {
             if (self.dir) |*d| d.close(global.io());
@@ -1066,6 +1072,11 @@ pub const Windows = struct {
                             if (try self.systemFallback()) |face| return face;
                             continue;
                         },
+                        .dwrite_family => {
+                            self.state = .coverage;
+                            if (try self.systemFamily()) |face| return face;
+                            continue;
+                        },
                         .coverage => {
                             const faces = Coverage.get(self.lib) orelse {
                                 // Without the index, probe every font.
@@ -1075,7 +1086,7 @@ pub const Windows = struct {
                             while (self.coverage_next < faces.len) {
                                 const info = &faces[self.coverage_next];
                                 self.coverage_next += 1;
-                                if (!info.has(self.desc.codepoint)) continue;
+                                if (!info.matches(self.desc)) continue;
                                 var face = Face.initFile(
                                     self.lib,
                                     info.path,
@@ -1133,7 +1144,7 @@ pub const Windows = struct {
                     self.dir = null;
                     self.iter = null;
                     self.state = switch (self.state) {
-                        .dwrite, .coverage, .system => .user,
+                        .dwrite, .dwrite_family, .coverage, .system => .user,
                         .user => .done,
                         .done => .done,
                     };
@@ -1180,6 +1191,31 @@ pub const Windows = struct {
             return try self.makeDeferred(face, font.path, @intCast(font.index));
         }
 
+        /// The face DirectWrite has for our family and style, if it
+        /// matches the rest of the descriptor.
+        fn systemFamily(self: *DiscoverIterator) !?DeferredFace {
+            const family = self.desc.family orelse return null;
+            const font = dwrite_fallback.findFamily(
+                self.alloc,
+                family,
+                self.desc.bold,
+                self.desc.italic,
+            ) orelse return null;
+            defer self.alloc.free(font.path);
+
+            var face = Face.initFile(
+                self.lib,
+                font.path,
+                @intCast(font.index),
+                .{ .size = .{ .points = 12 } },
+            ) catch return null;
+            if (!self.matches(&face)) {
+                face.deinit();
+                return null;
+            }
+            return try self.makeDeferred(face, font.path, @intCast(font.index));
+        }
+
         fn tryMatch(
             self: *DiscoverIterator,
             name: []const u8,
@@ -1187,7 +1223,7 @@ pub const Windows = struct {
             const dir_path = switch (self.state) {
                 .system => self.system_path.?,
                 .user => self.user_path.?,
-                .dwrite, .coverage, .done => return null,
+                .dwrite, .dwrite_family, .coverage, .done => return null,
             };
 
             var path_buf: [std.Io.Dir.max_path_bytes]u8 = undefined;
@@ -1232,10 +1268,8 @@ pub const Windows = struct {
                 // one, so bold and italic text was drawn regular. A
                 // family without the style isn't found, so the style is
                 // synthesized instead (font-synthetic-style).
-                const flags = face.face.handle.*.style_flags;
-                const bold = flags & freetype.c.FT_STYLE_FLAG_BOLD != 0;
-                const italic = flags & freetype.c.FT_STYLE_FLAG_ITALIC != 0;
-                if (bold != self.desc.bold or italic != self.desc.italic) return false;
+                const style = faceStyle(face);
+                if (style.bold != self.desc.bold or style.italic != self.desc.italic) return false;
             }
             if (self.desc.codepoint != 0) {
                 if (face.glyphIndex(self.desc.codepoint) == null) return false;
@@ -1294,11 +1328,21 @@ pub const Windows = struct {
         ) catch null;
     }
 
-    /// The characters of every face in the system and per-user font
-    /// directories, in the order a directory walk finds them. It's built
-    /// the first time a codepoint query gets past DirectWrite, which costs
-    /// about one walk that opens every font, and kept for the process, so
-    /// fonts installed after that are only found through DirectWrite.
+    fn faceStyle(face: *Face) struct { bold: bool, italic: bool } {
+        const flags = face.face.handle.*.style_flags;
+        return .{
+            .bold = flags & freetype.c.FT_STYLE_FLAG_BOLD != 0,
+            .italic = flags & freetype.c.FT_STYLE_FLAG_ITALIC != 0,
+        };
+    }
+
+    /// The names, styles, and characters of every face in the system and
+    /// per-user font directories, in the order a directory walk finds
+    /// them. It's built the first time a query gets past DirectWrite,
+    /// which costs about one walk that opens every font, and kept for the
+    /// process, so fonts installed after that are only found through
+    /// DirectWrite. Before, each such query walked the directories: a
+    /// family that isn't installed took a walk for each of its styles.
     const Coverage = struct {
         const Range = struct { first: u32, last: u32 };
 
@@ -1306,8 +1350,27 @@ pub const Windows = struct {
             path: [:0]const u8,
             index: i32,
 
+            /// FreeType's family name and the SFNT name, which
+            /// `familyMatches` compares too.
+            family: []const u8,
+            name: []const u8,
+            bold: bool,
+            italic: bool,
+
             /// Sorted, disjoint ranges of the codepoints the face maps.
             ranges: []const Range,
+
+            /// Whether the face is a candidate for `desc`, which the
+            /// iterator still checks against the face itself.
+            fn matches(self: *const FaceInfo, desc: Descriptor) bool {
+                if (desc.family) |family| {
+                    if (!std.ascii.eqlIgnoreCase(self.family, family) and
+                        !std.ascii.eqlIgnoreCase(self.name, family)) return false;
+                    if (self.bold != desc.bold or self.italic != desc.italic) return false;
+                }
+                if (desc.codepoint != 0 and !self.has(desc.codepoint)) return false;
+                return true;
+            }
 
             fn has(self: *const FaceInfo, cp: u32) bool {
                 var lo: usize = 0;
@@ -1331,7 +1394,7 @@ pub const Windows = struct {
         var arena: std.heap.ArenaAllocator = .init(std.heap.page_allocator);
 
         /// The faces, building the index on first use. Null if it
-        /// couldn't be built, so callers probe the fonts themselves.
+        /// couldn't be built, so callers walk the font directories.
         fn get(lib: Library) ?[]const FaceInfo {
             mutex.lockUncancelable(global.io());
             defer mutex.unlock(global.io());
@@ -1397,9 +1460,16 @@ pub const Windows = struct {
                             }
                         }
 
+                        const ft_family: ?[*:0]const u8 = face.face.handle.*.family_name;
+                        var name_buf: [256]u8 = undefined;
+                        const style = faceStyle(&face);
                         try list.append(alloc, .{
                             .path = path,
                             .index = face_index,
+                            .family = try alloc.dupe(u8, if (ft_family) |f| std.mem.span(f) else ""),
+                            .name = try alloc.dupe(u8, face.name(&name_buf) catch ""),
+                            .bold = style.bold,
+                            .italic = style.italic,
                             .ranges = try alloc.dupe(Range, ranges.items),
                         });
                     }
