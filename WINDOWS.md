@@ -1489,6 +1489,21 @@ Notes:
         Cascadia Mono. Test: "windows variable font weights" (skipped where
         Cascadia Mono isn't installed). Variable fonts found only through
         the folder walk or the coverage index still synthesize bold.
+  - [x] `+list-fonts` didn't list fonts outside the font folders, such as
+        Cascadia Mono from Windows Terminal's package, though
+        `font-family = Cascadia Mono` finds it, and it named every face by
+        its family ("Consolas" four times). Listing every font now also
+        takes the fonts in DirectWrite's system font set that aren't in
+        the folders (each named instance of a variable font by its weight
+        axis), and Windows faces are named by their full name ("Consolas
+        Bold"; a named instance by its family and instance names, since
+        the name table describes the default instance), like fontconfig
+        and CoreText. Here Cascadia Code and Cascadia Mono now appear with
+        all 12 styles (327 families, from 325). The font set gives each
+        font's file without parsing it: the system collection's fonts took
+        780 ms to list, the font set 31 ms. `+list-fonts` (ReleaseFast)
+        takes 168-179 ms, from 149-163. Tests: "otherFonts" and "windows
+        lists fonts outside the font directories".
 - The tab bar now has a shell dropdown next to the new-tab button. It lists
   shells whose executables are found in PATH and always offers the configured
   default. An explicit choice uses the resolved executable path and is

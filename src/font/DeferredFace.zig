@@ -178,7 +178,7 @@ pub fn name(self: DeferredFace, buf: []u8) ![]const u8 {
     switch (options.backend) {
         .freetype => {},
 
-        .freetype_windows => if (self.win) |w| return try w.peek.name(buf),
+        .freetype_windows => if (self.win) |w| return try w.peek.fullName(buf),
 
         .fontconfig_freetype => if (self.fc) |fc|
             return (try fc.pattern.get(.fullname, 0)).string,

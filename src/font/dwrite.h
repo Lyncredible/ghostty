@@ -8,4 +8,4 @@
 #define NOMINMAX
 
 #include <windows.h>
-#include <dwrite_2.h>
+#include <dwrite_3.h>

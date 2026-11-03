@@ -126,6 +126,106 @@ fn findFamilyInner(alloc: Allocator, family: []const u8, bold: bool, italic: boo
     return result;
 }
 
+/// The fonts DirectWrite knows that aren't in the given directories, such
+/// as the ones packaged apps register (Windows Terminal's Cascadia Mono).
+/// Each face is listed once per weight, so a variable font's named
+/// instances are listed separately. Empty if DirectWrite fails. Free with
+/// `freeFonts`.
+pub fn otherFonts(alloc: Allocator, skip_dirs: []const []const u8) []Font {
+    return otherFontsInner(alloc, skip_dirs) catch |err| {
+        log.debug("DirectWrite font listing failed err={}", .{err});
+        return &.{};
+    };
+}
+
+pub fn freeFonts(alloc: Allocator, fonts: []Font) void {
+    for (fonts) |font| alloc.free(font.path);
+    alloc.free(fonts);
+}
+
+fn otherFontsInner(alloc: Allocator, skip_dirs: []const []const u8) ![]Font {
+    var factory: ?*c.IDWriteFactory3 = null;
+    try check(c.DWriteCreateFactory(
+        c.DWRITE_FACTORY_TYPE_SHARED,
+        &IID_IDWriteFactory3,
+        @ptrCast(&factory),
+    ));
+    defer release(factory.?);
+
+    // The font set lists each face and named instance with its file, so
+    // nothing has to be parsed: creating a font face for each of the
+    // system collection's fonts took about 780 ms for 750 fonts.
+    var set: ?*c.IDWriteFontSet = null;
+    try check(call(factory.?, "GetSystemFontSet", .{&set}));
+    defer release(set.?);
+
+    var list: std.ArrayList(Font) = .empty;
+    errdefer {
+        for (list.items) |font| alloc.free(font.path);
+        list.deinit(alloc);
+    }
+
+    const count = call(set.?, "GetFontCount", .{});
+    for (0..count) |i| {
+        var ref: ?*c.IDWriteFontFaceReference = null;
+        try check(call(set.?, "GetFontFaceReference", .{ @as(c.UINT32, @intCast(i)), &ref }));
+        defer release(ref.?);
+        if (call(ref.?, "GetSimulations", .{}) != c.DWRITE_FONT_SIMULATIONS_NONE) continue;
+
+        var file: ?*c.IDWriteFontFile = null;
+        try check(call(ref.?, "GetFontFile", .{&file}));
+        defer release(file.?);
+
+        // Fonts that aren't in a local file can't be opened by path.
+        const path = (filePath(alloc, file.?) catch continue) orelse continue;
+        const font: Font = .{
+            .path = path,
+            .index = call(ref.?, "GetFontFaceIndex", .{}),
+            .weight = axisWeight(ref.?),
+        };
+        if (inDirs(font.path, skip_dirs) or contains(list.items, font)) {
+            alloc.free(font.path);
+            continue;
+        }
+        try list.append(alloc, font);
+    }
+    return try list.toOwnedSlice(alloc);
+}
+
+/// The weight axis value of a variable font's named instance, or zero.
+fn axisWeight(ref: *c.IDWriteFontFaceReference) u32 {
+    var ref1: ?*c.IDWriteFontFaceReference1 = null;
+    check(call(ref, "QueryInterface", .{ &IID_IDWriteFontFaceReference1, @as(?*?*anyopaque, @ptrCast(&ref1)) })) catch
+        return 0;
+    defer release(ref1.?);
+
+    var values: [16]c.DWRITE_FONT_AXIS_VALUE = undefined;
+    const n = @min(values.len, call(ref1.?, "GetFontAxisValueCount", .{}));
+    check(call(ref1.?, "GetFontAxisValues", .{ &values, @as(c.UINT32, @intCast(n)) })) catch return 0;
+    for (values[0..n]) |value| {
+        if (value.axisTag == c.DWRITE_FONT_AXIS_TAG_WEIGHT) return @intFromFloat(value.value);
+    }
+    return 0;
+}
+
+fn inDirs(path: []const u8, dirs: []const []const u8) bool {
+    for (dirs) |dir| {
+        if (path.len > dir.len and
+            std.ascii.startsWithIgnoreCase(path, dir) and
+            (path[dir.len] == '\\' or path[dir.len] == '/')) return true;
+    }
+    return false;
+}
+
+fn contains(fonts: []const Font, font: Font) bool {
+    for (fonts) |other| {
+        if (other.index == font.index and
+            other.weight == font.weight and
+            std.ascii.eqlIgnoreCase(other.path, font.path)) return true;
+    }
+    return false;
+}
+
 /// The file and face index of a DirectWrite font, or null if it isn't in
 /// a local file.
 fn fontFile(alloc: Allocator, font: *c.IDWriteFont) !?Font {
@@ -139,6 +239,12 @@ fn fontFile(alloc: Allocator, font: *c.IDWriteFont) !?Font {
     const font_file = file orelse return null;
     defer release(font_file);
 
+    const path = try filePath(alloc, font_file) orelse return null;
+    return .{ .path = path, .index = call(face.?, "GetIndex", .{}) };
+}
+
+/// The path of a font file, or null if it isn't a local file.
+fn filePath(alloc: Allocator, font_file: *c.IDWriteFontFile) !?[:0]u8 {
     var key: ?*const anyopaque = null;
     var key_size: c.UINT32 = 0;
     try check(call(font_file, "GetReferenceKey", .{ &key, &key_size }));
@@ -157,8 +263,7 @@ fn fontFile(alloc: Allocator, font: *c.IDWriteFont) !?Font {
     defer alloc.free(path16);
     try check(call(local.?, "GetFilePathFromKey", .{ key, key_size, path16.ptr, path_len + 1 }));
 
-    const path = try std.unicode.wtf16LeToWtf8AllocZ(alloc, path16[0..path_len]);
-    return .{ .path = path, .index = call(face.?, "GetIndex", .{}) };
+    return try std.unicode.wtf16LeToWtf8AllocZ(alloc, path16[0..path_len]);
 }
 
 /// The text to map, as an IDWriteTextAnalysisSource. It only lives on the
@@ -271,6 +376,8 @@ const TextSource = extern struct {
 
 const IID_IUnknown = guid(0x00000000, 0x0000, 0x0000, .{ 0xc0, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x46 });
 const IID_IDWriteFactory2 = guid(0x0439fc60, 0xca44, 0x4994, .{ 0x8d, 0xee, 0x3a, 0x9a, 0xf7, 0xb7, 0x32, 0xec });
+const IID_IDWriteFactory3 = guid(0x9a1b41c3, 0xd3bb, 0x466a, .{ 0x87, 0xfc, 0xfe, 0x67, 0x55, 0x6a, 0x3b, 0x65 });
+const IID_IDWriteFontFaceReference1 = guid(0xc081fe77, 0x2fd1, 0x41ac, .{ 0xa5, 0xa3, 0x34, 0x98, 0x3c, 0x4b, 0xa6, 0x1a });
 const IID_IDWriteTextAnalysisSource = guid(0x688e1a58, 0x5094, 0x47c8, .{ 0xad, 0xc8, 0xfb, 0xce, 0xa6, 0x0a, 0xe9, 0x2b });
 const IID_IDWriteLocalFontFileLoader = guid(0xb2d9f3ec, 0xc9fe, 0x4a11, .{ 0xa2, 0xec, 0xd8, 0x62, 0x08, 0xf7, 0xc0, 0xa2 });
 
@@ -304,6 +411,20 @@ test findFamily {
     try testing.expect(std.ascii.endsWithIgnoreCase(font.path, "consolab.ttf"));
     try testing.expectEqual(@as(u32, c.DWRITE_FONT_WEIGHT_BOLD), font.weight);
     try testing.expect(findFamily(testing.allocator, "No Such Font Family", false, false) == null);
+}
+
+test otherFonts {
+    const testing = std.testing;
+    const alloc = testing.allocator;
+    const fonts = otherFonts(alloc, &.{});
+    defer freeFonts(alloc, fonts);
+
+    // With no directories skipped, Consolas Bold is among them, once.
+    var found: usize = 0;
+    for (fonts) |font| {
+        if (std.ascii.endsWithIgnoreCase(font.path, "consolab.ttf")) found += 1;
+    }
+    try testing.expectEqual(@as(usize, 1), found);
 }
 
 test find {
