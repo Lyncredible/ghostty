@@ -961,12 +961,13 @@ pub const CoreText = struct {
 /// FreeType's family_name field (with a fallback to the SFNT name
 /// table when family_name is missing).
 ///
-/// No external service is used; each discover() call walks the
-/// directories, opening candidate files with FreeType only as needed.
-/// For typical Windows installations (~300 fonts) a name query is in
-/// the tens of milliseconds. A codepoint fallback query may be
-/// noticeably slower because every candidate has to be opened to
-/// probe its CMap.
+/// No external service is used; each name query walks the directories,
+/// opening candidate files with FreeType only as needed. For typical
+/// Windows installations (~300 fonts) a name query is in the tens of
+/// milliseconds. A codepoint query first asks DirectWrite's fallback,
+/// then looks in `Coverage`, which opens every font once per process to
+/// note its characters: probing every font for each codepoint made
+/// characters that no font has cost about 25 ms each.
 pub const Windows = struct {
     lib: Library,
 
@@ -990,6 +991,7 @@ pub const Windows = struct {
             .variations = desc.variations,
             // For a codepoint, first ask Windows which font it would use.
             .state = if (desc.codepoint != 0 and desc.family == null) .dwrite else .system,
+            .coverage_next = 0,
             .dir = null,
             .iter = null,
             .system_path = null,
@@ -1018,7 +1020,10 @@ pub const Windows = struct {
         system_path: ?[:0]const u8,
         user_path: ?[:0]const u8,
 
-        const State = enum { dwrite, system, user, done };
+        /// The next face in `Coverage` to check, in the coverage state.
+        coverage_next: usize,
+
+        const State = enum { dwrite, coverage, system, user, done };
 
         pub fn deinit(self: *DiscoverIterator) void {
             if (self.dir) |*d| d.close(global.io());
@@ -1033,8 +1038,33 @@ pub const Windows = struct {
                 if (self.iter == null) {
                     switch (self.state) {
                         .dwrite => {
-                            self.state = .system;
+                            self.state = .coverage;
                             if (try self.systemFallback()) |face| return face;
+                            continue;
+                        },
+                        .coverage => {
+                            const faces = Coverage.get(self.lib) orelse {
+                                // Without the index, probe every font.
+                                self.state = .system;
+                                continue;
+                            };
+                            while (self.coverage_next < faces.len) {
+                                const info = &faces[self.coverage_next];
+                                self.coverage_next += 1;
+                                if (!info.has(self.desc.codepoint)) continue;
+                                var face = Face.initFile(
+                                    self.lib,
+                                    info.path,
+                                    info.index,
+                                    .{ .size = .{ .points = 12 } },
+                                ) catch continue;
+                                if (!self.matches(&face)) {
+                                    face.deinit();
+                                    continue;
+                                }
+                                return try self.makeDeferred(face, info.path, info.index);
+                            }
+                            self.state = .done;
                             continue;
                         },
                         .system => {
@@ -1079,7 +1109,7 @@ pub const Windows = struct {
                     self.dir = null;
                     self.iter = null;
                     self.state = switch (self.state) {
-                        .dwrite, .system => .user,
+                        .dwrite, .coverage, .system => .user,
                         .user => .done,
                         .done => .done,
                     };
@@ -1098,29 +1128,11 @@ pub const Windows = struct {
         /// Windows install but we just skip the directory rather than
         /// falling back to a hardcoded drive letter.
         fn systemFontsPath(self: *DiscoverIterator) ?[:0]const u8 {
-            const systemroot = global.environ().getAlloc(
-                self.alloc,
-                "SYSTEMROOT",
-            ) catch return null;
-            defer self.alloc.free(systemroot);
-            return self.alloc.printSentinel(
-                "{s}\\Fonts",
-                .{systemroot},
-                0,
-            ) catch null;
+            return Windows.systemFontsPath(self.alloc);
         }
 
         fn userFontsPath(self: *DiscoverIterator) ?[:0]const u8 {
-            const local_appdata = global.environ().getAlloc(
-                self.alloc,
-                "LOCALAPPDATA",
-            ) catch return null;
-            defer self.alloc.free(local_appdata);
-            return self.alloc.printSentinel(
-                "{s}\\Microsoft\\Windows\\Fonts",
-                .{local_appdata},
-                0,
-            ) catch null;
+            return Windows.userFontsPath(self.alloc);
         }
 
         /// The font DirectWrite's system font fallback chooses for our
@@ -1151,7 +1163,7 @@ pub const Windows = struct {
             const dir_path = switch (self.state) {
                 .system => self.system_path.?,
                 .user => self.user_path.?,
-                .dwrite, .done => return null,
+                .dwrite, .coverage, .done => return null,
             };
 
             var path_buf: [std.Io.Dir.max_path_bytes]u8 = undefined;
@@ -1218,6 +1230,148 @@ pub const Windows = struct {
                     .alloc = self.alloc,
                 },
             };
+        }
+    };
+
+    fn systemFontsPath(alloc: Allocator) ?[:0]const u8 {
+        const systemroot = global.environ().getAlloc(
+            alloc,
+            "SYSTEMROOT",
+        ) catch return null;
+        defer alloc.free(systemroot);
+        return alloc.printSentinel(
+            "{s}\\Fonts",
+            .{systemroot},
+            0,
+        ) catch null;
+    }
+
+    fn userFontsPath(alloc: Allocator) ?[:0]const u8 {
+        const local_appdata = global.environ().getAlloc(
+            alloc,
+            "LOCALAPPDATA",
+        ) catch return null;
+        defer alloc.free(local_appdata);
+        return alloc.printSentinel(
+            "{s}\\Microsoft\\Windows\\Fonts",
+            .{local_appdata},
+            0,
+        ) catch null;
+    }
+
+    /// The characters of every face in the system and per-user font
+    /// directories, in the order a directory walk finds them. It's built
+    /// the first time a codepoint query gets past DirectWrite, which costs
+    /// about one walk that opens every font, and kept for the process, so
+    /// fonts installed after that are only found through DirectWrite.
+    const Coverage = struct {
+        const Range = struct { first: u32, last: u32 };
+
+        const FaceInfo = struct {
+            path: [:0]const u8,
+            index: i32,
+
+            /// Sorted, disjoint ranges of the codepoints the face maps.
+            ranges: []const Range,
+
+            fn has(self: *const FaceInfo, cp: u32) bool {
+                var lo: usize = 0;
+                var hi: usize = self.ranges.len;
+                while (lo < hi) {
+                    const mid = lo + (hi - lo) / 2;
+                    const r = self.ranges[mid];
+                    if (cp < r.first) {
+                        hi = mid;
+                    } else if (cp > r.last) {
+                        lo = mid + 1;
+                    } else return true;
+                }
+                return false;
+            }
+        };
+
+        var mutex: std.Io.Mutex = .init;
+        var built = false;
+        var faces: ?[]const FaceInfo = null;
+        var arena: std.heap.ArenaAllocator = .init(std.heap.page_allocator);
+
+        /// The faces, building the index on first use. Null if it
+        /// couldn't be built, so callers probe the fonts themselves.
+        fn get(lib: Library) ?[]const FaceInfo {
+            mutex.lockUncancelable(global.io());
+            defer mutex.unlock(global.io());
+            if (!built) {
+                built = true;
+                faces = build(lib) catch |err| faces: {
+                    log.warn("unable to index font coverage err={}", .{err});
+                    break :faces null;
+                };
+            }
+            return faces;
+        }
+
+        fn build(lib: Library) ![]const FaceInfo {
+            const alloc = arena.allocator();
+            var list: std.ArrayList(FaceInfo) = .empty;
+            var ranges: std.ArrayList(Range) = .empty;
+            defer ranges.deinit(std.heap.page_allocator);
+
+            const dirs = [_]?[:0]const u8{ systemFontsPath(alloc), userFontsPath(alloc) };
+            for (dirs) |dir_path_| {
+                const dir_path = dir_path_ orelse continue;
+                var dir = std.Io.Dir.openDirAbsolute(
+                    global.io(),
+                    dir_path,
+                    .{ .iterate = true },
+                ) catch continue;
+                defer dir.close(global.io());
+
+                var it = dir.iterate();
+                while (it.next(global.io()) catch null) |entry| {
+                    if (entry.kind != .file) continue;
+                    if (!isFontFile(entry.name)) continue;
+                    const path = try alloc.printSentinel(
+                        "{s}\\{s}",
+                        .{ dir_path, entry.name },
+                        0,
+                    );
+
+                    const is_ttc = std.ascii.endsWithIgnoreCase(entry.name, ".ttc");
+                    const max_faces: i32 = if (is_ttc) 16 else 1;
+                    var face_index: i32 = 0;
+                    while (face_index < max_faces) : (face_index += 1) {
+                        var face = Face.initFile(
+                            lib,
+                            path,
+                            face_index,
+                            .{ .size = .{ .points = 12 } },
+                        ) catch break;
+                        defer face.deinit();
+
+                        ranges.clearRetainingCapacity();
+                        var next = face.face.getFirstChar();
+                        while (next) |cg| : (next = face.face.getNextChar(cg.char)) {
+                            const items = ranges.items;
+                            if (items.len > 0 and items[items.len - 1].last + 1 == cg.char) {
+                                items[items.len - 1].last = cg.char;
+                            } else {
+                                try ranges.append(std.heap.page_allocator, .{
+                                    .first = cg.char,
+                                    .last = cg.char,
+                                });
+                            }
+                        }
+
+                        try list.append(alloc, .{
+                            .path = path,
+                            .index = face_index,
+                            .ranges = try alloc.dupe(Range, ranges.items),
+                        });
+                    }
+                }
+            }
+
+            return list.items;
         }
     };
 
@@ -1444,6 +1598,41 @@ test "windows" {
     var face = (try it.next()) orelse return error.TestFontNotFound;
     defer face.deinit();
     try testing.expect(face.hasCodepoint('A', null));
+}
+
+test "windows codepoint coverage" {
+    if (options.backend != .freetype_windows) return error.SkipZigTest;
+
+    const testing = std.testing;
+    const alloc = testing.allocator;
+
+    var lib = try Library.init(alloc);
+    defer lib.deinit();
+
+    const faces = Windows.Coverage.get(lib) orelse return error.TestNoCoverage;
+    var with_a: usize = 0;
+    for (faces) |*info| {
+        if (info.has('A')) with_a += 1;
+    }
+    try testing.expect(with_a > 0);
+
+    var win = Windows.init(lib);
+    defer win.deinit();
+
+    // A codepoint found through the index, then one that's unassigned
+    // (in the Thai block), which no font should have.
+    {
+        var it = try win.discover(alloc, .{ .codepoint = 0x2603, .size = 12 });
+        defer it.deinit();
+        var face = (try it.next()) orelse return error.TestFontNotFound;
+        defer face.deinit();
+        try testing.expect(face.hasCodepoint(0x2603, null));
+    }
+    {
+        var it = try win.discover(alloc, .{ .codepoint = 0x0E7F, .size = 12 });
+        defer it.deinit();
+        try testing.expect(try it.next() == null);
+    }
 }
 
 test {

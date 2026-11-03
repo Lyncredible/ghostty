@@ -1442,6 +1442,20 @@ Notes:
         same after 5 rounds as after 40, so it's kept once (the tab
         bar's resources, for example), not per tab. Splits, 5 and 30
         rounds: 54 MB, 520-523 handles, 35 GDI objects both times.
+  - [x] Characters no font has: 2 MB of random text from ten scripts
+        (CJK, Thai, Arabic, emoji and others, including unassigned
+        codepoints, as in a binary file) took 3.8 s to show (8.7 s the
+        first time) against 0.5 s for ASCII. Stack samples of the renderer
+        thread showed discovery opening every font file with FreeType for
+        each codepoint DirectWrite's fallback didn't serve, about 25 ms
+        each: 20 characters from scripts no Windows font covers (Tangut,
+        Mro and others) cost about 500 ms of CPU. Codepoint queries past
+        DirectWrite now use an index of every face's characters (sorted
+        ranges), built once per process on the first such query: the 2 MB
+        took 0.58 s, the 20 rare characters about 170 ms (mostly building
+        the index), for about 2 MB of memory. Fonts installed later are
+        only found through DirectWrite. Test: "windows codepoint
+        coverage" in `src/font/discovery.zig`.
 - The tab bar now has a shell dropdown next to the new-tab button. It lists
   shells whose executables are found in PATH and always offers the configured
   default. An explicit choice uses the resolved executable path and is
