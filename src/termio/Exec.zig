@@ -684,6 +684,10 @@ const Subprocess = struct {
     screen_size: renderer.ScreenSize,
     pty: ?Pty = null,
     process: ?Process = null,
+    /// The process's ID on Windows, where `process` only has its handle,
+    /// for getProcessInfo, which other threads call. 0 when it's not
+    /// running.
+    windows_pid: std.atomic.Value(u32) = .init(0),
 
     rt_pre_exec_info: Command.RtPreExecInfo,
     rt_post_fork_info: Command.RtPostForkInfo,
@@ -1226,6 +1230,9 @@ const Subprocess = struct {
         log.info("started subcommand path={s} pid={?}", .{ self.args[0], cmd.pid });
 
         self.process = .{ .fork_exec = cmd };
+        if (comptime builtin.target.os.tag == .windows) {
+            if (cmd.pid) |handle| self.windows_pid.store(windows.exp.kernel32.GetProcessId(handle), .release);
+        }
         return switch (builtin.target.os.tag) {
             .windows => .{
                 .read = pty.out_pipe,
@@ -1263,6 +1270,7 @@ const Subprocess = struct {
                 },
                 .flatpak => {},
             };
+            self.windows_pid.store(0, .release);
         }
         self.process = null;
     }
@@ -1420,6 +1428,16 @@ const Subprocess = struct {
     /// Returns `null` if there was an error getting the information or the
     /// information is not available on a particular platform.
     pub fn getProcessInfo(self: *Subprocess, comptime info: ProcessInfo) ?ProcessInfo.Type(info) {
+        if (comptime builtin.target.os.tag == .windows and info == .foreground_pid) {
+            // ConPTY has no foreground process group; the deepest
+            // process under ours stands in for it.
+            const root = self.windows_pid.load(.acquire);
+            if (root == 0) return null;
+            const alloc = std.heap.page_allocator;
+            const list = windows.processes(alloc) catch return null;
+            defer alloc.free(list);
+            return windows.foregroundProcess(list, root);
+        }
         const pty = &(self.pty orelse return null);
         return pty.getProcessInfo(info);
     }
