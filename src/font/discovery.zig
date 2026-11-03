@@ -1053,9 +1053,15 @@ pub const Windows = struct {
         /// The next face in `Coverage` to check, in the coverage state.
         coverage_next: usize,
 
-        const State = enum { dwrite, dwrite_family, coverage, system, user, done };
+        /// The fonts DirectWrite knows outside the font directories, and
+        /// the next one to check, in the others state.
+        others: ?[]dwrite_fallback.Font = null,
+        others_next: usize = 0,
+
+        const State = enum { dwrite, dwrite_family, coverage, system, user, others, done };
 
         pub fn deinit(self: *DiscoverIterator) void {
+            if (self.others) |fonts| dwrite_fallback.freeFonts(self.alloc, fonts);
             if (self.dir) |*d| d.close(global.io());
             if (self.system_path) |p| self.alloc.free(p);
             if (self.user_path) |p| self.alloc.free(p);
@@ -1120,7 +1126,7 @@ pub const Windows = struct {
                         },
                         .user => {
                             const path = self.userFontsPath() orelse {
-                                self.state = .done;
+                                self.state = .others;
                                 continue;
                             };
                             self.user_path = path;
@@ -1129,10 +1135,15 @@ pub const Windows = struct {
                                 path,
                                 .{ .iterate = true },
                             ) catch {
-                                self.state = .done;
+                                self.state = .others;
                                 continue;
                             };
                             self.iter = self.dir.?.iterate();
+                        },
+                        .others => {
+                            if (try self.otherFont()) |face| return face;
+                            self.state = .done;
+                            continue;
                         },
                         .done => return null,
                     }
@@ -1145,8 +1156,8 @@ pub const Windows = struct {
                     self.iter = null;
                     self.state = switch (self.state) {
                         .dwrite, .dwrite_family, .coverage, .system => .user,
-                        .user => .done,
-                        .done => .done,
+                        .user => .others,
+                        .others, .done => .done,
                     };
                     continue;
                 };
@@ -1211,7 +1222,6 @@ pub const Windows = struct {
                 .{ .size = .{ .points = 12 } },
             ) catch return null;
             if (self.matches(&face)) return try self.makeDeferred(face, font.path, index);
-            const instances = face.face.handle.*.style_flags >> 16;
             face.deinit();
 
             // A variable font keeps its weights as named instances of one
@@ -1220,6 +1230,78 @@ pub const Windows = struct {
             // regular and bold alike. Load the instance with the weight
             // DirectWrite matched, so bold is the font's own bold rather
             // than synthetic bold.
+            var instance = (self.namedInstance(font) orelse return null);
+            if (self.matches(&instance.face)) {
+                return try self.makeDeferred(instance.face, font.path, instance.index);
+            }
+            instance.face.deinit();
+            return null;
+        }
+
+        /// The next font DirectWrite knows outside the font directories
+        /// that matches the descriptor. The walk never sees them: fonts
+        /// that packaged apps register are in the apps' own directories.
+        /// Only listing every font needs them, because name and codepoint
+        /// queries ask DirectWrite first.
+        fn otherFont(self: *DiscoverIterator) !?DeferredFace {
+            const fonts = self.others orelse fonts: {
+                var dirs: [2][]const u8 = undefined;
+                var n: usize = 0;
+                for ([_]?[:0]const u8{ self.system_path, self.user_path }) |path| {
+                    dirs[n] = path orelse continue;
+                    n += 1;
+                }
+                self.others = dwrite_fallback.otherFonts(self.alloc, dirs[0..n]);
+                break :fonts self.others.?;
+            };
+            while (self.others_next < fonts.len) {
+                const font = fonts[self.others_next];
+                self.others_next += 1;
+
+                // Each weight of a variable font is its named instance.
+                if (self.namedInstance(font)) |instance_| {
+                    var instance = instance_;
+                    if (self.matches(&instance.face)) {
+                        return try self.makeDeferred(instance.face, font.path, instance.index);
+                    }
+                    instance.face.deinit();
+                    continue;
+                }
+
+                const index: i32 = @intCast(font.index);
+                var face = Face.initFile(
+                    self.lib,
+                    font.path,
+                    index,
+                    .{ .size = .{ .points = 12 } },
+                ) catch continue;
+                if (!self.matches(&face)) {
+                    face.deinit();
+                    continue;
+                }
+                return try self.makeDeferred(face, font.path, index);
+            }
+            return null;
+        }
+
+        /// The named instance of a variable font with the weight
+        /// DirectWrite gave, or null if the face has none with it.
+        fn namedInstance(
+            self: *DiscoverIterator,
+            font: dwrite_fallback.Font,
+        ) ?struct { face: Face, index: i32 } {
+            const index: i32 = @intCast(font.index);
+            const instances = instances: {
+                var face = Face.initFile(
+                    self.lib,
+                    font.path,
+                    index,
+                    .{ .size = .{ .points = 12 } },
+                ) catch return null;
+                defer face.deinit();
+                break :instances face.face.handle.*.style_flags >> 16;
+            };
+
             var n: i32 = 1;
             while (n <= instances) : (n += 1) {
                 const instance_index = (n << 16) | index;
@@ -1229,10 +1311,8 @@ pub const Windows = struct {
                     instance_index,
                     .{ .size = .{ .points = 12 } },
                 ) catch continue;
-                if (instanceWeight(&instance) == @as(f64, @floatFromInt(font.weight)) and
-                    self.matches(&instance))
-                {
-                    return try self.makeDeferred(instance, font.path, instance_index);
+                if (instanceWeight(&instance) == @as(f64, @floatFromInt(font.weight))) {
+                    return .{ .face = instance, .index = instance_index };
                 }
                 instance.deinit();
             }
@@ -1246,7 +1326,7 @@ pub const Windows = struct {
             const dir_path = switch (self.state) {
                 .system => self.system_path.?,
                 .user => self.user_path.?,
-                .dwrite, .dwrite_family, .coverage, .done => return null,
+                .dwrite, .dwrite_family, .coverage, .others, .done => return null,
             };
 
             var path_buf: [std.Io.Dir.max_path_bytes]u8 = undefined;
@@ -1812,6 +1892,39 @@ test "windows variable font weights" {
     errdefer std.debug.print("found {s} index=0x{x}\n", .{ face.win.?.path, face.win.?.face_index });
     try testing.expect(face.win.?.face_index >> 16 != 0);
     try testing.expectEqual(@as(?f64, 700), Windows.instanceWeight(&face.win.?.peek));
+}
+
+test "windows lists fonts outside the font directories" {
+    if (options.backend != .freetype_windows) return error.SkipZigTest;
+
+    const testing = std.testing;
+    const alloc = testing.allocator;
+
+    // Windows Terminal registers Cascadia Mono from its own package
+    // directory, which isn't one the walk visits.
+    const cascadia = dwrite_fallback.findFamily(alloc, "Cascadia Mono", true, false) orelse
+        return error.SkipZigTest;
+    defer alloc.free(cascadia.path);
+    const fonts_dir = Windows.systemFontsPath(alloc) orelse return error.SkipZigTest;
+    defer alloc.free(fonts_dir);
+    if (std.ascii.startsWithIgnoreCase(cascadia.path, fonts_dir)) return error.SkipZigTest;
+
+    var lib = try Library.init(alloc);
+    defer lib.deinit();
+
+    var win = Windows.init(lib);
+    defer win.deinit();
+
+    var it = try win.discover(alloc, .{});
+    defer it.deinit();
+    var found = false;
+    while (try it.next()) |face_| {
+        var face = face_;
+        defer face.deinit();
+        var buf: [256]u8 = undefined;
+        if (std.mem.eql(u8, try face.name(&buf), "Cascadia Mono Bold")) found = true;
+    }
+    try testing.expect(found);
 }
 
 test "windows codepoint coverage" {

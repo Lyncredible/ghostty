@@ -156,6 +156,27 @@ pub const Face = struct {
     /// but sometimes allocation isn't required and a static string is
     /// returned.
     pub fn name(self: *const Face, buf: []u8) Allocator.Error![]const u8 {
+        return self.sfntName(freetype.c.TT_NAME_ID_FONT_FAMILY, buf);
+    }
+
+    /// Returns the full name, such as "Consolas Bold", or the family name
+    /// if the font has none. A named instance of a variable font gets the
+    /// family and instance names, because the name table only describes
+    /// the default instance.
+    pub fn fullName(self: *const Face, buf: []u8) Allocator.Error![]const u8 {
+        const handle = self.face.handle;
+        if (handle.*.face_index >> 16 != 0) instance: {
+            const style: [*:0]const u8 = handle.*.style_name orelse break :instance;
+            var family_buf: [512]u8 = undefined;
+            const family = try self.name(&family_buf);
+            return std.fmt.bufPrint(buf, "{s} {s}", .{ family, std.mem.span(style) }) catch
+                error.OutOfMemory;
+        }
+        const full = try self.sfntName(freetype.c.TT_NAME_ID_FULL_NAME, buf);
+        return if (full.len > 0) full else try self.name(buf);
+    }
+
+    fn sfntName(self: *const Face, name_id: u16, buf: []u8) Allocator.Error![]const u8 {
         const count = self.face.getSfntNameCount();
 
         // Fonts often have several family names: for different platforms,
@@ -166,7 +187,7 @@ pub const Face = struct {
         var best_rank: u8 = 0;
         for (0..count) |i| {
             const entry = self.face.getSfntName(i) catch continue;
-            if (entry.name_id != freetype.c.TT_NAME_ID_FONT_FAMILY) continue;
+            if (entry.name_id != name_id) continue;
             const rank: u8 = if (isUtf16Name(entry))
                 if (entry.platform_id == freetype.c.TT_PLATFORM_MICROSOFT and
                     entry.language_id == freetype.c.TT_MS_LANGID_ENGLISH_UNITED_STATES) 3 else 2
