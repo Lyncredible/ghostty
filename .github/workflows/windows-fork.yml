@@ -31,8 +31,10 @@ jobs:
       - name: Build
         run: zig build -Dtarget=x86_64-windows-gnu
 
+      # Failures are repeated as an annotation, which needs no sign-in.
       - name: Test
-        run: zig build test -Dtarget=x86_64-windows-gnu --summary all
+        shell: pwsh
+        run: ./test/windows/unit-tests.ps1 -Target x86_64-windows-gnu
 
       # CLI actions through the ghostty.com launcher, which waits for them
       # and returns their exit code.
@@ -242,8 +244,10 @@ jobs:
             exit 1
           }
 
+      # Failures are repeated as an annotation, which needs no sign-in.
       - name: Test
-        run: zig build test -Dtarget=aarch64-windows-gnu --summary all
+        shell: pwsh
+        run: ./test/windows/unit-tests.ps1 -Target aarch64-windows-gnu
 
       # The app in a real window on an ARM64 desktop.
       - name: Smoke test (cmd)

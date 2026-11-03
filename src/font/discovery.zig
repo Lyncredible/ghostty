@@ -1786,6 +1786,7 @@ test "windows variable font weights" {
     defer it.deinit();
     var face = (try it.next()) orelse return error.SkipZigTest;
     defer face.deinit();
+    errdefer std.debug.print("found {s} index=0x{x}\n", .{ face.win.?.path, face.win.?.face_index });
     try testing.expect(face.win.?.face_index >> 16 != 0);
     try testing.expectEqual(@as(?f64, 700), Windows.instanceWeight(&face.win.?.peek));
 }
