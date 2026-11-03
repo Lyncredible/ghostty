@@ -5,9 +5,18 @@ const Allocator = std.mem.Allocator;
 
 /// The kind of shell the paths are for.
 pub const Shell = enum {
-    /// A Windows shell such as cmd or PowerShell: paths are quoted with
-    /// double quotes when needed.
+    /// cmd, and shells we don't know: paths are quoted with double quotes
+    /// when needed.
     windows,
+
+    /// PowerShell, which expands `$` and backticks in double quotes (a
+    /// file named `$(calc).txt` would run calc): paths are quoted with
+    /// single quotes when needed.
+    powershell,
+
+    /// A POSIX shell for Windows, such as Git Bash's, which also expands
+    /// `$` in double quotes: paths are quoted with single quotes.
+    posix,
 
     /// A shell in WSL: paths are translated to Linux paths and quoted
     /// with single quotes when needed.
@@ -23,6 +32,8 @@ pub fn text(alloc: Allocator, paths: []const []const u8, shell: Shell) Allocator
         if (i > 0) writer.writeByte(' ') catch return error.OutOfMemory;
         switch (shell) {
             .windows => writeWindows(writer, path) catch return error.OutOfMemory,
+            .powershell => writePowerShell(writer, path) catch return error.OutOfMemory,
+            .posix => writeSingleQuoted(writer, path) catch return error.OutOfMemory,
             .wsl => writeWsl(alloc, writer, path) catch return error.OutOfMemory,
         }
     }
@@ -45,10 +56,36 @@ fn writeWsl(alloc: Allocator, writer: *std.Io.Writer, path: []const u8) !void {
         if (!(std.ascii.isAlphanumeric(ch) or std.mem.indexOfScalar(u8, "/._-+,:@%", ch) != null)) break false;
     } else true;
     if (safe) return writer.writeAll(linux);
+    try writeSingleQuoted(writer, linux);
+}
 
+fn writePowerShell(writer: *std.Io.Writer, path: []const u8) std.Io.Writer.Error!void {
+    const safe = for (path) |ch| {
+        if (!(std.ascii.isAlphanumeric(ch) or std.mem.indexOfScalar(u8, "\\:._-", ch) != null)) break false;
+    } else true;
+    if (safe) return writer.writeAll(path);
+
+    // Single quotes, in which nothing expands. PowerShell also takes the
+    // typographic single quotes (U+2018 to U+201B) as quotes, and writing
+    // any of them twice stands for itself.
+    try writer.writeByte('\'');
+    var i: usize = 0;
+    while (i < path.len) {
+        const len = std.unicode.utf8ByteSequenceLength(path[i]) catch 1;
+        const ch = path[i..@min(i + len, path.len)];
+        try writer.writeAll(ch);
+        const quote = std.mem.eql(u8, ch, "'") or
+            (ch.len == 3 and ch[0] == 0xE2 and ch[1] == 0x80 and ch[2] >= 0x98 and ch[2] <= 0x9B);
+        if (quote) try writer.writeAll(ch);
+        i += ch.len;
+    }
+    try writer.writeByte('\'');
+}
+
+fn writeSingleQuoted(writer: *std.Io.Writer, path: []const u8) std.Io.Writer.Error!void {
     // Single quotes, with any single quote written as '\''.
     try writer.writeByte('\'');
-    var rest = linux;
+    var rest = path;
     while (std.mem.indexOfScalar(u8, rest, '\'')) |i| {
         try writer.writeAll(rest[0..i]);
         try writer.writeAll("'\\''");
@@ -105,5 +142,25 @@ test text {
             "/mnt/c/Users/me/a.txt '/mnt/d/it'\\''s here' /home/me/notes.md /",
             result,
         );
+    }
+
+    {
+        const result = try text(alloc, &.{
+            "C:\\Users\\me\\a.txt",
+            "C:\\Downloads\\$(calc).txt",
+            "C:\\it's `here`",
+            "C:\\it\u{2019}s",
+        }, .powershell);
+        defer alloc.free(result);
+        try testing.expectEqualStrings(
+            "C:\\Users\\me\\a.txt 'C:\\Downloads\\$(calc).txt' 'C:\\it''s `here`' 'C:\\it\u{2019}\u{2019}s'",
+            result,
+        );
+    }
+
+    {
+        const result = try text(alloc, &.{ "C:\\Downloads\\$(calc).txt", "C:\\it's" }, .posix);
+        defer alloc.free(result);
+        try testing.expectEqualStrings("'C:\\Downloads\\$(calc).txt' 'C:\\it'\\''s'", result);
     }
 }
