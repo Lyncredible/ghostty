@@ -89,13 +89,13 @@ function ClickLink([string]$url) {
         '--window-save-state=never', `
         "`"--command=powershell.exe -NoProfile -ExecutionPolicy Bypass -File $print -Url $url`""
 
-    $condition = New-Object System.Windows.Automation.PropertyCondition(
+    $surfaceClass = New-Object System.Windows.Automation.PropertyCondition(
         [System.Windows.Automation.AutomationElement]::ClassNameProperty, 'GhosttySurface')
     $surface = WaitFor {
         $process.Refresh()
         if ($process.MainWindowHandle -ne 0) {
             $s = [System.Windows.Automation.AutomationElement]::FromHandle($process.MainWindowHandle).FindFirst(
-                [System.Windows.Automation.TreeScope]::Descendants, $condition)
+                [System.Windows.Automation.TreeScope]::Descendants, $surfaceClass)
             if ($s -and $s.GetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern).Current.Value.Contains('OPEN-THIS-LINK')) { $s }
         }
     } 'the links to show'
