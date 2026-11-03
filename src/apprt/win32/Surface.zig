@@ -162,9 +162,9 @@ key_sequence: std.ArrayList([:0]const u8) = .empty,
 /// An explicitly selected command, owned by this surface and inherited by splits.
 shell: ?configpkg.Command = null,
 
-/// Whether our command runs WSL, so that dropped files are pasted as
-/// Linux paths.
-runs_wsl: bool = false,
+/// The shell our command runs, which decides how dropped files' paths are
+/// quoted (and translated, for WSL).
+drop_shell: drop.Shell = .windows,
 
 /// A pending high surrogate from a standalone WM_CHAR.
 high_surrogate: ?u16 = null,
@@ -280,7 +280,7 @@ pub fn init(self: *Surface, app: *App, window: *Window, opts: Options) !void {
         config.@"initial-command" = null;
     }
     opts.overrides.apply(&config);
-    self.runs_wsl = if (config.command) |command| commandRunsWsl(command) else false;
+    self.drop_shell = if (config.command) |command| dropShell(command) else .windows;
     self.bell_features = config.@"bell-features";
     self.notify_on_command_finish = config.@"notify-on-command-finish";
     self.notify_on_command_finish_action = config.@"notify-on-command-finish-action";
@@ -616,9 +616,9 @@ test underlay {
 
 /// Whether a command starts WSL. For a shell command line, this looks at
 /// the program, the first word, which may be quoted.
-fn commandRunsWsl(command: configpkg.Command) bool {
+fn dropShell(command: configpkg.Command) drop.Shell {
     const program = switch (command) {
-        .direct => |args| if (args.len > 0) args[0] else return false,
+        .direct => |args| if (args.len > 0) args[0] else return .windows,
         .shell => |line| program: {
             const trimmed = std.mem.trimStart(u8, line, " \t");
             if (std.mem.startsWith(u8, trimmed, "\"")) {
@@ -629,14 +629,29 @@ fn commandRunsWsl(command: configpkg.Command) bool {
             break :program trimmed[0..end];
         },
     };
-    return internal_os.wsl.isWsl(program);
+    if (internal_os.wsl.isWsl(program)) return .wsl;
+
+    const base = std.fs.path.basename(program);
+    const name = if (std.ascii.endsWithIgnoreCase(base, ".exe")) base[0 .. base.len - 4] else base;
+    for ([_][]const u8{ "powershell", "pwsh" }) |shell| {
+        if (std.ascii.eqlIgnoreCase(name, shell)) return .powershell;
+    }
+    for ([_][]const u8{ "bash", "sh", "dash", "zsh", "ksh", "fish" }) |shell| {
+        if (std.ascii.eqlIgnoreCase(name, shell)) return .posix;
+    }
+    return .windows;
 }
 
-test commandRunsWsl {
+test dropShell {
     const testing = std.testing;
-    try testing.expect(commandRunsWsl(.{ .shell = "wsl.exe -d Ubuntu" }));
-    try testing.expect(commandRunsWsl(.{ .shell = "\"C:\\Windows\\System32\\wsl.exe\" ~" }));
-    try testing.expect(!commandRunsWsl(.{ .shell = "cmd.exe" }));
+    try testing.expectEqual(.wsl, dropShell(.{ .shell = "wsl.exe -d Ubuntu" }));
+    try testing.expectEqual(.wsl, dropShell(.{ .shell = "\"C:\\Windows\\System32\\wsl.exe\" ~" }));
+    try testing.expectEqual(.windows, dropShell(.{ .shell = "cmd.exe" }));
+    try testing.expectEqual(.powershell, dropShell(.{ .shell = "pwsh.exe -NoLogo" }));
+    try testing.expectEqual(.powershell, dropShell(.{ .shell = "\"C:\\Program Files\\PowerShell\\7\\pwsh.exe\"" }));
+    try testing.expectEqual(.powershell, dropShell(.{ .direct = &.{"powershell"} }));
+    try testing.expectEqual(.posix, dropShell(.{ .shell = "\"C:\\Program Files\\Git\\bin\\bash.exe\" --login" }));
+    try testing.expectEqual(.windows, dropShell(.{ .shell = "python" }));
 }
 
 /// Scroll for a touch pan gesture. Returns false for other gestures,
@@ -688,7 +703,7 @@ fn dropFiles(self: *Surface, hdrop: c.HDROP) void {
     }
     if (paths.items.len == 0) return;
 
-    const text = drop.text(alloc, paths.items, if (self.runs_wsl) .wsl else .windows) catch return;
+    const text = drop.text(alloc, paths.items, self.drop_shell) catch return;
     self.completeClipboardText(.{ .paste = .standard }, text, false);
 }
 
