@@ -1438,7 +1438,9 @@ Notes:
         permission dialogs were called the same way). All three dialogs
         now run from a message the surface posts to itself
         (`WM_GHOSTTY_CONFIRM_CLIPBOARD`), with no core code on the stack;
-        a second request while one waits is denied.
+        a second request while one waits is denied. CI then passed
+        (run 41705029879): the shell exited with the dialog open and
+        Ghostty closed cleanly, and Ctrl+V pasting still works.
 - Bell handling now copies each surface's `bell-features` (including on
   reload), gates `MessageBeep` on `system`, and requests taskbar attention
   only for background windows. `FLASHW_TIMERNOFG` stops the flash on
