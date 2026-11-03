@@ -81,6 +81,13 @@ jobs:
         shell: pwsh
         run: ./test/windows/desktop-input.ps1 -Exe zig-out/bin/ghostty.exe
 
+      # The unsafe paste dialog: Cancel, and the shell exiting while it's
+      # open.
+      - name: Unsafe paste dialog test
+        timeout-minutes: 5
+        shell: pwsh
+        run: ./test/windows/paste-race.ps1 -Exe zig-out/bin/ghostty.exe
+
       # Ctrl+clicking hyperlinks from terminal output: a text file opens,
       # a script is blocked, and another app's scheme asks first.
       - name: Links test

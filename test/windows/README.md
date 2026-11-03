@@ -88,6 +88,14 @@ terminal output: a link to a text file opens it in Notepad, a link to a
 `ms-settings:` link asks first (the script answers No). It sends real
 input and opens apps, so it refuses to run unless `CI` is `true`.
 
+## paste-race.ps1
+
+Pastes two lines (an unsafe paste) with a key bound to
+`paste_from_clipboard` and checks the warning dialog: Cancel closes it
+without pasting, and when the shell exits while it's open, the dialog
+goes away and Ghostty exits cleanly (or stays responsive). It sets the
+clipboard and shows dialogs, so it refuses to run unless `CI` is `true`.
+
 ## start-menu.ps1
 
 Starts an installed Ghostty the way the Start menu does (the MSIX by its
