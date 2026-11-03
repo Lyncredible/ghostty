@@ -125,19 +125,13 @@ fn checkFileUrl(alloc: Allocator, value: []const u8) Allocator.Error!Decision {
 }
 
 fn checkPath(alloc: Allocator, path: []const u16) Allocator.Error!Decision {
-    const sep = struct {
-        fn is(unit: u16) bool {
-            return unit == '\\' or unit == '/';
-        }
-    }.is;
-
     // Network paths (and \\?\ and \\.\ device paths) would make Windows
     // connect to another machine or open a device just to check them.
-    if (path.len >= 2 and sep(path[0]) and sep(path[1])) return .{ .deny = .remote_file };
+    if (path.len >= 2 and isSep(path[0]) and isSep(path[1])) return .{ .deny = .remote_file };
 
     // Only absolute drive paths. A colon anywhere else names an alternate
     // data stream.
-    if (path.len < 3 or path[1] != ':' or !sep(path[2]) or
+    if (path.len < 3 or path[1] != ':' or !isSep(path[2]) or
         path[0] > 0x7f or !std.ascii.isAlphabetic(@intCast(path[0])))
     {
         return .{ .deny = .malformed };
@@ -147,6 +141,10 @@ fn checkPath(alloc: Allocator, path: []const u16) Allocator.Error!Decision {
     // Look at the file itself, so that the name Windows uses decides,
     // rather than how the link spelled it: trailing dots and spaces, short
     // (8.3) names, and symbolic links all resolve here.
+    // Windows follows symbolic links to network shares, so opening the
+    // path below could connect to one.
+    if (try checkLinks(alloc, path, max_links)) |reason| return .{ .deny = reason };
+
     const path_z = try alloc.dupeSentinel(u16, path, 0);
     defer alloc.free(path_z);
     const handle = c.CreateFileW(
@@ -193,6 +191,110 @@ fn checkPath(alloc: Allocator, path: []const u16) Allocator.Error!Decision {
     }
 
     return .{ .allow = try alloc.dupeSentinel(u16, final, 0) };
+}
+
+/// Windows follows at most 63 symbolic links in a path.
+const max_links = 63;
+
+/// Reads each symbolic link on the way to `path` (an absolute drive path)
+/// without following it, and returns why the path can't be opened if one
+/// points to another computer (or can't be read). Junctions and other
+/// reparse points only lead to local volumes.
+fn checkLinks(alloc: Allocator, path: []const u16, links_left: usize) Allocator.Error!?Reason {
+    if (path.len < 3 or path[1] != ':' or !isSep(path[2])) return .malformed;
+
+    var end: usize = 3;
+    while (end <= path.len) : (end += 1) {
+        if (end < path.len and !isSep(path[end])) continue;
+        if (isSep(path[end - 1])) continue;
+
+        const prefix = try alloc.dupeSentinel(u16, path[0..end], 0);
+        defer alloc.free(prefix);
+        const attributes = c.GetFileAttributesW(prefix.ptr);
+        // Opening the path fails too.
+        if (attributes == c.INVALID_FILE_ATTRIBUTES) return null;
+        if (attributes & c.FILE_ATTRIBUTE_REPARSE_POINT == 0) continue;
+
+        const target = switch (try readLink(alloc, prefix)) {
+            .none => continue,
+            .remote => return .remote_file,
+            .unreadable => return .inaccessible_file,
+            .target => |target| target,
+        };
+        defer alloc.free(target);
+        if (links_left == 0) return .inaccessible_file;
+
+        // The rest of the path continues from the link's target.
+        const next = try std.mem.concat(alloc, u16, &.{ target, path[end..] });
+        defer alloc.free(next);
+        return try checkLinks(alloc, next, links_left - 1);
+    }
+    return null;
+}
+
+const Link = union(enum) {
+    /// Not a symbolic link.
+    none,
+    remote,
+    unreadable,
+    /// The absolute path it points to.
+    target: []u16,
+};
+
+fn readLink(alloc: Allocator, link: [:0]const u16) Allocator.Error!Link {
+    const handle = c.CreateFileW(
+        link.ptr,
+        FILE_READ_ATTRIBUTES,
+        c.FILE_SHARE_READ | c.FILE_SHARE_WRITE | c.FILE_SHARE_DELETE,
+        null,
+        c.OPEN_EXISTING,
+        c.FILE_FLAG_BACKUP_SEMANTICS | c.FILE_FLAG_OPEN_REPARSE_POINT,
+        null,
+    );
+    if (handle == c.INVALID_HANDLE_VALUE) return .unreadable;
+    defer _ = c.CloseHandle(handle);
+
+    // REPARSE_DATA_BUFFER (the symbolic link form).
+    var data: [16 * 1024]u8 = undefined;
+    var len: c.DWORD = 0;
+    if (c.DeviceIoControl(handle, FSCTL_GET_REPARSE_POINT, null, 0, &data, data.len, &len, null) == 0) {
+        return .unreadable;
+    }
+    if (len < 8) return .unreadable;
+    if (std.mem.readInt(u32, data[0..4], .little) != IO_REPARSE_TAG_SYMLINK) return .none;
+    if (len < 20) return .unreadable;
+    const name_offset = std.mem.readInt(u16, data[8..10], .little);
+    const name_len = std.mem.readInt(u16, data[10..12], .little);
+    const flags = std.mem.readInt(u32, data[16..20], .little);
+    if (name_offset % 2 != 0 or name_len % 2 != 0 or 20 + @as(usize, name_offset) + name_len > len) {
+        return .unreadable;
+    }
+    const bytes = data[20 + name_offset ..][0..name_len];
+    const name = try alloc.alloc(u16, name_len / 2);
+    defer alloc.free(name);
+    for (name, 0..) |*unit, i| unit.* = std.mem.readInt(u16, bytes[i * 2 ..][0..2], .little);
+
+    if (flags & SYMLINK_FLAG_RELATIVE != 0) {
+        // From the link's folder, or its drive for `\name`.
+        const base = if (name.len > 0 and isSep(name[0]))
+            link[0..2]
+        else
+            link[0 .. (std.mem.lastIndexOfAny(u16, link, &.{ '\\', '/' }) orelse return .unreadable) + 1];
+        return .{ .target = try std.mem.concat(alloc, u16, &.{ base, name }) };
+    }
+
+    // Absolute targets are NT paths: \??\C:\... or \??\UNC\host\...
+    const unc_prefix = std.unicode.utf8ToUtf16LeStringLiteral("\\??\\UNC\\");
+    const nt_prefix = std.unicode.utf8ToUtf16LeStringLiteral("\\??\\");
+    if (std.ascii.startsWithIgnoreCase(std.mem.sliceAsBytes(name), std.mem.sliceAsBytes(unc_prefix))) return .remote;
+    if (!std.mem.startsWith(u16, name, nt_prefix)) return .unreadable;
+    const target = name[nt_prefix.len..];
+    if (target.len < 3 or target[1] != ':' or !isSep(target[2])) return .unreadable;
+    return .{ .target = try alloc.dupe(u16, target) };
+}
+
+fn isSep(unit: u16) bool {
+    return unit == '\\' or unit == '/';
 }
 
 /// Whether opening a file with this extension (including its dot) could run
@@ -312,6 +414,10 @@ pub fn display(alloc: Allocator, value: []const u8) Allocator.Error![]u8 {
 }
 
 const FILE_READ_ATTRIBUTES = 0x0080;
+const FSCTL_GET_REPARSE_POINT = 0x000900A8;
+const IO_REPARSE_TAG_SYMLINK = 0xA000000C;
+const SYMLINK_FLAG_RELATIVE = 0x1;
+const SYMBOLIC_LINK_FLAG_ALLOW_UNPRIVILEGED_CREATE = 0x2;
 
 extern "shlwapi" fn AssocIsDangerous(ext: [*:0]const u16) callconv(.winapi) c.BOOL;
 extern "shlwapi" fn PathCreateFromUrlW(
@@ -451,4 +557,53 @@ test "local files" {
     // Windows' own executables.
     try expectDeny(.unsafe_file, "C:\\Windows\\System32\\calc.exe", true);
     try expectDeny(.unsafe_file, "file:///C:/Windows/System32/calc.exe", false);
+}
+
+test "symbolic links to other computers" {
+    var tmp = testing.tmpDir(.{});
+    defer tmp.cleanup();
+    const io = testing.io;
+    try tmp.dir.writeFile(io, .{ .sub_path = "notes.txt", .data = "x" });
+
+    var dir_buf: [std.Io.Dir.max_path_bytes]u8 = undefined;
+    const dir = dir_buf[0..try tmp.dir.realPath(io, &dir_buf)];
+
+    const LinkCase = struct { name: []const u8, target: []const u8, folder: bool = false };
+    const notes = try std.fmt.allocPrint(testing.allocator, "{s}\\notes.txt", .{dir});
+    defer testing.allocator.free(notes);
+    const links = [_]LinkCase{
+        .{ .name = "remote.txt", .target = "\\\\127.0.0.1\\c$\\Windows\\win.ini" },
+        .{ .name = "share", .target = "\\\\127.0.0.1\\c$", .folder = true },
+        .{ .name = "hop.txt", .target = "remote.txt" },
+        .{ .name = "here", .target = ".", .folder = true },
+        .{ .name = "local.txt", .target = "notes.txt" },
+        .{ .name = "absolute.txt", .target = notes },
+    };
+    for (links) |l| {
+        const name = try std.fmt.allocPrint(testing.allocator, "{s}\\{s}", .{ dir, l.name });
+        defer testing.allocator.free(name);
+        const name_w = try std.unicode.utf8ToUtf16LeAllocZ(testing.allocator, name);
+        defer testing.allocator.free(name_w);
+        const target_w = try std.unicode.utf8ToUtf16LeAllocZ(testing.allocator, l.target);
+        defer testing.allocator.free(target_w);
+        const flags: c.DWORD = SYMBOLIC_LINK_FLAG_ALLOW_UNPRIVILEGED_CREATE |
+            @as(c.DWORD, if (l.folder) c.SYMBOLIC_LINK_FLAG_DIRECTORY else 0);
+        // Needs developer mode or the symbolic link privilege, which CI
+        // lacks.
+        if (c.CreateSymbolicLinkW(name_w.ptr, target_w.ptr, flags) == 0) return error.SkipZigTest;
+    }
+
+    // Checking these must not connect to 127.0.0.1.
+    for ([_][]const u8{ "remote.txt", "share\\Windows\\win.ini", "hop.txt", "here\\hop.txt", "here\\share\\Windows" }) |name| {
+        const path = try std.fmt.allocPrint(testing.allocator, "{s}\\{s}", .{ dir, name });
+        defer testing.allocator.free(path);
+        try expectDeny(.remote_file, path, true);
+    }
+
+    // Local links still open, by their target's path.
+    for ([_][]const u8{ "local.txt", "absolute.txt", "here\\local.txt" }) |name| {
+        const path = try std.fmt.allocPrint(testing.allocator, "{s}\\{s}", .{ dir, name });
+        defer testing.allocator.free(path);
+        try expectTarget(.allow, notes, path, true);
+    }
 }
