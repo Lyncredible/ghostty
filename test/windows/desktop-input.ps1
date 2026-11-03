@@ -1,9 +1,9 @@
 # Checks of the Windows app with real (synthesized) keyboard and mouse
 # input, for CI: typing, Ctrl+V pasting, Ctrl+C copying and interrupting,
-# focus-follows-mouse between splits, and window-step-resize while dragging
-# the window's corner. SendInput goes to whatever window is in the
-# foreground, so this only runs in CI (where nothing else is on the
-# desktop), never on a developer's machine.
+# focus-follows-mouse between splits, mouse-hide-while-typing, and
+# window-step-resize while dragging the window's corner. SendInput goes to
+# whatever window is in the foreground, so this only runs in CI (where
+# nothing else is on the desktop), never on a developer's machine.
 #
 #     $env:CI = 'true'; ./desktop-input.ps1 -Exe zig-out/bin/ghostty.exe
 
@@ -36,6 +36,11 @@ Add-Type -Namespace GhosttyDesktop -Name Win32 -MemberDefinition @'
 [DllImport("user32.dll")] public static extern bool SetProcessDPIAware();
 [DllImport("user32.dll")] public static extern bool GetClientRect(System.IntPtr h, out RECT r);
 [DllImport("user32.dll")] public static extern void mouse_event(uint flags, int dx, int dy, uint data, System.IntPtr extra);
+[StructLayout(LayoutKind.Sequential)] public struct CURSORINFO { public int cbSize; public int flags; public System.IntPtr hCursor; public int x, y; }
+[DllImport("user32.dll")] public static extern bool GetCursorInfo(ref CURSORINFO info);
+public static System.IntPtr Cursor() {
+  var i = new CURSORINFO(); i.cbSize = System.Runtime.InteropServices.Marshal.SizeOf(i);
+  GetCursorInfo(ref i); return i.hCursor; }
 public static void Key(ushort vk, bool up) {
   var i = new INPUT[1]; i[0].type = 1; i[0].u.ki.wVk = vk; i[0].u.ki.dwFlags = up ? 2u : 0u;
   SendInput(1, i, System.Runtime.InteropServices.Marshal.SizeOf(typeof(INPUT))); }
@@ -56,7 +61,7 @@ $env:GHOSTTY_LOG = 'debug'
 $process = Start-Process -FilePath $Exe -PassThru -RedirectStandardError $log -ArgumentList `
     '--command=cmd.exe', '--window-save-state=never', '--focus-follows-mouse=true', `
     '--clipboard-paste-protection=false', '--keybind=f8=new_split:right', `
-    '--keybind=f9=select_all', '--window-step-resize=true'
+    '--keybind=f9=select_all', '--window-step-resize=true', '--mouse-hide-while-typing=true'
 
 function Fail([string]$message) {
     Write-Host "::error title=desktop-input::$message"
@@ -149,6 +154,16 @@ try {
     [void][GhosttyDesktop.Win32]::SetCursorPos($x, $y)
     [void](WaitFor { [GhosttyDesktop.Win32]::Focus($window) -eq $handle } 'focus to follow the mouse')
     Write-Host 'Focus follows the mouse.'
+
+    # mouse-hide-while-typing: a typed letter hides the pointer over the
+    # terminal, and moving the mouse shows it again.
+    if ([GhosttyDesktop.Win32]::Cursor() -eq [IntPtr]::Zero) { Fail 'the pointer was hidden before typing' }
+    [GhosttyDesktop.Win32]::Key(0x41, $false); [GhosttyDesktop.Win32]::Key(0x41, $true)
+    [void](WaitFor { [GhosttyDesktop.Win32]::Cursor() -eq [IntPtr]::Zero } 'typing to hide the pointer')
+    [void][GhosttyDesktop.Win32]::SetCursorPos($x + 10, $y + 10)
+    [void](WaitFor { [GhosttyDesktop.Win32]::Cursor() -ne [IntPtr]::Zero } 'moving the mouse to show the pointer')
+    [GhosttyDesktop.Win32]::Key(0x08, $false); [GhosttyDesktop.Win32]::Key(0x08, $true)
+    Write-Host 'Typing hides the pointer and moving the mouse shows it.'
 
     # window-step-resize: dragging the bottom-right corner by an amount
     # that isn't whole cells changes the terminal by whole cells.
