@@ -5,11 +5,16 @@
 #
 #     ./drag-drop.ps1 -Exe zig-out/bin/ghostty.exe
 #
+# With -PowerShell, it drops a file named `drop $(Write-Output RAN).txt` on
+# Windows PowerShell and checks that the path is pasted in single quotes,
+# where `$(...)` doesn't run.
+#
 # Run it with Windows PowerShell, whose thread is STA, as OLE drag and
 # drop needs.
 
 param(
     [Parameter(Mandatory)] [string]$Exe,
+    [switch]$PowerShell,
     [int]$TimeoutSeconds = 60
 )
 
@@ -45,10 +50,19 @@ public static void MoveAndRelease(int x, int y, int tx, int ty) {
 '@
 [void][GhosttyDrop.Win32]::SetProcessDPIAware()
 
-$file = Join-Path ([IO.Path]::GetTempPath()) 'drop test.txt'
-Set-Content $file 'dropped'
+if ($PowerShell) {
+    $file = Join-Path ([IO.Path]::GetTempPath()) 'drop $(Write-Output RAN).txt'
+    $command = 'powershell.exe -NoProfile'
+    # The end is enough: double quotes would end it with ".
+    $expected = 'drop $(Write-Output RAN).txt' + "'"
+} else {
+    $file = Join-Path ([IO.Path]::GetTempPath()) 'drop test.txt'
+    $command = 'cmd.exe'
+    $expected = 'drop test.txt'
+}
+Set-Content -LiteralPath $file 'dropped'
 
-$process = Start-Process -FilePath $Exe -PassThru -ArgumentList '--command=cmd.exe', '--window-save-state=never'
+$process = Start-Process -FilePath $Exe -PassThru -ArgumentList "`"--command=$command`"", '--window-save-state=never'
 
 function SurfaceText {
     $condition = New-Object System.Windows.Automation.PropertyCondition(
@@ -114,7 +128,7 @@ try {
     })
     [void]$form.ShowDialog()
 
-    [void](WaitFor { (SurfaceText).Text.Contains('drop test.txt') } 'the dropped path in the terminal')
+    [void](WaitFor { (SurfaceText).Text.Contains($expected) } "the dropped path ($expected) in the terminal")
     Write-Host 'Dropping a file pasted its path:'
     Write-Host (((SurfaceText).Text -split "`n" | Where-Object { $_.Trim() } | Select-Object -Last 1))
 } catch {
@@ -126,5 +140,5 @@ try {
     throw
 } finally {
     if (-not $process.HasExited) { Stop-Process -Id $process.Id -Force }
-    Remove-Item $file -ErrorAction SilentlyContinue
+    Remove-Item -LiteralPath $file -ErrorAction SilentlyContinue
 }
