@@ -53,6 +53,10 @@ pub const InitOpts = union(enum) {
 
 /// Initialize the global state.
 pub fn init(opts: InitOpts) !void {
+    // Our logging writes to stderr through std.debug, which needs to know
+    // whether stderr is an asynchronous pipe (as in Git Bash) on Windows.
+    internal_os.stdio.fixDebugStderr();
+
     // Initialize ourself to nothing so we don't have any extra state.
     // IMPORTANT: this MUST be initialized before any log output because
     // the log function uses the global state.

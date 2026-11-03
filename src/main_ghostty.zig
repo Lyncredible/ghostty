@@ -32,7 +32,7 @@ pub fn main(minimal: std.process.Init.Minimal) !MainReturn {
     global.init(.{ .main = minimal }) catch |err| {
         if (comptime builtin.target.os.tag == .windows) internal_os.windows.attachParentConsole();
         var buffer: [1024]u8 = undefined;
-        var stderr_writer = std.Io.File.stderr().writer(
+        var stderr_writer = internal_os.stdio.stderr().writer(
             std.Io.Threaded.global_single_threaded.io(),
             &buffer,
         );

@@ -4,6 +4,7 @@ const args = @import("args.zig");
 const Action = @import("ghostty.zig").Action;
 const Config = @import("../config.zig").Config;
 const global = @import("../global.zig");
+const internal_os = @import("../os/main.zig");
 
 pub const Options = struct {
     /// The path of the config file to validate. If this isn't specified,
@@ -41,7 +42,7 @@ pub fn run(alloc: std.mem.Allocator) !u8 {
     }
 
     var buffer: [1024]u8 = undefined;
-    var stdout_writer = std.Io.File.stdout().writer(global.io(), &buffer);
+    var stdout_writer = internal_os.stdio.stdout().writer(global.io(), &buffer);
     const stdout = &stdout_writer.interface;
     const result = runInner(alloc, opts, stdout);
     // Not `end`, which would set the length of stdout, and that fails for

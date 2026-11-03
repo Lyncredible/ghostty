@@ -7,6 +7,7 @@ const args = @import("args.zig");
 const diagnostics = @import("diagnostics.zig");
 const homedir = @import("../os/homedir.zig");
 const global = @import("../global.zig");
+const internal_os = @import("../os/main.zig");
 
 pub const Options = struct {
     /// We store an I/O implementation to make maintenance easier.
@@ -187,7 +188,7 @@ pub fn run(alloc: Allocator) !u8 {
     defer iter.deinit();
 
     var buffer: [1024]u8 = undefined;
-    var stderr_writer = std.Io.File.stderr().writer(global.io(), &buffer);
+    var stderr_writer = internal_os.stdio.stderr().writer(global.io(), &buffer);
     const stderr = &stderr_writer.interface;
 
     const result = runArgs(alloc, &iter, stderr);

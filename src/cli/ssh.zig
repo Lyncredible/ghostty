@@ -229,7 +229,7 @@ pub fn run(alloc_gpa: Allocator) !u8 {
     }
 
     var stderr_buffer: [1024]u8 = undefined;
-    var stderr_file: std.Io.File = .stderr();
+    var stderr_file: std.Io.File = internal_os.stdio.stderr();
     var stderr_writer = stderr_file.writer(global.io(), &stderr_buffer);
     const stderr = &stderr_writer.interface;
 

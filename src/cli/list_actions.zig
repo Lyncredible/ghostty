@@ -4,6 +4,7 @@ const Action = @import("ghostty.zig").Action;
 const Allocator = std.mem.Allocator;
 const helpgen_actions = @import("../input/helpgen_actions.zig");
 const global = @import("../global.zig");
+const internal_os = @import("../os/main.zig");
 
 pub const Options = struct {
     /// If `true`, print out documentation about the action associated with the
@@ -38,7 +39,7 @@ pub fn run(alloc: Allocator) !u8 {
         try args.parse(Options, alloc, &opts, &iter);
     }
 
-    var stdout: std.Io.File = .stdout();
+    var stdout: std.Io.File = internal_os.stdio.stdout();
     var buffer: [4096]u8 = undefined;
     var stdout_writer = stdout.writer(global.io(), &buffer);
     try helpgen_actions.generate(

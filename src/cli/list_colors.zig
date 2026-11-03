@@ -7,6 +7,7 @@ const x11_color = @import("../terminal/main.zig").x11_color;
 const vaxis = @import("vaxis");
 const tui = @import("tui.zig");
 const global = @import("../global.zig");
+const internal_os = @import("../os/main.zig");
 
 pub const Options = struct {
     pub fn deinit(self: Options) void {
@@ -50,7 +51,7 @@ pub fn run(alloc: Allocator) !u8 {
         }
     }.lessThan);
 
-    var stdout: std.Io.File = .stdout();
+    var stdout: std.Io.File = internal_os.stdio.stdout();
     if (tui.can_pretty_print and !opts.plain and try stdout.isTty(global.io())) {
         var arena = std.heap.ArenaAllocator.init(alloc);
         defer arena.deinit();

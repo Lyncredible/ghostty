@@ -3,6 +3,7 @@ const Allocator = std.mem.Allocator;
 const Action = @import("../cli.zig").ghostty.Action;
 const apprt = @import("../apprt.zig");
 const global = @import("../global.zig");
+const internal_os = @import("../os/main.zig");
 
 pub const Options = struct {
     /// If set, connect to a custom instance of Ghostty.
@@ -40,7 +41,7 @@ pub const Options = struct {
 /// Available since: 1.4.0
 pub fn run(alloc: Allocator) !u8 {
     var buf: [256]u8 = undefined;
-    var stderr_writer = std.Io.File.stderr().writer(global.io(), &buf);
+    var stderr_writer = internal_os.stdio.stderr().writer(global.io(), &buf);
     const stderr = &stderr_writer.interface;
 
     if (apprt.App.performIpc(

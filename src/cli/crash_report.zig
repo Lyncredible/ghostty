@@ -5,6 +5,7 @@ const Action = @import("ghostty.zig").Action;
 const Config = @import("../config.zig").Config;
 const crash = @import("../crash/main.zig");
 const global = @import("../global.zig");
+const internal_os = @import("../os/main.zig");
 
 pub const Options = struct {
     pub fn deinit(self: Options) void {
@@ -40,7 +41,7 @@ pub fn run(alloc_gpa: Allocator) !u8 {
     }
 
     var buffer: [1024]u8 = undefined;
-    var stdout_file: std.Io.File = .stdout();
+    var stdout_file: std.Io.File = internal_os.stdio.stdout();
     var stdout_writer = stdout_file.writer(global.io(), &buffer);
     const stdout = &stdout_writer.interface;
 

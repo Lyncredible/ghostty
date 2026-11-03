@@ -727,6 +727,24 @@ Notes:
         Microsoft name is preferred, then any UTF-16 name, decoded
         without assuming alignment. The family name fallback in font
         discovery uses the same function.
+  - [x] Output piped in Git Bash: `+show-config --default --docs | wc -c`
+        stopped at 69,053 of 187,859 bytes and hung. The pipes of MSYS2
+        and Cygwin programs are opened for asynchronous I/O, and Zig's
+        `std.Io.File.stdout()` assumes a synchronous handle, so a write to
+        a full pipe returned `STATUS_PENDING`, which Zig treats as
+        unreachable (a small Zig program writing 235 KB panicked there).
+        Reopening the handle synchronously fails (`ERROR_PIPE_BUSY`), so
+        `internal_os.stdio` asks how each standard handle was opened
+        (`NtQueryInformationFile`, `FileModeInformation`) and marks
+        asynchronous ones nonblocking, which makes Zig wait for the write.
+        The CLI actions use it, and so does our logging's stderr: the app
+        with a config of 3,000 bad lines (614 KB of warnings) and `2>&1`
+        piped to a reader that waited 5 s got 165 KB and stuck before;
+        now all 614 KB arrive. Checked: all 187,859 bytes arrive through
+        `wc` and through a reader that waits 3 s; files, cmd pipes and
+        consoles report synchronous handles and are unchanged. Tests:
+        `os/stdio.zig` (a file stays synchronous, an overlapped pipe
+        becomes nonblocking).
 - [x] Output throughput (2026-10-26, ReleaseFast, 20 MB of text):
   - `cmd /c type` is slow everywhere: 19-27 s in Ghostty, 27-38 s in a
     conhost window. cmd writes line by line through the console API.
