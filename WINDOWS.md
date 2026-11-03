@@ -1427,6 +1427,13 @@ Notes:
         preview): no resize, 36% CPU (parsing the output), and drawing
         resumes on restore. `test/windows/minimize.ps1` checks this in CI;
         it fails on the build before ("minimized 0x0").
+  - [x] Scrollback memory, checked: after 20 MB of output into one tab,
+        private memory was 98 MB against 49 MB for an empty tab, which is
+        the default 50 MB limit (146 MB with a 100 MB limit). Scrollback
+        compression works here: the working set was 73-74 MB with it and
+        113-120 MB with `scrollback-compression=false`. Private bytes stay
+        the same either way, since `DiscardVirtualMemory` keeps the commit
+        charge (see `src/terminal/mem.zig`).
 - The tab bar now has a shell dropdown next to the new-tab button. It lists
   shells whose executables are found in PATH and always offers the configured
   default. An explicit choice uses the resolved executable path and is
