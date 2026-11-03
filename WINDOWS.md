@@ -783,9 +783,11 @@ Notes:
         the mouse would get drags and no release. `WM_CAPTURECHANGED` now
         releases the buttons the core has down. Checked: the selection
         stays "aaaa b". Test: `test/windows/mouse-capture.ps1`, which fails
-        on the build before the fix. The missing release for programs
-        that report the mouse follows from the same state but wasn't
-        checked separately.
+        on the build before the fix. Programs that report the mouse now
+        get the release too: a WSL program with button-event tracking
+        (DECSET 1002 and 1006) got the press, the drag and
+        `ESC [ < 0 ; 32 ; 10 m` after `WM_CANCELMODE`; the build before
+        the fix sent no release.
   - [x] Wheel messages too (their coordinates are on the screen). Checked:
         a posted wheel notch reached the WSL program as three wheel-up
         reports at 21;10 (`ESC [ < 64 ; 21 ; 10 M`, three per notch, as
