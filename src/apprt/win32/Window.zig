@@ -131,6 +131,9 @@ taskbar_ready: bool = false,
 /// True while a WM_GHOSTTY_TITLE_CHANGED is posted and not yet handled.
 title_change_posted: bool = false,
 
+/// Whether the window is minimized, while which its surfaces don't draw.
+minimized: bool = false,
+
 /// A title set by the user, which takes precedence over the active tab's.
 title_override: ?[:0]const u8 = null,
 
@@ -1982,7 +1985,14 @@ pub fn wndProc(
             return 0;
         },
         c.WM_SIZE => {
-            self.layout();
+            // A minimized window has no client area. Laying out would
+            // size its surfaces to nothing, and so their terminals.
+            const minimized = wparam == c.SIZE_MINIMIZED;
+            if (minimized != self.minimized) {
+                self.minimized = minimized;
+                if (self.tabs.items.len > 0) self.activeTab().setMinimized(minimized);
+            }
+            if (!minimized) self.layout();
             return 0;
         },
 
