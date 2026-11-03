@@ -1410,8 +1410,8 @@ Notes:
         of the last now sleeps first (a timer tick, about 15.6 ms): 64
         frames a second (44% CPU, 23% GPU), with animated shaders still
         at 63-65 and throughput unchanged. `output-frames.ps1` reports
-        the flood's frame rate, which shows what an unlocked desktop does
-        (CI). Tried and dropped: a frame latency waitable object didn't
+        the flood's frame rate, which shows what an unlocked desktop does:
+        54 a second in run 41549447897 (CI). Tried and dropped: a frame latency waitable object didn't
         limit occluded presents, and
         `D3D11_CREATE_DEVICE_PREVENT_INTERNAL_THREADING_OPTIMIZATIONS`
         took NVIDIA's 11 threads per surface device down to 1 (10 idle
