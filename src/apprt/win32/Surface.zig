@@ -72,6 +72,9 @@ tracking_mouse: bool = false,
 /// the context menu when it's released.
 context_menu_pending: bool = false,
 
+/// The buttons we've told the core are pressed.
+buttons_down: std.EnumSet(input.MouseButton) = .empty,
+
 /// The cursor to show when the mouse is over us, and whether it's hidden.
 cursor: c.HCURSOR,
 cursor_hidden: bool = false,
@@ -1542,6 +1545,13 @@ pub fn wndProc(
             return 0;
         },
 
+        // Another window took the mouse with a button down, for example
+        // Alt+Tab during a drag, so its release won't come to us.
+        c.WM_CAPTURECHANGED => {
+            if (@as(c.HWND, @ptrFromInt(@as(usize, @bitCast(lparam)))) != hwnd) self.releaseButtons();
+            return 0;
+        },
+
         c.WM_LBUTTONDOWN => return self.mouseButtonEvent(.press, .left, wparam, lparam),
         c.WM_LBUTTONUP => return self.mouseButtonEvent(.release, .left, wparam, lparam),
         c.WM_RBUTTONDOWN => return self.mouseButtonEvent(.press, .right, wparam, lparam),
@@ -1658,6 +1668,12 @@ fn mouseButtonEvent(
         .y = @floatFromInt(util.hiword(lparam)),
     });
 
+    // Before releasing the capture, which sends us WM_CAPTURECHANGED.
+    switch (action) {
+        .press => self.buttons_down.insert(button),
+        .release => self.buttons_down.remove(button),
+    }
+
     // Capture the mouse while a button is held so that we keep getting
     // events (e.g. while selecting) if the cursor leaves the window.
     // Clicking a surface (e.g. another split) also focuses it.
@@ -1690,6 +1706,22 @@ fn mouseButtonEvent(
         },
     };
     return 0;
+}
+
+/// Release the buttons the core still has down. Without this, after the
+/// capture was taken mid-drag the core kept dragging: moving the mouse
+/// over us later still extended the selection, and a program reporting
+/// the mouse never got the release.
+fn releaseButtons(self: *Surface) void {
+    const buttons = self.buttons_down;
+    self.buttons_down = .empty;
+    self.context_menu_pending = false;
+    var it = buttons.iterator();
+    while (it.next()) |button| {
+        _ = self.core_surface.mouseButtonCallback(.release, button, key.currentMods()) catch |err| {
+            log.err("error in mouse button callback err={}", .{err});
+        };
+    }
 }
 
 /// Show the context menu at a point in our client area.

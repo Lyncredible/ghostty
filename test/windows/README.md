@@ -178,3 +178,10 @@ It also reports the frame rate while output floods in.
 Minimizes and restores a window (posted `WM_SYSCOMMAND`s) while output
 floods in. The terminal must keep its size while minimized, nothing may be
 drawn, and drawing must resume after restoring.
+
+## mouse-capture.ps1
+
+Starts a drag selection (posted button and move messages), then takes the
+mouse capture away with `WM_CANCELMODE`, as when another window takes it
+mid-drag. Later moves must not change the selection, which is read through
+UI Automation.

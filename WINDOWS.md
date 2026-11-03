@@ -775,6 +775,17 @@ Notes:
         dropped the press, and put the release at 1;1. Pen and touch can
         also press without a move. Button messages now update the
         position from their own coordinates first.
+  - [x] Losing the mouse capture with a button down (another window
+        taking it, as with Alt+Tab during a drag) left the button pressed
+        in the core, since its release went elsewhere: later moves over
+        the terminal kept changing the selection (posted moves without a
+        button after `WM_CANCELMODE` emptied it), and a program reporting
+        the mouse would get drags and no release. `WM_CAPTURECHANGED` now
+        releases the buttons the core has down. Checked: the selection
+        stays "aaaa b". Test: `test/windows/mouse-capture.ps1`, which fails
+        on the build before the fix. The missing release for programs
+        that report the mouse follows from the same state but wasn't
+        checked separately.
   - [x] Wheel messages too (their coordinates are on the screen). Checked:
         a posted wheel notch reached the WSL program as three wheel-up
         reports at 21;10 (`ESC [ < 64 ; 21 ; 10 M`, three per notch, as
