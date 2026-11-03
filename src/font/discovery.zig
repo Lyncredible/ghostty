@@ -1180,17 +1180,40 @@ pub const Windows = struct {
             ) orelse return null;
             defer self.alloc.free(font.path);
 
+            const index: i32 = @intCast(font.index);
             var face = Face.initFile(
                 self.lib,
                 font.path,
-                @intCast(font.index),
+                index,
                 .{ .size = .{ .points = 12 } },
             ) catch return null;
-            if (!self.matches(&face)) {
-                face.deinit();
-                return null;
+            if (self.matches(&face)) return try self.makeDeferred(face, font.path, index);
+            const instances = face.face.handle.*.style_flags >> 16;
+            face.deinit();
+
+            // A variable font keeps its weights as named instances of one
+            // face, which FreeType opens as the default instance: Cascadia
+            // Mono Bold is instance 6 of the face DirectWrite returns for
+            // regular and bold alike. Load the instance with the weight
+            // DirectWrite matched, so bold is the font's own bold rather
+            // than synthetic bold.
+            var n: i32 = 1;
+            while (n <= instances) : (n += 1) {
+                const instance_index = (n << 16) | index;
+                var instance = Face.initFile(
+                    self.lib,
+                    font.path,
+                    instance_index,
+                    .{ .size = .{ .points = 12 } },
+                ) catch continue;
+                if (instanceWeight(&instance) == @as(f64, @floatFromInt(font.weight)) and
+                    self.matches(&instance))
+                {
+                    return try self.makeDeferred(instance, font.path, instance_index);
+                }
+                instance.deinit();
             }
-            return try self.makeDeferred(face, font.path, @intCast(font.index));
+            return null;
         }
 
         fn tryMatch(
@@ -1308,9 +1331,34 @@ pub const Windows = struct {
     fn faceStyle(face: *Face) struct { bold: bool, italic: bool } {
         const flags = face.face.handle.*.style_flags;
         return .{
-            .bold = flags & freetype.c.FT_STYLE_FLAG_BOLD != 0,
+            // FreeType gives every named instance the default instance's
+            // flags, so a Bold instance isn't flagged bold. Like CoreText
+            // discovery, take a weight of 600 or more as bold.
+            .bold = if (instanceWeight(face)) |weight|
+                weight >= 600
+            else
+                flags & freetype.c.FT_STYLE_FLAG_BOLD != 0,
             .italic = flags & freetype.c.FT_STYLE_FLAG_ITALIC != 0,
         };
+    }
+
+    /// The 'wght' coordinate of a face that is a named instance of a
+    /// variable font, or null for any other face.
+    fn instanceWeight(face: *Face) ?f64 {
+        if (face.face.handle.*.face_index >> 16 == 0) return null;
+        const mm = face.face.getMMVar() catch return null;
+        defer face.lib.lib.doneMMVar(mm);
+
+        var coords_buf: [32]freetype.c.FT_Fixed = undefined;
+        const coords = coords_buf[0..@min(coords_buf.len, mm.num_axis)];
+        face.face.getVarDesignCoordinates(coords) catch return null;
+        const wght: u32 = @bitCast(Variation.Id.init("wght"));
+        for (coords, 0..) |coord, i| {
+            if (std.math.cast(u32, mm.axis[i].tag) == wght) {
+                return @as(f64, @floatFromInt(coord)) / 65536;
+            }
+        }
+        return null;
     }
 
     /// The names, styles, and characters of every face in the system and
@@ -1714,6 +1762,32 @@ test "windows styles" {
         defer face.deinit();
         try testing.expect(std.ascii.endsWithIgnoreCase(face.win.?.path, style.file));
     }
+}
+
+test "windows variable font weights" {
+    if (options.backend != .freetype_windows) return error.SkipZigTest;
+
+    const testing = std.testing;
+    const alloc = testing.allocator;
+
+    var lib = try Library.init(alloc);
+    defer lib.deinit();
+
+    var win = Windows.init(lib);
+    defer win.deinit();
+
+    // Cascadia Mono is one variable font with its weights as named
+    // instances. It comes with Windows Terminal, so it may be missing.
+    var it = try win.discover(alloc, .{
+        .family = "Cascadia Mono",
+        .size = 12,
+        .bold = true,
+    });
+    defer it.deinit();
+    var face = (try it.next()) orelse return error.SkipZigTest;
+    defer face.deinit();
+    try testing.expect(face.win.?.face_index >> 16 != 0);
+    try testing.expectEqual(@as(?f64, 700), Windows.instanceWeight(&face.win.?.peek));
 }
 
 test "windows codepoint coverage" {
