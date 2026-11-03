@@ -35,6 +35,17 @@ The ghostty_info call verifies the DLL loads and the CRT is initialized.
 Before the fix, loading the DLL would crash with "access violation writing
 0x0000000000000024".
 
+## unit-tests.ps1
+
+Runs `zig build test` for a target and, if it fails, repeats the failing
+tests' output as a GitHub Actions error annotation, which anyone can read
+from the run without signing in (job logs need a sign-in). CI's Test steps
+use it. `-Filter` passes a test filter.
+
+```
+pwsh -NoProfile -File unit-tests.ps1 -Target x86_64-windows-gnu -Filter windows
+```
+
 ## powershell-integration.ps1
 
 Loads the PowerShell shell integration without a terminal and checks the
