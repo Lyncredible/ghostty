@@ -94,6 +94,12 @@ jobs:
         shell: powershell
         run: ./test/windows/drag-drop.ps1 -Exe zig-out/bin/ghostty.exe
 
+      # Dropping a file named `drop $(Write-Output RAN).txt` on PowerShell
+      # pastes its path in single quotes, where `$(...)` doesn't run.
+      - name: Drag and drop test (PowerShell)
+        shell: powershell
+        run: ./test/windows/drag-drop.ps1 -Exe zig-out/bin/ghostty.exe -PowerShell
+
       # A one-finger touch pan (injected with InjectTouchInput) scrolls.
       - name: Touch scroll test
         shell: pwsh
