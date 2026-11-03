@@ -1434,6 +1434,13 @@ Notes:
         113-120 MB with `scrollback-compression=false`. Private bytes stay
         the same either way, since `DiscardVirtualMemory` keeps the commit
         charge (see `src/terminal/mem.zig`).
+  - [x] Leaks from opening and closing tabs, checked: 5 and 40 rounds
+        of opening a tab and closing it (posted keys) both ended, once
+        the closed tabs' undo time had passed, at 55-59 MB private (51 at
+        the start), about 524 handles (501), 22-24 threads (23), 34 GDI
+        objects (22) and 46-47 USER objects (45). The difference is the
+        same after 5 rounds as after 40, so it's kept once (the tab
+        bar's resources, for example), not per tab.
 - The tab bar now has a shell dropdown next to the new-tab button. It lists
   shells whose executables are found in PATH and always offers the configured
   default. An explicit choice uses the resolved executable path and is
