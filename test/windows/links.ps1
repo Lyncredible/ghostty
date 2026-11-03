@@ -81,6 +81,28 @@ function Dialog([string]$title) {
     }
 }
 
+# Click $button in each of Ghostty's dialogs titled $title until none are
+# left, and return how many there were.
+function CloseDialogs([string]$title, [string]$button) {
+    $closed = 0
+    $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
+    while ((Get-Date) -lt $deadline) {
+        $dialog = Dialog $title
+        if (-not $dialog) {
+            # Wait a moment in case another one is about to appear.
+            Start-Sleep -Milliseconds 1000
+            if (-not (Dialog $title)) { return $closed }
+            continue
+        }
+        $b = $W::FindWindowExW($dialog, [IntPtr]::Zero, 'Button', $button)
+        if ($b -eq [IntPtr]::Zero) { Fail "the $title dialog has no $button button" }
+        [void]$W::PostMessageW($b, 0x00F5, [IntPtr]::Zero, [IntPtr]::Zero)   # BM_CLICK
+        $closed++
+        [void](WaitFor { (Dialog $title) -ne $dialog } "the $title dialog to close")
+    }
+    Fail "the $title dialog kept coming back"
+}
+
 # Start Ghostty showing a screen of links to $url and Ctrl+click one.
 function ClickLink([string]$url) {
     $script:log = Join-Path $dir "ghostty-$([guid]::NewGuid()).log"
@@ -140,16 +162,16 @@ try {
     if (-not (Select-String -Path $log -Pattern 'not opening link reason=unsafe_file' -Quiet)) {
         Fail "the log doesn't say why the link was blocked"
     }
-    [void]$W::PostMessageW($dialog, 0x0111, [IntPtr]1, [IntPtr]::Zero)   # WM_COMMAND IDOK
-    [void](WaitFor { -not (Dialog 'Link Blocked') } 'the dialog to close')
+    $count = CloseDialogs 'Link Blocked' 'OK'
+    if ($count -ne 1) { Fail "one click showed $count Link Blocked dialogs" }
     Write-Host 'A link to a script was blocked, and the script did not run.'
     Close
 
     # Another app's scheme asks first. No (the default) doesn't open it.
     ClickLink 'ms-settings:about'
     $dialog = WaitFor { Dialog 'Open Link' } 'the Open Link dialog'
-    [void]$W::PostMessageW($dialog, 0x0111, [IntPtr]7, [IntPtr]::Zero)   # WM_COMMAND IDNO
-    [void](WaitFor { -not (Dialog 'Open Link') } 'the dialog to close')
+    $count = CloseDialogs 'Open Link' '&No'
+    if ($count -ne 1) { Fail "one click showed $count Open Link dialogs" }
     Write-Host 'A link to ms-settings: asked first.'
     Close
 } finally {
