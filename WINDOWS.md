@@ -663,6 +663,10 @@ Notes:
   - Control, invisible and text-reversing characters are refused, and
     the dialogs show them escaped (`\u{202E}`).
   - Blocked links show "Link Blocked" with the reason, and are logged.
+    The check and its dialogs run from a posted message: the core asks
+    to open a link while it holds the terminal's lock, and in CI the
+    dialog then didn't respond to its own button (its message loop
+    painted, which needs that lock).
   - Unit tests: `apprt.win32.link` (web, mail and other schemes; unsafe
     characters; remote and relative paths; local files, including
     `run.bat.`, `run.bat .. `, `data.PS1`, a stream, a CLSID folder and
