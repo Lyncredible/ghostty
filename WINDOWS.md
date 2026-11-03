@@ -1430,6 +1430,15 @@ Notes:
   passes. A disposable child sent OSC 52 with `clipboard-write=ask`, then
   exited while the permission dialog was open; Ghostty closed cleanly.
   The unsafe-paste dialog still needs the same live race test.
+  - [x] Done in CI (`test/windows/paste-race.ps1`), and it crashed:
+        Cancel worked, but when the shell exited with the dialog open,
+        Ghostty crashed. The surface's own check was fine, but the dialog
+        ran inside the core's paste call, which went on using the
+        destroyed core surface once the dialog returned (the clipboard
+        permission dialogs were called the same way). All three dialogs
+        now run from a message the surface posts to itself
+        (`WM_GHOSTTY_CONFIRM_CLIPBOARD`), with no core code on the stack;
+        a second request while one waits is denied.
 - Bell handling now copies each surface's `bell-features` (including on
   reload), gates `MessageBeep` on `system`, and requests taskbar attention
   only for background windows. `FLASHW_TIMERNOFG` stops the flash on
