@@ -3,6 +3,7 @@ const builtin = @import("builtin");
 const Allocator = std.mem.Allocator;
 const assert = @import("../quirks.zig").inlineAssert;
 const fontconfig = @import("fontconfig");
+const freetype = @import("freetype");
 const macos = @import("macos");
 const opentype = @import("opentype.zig");
 const options = @import("main.zig").options;
@@ -1224,6 +1225,17 @@ pub const Windows = struct {
         fn matches(self: *const DiscoverIterator, face: *Face) bool {
             if (self.desc.family) |family| {
                 if (!familyMatches(face, family)) return false;
+
+                // Each style is a separate face of the family, such as
+                // consolab.ttf for Consolas Bold. Without this, every
+                // style got the first face found, usually the regular
+                // one, so bold and italic text was drawn regular. A
+                // family without the style isn't found, so the style is
+                // synthesized instead (font-synthetic-style).
+                const flags = face.face.handle.*.style_flags;
+                const bold = flags & freetype.c.FT_STYLE_FLAG_BOLD != 0;
+                const italic = flags & freetype.c.FT_STYLE_FLAG_ITALIC != 0;
+                if (bold != self.desc.bold or italic != self.desc.italic) return false;
             }
             if (self.desc.codepoint != 0) {
                 if (face.glyphIndex(self.desc.codepoint) == null) return false;
@@ -1621,6 +1633,40 @@ test "windows" {
     var face = (try it.next()) orelse return error.TestFontNotFound;
     defer face.deinit();
     try testing.expect(face.hasCodepoint('A', null));
+}
+
+test "windows styles" {
+    if (options.backend != .freetype_windows) return error.SkipZigTest;
+
+    const testing = std.testing;
+    const alloc = testing.allocator;
+
+    var lib = try Library.init(alloc);
+    defer lib.deinit();
+
+    var win = Windows.init(lib);
+    defer win.deinit();
+
+    // Consolas ships on every stock Windows install with a file for each
+    // style.
+    const styles = [_]struct { bold: bool, italic: bool, file: []const u8 }{
+        .{ .bold = false, .italic = false, .file = "consola.ttf" },
+        .{ .bold = true, .italic = false, .file = "consolab.ttf" },
+        .{ .bold = false, .italic = true, .file = "consolai.ttf" },
+        .{ .bold = true, .italic = true, .file = "consolaz.ttf" },
+    };
+    for (styles) |style| {
+        var it = try win.discover(alloc, .{
+            .family = "Consolas",
+            .size = 12,
+            .bold = style.bold,
+            .italic = style.italic,
+        });
+        defer it.deinit();
+        var face = (try it.next()) orelse return error.TestFontNotFound;
+        defer face.deinit();
+        try testing.expect(std.ascii.endsWithIgnoreCase(face.win.?.path, style.file));
+    }
 }
 
 test "windows codepoint coverage" {

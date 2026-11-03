@@ -1456,6 +1456,18 @@ Notes:
         the index), for about 2 MB of memory. Fonts installed later are
         only found through DirectWrite. Test: "windows codepoint
         coverage" in `src/font/discovery.zig`.
+  - [x] Bold and italic of a configured `font-family` were drawn regular:
+        name queries matched the family only, so every style got the first
+        face found (`consola.ttf` for all four Consolas styles), and with
+        every style filled none was synthesized. Name queries now also
+        match FreeType's bold and italic style flags: Consolas loads
+        consolab, consolai and consolaz, and Inconsolata (regular and bold
+        files here) synthesizes italic and bold italic. Startup with
+        Consolas is unchanged (181-192 ms). Test: "windows styles".
+        Still slow: a family that isn't installed walks the font folders
+        once per style (Cascadia Mono, absent here: 540 ms to the window
+        against 170), as does a per-user font, which comes after all of
+        the system fonts.
 - The tab bar now has a shell dropdown next to the new-tab button. It lists
   shells whose executables are found in PATH and always offers the configured
   default. An explicit choice uses the resolved executable path and is
