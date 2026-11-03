@@ -160,3 +160,10 @@ Starts a program that prints a letter every 250 ms and counts Ghostty's
 frames with the DXGI ETW provider (`logman`, no input needed): there must
 be about one frame per letter. Cursor blinks alone give about 10 in the 6
 seconds, which is what a build gets when output doesn't wake the renderer.
+It also reports the frame rate while output floods in.
+
+## minimize.ps1
+
+Minimizes and restores a window (posted `WM_SYSCOMMAND`s) while output
+floods in. The terminal must keep its size while minimized, nothing may be
+drawn, and drawing must resume after restoring.
