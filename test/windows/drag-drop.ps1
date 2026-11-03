@@ -7,7 +7,9 @@
 #
 # With -PowerShell, it drops a file named `drop $(Write-Output RAN).txt` on
 # Windows PowerShell and checks that the path is pasted in single quotes,
-# where `$(...)` doesn't run.
+# where `$(...)` doesn't run. With -Nested too, PowerShell runs under cmd
+# (`cmd /k powershell`), so the quoting must follow the running shell
+# rather than the command Ghostty started.
 #
 # Run it with Windows PowerShell, whose thread is STA, as OLE drag and
 # drop needs.
@@ -15,6 +17,7 @@
 param(
     [Parameter(Mandatory)] [string]$Exe,
     [switch]$PowerShell,
+    [switch]$Nested,
     [int]$TimeoutSeconds = 60
 )
 
@@ -52,7 +55,7 @@ public static void MoveAndRelease(int x, int y, int tx, int ty) {
 
 if ($PowerShell) {
     $file = Join-Path ([IO.Path]::GetTempPath()) 'drop $(Write-Output RAN).txt'
-    $command = 'powershell.exe -NoProfile'
+    $command = if ($Nested) { 'cmd.exe /k powershell.exe -NoProfile' } else { 'powershell.exe -NoProfile' }
     # The end is enough: double quotes would end it with ".
     $expected = 'drop $(Write-Output RAN).txt' + "'"
 } else {
@@ -92,7 +95,8 @@ function WaitFor([scriptblock]$condition, [string]$what) {
 }
 
 try {
-    $surface = WaitFor { $s = SurfaceText; if ($s -and $s.Text.Contains('>')) { $s } } 'the prompt'
+    $prompt = if ($PowerShell) { 'PS ' } else { '>' }
+    $surface = WaitFor { $s = SurfaceText; if ($s -and $s.Text.Contains($prompt)) { $s } } 'the prompt'
     $rect = New-Object GhosttyDrop.Win32+RECT
     [void][GhosttyDrop.Win32]::GetWindowRect($surface.Handle, [ref]$rect)
     $target = @{ X = [int](($rect.l + $rect.r) / 2); Y = [int](($rect.t + $rect.b) / 2) }

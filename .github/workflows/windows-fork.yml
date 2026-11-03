@@ -107,6 +107,12 @@ jobs:
         shell: powershell
         run: ./test/windows/drag-drop.ps1 -Exe zig-out/bin/ghostty.exe -PowerShell
 
+      # The same with PowerShell started from cmd: the quoting follows the
+      # shell that's running, not the one Ghostty started.
+      - name: Drag and drop test (PowerShell under cmd)
+        shell: powershell
+        run: ./test/windows/drag-drop.ps1 -Exe zig-out/bin/ghostty.exe -PowerShell -Nested
+
       # A one-finger touch pan (injected with InjectTouchInput) scrolls.
       - name: Touch scroll test
         shell: pwsh

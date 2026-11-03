@@ -1298,8 +1298,19 @@ Notes:
           Bash. Unit tests: `text` in `drop.zig`, `dropShell`. CI's drag
           test also drops `drop $(Write-Output RAN).txt` on Windows
           PowerShell and expects it single-quoted.
-      - Not covered: the quoting follows the surface's command, so a
-        PowerShell started from cmd still gets cmd's double quotes.
+      - [x] The quoting followed the surface's command, so PowerShell
+            started from cmd got cmd's double quotes (where `$(...)`
+            runs). It now follows the shell that's running: the core's
+            `foreground_pid` works on Windows (ConPTY has no foreground
+            process group, so it's the newest of the deepest processes
+            under the shell, from a process snapshot; a parent must have
+            started before its child, since process IDs are reused), and
+            the drop walks up from it to the nearest shell it knows. Unit
+            test `foregroundProcess` starts `cmd /c powershell` and finds
+            PowerShell; CI's drag test drops the `$(...)` file on
+            `cmd /k powershell` (`-Nested`).
+        - Not covered: a shell that Windows doesn't see, like one in WSL
+          or over SSH, still gets the command's quoting.
   - [x] `app-notifications`: "Copied to clipboard" / "Cleared clipboard"
         and "Reloaded the configuration" as a badge at the bottom of the
         terminal for two seconds, like GTK's toasts. Checked with
