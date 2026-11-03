@@ -1273,6 +1273,24 @@ Notes:
         WSL (the command runs `wsl.exe`) they become Linux paths
         (`/mnt/c/...`, `\\wsl$\<distro>\...` to `/...`) in single
         quotes when needed. Unit tested; a real drop needs a manual check.
+    - [x] Dropping a file could run a command in PowerShell: paths went
+          in double quotes, where PowerShell runs `$(...)` (and expands
+          `$name` and backticks), and Windows file names can contain `$`,
+          `(` and `)`. A downloaded `$(calc).txt` dropped on PowerShell
+          pasted `"C:\...\$(calc).txt"`, which runs calc on Enter (checked
+          here with `$(Write-Output RAN)`, which printed `RAN.txt`). Git
+          Bash's double quotes do the same. The surface's command now
+          picks the quoting: PowerShell (`powershell`, `pwsh`) gets single
+          quotes, with `'` and the typographic single quotes U+2018 to
+          U+201B doubled (PowerShell takes those as quotes too); POSIX
+          shells (`bash`, `sh`, `zsh`, `fish` and others) get single
+          quotes with `'\''`; cmd and other commands keep double quotes.
+          Checked here: both forms print literally in PowerShell and Git
+          Bash. Unit tests: `text` in `drop.zig`, `dropShell`. CI's drag
+          test also drops `drop $(Write-Output RAN).txt` on Windows
+          PowerShell and expects it single-quoted.
+      - Not covered: the quoting follows the surface's command, so a
+        PowerShell started from cmd still gets cmd's double quotes.
   - [x] `app-notifications`: "Copied to clipboard" / "Cleared clipboard"
         and "Reloaded the configuration" as a badge at the bottom of the
         terminal for two seconds, like GTK's toasts. Checked with
