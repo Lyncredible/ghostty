@@ -89,5 +89,7 @@ test {
     } else if (comptime builtin.target.os.tag.isDarwin()) {
         _ = mach;
         _ = macos;
+    } else if (comptime builtin.target.os.tag == .windows) {
+        _ = windows;
     }
 }

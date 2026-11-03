@@ -32,6 +32,7 @@ const drop = @import("drop.zig");
 const SplitDrag = @import("SplitDrag.zig");
 const Accessibility = @import("Accessibility.zig");
 const internal_os = @import("../../os/main.zig");
+const windows = internal_os.windows;
 
 const log = std.log.scoped(.win32);
 
@@ -636,17 +637,46 @@ fn dropShell(command: configpkg.Command) drop.Shell {
             break :program trimmed[0..end];
         },
     };
+    return shellOf(program) orelse .windows;
+}
+
+/// Which shell a program is, by its path or file name, or null if it
+/// isn't one we know.
+fn shellOf(program: []const u8) ?drop.Shell {
     if (internal_os.wsl.isWsl(program)) return .wsl;
 
     const base = std.fs.path.basename(program);
     const name = if (std.ascii.endsWithIgnoreCase(base, ".exe")) base[0 .. base.len - 4] else base;
+    if (std.ascii.eqlIgnoreCase(name, "cmd")) return .windows;
     for ([_][]const u8{ "powershell", "pwsh" }) |shell| {
         if (std.ascii.eqlIgnoreCase(name, shell)) return .powershell;
     }
     for ([_][]const u8{ "bash", "sh", "dash", "zsh", "ksh", "fish" }) |shell| {
         if (std.ascii.eqlIgnoreCase(name, shell)) return .posix;
     }
-    return .windows;
+    return null;
+}
+
+/// The shell that the terminal's current program runs under, which isn't
+/// always the one we started (cmd running pwsh). Null if there's none
+/// among its Windows processes.
+fn currentShell(self: *Surface) ?drop.Shell {
+    const pid = self.core_surface.getProcessInfo(.foreground_pid) orelse return null;
+    const alloc = self.app.core_app.alloc;
+    const list = windows.processes(alloc) catch return null;
+    defer alloc.free(list);
+
+    const own = windows.GetCurrentProcessId();
+    var current: ?*const windows.ProcessEntry = for (list) |*entry| {
+        if (entry.pid == pid) break entry;
+    } else null;
+    while (current) |entry| : (current = windows.parentProcess(list, entry.pid)) {
+        if (entry.pid == own) return null;
+        var name_buf: [260 * 3]u8 = undefined;
+        const len = std.unicode.utf16LeToUtf8(&name_buf, entry.exeName()) catch continue;
+        if (shellOf(name_buf[0..len])) |shell| return shell;
+    }
+    return null;
 }
 
 test dropShell {
@@ -710,7 +740,7 @@ fn dropFiles(self: *Surface, hdrop: c.HDROP) void {
     }
     if (paths.items.len == 0) return;
 
-    const text = drop.text(alloc, paths.items, self.drop_shell) catch return;
+    const text = drop.text(alloc, paths.items, self.currentShell() orelse self.drop_shell) catch return;
     self.completeClipboardText(.{ .paste = .standard }, text, false);
 }
 

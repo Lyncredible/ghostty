@@ -108,7 +108,9 @@ for the zip it also uninstalls. It only runs in CI.
 Drags a file (a real OLE drag, as from Explorer) from a window of its own
 onto a terminal running cmd, and checks that its path was pasted. It moves
 the mouse and holds its button, so it only runs in CI, with Windows
-PowerShell (an STA thread).
+PowerShell (an STA thread). `-PowerShell` drops a file named
+`drop $(Write-Output RAN).txt` on PowerShell and expects it single-quoted;
+with `-Nested`, that PowerShell runs under cmd.
 
 ## touch-scroll.ps1
 

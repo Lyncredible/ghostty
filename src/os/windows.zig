@@ -309,6 +309,7 @@ pub const exp = struct {
             bInheritHandle: BOOL,
             dwProcessId: DWORD,
         ) callconv(.winapi) ?HANDLE;
+        pub extern "kernel32" fn GetProcessId(Process: HANDLE) callconv(.winapi) DWORD;
         pub extern "kernel32" fn QueryFullProcessImageNameW(
             hProcess: HANDLE,
             dwFlags: DWORD,
@@ -516,3 +517,157 @@ const console = struct {
         template: ?HANDLE,
     ) callconv(.winapi) HANDLE;
 };
+
+/// A process in a snapshot of the system's processes (`processes`).
+pub const ProcessEntry = struct {
+    pid: DWORD,
+    parent: DWORD,
+    /// The executable's file name, like `pwsh.exe`.
+    name: [260]u16,
+    name_len: usize,
+
+    pub fn exeName(self: *const ProcessEntry) []const u16 {
+        return self.name[0..self.name_len];
+    }
+};
+
+/// The processes running now. The caller frees the list.
+pub fn processes(alloc: std.mem.Allocator) ![]ProcessEntry {
+    const snapshot = exp.kernel32.CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+    if (snapshot == INVALID_HANDLE_VALUE) return error.SnapshotFailed;
+    defer _ = exp.kernel32.CloseHandle(snapshot);
+
+    var list: std.ArrayList(ProcessEntry) = .empty;
+    errdefer list.deinit(alloc);
+    var entry: PROCESSENTRY32W = undefined;
+    entry.dwSize = @sizeOf(PROCESSENTRY32W);
+    var more = exp.kernel32.Process32FirstW(snapshot, &entry).toBool();
+    while (more) : (more = exp.kernel32.Process32NextW(snapshot, &entry).toBool()) {
+        try list.append(alloc, .{
+            .pid = entry.th32ProcessID,
+            .parent = entry.th32ParentProcessID,
+            .name = entry.szExeFile,
+            .name_len = std.mem.indexOfScalar(u16, &entry.szExeFile, 0) orelse entry.szExeFile.len,
+        });
+    }
+    return try list.toOwnedSlice(alloc);
+}
+
+/// The newest of the deepest processes under `root` (a process ID), or
+/// `root` itself if it has none. ConPTY has no foreground process group,
+/// so this stands in for one: the program a shell is running.
+pub fn foregroundProcess(list: []const ProcessEntry, root: DWORD) DWORD {
+    var current = root;
+    var current_start = processStart(root) orelse return root;
+    while (true) {
+        var best: ?DWORD = null;
+        var best_start: u64 = 0;
+        var best_depth: usize = 0;
+        for (list) |entry| {
+            if (entry.parent != current or entry.pid == current) continue;
+            // Process IDs are reused, so a parent ID can name a newer
+            // process than the one that started this one.
+            const start = processStart(entry.pid) orelse continue;
+            if (start < current_start) continue;
+            const depth = processDepth(list, entry.pid, start, 0);
+            if (best == null or depth > best_depth or (depth == best_depth and start > best_start)) {
+                best = entry.pid;
+                best_start = start;
+                best_depth = depth;
+            }
+        }
+        current = best orelse return current;
+        current_start = best_start;
+    }
+}
+
+/// How many generations of processes are under `pid`.
+fn processDepth(list: []const ProcessEntry, pid: DWORD, start: u64, depth: usize) usize {
+    // Windows doesn't limit it, but a shell's tree is shallow.
+    if (depth >= 16) return 0;
+    var deepest: usize = 0;
+    for (list) |entry| {
+        if (entry.parent != pid or entry.pid == pid) continue;
+        const child_start = processStart(entry.pid) orelse continue;
+        if (child_start < start) continue;
+        deepest = @max(deepest, 1 + processDepth(list, entry.pid, child_start, depth + 1));
+    }
+    return deepest;
+}
+
+/// The parent of `pid`, if it's still the process that started it.
+pub fn parentProcess(list: []const ProcessEntry, pid: DWORD) ?*const ProcessEntry {
+    const entry = for (list) |*entry| {
+        if (entry.pid == pid) break entry;
+    } else return null;
+    const parent = for (list) |*parent| {
+        if (parent.pid == entry.parent and parent.pid != pid) break parent;
+    } else return null;
+    const start = processStart(pid) orelse return null;
+    const parent_start = processStart(parent.pid) orelse return null;
+    return if (parent_start <= start) parent else null;
+}
+
+/// When a process started, as a FILETIME.
+fn processStart(pid: DWORD) ?u64 {
+    const handle = exp.kernel32.OpenProcess(process.PROCESS_QUERY_LIMITED_INFORMATION, FALSE, pid) orelse return null;
+    defer _ = exp.kernel32.CloseHandle(handle);
+    var times: [4]process.FILETIME = undefined;
+    if (!process.GetProcessTimes(handle, &times[0], &times[1], &times[2], &times[3]).toBool()) return null;
+    return @as(u64, times[0].high) << 32 | times[0].low;
+}
+
+const process = struct {
+    const PROCESS_QUERY_LIMITED_INFORMATION: DWORD = 0x1000;
+    const FILETIME = extern struct { low: DWORD, high: DWORD };
+
+    extern "kernel32" fn GetProcessTimes(
+        process: HANDLE,
+        creation: *FILETIME,
+        exit: *FILETIME,
+        kernel: *FILETIME,
+        user: *FILETIME,
+    ) callconv(.winapi) BOOL;
+};
+
+test foregroundProcess {
+    const builtin = @import("builtin");
+    if (comptime builtin.target.os.tag != .windows) return error.SkipZigTest;
+    const testing = std.testing;
+    const list = try processes(testing.allocator);
+    defer testing.allocator.free(list);
+
+    // We have no child processes, so we're our own foreground.
+    const self_pid = GetCurrentProcessId();
+    try testing.expectEqual(self_pid, foregroundProcess(list, self_pid));
+    const parent = parentProcess(list, self_pid) orelse return error.TestUnexpectedResult;
+    try testing.expect(parent.pid != self_pid);
+
+    // cmd running PowerShell: PowerShell is the foreground.
+    const io = testing.io;
+    var child = try std.process.spawn(io, .{
+        .argv = &.{ "cmd.exe", "/c", "powershell.exe -NoProfile -Command Start-Sleep 3" },
+        .stdin = .ignore,
+        .stdout = .ignore,
+        .stderr = .ignore,
+    });
+    defer _ = child.wait(io) catch {};
+    const cmd = exp.kernel32.GetProcessId(child.id.?);
+    for (0..100) |_| {
+        const now = try processes(testing.allocator);
+        defer testing.allocator.free(now);
+        const pid = foregroundProcess(now, cmd);
+        if (pid != cmd) {
+            const entry = for (now) |*entry| {
+                if (entry.pid == pid) break entry;
+            } else return error.TestUnexpectedResult;
+            var name_buf: [260 * 3]u8 = undefined;
+            const name = name_buf[0..try std.unicode.utf16LeToUtf8(&name_buf, entry.exeName())];
+            try testing.expect(std.ascii.eqlIgnoreCase(name, "powershell.exe"));
+            try testing.expectEqual(cmd, parentProcess(now, pid).?.pid);
+            return;
+        }
+        try std.Io.sleep(io, .fromMilliseconds(50), .awake);
+    }
+    return error.TestUnexpectedResult;
+}
