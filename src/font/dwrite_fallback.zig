@@ -3,6 +3,8 @@
 //! preferences into account, for example Yu Gothic or Meiryo for Japanese
 //! text on a Japanese system and Segoe UI Emoji for emoji, where scanning
 //! the font folders finds whichever font file happens to come first.
+//! Also the face of a font family for a style, from DirectWrite's index
+//! of installed fonts.
 const std = @import("std");
 const Allocator = std.mem.Allocator;
 
@@ -67,9 +69,62 @@ fn findInner(alloc: Allocator, codepoint: u21, bold: bool, italic: bool) !?Font 
     }));
     const mapped = font orelse return null;
     defer release(mapped);
+    return try fontFile(alloc, mapped);
+}
 
+/// The face of a family that DirectWrite matches to a style, or null if
+/// the family isn't installed or doesn't have that style (DirectWrite
+/// would simulate it). DirectWrite keeps an index of the installed fonts,
+/// per-user ones too, so this is much faster than opening font files.
+pub fn findFamily(alloc: Allocator, family: []const u8, bold: bool, italic: bool) ?Font {
+    return findFamilyInner(alloc, family, bold, italic) catch |err| {
+        log.debug("DirectWrite family lookup failed err={}", .{err});
+        return null;
+    };
+}
+
+fn findFamilyInner(alloc: Allocator, family: []const u8, bold: bool, italic: bool) !?Font {
+    var factory: ?*c.IDWriteFactory2 = null;
+    try check(c.DWriteCreateFactory(
+        c.DWRITE_FACTORY_TYPE_SHARED,
+        &IID_IDWriteFactory2,
+        @ptrCast(&factory),
+    ));
+    defer release(factory.?);
+
+    var collection: ?*c.IDWriteFontCollection = null;
+    try check(call(factory.?, "GetSystemFontCollection", .{ &collection, c.FALSE }));
+    defer release(collection.?);
+
+    const family16 = std.unicode.wtf8ToWtf16LeAllocZ(alloc, family) catch return null;
+    defer alloc.free(family16);
+    var index: c.UINT32 = 0;
+    var exists: c.BOOL = c.FALSE;
+    try check(call(collection.?, "FindFamilyName", .{ family16.ptr, &index, &exists }));
+    if (exists == c.FALSE) return null;
+
+    var font_family: ?*c.IDWriteFontFamily = null;
+    try check(call(collection.?, "GetFontFamily", .{ index, &font_family }));
+    defer release(font_family.?);
+
+    var font: ?*c.IDWriteFont = null;
+    try check(call(font_family.?, "GetFirstMatchingFont", .{
+        @as(c.DWRITE_FONT_WEIGHT, if (bold) c.DWRITE_FONT_WEIGHT_BOLD else c.DWRITE_FONT_WEIGHT_NORMAL),
+        @as(c.DWRITE_FONT_STRETCH, c.DWRITE_FONT_STRETCH_NORMAL),
+        @as(c.DWRITE_FONT_STYLE, if (italic) c.DWRITE_FONT_STYLE_ITALIC else c.DWRITE_FONT_STYLE_NORMAL),
+        &font,
+    }));
+    const matched = font orelse return null;
+    defer release(matched);
+    if (call(matched, "GetSimulations", .{}) != c.DWRITE_FONT_SIMULATIONS_NONE) return null;
+    return try fontFile(alloc, matched);
+}
+
+/// The file and face index of a DirectWrite font, or null if it isn't in
+/// a local file.
+fn fontFile(alloc: Allocator, font: *c.IDWriteFont) !?Font {
     var face: ?*c.IDWriteFontFace = null;
-    try check(call(mapped, "CreateFontFace", .{&face}));
+    try check(call(font, "CreateFontFace", .{&face}));
     defer release(face.?);
 
     var file_count: c.UINT32 = 1;
@@ -234,6 +289,14 @@ fn MethodReturn(comptime Ptr: type, comptime method: []const u8) type {
 
 inline fn release(obj: anytype) void {
     _ = call(obj, "Release", .{});
+}
+
+test findFamily {
+    const testing = std.testing;
+    const font = findFamily(testing.allocator, "Consolas", true, false) orelse return error.SkipZigTest;
+    defer testing.allocator.free(font.path);
+    try testing.expect(std.ascii.endsWithIgnoreCase(font.path, "consolab.ttf"));
+    try testing.expect(findFamily(testing.allocator, "No Such Font Family", false, false) == null);
 }
 
 test find {
