@@ -1467,9 +1467,10 @@ Notes:
   only for background windows. `FLASHW_TIMERNOFG` stops the flash on
   activation. Native Debug build passes; visual taskbar verification is
   still pending.
-  - [ ] CI test `bell-flash.ps1`: a shell hook window sees the flash
+  - [x] CI test `bell-flash.ps1`: a shell hook window sees the flash
         (`HSHELL_FLASH`) for a bell from the background, none from the
-        foreground, and none with `no-attention`.
+        foreground, and none with `no-attention`. Passed (run
+        41727336416).
 - A real ConPTY smoke test exposed the Windows process command-line
   serializer dropping empty arguments. Fixed by quoting empty strings;
   round-trip regression tests cover adjacent/trailing empty arguments,
