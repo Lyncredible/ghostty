@@ -1129,6 +1129,13 @@ Notes:
 - [x] Shell integration for PowerShell (5.1 tested; PowerShell 7 isn't
       installed on the dev machine)
 - [x] OSC 7 working directory reports on Windows
+  - [x] Checked that a program can't use them to make a new tab start in
+        another machine's share (which would connect to it): the core
+        rejects a URL whose host isn't this machine, drive paths keep
+        their drive (`/C://host/share` is `C:\\host\share`, a local
+        folder), and WSL paths stay in their distribution's share
+        (Windows resolves `\\wsl$\Ubuntu\..\..\evil\share` to
+        `\\wsl$\Ubuntu\evil\share`).
 - [x] Font discovery: FreeType scans the system and user font folders
       (`+list-fonts --family=Consolas` takes about 0.1 s here)
   - [x] Codepoint fallback asks DirectWrite's system font fallback
