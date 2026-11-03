@@ -1479,6 +1479,13 @@ Notes:
         either dialog open must not crash. Passed (run 41736532621); it
         wasn't run on the build before the fix, so whether that one
         crashed is unconfirmed.
+  - [ ] The same for "Quit Ghostty?" (`quit`) and the configuration
+        errors dialog after a reload (`reload_config`, which shows the
+        new config's errors): both now run from messages posted to the
+        app's message window (`WM_GHOSTTY_QUIT`, and
+        `WM_GHOSTTY_CONFIG_ERRORS` with the message already written).
+        `dialog-race.ps1` also quits with F6 while `ping` runs and lets
+        the shell exit with the dialog open.
 - Bell handling now copies each surface's `bell-features` (including on
   reload), gates `MessageBeep` on `system`, and requests taskbar attention
   only for background windows. `FLASHW_TIMERNOFG` stops the flash on

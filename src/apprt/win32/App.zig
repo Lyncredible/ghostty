@@ -45,7 +45,9 @@ const log = std.log.scoped(.win32);
 /// Posted to our message window to wake up the event loop.
 const WM_GHOSTTY_WAKEUP = c.WM_APP + 1;
 
-/// Posted at startup to show configuration errors once a window is up.
+/// Posted to show configuration errors: at startup (once a window is up)
+/// with 0 as the lparam, for our config's, or with the message to show, a
+/// `[*:0]u16` that the handler frees.
 const WM_GHOSTTY_CONFIG_ERRORS = c.WM_APP + 3;
 
 /// Posted to redo closing, with the window (or 0) as the wparam.
@@ -61,6 +63,9 @@ const WM_GHOSTTY_OPEN_LINK = c.WM_APP + 6;
 /// Posted to ask where to save exported terminal IO, with a
 /// `*PendingExport` as the lparam.
 const WM_GHOSTTY_EXPORT = c.WM_APP + 7;
+
+/// Posted to quit, asking first if a terminal is busy.
+const WM_GHOSTTY_QUIT = c.WM_APP + 8;
 
 /// The ID of the timer on our message window for the quit timer.
 const quit_timer_id = 1;
@@ -726,7 +731,24 @@ fn msgWndProc(
         const self: *App = @ptrFromInt(@as(usize, @bitCast(ptr)));
         switch (msg) {
             WM_GHOSTTY_CONFIG_ERRORS => {
-                self.showConfigErrors(&self.config);
+                const alloc = self.core_app.alloc;
+                const message: [:0]u16 = if (lparam != 0)
+                    std.mem.sliceTo(@as([*:0]u16, @ptrFromInt(@as(usize, @bitCast(lparam)))), 0)
+                else
+                    configErrorsMessage(alloc, &self.config) catch return 0;
+                defer alloc.free(message);
+                self.askAboutConfigErrors(message);
+                return 0;
+            },
+
+            WM_GHOSTTY_QUIT => {
+                if (self.core_app.needsConfirmQuit() and
+                    !Window.confirm(null, "Quit Ghostty?", "All terminal sessions will be terminated."))
+                {
+                    return 0;
+                }
+                SaveState.save(self);
+                self.quit();
                 return 0;
             },
 
@@ -1047,14 +1069,12 @@ pub fn performAction(
     value: apprt.Action.Value(action),
 ) !bool {
     switch (action) {
-        .quit => {
-            if (self.core_app.needsConfirmQuit() and
-                !Window.confirm(null, "Quit Ghostty?", "All terminal sessions will be terminated."))
-            {
-                return true;
-            }
-            SaveState.save(self);
-            self.quit();
+        // Keybindings ask from the core's key handling, which goes on
+        // using the core surface after we return, so a dialog here would
+        // let it be destroyed underneath. We ask once this is done.
+        .quit => if (c.PostMessageW(self.msg_hwnd, WM_GHOSTTY_QUIT, 0, 0) == 0) {
+            log.warn("couldn't post quit", .{});
+            return false;
         },
 
         .new_window => _ = try self.newWindow(.{ .parent = switch (target) {
@@ -1463,7 +1483,12 @@ fn reloadConfig(
     }
 
     if (config._diagnostics.items().len > 0) {
-        self.showConfigErrors(&config);
+        // Reloading can come from a keybinding, so, as for quitting, we
+        // ask once the core's call returns.
+        const message = try configErrorsMessage(self.core_app.alloc, &config);
+        if (c.PostMessageW(self.msg_hwnd, WM_GHOSTTY_CONFIG_ERRORS, 0, @bitCast(@intFromPtr(message.ptr))) == 0) {
+            self.core_app.alloc.free(message);
+        }
         return;
     }
 
@@ -1477,26 +1502,26 @@ fn reloadConfig(
 
 /// Like GTK, list configuration errors and offer to reload the
 /// configuration, for example after fixing them.
-fn showConfigErrors(self: *App, config: *const Config) void {
-    const alloc = self.core_app.alloc;
+fn configErrorsMessage(alloc: Allocator, config: *const Config) ![:0]u16 {
     var text: std.Io.Writer.Allocating = .init(alloc);
     defer text.deinit();
     const writer = &text.writer;
-    writer.writeAll("One or more configuration errors were found:\n\n") catch return;
+    try writer.writeAll("One or more configuration errors were found:\n\n");
 
     // Long lists don't fit a message box.
     const max_shown = 15;
     const diagnostics = config._diagnostics.items();
     for (diagnostics[0..@min(diagnostics.len, max_shown)]) |diag| {
-        writer.print("{f}\n", .{diag}) catch return;
+        try writer.print("{f}\n", .{diag});
     }
     if (diagnostics.len > max_shown) {
-        writer.print("...and {d} more\n", .{diagnostics.len - max_shown}) catch return;
+        try writer.print("...and {d} more\n", .{diagnostics.len - max_shown});
     }
-    writer.writeAll("\nReload the configuration now? Choose No to ignore these errors.") catch return;
+    try writer.writeAll("\nReload the configuration now? Choose No to ignore these errors.");
+    return try util.utf16Alloc(alloc, text.written());
+}
 
-    const message = util.utf16Alloc(alloc, text.written()) catch return;
-    defer alloc.free(message);
+fn askAboutConfigErrors(self: *App, message: [:0]const u16) void {
     const owner = if (self.activeWindow()) |window| window.hwnd else null;
     const choice = c.MessageBoxW(
         owner,
