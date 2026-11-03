@@ -58,6 +58,10 @@ const WM_GHOSTTY_CLOSE_ALL = c.WM_APP + 5;
 /// `*PendingLink` as the lparam.
 const WM_GHOSTTY_OPEN_LINK = c.WM_APP + 6;
 
+/// Posted to ask where to save exported terminal IO, with a
+/// `*PendingExport` as the lparam.
+const WM_GHOSTTY_EXPORT = c.WM_APP + 7;
+
 /// The ID of the timer on our message window for the quit timer.
 const quit_timer_id = 1;
 
@@ -743,6 +747,21 @@ fn msgWndProc(
                 return 0;
             },
 
+            WM_GHOSTTY_EXPORT => {
+                const pending: *PendingExport = @ptrFromInt(@as(usize, @bitCast(lparam)));
+                defer pending.destroy(self.core_app.alloc);
+                // The inspector may have closed meanwhile.
+                const owner = if (c.IsWindow(pending.owner) != 0) pending.owner else null;
+                _ = shell.saveAs(
+                    self.core_app.alloc,
+                    owner,
+                    "Export Terminal IO Events",
+                    "ghostty-terminal-io.txt",
+                    pending.contents,
+                );
+                return 0;
+            },
+
             WM_GHOSTTY_WAKEUP => {
                 self.core_app.tick(self) catch |err| {
                     log.err("error ticking app err={}", .{err});
@@ -1157,7 +1176,7 @@ pub fn performAction(
 
         .prompt_title => switch (target) {
             .app => return false,
-            .surface => |v| try v.rt_surface.promptTitle(value),
+            .surface => |v| v.rt_surface.promptTitle(value),
         },
 
         .copy_title_to_clipboard => switch (target) {
@@ -1185,17 +1204,23 @@ pub fn performAction(
             .surface => |v| return shell.toggleTouchKeyboard(v.rt_surface.window.hwnd),
         },
 
-        // The contents are only valid during this call, and the dialog is
-        // modal, so we save them before returning.
+        // The inspector asks while it holds the terminal's lock, so the
+        // dialog's message loop would stop the terminal and could deadlock
+        // on it. The contents are only valid during this call, so we copy
+        // them and ask once this message is done.
         .export_terminal_io => switch (target) {
             .app => return false,
-            .surface => |v| _ = shell.saveAs(
-                self.core_app.alloc,
-                if (v.rt_surface.inspector) |window| window.hwnd else v.rt_surface.window.hwnd,
-                "Export Terminal IO Events",
-                "ghostty-terminal-io.txt",
-                value.contents,
-            ),
+            .surface => |v| {
+                const pending = PendingExport.create(
+                    self.core_app.alloc,
+                    if (v.rt_surface.inspector) |window| window.hwnd else v.rt_surface.window.hwnd,
+                    value.contents,
+                ) catch return false;
+                if (c.PostMessageW(self.msg_hwnd, WM_GHOSTTY_EXPORT, 0, @bitCast(@intFromPtr(pending))) == 0) {
+                    pending.destroy(self.core_app.alloc);
+                    return false;
+                }
+            },
         },
 
         .inspector => switch (target) {
@@ -1522,6 +1547,23 @@ const PendingLink = struct {
 
     fn destroy(self: *PendingLink, alloc: Allocator) void {
         alloc.free(self.url);
+        alloc.destroy(self);
+    }
+};
+
+const PendingExport = struct {
+    owner: c.HWND,
+    contents: []const u8,
+
+    fn create(alloc: Allocator, owner: c.HWND, contents: []const u8) Allocator.Error!*PendingExport {
+        const self = try alloc.create(PendingExport);
+        errdefer alloc.destroy(self);
+        self.* = .{ .owner = owner, .contents = try alloc.dupe(u8, contents) };
+        return self;
+    }
+
+    fn destroy(self: *PendingExport, alloc: Allocator) void {
+        alloc.free(self.contents);
         alloc.destroy(self);
     }
 };
