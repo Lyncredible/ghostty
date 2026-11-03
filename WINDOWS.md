@@ -764,6 +764,15 @@ Notes:
           rest of a partial write. Test: a 16 KB write to an overlapped
           pipe that's read only after 200 ms must take that long and
           arrive whole; without the wait it crashed.
+    - [x] The benchmark data generator: `ghostty-gen +ascii | head -c
+          10000000 | wc -c` gave 65,536 bytes and `ghostty-gen` exited 0,
+          because its generators treat a failed write as the reader
+          having gone away. It now uses `internal_os.stdio` too, and all
+          10,000,000 bytes arrive; `ghostty-gen +ascii | ghostty-bench
+          +terminal-stream --data=-` runs. Reading a Git Bash pipe was
+          already fine: `ghostty-bench --data=-` read all 2,701,756 bytes
+          of a piped file, and all 300,000 of a pipe fed in three pauses
+          (checked with a temporary byte count, not committed).
 - [x] Output throughput (2026-10-26, ReleaseFast, 20 MB of text):
   - `cmd /c type` is slow everywhere: 19-27 s in Ghostty, 27-38 s in a
     conhost window. cmd writes line by line through the console API.

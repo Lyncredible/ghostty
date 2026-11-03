@@ -1,6 +1,7 @@
 const std = @import("std");
 const Allocator = std.mem.Allocator;
 const cli = @import("../cli.zig");
+const internal_os = @import("../os/main.zig");
 
 /// The available actions for the CLI. This is the list of available
 /// synthetic generators. View docs for each individual one in the
@@ -98,7 +99,7 @@ fn mainActionImpl(
 
     // Our output always goes to stdout.
     var buffer: [2048]u8 = undefined;
-    var stdout_writer = std.Io.File.stdout().writer(io, &buffer);
+    var stdout_writer = internal_os.stdio.stdout().writer(io, &buffer);
     const writer = &stdout_writer.interface;
 
     // Create our implementation
