@@ -117,9 +117,8 @@ try {
         if (-not $script:process.Responding) { Fail "Ghostty isn't responding after the shell exited" }
         Write-Host 'The shell exited with the dialog open; the dialog closed and Ghostty still responds.'
     } else {
-        if (Select-String -Path $script:log -Pattern 'panic|reached unreachable|Segmentation' -Quiet) {
-            Fail "Ghostty crashed after the shell exited"
-        }
+        $crash = Select-String -Path $script:log -Pattern 'panic|reached unreachable|Segmentation' | Select-Object -First 3
+        if ($crash) { Fail "Ghostty crashed after the shell exited: $(($crash | ForEach-Object { $_.Line.Trim() }) -join ' / ')" }
         Write-Host "The shell exited with the dialog open; Ghostty exited cleanly (exit code $($script:process.ExitCode))."
         if ($script:process.ExitCode -ne 0) { Fail "Ghostty exited with code $($script:process.ExitCode)" }
     }

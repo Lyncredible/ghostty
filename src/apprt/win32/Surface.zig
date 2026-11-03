@@ -166,6 +166,12 @@ shell: ?configpkg.Command = null,
 /// quoted (and translated, for WSL).
 drop_shell: drop.Shell = .windows,
 
+/// A clipboard request waiting for the user's answer, which we ask for from
+/// WM_GHOSTTY_CONFIRM_CLIPBOARD rather than while the core is calling us:
+/// the dialog's message loop can destroy this surface (the shell exits),
+/// and the core would then go on using it.
+pending_clipboard: ?PendingClipboard = null,
+
 /// A pending high surrogate from a standalone WM_CHAR.
 high_surrogate: ?u16 = null,
 
@@ -356,6 +362,7 @@ pub fn deinit(self: *Surface) void {
 
     // Detach from our window first so that no more messages reach us.
     _ = c.SetWindowLongPtrW(self.hwnd, util.GWLP_USERDATA, 0);
+    if (self.pending_clipboard) |pending| pending.deinit(alloc);
     self.dim_overlay.deinit();
     self.bell_border.deinit();
     self.link_preview.deinit(alloc);
@@ -1101,31 +1108,12 @@ fn completeClipboardText(
         error.UnsafePaste,
         error.UnauthorizedPaste,
         => {
-            const hwnd = self.hwnd;
-            const identity = c.GetWindowLongPtrW(hwnd, util.GWLP_USERDATA);
-            // Like GTK, we say what's happening and show the text.
-            const title: []const u8, const message: []const u8 = if (err == error.UnsafePaste) .{
-                "Warning: Potentially Unsafe Paste",
-                "Pasting this text into the terminal may be dangerous as it looks like some commands may be executed. Paste anyway?",
-            } else .{
-                "Authorize Clipboard Access",
-                "An application is attempting to read from the clipboard. The current clipboard contents are shown below. Allow it?",
-            };
-            const allowed = !confirmed and Window.confirmText(
-                self.window,
-                self.app.core_app.alloc,
-                title,
-                message,
-                text,
-            );
-            // The process can exit and destroy this surface while the
-            // confirmation dialog pumps messages.
-            if (c.GetWindowLongPtrW(hwnd, util.GWLP_USERDATA) != identity) return;
-            if (allowed) {
-                self.completeClipboardText(state, text, true);
-            } else {
-                self.core_surface.denyClipboardRequest(state);
-            }
+            if (confirmed) return self.core_surface.denyClipboardRequest(state);
+            self.queueClipboard(.{
+                .kind = if (err == error.UnsafePaste) .{ .unsafe_paste = state } else .{ .read = state },
+                .text = self.app.core_app.alloc.dupeSentinel(u8, text, 0) catch
+                    return self.core_surface.denyClipboardRequest(state),
+            });
         },
 
         else => log.err("error completing clipboard request err={}", .{err}),
@@ -1150,24 +1138,100 @@ pub fn setClipboard(
     } else null;
 
     const alloc = self.app.core_app.alloc;
-    const owned_text = if (confirm) try alloc.dupeSentinel(u8, text, 0) else null;
-    defer if (owned_text) |copy| alloc.free(copy);
+    if (confirm) {
+        const owned_text = try alloc.dupeSentinel(u8, text, 0);
+        errdefer alloc.free(owned_text);
+        const owned_html = if (html) |v| try alloc.dupe(u8, v) else null;
+        self.queueClipboard(.{ .kind = .{ .write = owned_html }, .text = owned_text });
+        return;
+    }
+    try self.writeClipboard(text, html);
+}
+
+fn writeClipboard(self: *Surface, text: [:0]const u8, html: ?[]const u8) !void {
+    try writeClipboardText(self.app.core_app.alloc, self.hwnd, text, html);
+    if (self.app.config.@"app-notifications".@"clipboard-copy") {
+        self.showToast(if (text.len > 0) "Copied to clipboard" else "Cleared clipboard");
+    }
+}
+
+const PendingClipboard = struct {
+    kind: union(enum) {
+        /// A paste the core considers unsafe.
+        unsafe_paste: apprt.ClipboardRequest,
+        /// A program reading the clipboard (OSC 52).
+        read: apprt.ClipboardRequest,
+        /// A program writing the clipboard (OSC 52), with any HTML.
+        write: ?[]u8,
+    },
+    text: [:0]u8,
+
+    fn deinit(self: PendingClipboard, alloc: Allocator) void {
+        alloc.free(self.text);
+        switch (self.kind) {
+            .write => |html| if (html) |v| alloc.free(v),
+            .unsafe_paste, .read => {},
+        }
+    }
+
+    /// Answer a request without asking, as if the user said no.
+    fn deny(self: PendingClipboard, surface: *Surface) void {
+        switch (self.kind) {
+            .unsafe_paste, .read => |state| surface.core_surface.denyClipboardRequest(state),
+            .write => {},
+        }
+    }
+};
+
+/// Ask about a clipboard request once the current message is done. Takes
+/// ownership of `pending`.
+fn queueClipboard(self: *Surface, pending: PendingClipboard) void {
+    // One question at a time: a program asking again while we wait is told
+    // no.
+    if (self.pending_clipboard != null or
+        c.PostMessageW(self.hwnd, WM_GHOSTTY_CONFIRM_CLIPBOARD, 0, 0) == 0)
+    {
+        pending.deny(self);
+        pending.deinit(self.app.core_app.alloc);
+        return;
+    }
+    self.pending_clipboard = pending;
+}
+
+fn confirmClipboard(self: *Surface) void {
+    const pending = self.pending_clipboard orelse return;
+    self.pending_clipboard = null;
+    const alloc = self.app.core_app.alloc;
+    defer pending.deinit(alloc);
+
+    // Like GTK, we say what's happening and show the text.
+    const title: []const u8, const message: []const u8 = switch (pending.kind) {
+        .unsafe_paste => .{
+            "Warning: Potentially Unsafe Paste",
+            "Pasting this text into the terminal may be dangerous as it looks like some commands may be executed. Paste anyway?",
+        },
+        .read => .{
+            "Authorize Clipboard Access",
+            "An application is attempting to read from the clipboard. The current clipboard contents are shown below. Allow it?",
+        },
+        .write => .{
+            "Authorize Clipboard Access",
+            "An application is attempting to write to the clipboard. The text it would copy is shown below. Allow it?",
+        },
+    };
     const hwnd = self.hwnd;
     const identity = c.GetWindowLongPtrW(hwnd, util.GWLP_USERDATA);
+    const allowed = Window.confirmText(self.window, alloc, title, message, pending.text);
 
-    if (confirm and !Window.confirmText(
-        self.window,
-        alloc,
-        "Authorize Clipboard Access",
-        "An application is attempting to write to the clipboard. The text it would copy is shown below. Allow it?",
-        text,
-    )) return;
-
+    // The process can exit and destroy this surface while the dialog pumps
+    // messages.
     if (c.GetWindowLongPtrW(hwnd, util.GWLP_USERDATA) != identity) return;
-
-    try writeClipboardText(alloc, hwnd, owned_text orelse text, html);
-    if (self.app.config.@"app-notifications".@"clipboard-copy") {
-        self.showToast(if ((owned_text orelse text).len > 0) "Copied to clipboard" else "Cleared clipboard");
+    if (!allowed) return pending.deny(self);
+    switch (pending.kind) {
+        .unsafe_paste, .read => |state| self.completeClipboardText(state, pending.text, true),
+        .write => |html| self.writeClipboard(pending.text, html) catch |err| {
+            log.warn("failed to write clipboard err={}", .{err});
+        },
     }
 }
 
@@ -1177,6 +1241,9 @@ const accessibility_timer_id = 3;
 
 /// Posted to the surface when its selection changes.
 pub const WM_GHOSTTY_SELECTION_CHANGED = c.WM_APP + 10;
+
+/// Posted to the surface to ask about its `pending_clipboard`.
+const WM_GHOSTTY_CONFIRM_CLIPBOARD = c.WM_APP + 11;
 const accessibility_ms = 500;
 
 fn updateResizeOverlay(self: *Surface, config: *const configpkg.Config) void {
@@ -1444,6 +1511,11 @@ pub fn wndProc(
 
         WM_GHOSTTY_SELECTION_CHANGED => {
             if (self.accessibility) |a| a.selectionChanged();
+            return 0;
+        },
+
+        WM_GHOSTTY_CONFIRM_CLIPBOARD => {
+            self.confirmClipboard();
             return 0;
         },
 
