@@ -45,8 +45,12 @@ fn report(msg: []const u8, first_trace_addr: usize) void {
     const path = writeReport(&path_buf, writer.buffered()) orelse return;
 
     // With a console (a CLI action, or launched from a terminal with one
-    // attached), the default handler's output is visible there.
-    if (GetConsoleWindow() != null) return;
+    // attached), the default handler's output is visible there. A standard
+    // error that's a file or a pipe (Git Bash's terminal, or a script that
+    // captures it) gets that output too, and a dialog would only keep us
+    // from exiting until someone clicks it: under Git Bash, a CLI action
+    // that panicked used to hang there.
+    if (GetConsoleWindow() != null or hasStderr()) return;
 
     var text_buf: [1024]u16 = undefined;
     var text: Utf16Buf = .{ .buf = &text_buf };
@@ -60,6 +64,14 @@ fn report(msg: []const u8, first_trace_addr: usize) void {
         std.unicode.utf8ToUtf16LeStringLiteral("Ghostty"),
         MB_OK | MB_ICONERROR | MB_SETFOREGROUND,
     );
+}
+
+/// Whether our standard error goes somewhere: a GUI program started from
+/// Explorer or the Start menu has none.
+fn hasStderr() bool {
+    const handle = GetStdHandle(STD_ERROR_HANDLE) orelse return false;
+    if (handle == std.os.windows.INVALID_HANDLE_VALUE) return false;
+    return GetFileType(handle) != FILE_TYPE_UNKNOWN;
 }
 
 /// Release builds have no debug info to print a stack trace with, so we
@@ -172,6 +184,10 @@ const MB_SETFOREGROUND: u32 = 0x10000;
 extern "kernel32" fn RtlCaptureStackBackTrace(skip: DWORD, count: DWORD, frames: [*]?*anyopaque, hash: ?*DWORD) callconv(.winapi) u16;
 extern "kernel32" fn GetModuleHandleW(name: ?[*:0]const u16) callconv(.winapi) ?*anyopaque;
 extern "kernel32" fn GetConsoleWindow() callconv(.winapi) ?HANDLE;
+extern "kernel32" fn GetFileType(file: HANDLE) callconv(.winapi) DWORD;
+const FILE_TYPE_UNKNOWN = 0;
+extern "kernel32" fn GetStdHandle(which: DWORD) callconv(.winapi) ?HANDLE;
+const STD_ERROR_HANDLE: DWORD = @bitCast(@as(i32, -12));
 extern "kernel32" fn GetEnvironmentVariableW(name: [*:0]const u16, buf: [*]u16, size: DWORD) callconv(.winapi) DWORD;
 extern "kernel32" fn CreateDirectoryW(path: [*:0]const u16, security: ?*anyopaque) callconv(.winapi) BOOL;
 extern "kernel32" fn GetTickCount64() callconv(.winapi) u64;

@@ -611,6 +611,17 @@ Notes:
   - `ghostty +crash-report` lists them: on Windows the crash directory
     is the same `%LOCALAPPDATA%\ghostty\crash`. Checked: after a
     `crash:main`, it listed "crash-66322625.txt (5s ago)".
+  - [x] The dialog showed whenever there was no console, so a CLI action
+        that panicked under Git Bash (no console there) or in a script
+        waited for a click that never came: the Git Bash pipe panics
+        above hung for an hour. Now standard error that goes to a file,
+        pipe, or device also skips the dialog, since the default
+        handler's output reaches it. Checked: the app with stderr in a
+        file and F12 bound to `crash:main` exited by itself after a posted
+        F12, with the panic and stack trace in the file and a report
+        saved. Not rechecked: the dialog without a standard error (from
+        Explorer), which would show on this desktop; that path is
+        unchanged.
 - [x] Config, cache, and state directories: with `XDG_CONFIG_HOME` (and
       the others) set but empty, the empty value won over `LOCALAPPDATA`,
       so the config went under `%USERPROFILE%\.config`. Empty now counts
