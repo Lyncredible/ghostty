@@ -673,8 +673,17 @@ Notes:
     `calc.exe`). CI test `links.ps1` Ctrl+clicks real links: a `.txt`
     opens in Notepad, a `.vbs` is blocked and doesn't run, and
     `ms-settings:` asks.
-  - Not covered: a local symlink that points to a network share is
-    still followed while it's checked.
+  - [x] A local symbolic link to a network share was followed while the
+        link was checked (Windows follows local-to-remote links by
+        default), and then opened. Each symbolic link on the way is now
+        read without following it (`FSCTL_GET_REPARSE_POINT`), through
+        relative targets and chains of links; one that points to
+        `\\host` blocks the link before anything is opened. Unit test
+        `symbolic links to other computers` creates real links (it's
+        skipped without developer mode, as on CI); with the check turned
+        off it fails, since a link to `\\127.0.0.1\c$\Windows\win.ini`
+        was allowed.
+  - Mapped network drives (`Z:\`) still open: the user chose that share.
 - [x] The child environment (printed by Python under `-e`): `TERM`,
       `COLORTERM`, `TERM_PROGRAM`, `TERM_PROGRAM_VERSION`,
       `GHOSTTY_RESOURCES_DIR`, `GHOSTTY_BIN_DIR`, `GHOSTTY_SHELL_FEATURES`,
