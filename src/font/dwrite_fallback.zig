@@ -17,6 +17,10 @@ pub const Font = struct {
     /// UTF-8, owned by the caller.
     path: [:0]u8,
     index: u32,
+
+    /// The weight DirectWrite matched, from 1 to 999, which picks the
+    /// named instance of a variable font. Zero from `find`.
+    weight: u32 = 0,
 };
 
 /// The font DirectWrite falls back to for a codepoint, or null if there's
@@ -117,7 +121,9 @@ fn findFamilyInner(alloc: Allocator, family: []const u8, bold: bool, italic: boo
     const matched = font orelse return null;
     defer release(matched);
     if (call(matched, "GetSimulations", .{}) != c.DWRITE_FONT_SIMULATIONS_NONE) return null;
-    return try fontFile(alloc, matched);
+    var result = try fontFile(alloc, matched) orelse return null;
+    result.weight = @intCast(call(matched, "GetWeight", .{}));
+    return result;
 }
 
 /// The file and face index of a DirectWrite font, or null if it isn't in
@@ -296,6 +302,7 @@ test findFamily {
     const font = findFamily(testing.allocator, "Consolas", true, false) orelse return error.SkipZigTest;
     defer testing.allocator.free(font.path);
     try testing.expect(std.ascii.endsWithIgnoreCase(font.path, "consolab.ttf"));
+    try testing.expectEqual(c.DWRITE_FONT_WEIGHT_BOLD, font.weight);
     try testing.expect(findFamily(testing.allocator, "No Such Font Family", false, false) == null);
 }
 
