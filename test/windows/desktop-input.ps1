@@ -157,8 +157,11 @@ try {
 
     # mouse-hide-while-typing: a typed letter hides the pointer over the
     # terminal, and moving the mouse shows it again.
-    # Runners without a mouse show no pointer at all, so there's nothing
-    # to hide there.
+    # The typing above may have hidden the pointer already, so move the
+    # mouse first. A desktop that still shows no pointer has nothing to hide.
+    [void][GhosttyDesktop.Win32]::SetCursorPos($x + 5, $y + 5)
+    $deadline = (Get-Date).AddSeconds(3)
+    while ([GhosttyDesktop.Win32]::Cursor() -eq [IntPtr]::Zero -and (Get-Date) -lt $deadline) { Start-Sleep -Milliseconds 100 }
     if ([GhosttyDesktop.Win32]::Cursor() -eq [IntPtr]::Zero) {
         Write-Host '::notice title=desktop-input::no pointer is shown on this desktop, so mouse-hide-while-typing was not checked'
     } else {
