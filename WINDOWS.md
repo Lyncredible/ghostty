@@ -1308,7 +1308,8 @@ Notes:
             the drop walks up from it to the nearest shell it knows. Unit
             test `foregroundProcess` starts `cmd /c powershell` and finds
             PowerShell; CI's drag test drops the `$(...)` file on
-            `cmd /k powershell` (`-Nested`).
+            `cmd /k powershell` (`-Nested`), and passed (run
+            41717273203).
         - Not covered: a shell that Windows doesn't see, like one in WSL
           or over SSH, still gets the command's quoting.
   - [x] `app-notifications`: "Copied to clipboard" / "Cleared clipboard"
@@ -1466,6 +1467,9 @@ Notes:
   only for background windows. `FLASHW_TIMERNOFG` stops the flash on
   activation. Native Debug build passes; visual taskbar verification is
   still pending.
+  - [ ] CI test `bell-flash.ps1`: a shell hook window sees the flash
+        (`HSHELL_FLASH`) for a bell from the background, none from the
+        foreground, and none with `no-attention`.
 - A real ConPTY smoke test exposed the Windows process command-line
   serializer dropping empty arguments. Fixed by quoting empty strings;
   round-trip regression tests cover adjacent/trailing empty arguments,

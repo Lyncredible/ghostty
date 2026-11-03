@@ -95,6 +95,13 @@ jobs:
         shell: pwsh
         run: ./test/windows/links.ps1 -Exe zig-out/bin/ghostty.exe
 
+      # The bell flashes the taskbar button only from the background, and
+      # only with bell-features=attention (seen through a shell hook).
+      - name: Bell flash test
+        timeout-minutes: 5
+        shell: powershell
+        run: ./test/windows/bell-flash.ps1 -Exe zig-out/bin/ghostty.exe
+
       # A real OLE drag of a file onto a terminal (Windows PowerShell's
       # thread is STA, as drag and drop needs).
       - name: Drag and drop test

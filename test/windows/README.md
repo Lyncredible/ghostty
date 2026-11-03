@@ -96,6 +96,14 @@ without pasting, and when the shell exits while it's open, the dialog
 goes away and Ghostty exits cleanly (or stays responsive). It sets the
 clipboard and shows dialogs, so it refuses to run unless `CI` is `true`.
 
+## bell-flash.ps1
+
+Rings the bell from a script in the terminal and watches for taskbar
+flashes with a shell hook window of its own (`HSHELL_FLASH`): with
+`bell-features=attention`, Ghostty's button flashes while it's in the
+background and not while it's in front; with `no-attention`, it doesn't
+flash. It changes the foreground window, so it only runs in CI.
+
 ## start-menu.ps1
 
 Starts an installed Ghostty the way the Start menu does (the MSIX by its
