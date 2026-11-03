@@ -1476,10 +1476,19 @@ Notes:
         ms, Inconsolata 271-273 ms (most of it building the index), and
         Consolas 171-181 ms. DirectWrite also knows fonts that packaged apps
         register, which the walk never saw: here Cascadia Mono comes from
-        Windows Terminal's package. Its bold is the variable font's weight
-        axis, which DirectWrite reports without a simulation but FreeType's
-        flags call regular, so bold is synthesized; using the font's own
-        bold instance would be better.
+        Windows Terminal's package.
+  - [x] Variable font weights: Cascadia Mono is one variable font whose
+        weights are named instances of one face. DirectWrite matches its
+        Bold instance without a simulation, but FreeType opens the face's
+        default (Regular) instance and gives every instance the same style
+        flags, so bold and bold italic were synthesized ("synthetic bold
+        face created" in the log). Discovery now opens the named instance
+        with the weight DirectWrite matched (instance 6, wght 700) and,
+        like CoreText discovery, counts a named instance with a weight of
+        600 or more as bold. The log no longer shows synthetic faces for
+        Cascadia Mono. Test: "windows variable font weights" (skipped where
+        Cascadia Mono isn't installed). Variable fonts found only through
+        the folder walk or the coverage index still synthesize bold.
 - The tab bar now has a shell dropdown next to the new-tab button. It lists
   shells whose executables are found in PATH and always offers the configured
   default. An explicit choice uses the resolved executable path and is
