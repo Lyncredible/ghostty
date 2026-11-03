@@ -818,6 +818,10 @@ Notes:
         a posted wheel notch reached the WSL program as three wheel-up
         reports at 21;10 (`ESC [ < 64 ; 21 ; 10 M`, three per notch, as
         on other platforms).
+- [x] `mouse-hide-while-typing`: checked in CI with real input
+      (`desktop-input.ps1`): a typed letter hid the pointer over the
+      terminal (`GetCursorInfo` showed no cursor) and moving the mouse
+      showed it again.
 - [x] Ctrl+wheel changes the font size, like other Windows apps and
       Windows Terminal, unless a program reports the mouse (it then gets
       the wheel as usual). Checked: two posted Ctrl+wheel-up notches took
