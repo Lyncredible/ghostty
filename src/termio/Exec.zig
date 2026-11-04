@@ -311,6 +311,11 @@ pub fn focusGained(
     }
 }
 
+/// Called when the window showing the terminal changes.
+pub fn parentWindow(self: *Exec, hwnd: usize) void {
+    self.subprocess.setParentWindow(hwnd);
+}
+
 pub fn resize(
     self: *Exec,
     grid_size: renderer.GridSize,
@@ -694,6 +699,8 @@ const Subprocess = struct {
     windows_pid: std.atomic.Value(u32) = .init(0),
     /// A handed off console session, until `start` adopts it.
     handoff: ?ptypkg.ConsoleHandoff = null,
+    /// The window showing the terminal (see `setParentWindow`), or 0.
+    parent_window: usize = 0,
 
     rt_pre_exec_info: Command.RtPreExecInfo,
     rt_post_fork_info: Command.RtPostForkInfo,
@@ -1070,6 +1077,9 @@ const Subprocess = struct {
             .ws_ypixel = @intCast(self.screen_size.height),
         });
         self.pty = pty;
+        if (comptime builtin.target.os.tag == .windows) {
+            if (self.parent_window != 0) self.pty.?.setParentWindow(self.parent_window);
+        }
         errdefer if (!in_child) {
             if (comptime builtin.target.os.tag != .windows) {
                 _ = posix.system.close(pty.slave);
@@ -1281,6 +1291,7 @@ const Subprocess = struct {
             .ws_xpixel = @intCast(self.screen_size.width),
             .ws_ypixel = @intCast(self.screen_size.height),
         }, handoff);
+        if (self.parent_window != 0) self.pty.?.setParentWindow(self.parent_window);
         self.process = .{ .fork_exec = .{
             .path = self.args[0],
             .args = self.args,
@@ -1294,6 +1305,15 @@ const Subprocess = struct {
         const pid = windows.exp.kernel32.GetProcessId(handoff.client);
         self.windows_pid.store(pid, .release);
         log.info("adopted a handed off console pid={}", .{pid});
+    }
+
+    /// On Windows, the window showing the terminal owns the
+    /// pseudoconsole's window, which console programs get from
+    /// `GetConsoleWindow`. If the pty isn't open yet, `start` sends it.
+    fn setParentWindow(self: *Subprocess, hwnd: usize) void {
+        self.parent_window = hwnd;
+        if (comptime builtin.target.os.tag != .windows) return;
+        if (self.pty) |*pty| pty.setParentWindow(hwnd);
     }
 
     fn closeHandoff(handoff: ptypkg.ConsoleHandoff) void {

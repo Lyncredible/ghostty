@@ -352,6 +352,7 @@ pub fn init(self: *Surface, app: *App, window: *Window, opts: Options) !void {
         self.core_initialized = false;
         self.core_surface.deinit();
     }
+    self.core_surface.setParentWindow(@intFromPtr(window.hwnd));
     self.showResizeOverlay();
 
     // Inherit the font size of our parent if configured.
