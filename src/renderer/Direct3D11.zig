@@ -90,6 +90,16 @@ default_sampler: Sampler,
 /// Alpha blending mode
 blending: configpkg.Config.AlphaBlending,
 
+/// Whether the objects made from our device were released by
+/// `recreateDevice` without new ones replacing them.
+released: bool = false,
+
+/// In debug builds, `GHOSTTY_D3D11_LOSE_DEVICE=N` makes the Nth present
+/// act as if the device was removed, once, to test `recreateDevice`.
+simulate_loss: ?u32 = null,
+simulated_lost: bool = false,
+presents: u32 = 0,
+
 pub fn init(
     alloc: Allocator,
     device: *const Device,
@@ -113,72 +123,151 @@ pub fn init(
         com.release(created.context);
         com.release(created.device);
     }
-
-    // The immediate context isn't thread-safe. Nearly all of our work
-    // happens on the render thread, but some resources are initialized
-    // elsewhere, so we have Direct3D protect the context for us. This is
-    // uncontended so it costs very little.
-    if (com.queryInterface(
-        c.ID3D11Multithread,
-        created.context,
-        &com.IID_ID3D11Multithread,
-    )) |mt| {
-        defer com.release(mt);
-        _ = com.call(mt, "SetMultithreadProtected", .{c.TRUE});
-    } else |err| {
-        log.warn("unable to enable multithread protection err={}", .{err});
-    }
-
-    const size = clientSize(hwnd);
-    const swap_chain = try createSwapChain(created.device, size.width, size.height);
-    errdefer com.release(swap_chain);
-    const composition: Composition = try .init(created.device, hwnd, swap_chain);
-    errdefer composition.deinit();
-
-    var rasterizer: ?*c.ID3D11RasterizerState = null;
-    try com.check(com.call(created.device, "CreateRasterizerState", .{
-        &c.D3D11_RASTERIZER_DESC{
-            .FillMode = c.D3D11_FILL_SOLID,
-            .CullMode = c.D3D11_CULL_NONE,
-            .FrontCounterClockwise = c.FALSE,
-            .DepthBias = 0,
-            .DepthBiasClamp = 0,
-            .SlopeScaledDepthBias = 0,
-            // We don't use depth, and some of our vertices are
-            // outside of the [0, 1] depth range.
-            .DepthClipEnable = c.FALSE,
-            .ScissorEnable = c.FALSE,
-            .MultisampleEnable = c.FALSE,
-            .AntialiasedLineEnable = c.FALSE,
-        },
-        &rasterizer,
-    }), "ID3D11Device::CreateRasterizerState");
-    errdefer com.releaseOpt(rasterizer);
-
-    const default_sampler = try Sampler.init(.{
-        .device = created.device,
-        .filter = c.D3D11_FILTER_MIN_MAG_MIP_LINEAR,
-        .address_u = c.D3D11_TEXTURE_ADDRESS_CLAMP,
-        .address_v = c.D3D11_TEXTURE_ADDRESS_CLAMP,
-    });
-    errdefer default_sampler.deinit();
+    const objects = try Objects.init(created, hwnd);
 
     return .{
         .device = device,
-        .d3d = created.device,
-        .context = created.context,
+        .d3d = objects.d3d,
+        .context = objects.context,
         .hwnd = hwnd,
-        .swap_chain = swap_chain,
-        .composition = composition,
-        .swap_chain_width = size.width,
-        .swap_chain_height = size.height,
-        .rasterizer = rasterizer.?,
-        .default_sampler = default_sampler,
+        .swap_chain = objects.swap_chain,
+        .composition = objects.composition,
+        .swap_chain_width = objects.swap_chain_width,
+        .swap_chain_height = objects.swap_chain_height,
+        .rasterizer = objects.rasterizer,
+        .default_sampler = objects.default_sampler,
         .blending = opts.config.blending,
+        .simulate_loss = simulateLoss(),
     };
 }
 
-pub fn deinit(self: *Direct3D11) void {
+/// Everything we make from our Direct3D device, which a lost device
+/// takes with it.
+const Objects = struct {
+    d3d: *c.ID3D11Device,
+    context: *c.ID3D11DeviceContext,
+    swap_chain: *c.IDXGISwapChain1,
+    composition: Composition,
+    swap_chain_width: u32,
+    swap_chain_height: u32,
+    rasterizer: *c.ID3D11RasterizerState,
+    default_sampler: Sampler,
+
+    /// Make our objects for a new device, shown on the window. They
+    /// take the device on success.
+    fn init(created: Device.Created, hwnd: c.HWND) !Objects {
+        // The immediate context isn't thread-safe. Nearly all of our work
+        // happens on the render thread, but some resources are initialized
+        // elsewhere, so we have Direct3D protect the context for us. This is
+        // uncontended so it costs very little.
+        if (com.queryInterface(
+            c.ID3D11Multithread,
+            created.context,
+            &com.IID_ID3D11Multithread,
+        )) |mt| {
+            defer com.release(mt);
+            _ = com.call(mt, "SetMultithreadProtected", .{c.TRUE});
+        } else |err| {
+            log.warn("unable to enable multithread protection err={}", .{err});
+        }
+
+        const size = clientSize(hwnd);
+        const swap_chain = try createSwapChain(created.device, size.width, size.height);
+        errdefer com.release(swap_chain);
+        const composition: Composition = try .init(created.device, hwnd, swap_chain);
+        errdefer composition.deinit();
+
+        var rasterizer: ?*c.ID3D11RasterizerState = null;
+        try com.check(com.call(created.device, "CreateRasterizerState", .{
+            &c.D3D11_RASTERIZER_DESC{
+                .FillMode = c.D3D11_FILL_SOLID,
+                .CullMode = c.D3D11_CULL_NONE,
+                .FrontCounterClockwise = c.FALSE,
+                .DepthBias = 0,
+                .DepthBiasClamp = 0,
+                .SlopeScaledDepthBias = 0,
+                // We don't use depth, and some of our vertices are
+                // outside of the [0, 1] depth range.
+                .DepthClipEnable = c.FALSE,
+                .ScissorEnable = c.FALSE,
+                .MultisampleEnable = c.FALSE,
+                .AntialiasedLineEnable = c.FALSE,
+            },
+            &rasterizer,
+        }), "ID3D11Device::CreateRasterizerState");
+        errdefer com.releaseOpt(rasterizer);
+
+        const default_sampler = try Sampler.init(.{
+            .device = created.device,
+            .filter = c.D3D11_FILTER_MIN_MAG_MIP_LINEAR,
+            .address_u = c.D3D11_TEXTURE_ADDRESS_CLAMP,
+            .address_v = c.D3D11_TEXTURE_ADDRESS_CLAMP,
+        });
+
+        return .{
+            .d3d = created.device,
+            .context = created.context,
+            .swap_chain = swap_chain,
+            .composition = composition,
+            .swap_chain_width = size.width,
+            .swap_chain_height = size.height,
+            .rasterizer = rasterizer.?,
+            .default_sampler = default_sampler,
+        };
+    }
+};
+
+fn simulateLoss() ?u32 {
+    if (comptime builtin.mode != .debug) return null;
+    const name = std.unicode.utf8ToUtf16LeStringLiteral("GHOSTTY_D3D11_LOSE_DEVICE");
+    var buf: [16]u16 = undefined;
+    const len = c.GetEnvironmentVariableW(name, &buf, buf.len);
+    if (len == 0 or len >= buf.len) return null;
+    var utf8: [3 * buf.len]u8 = undefined;
+    const n = std.unicode.wtf16LeToWtf8(&utf8, buf[0..len]);
+    return std.fmt.parseInt(u32, utf8[0..n], 10) catch null;
+}
+
+/// Whether our device was lost: removed or reset, such as when the
+/// graphics driver is updated or restarts after a GPU timeout. Everything
+/// made from it then fails, and `recreateDevice` replaces it.
+pub fn deviceLost(self: *const Direct3D11) bool {
+    if (self.released or self.simulated_lost) return true;
+    return com.call(self.d3d, "GetDeviceRemovedReason", .{}) != c.S_OK;
+}
+
+/// Replace a lost device with a new one, along with its swap chain and
+/// the composition that shows it. The caller must release everything
+/// else made from the old device first. On failure everything of ours is
+/// released, and this can be tried again.
+pub fn recreateDevice(self: *Direct3D11) !void {
+    if (!self.released) {
+        // A window can only have one composition target, so the old one
+        // goes before the new one is made.
+        self.releaseObjects();
+        self.released = true;
+    }
+    self.simulated_lost = false;
+
+    const created = try Device.createDefault();
+    errdefer {
+        com.release(created.context);
+        com.release(created.device);
+    }
+    const objects = try Objects.init(created, self.hwnd);
+    self.d3d = objects.d3d;
+    self.context = objects.context;
+    self.swap_chain = objects.swap_chain;
+    self.composition = objects.composition;
+    self.swap_chain_width = objects.swap_chain_width;
+    self.swap_chain_height = objects.swap_chain_height;
+    self.rasterizer = objects.rasterizer;
+    self.default_sampler = objects.default_sampler;
+    self.released = false;
+    log.info("recreated the device after it was lost", .{});
+}
+
+fn releaseObjects(self: *Direct3D11) void {
     self.default_sampler.deinit();
     com.release(self.rasterizer);
     self.composition.deinit();
@@ -186,6 +275,10 @@ pub fn deinit(self: *Direct3D11) void {
     com.call(self.context, "ClearState", .{});
     com.release(self.context);
     com.release(self.d3d);
+}
+
+pub fn deinit(self: *Direct3D11) void {
+    if (!self.released) self.releaseObjects();
     self.* = undefined;
 }
 
@@ -375,6 +468,15 @@ pub fn initTarget(self: *const Direct3D11, width: usize, height: usize) !Target 
 
 /// Present the provided target.
 pub fn present(self: *Direct3D11, target: Target) !void {
+    if (comptime builtin.mode == .debug) if (self.simulate_loss) |n| {
+        self.presents +|= 1;
+        if (self.presents == n) {
+            log.warn("simulating a lost device (GHOSTTY_D3D11_LOSE_DEVICE)", .{});
+            self.simulated_lost = true;
+        }
+        if (self.simulated_lost) return error.DeviceLost;
+    };
+
     const width: u32 = @intCast(target.width);
     const height: u32 = @intCast(target.height);
 

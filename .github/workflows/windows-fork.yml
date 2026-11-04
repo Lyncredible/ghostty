@@ -157,6 +157,13 @@ jobs:
         shell: pwsh
         run: ./test/windows/high-contrast.ps1 -Exe zig-out/bin/ghostty.exe
 
+      # A debug build acts as if its Direct3D device was removed, as after
+      # a graphics driver update, and the terminal must draw again.
+      - name: Device lost test
+        timeout-minutes: 5
+        shell: pwsh
+        run: ./test/windows/device-lost.ps1 -Exe zig-out/bin/ghostty.exe
+
       - name: Dark mode test
         shell: pwsh
         run: ./test/windows/dark-mode.ps1 -Exe zig-out/bin/ghostty.exe
