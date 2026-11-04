@@ -699,6 +699,12 @@ pub fn init(
             .abnormal_command_exit_runtime_ms = config.@"abnormal-command-exit-runtime",
             .rt_pre_exec_info = .init(config),
             .rt_post_fork_info = .init(config),
+            // A console session that the runtime was handed (Windows'
+            // default terminal application) runs instead of `command`.
+            .handoff = if (comptime @hasDecl(apprt.runtime.Surface, "takeConsoleHandoff"))
+                rt_surface.takeConsoleHandoff()
+            else
+                null,
         });
         errdefer io_exec.deinit();
 
