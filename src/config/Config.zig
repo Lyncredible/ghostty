@@ -928,6 +928,9 @@ palette: Palette = .{},
 /// when the mouse is used (button, movement, etc.). Platform-specific behavior
 /// may dictate other scenarios where the mouse is shown. For example on macOS,
 /// the mouse is shown again when a new window, tab, or split is created.
+///
+/// On Windows, the default follows the system's "Hide pointer while
+/// typing" mouse setting, which is on unless it was turned off.
 @"mouse-hide-while-typing": bool = false,
 
 /// When to scroll the surface to the bottom. The format of this is a list of
@@ -4130,6 +4133,12 @@ pub fn default(alloc_gpa: Allocator) Allocator.Error!Config {
         .action = .{ .open = {} },
         .highlight = .{ .hover_mods = inputpkg.ctrlOrSuper(.{}) },
     });
+
+    // Follow the system's setting where it has one, before any config
+    // can set it. Tests keep the documented default.
+    if (comptime !builtin.is_test) {
+        if (internal_os.hideWhileTyping()) |v| result.@"mouse-hide-while-typing" = v;
+    }
 
     return result;
 }

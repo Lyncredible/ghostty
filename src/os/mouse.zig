@@ -28,3 +28,20 @@ pub fn clickInterval() ?u32 {
 }
 
 extern "user32" fn GetDoubleClickTime() callconv(.winapi) u32;
+
+/// Whether the system hides the pointer while typing, if it has such a
+/// setting. On Windows, this is "Hide pointer while typing" in the mouse
+/// settings, which is on by default and which text editors follow.
+pub fn hideWhileTyping() ?bool {
+    return switch (builtin.target.os.tag) {
+        .windows => windows: {
+            const SPI_GETMOUSEVANISH = 0x1020;
+            var on: i32 = 0;
+            if (SystemParametersInfoW(SPI_GETMOUSEVANISH, 0, &on, 0) == 0) break :windows null;
+            break :windows on != 0;
+        },
+        else => null,
+    };
+}
+
+extern "user32" fn SystemParametersInfoW(action: u32, param: u32, value: ?*anyopaque, ini: u32) callconv(.winapi) i32;
