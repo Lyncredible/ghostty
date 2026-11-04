@@ -73,7 +73,7 @@ pub fn init(
     if (c.SetLayeredWindowAttributes(
         self.hwnd,
         transparent_key,
-        160,
+        opacity(),
         c.LWA_COLORKEY | c.LWA_ALPHA,
     ) == 0) return error.SetOpacityFailed;
     self.ctx = ctx;
@@ -142,6 +142,7 @@ fn scrollable(self: *const Scrollbar) bool {
 
 fn show(self: *Scrollbar) void {
     if (!self.enabled) return;
+    _ = c.SetLayeredWindowAttributes(self.hwnd, transparent_key, opacity(), c.LWA_COLORKEY | c.LWA_ALPHA);
     _ = c.ShowWindow(self.hwnd, c.SW_SHOWNA);
     if (autoHide()) {
         _ = c.SetTimer(self.hwnd, hide_timer_id, hide_ms, null);
@@ -152,6 +153,12 @@ fn hide(self: *Scrollbar) void {
     _ = c.KillTimer(self.hwnd, hide_timer_id);
     _ = c.ShowWindow(self.hwnd, c.SW_HIDE);
     self.hovered = false;
+}
+
+/// A high contrast theme gets a solid thumb, so it isn't blended into
+/// the terminal behind it. This is checked each time the thumb appears.
+fn opacity() u8 {
+    return if (util.highContrast()) 255 else 160;
 }
 
 /// Whether scrollbars hide automatically, from the Windows setting
