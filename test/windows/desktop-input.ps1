@@ -115,6 +115,19 @@ try {
     [void](WaitFor { (Text $surface).Contains('typed-ok') } 'typed text to run')
     Write-Host 'Typing works.'
 
+    # An Alt code: Alt+0233 on the numpad types é, and the digits
+    # themselves don't reach the shell.
+    foreach ($ch in 'echo alt-'.ToCharArray()) { [GhosttyDesktop.Win32]::Char($ch) }
+    [GhosttyDesktop.Win32]::Key(0x12, $false)
+    foreach ($vk in 0x60, 0x62, 0x63, 0x63) {
+        [GhosttyDesktop.Win32]::Key($vk, $false); [GhosttyDesktop.Win32]::Key($vk, $true)
+    }
+    [GhosttyDesktop.Win32]::Key(0x12, $true)
+    TypeLine '-ok'
+    $line = WaitFor { (Text $surface) -split "`n" | Where-Object { $_ -match '^alt-.*-ok' } | Select-Object -Last 1 } 'the Alt code line to run'
+    if ($line.Trim() -ne "alt-$([char]0xE9)-ok") { Fail "the Alt code gave: $line" }
+    Write-Host 'Alt codes type their character.'
+
     # Ctrl+V pastes (the default binding on Windows).
     Set-Clipboard -Value 'echo pasted-%USERNAME:~0,0%ok'
     [GhosttyDesktop.Win32]::Key(0x11, $false); [GhosttyDesktop.Win32]::Key(0x56, $false)

@@ -72,6 +72,29 @@ pub fn altGr() bool {
     return down(c.VK_RMENU) and down(c.VK_LCONTROL);
 }
 
+/// Returns true if the key is part of an Alt code (Alt held while typing
+/// a number on the numpad, such as Alt+0233 for é): Windows composes the
+/// character itself and sends it when Alt is released, so, like Windows
+/// Terminal, we leave the digits to it. This goes by the scancode, so it
+/// works with Num Lock off too.
+pub fn altCode(key: input.Key, mods: input.Mods) bool {
+    if (!mods.alt or mods.ctrl or mods.shift or mods.super) return false;
+    return switch (key) {
+        .numpad_0,
+        .numpad_1,
+        .numpad_2,
+        .numpad_3,
+        .numpad_4,
+        .numpad_5,
+        .numpad_6,
+        .numpad_7,
+        .numpad_8,
+        .numpad_9,
+        => true,
+        else => false,
+    };
+}
+
 /// Translate a key into UTF-16 code units given a keyboard state, without
 /// changing the keyboard (dead key) state. Returns null for dead keys.
 fn translate(
@@ -180,4 +203,15 @@ test "isControl" {
     try testing.expect(isControl(&.{0x7F}));
     try testing.expect(!isControl(&.{'c'}));
     try testing.expect(!isControl(&.{ 0x03, 0x03 }));
+}
+
+test "altCode" {
+    const testing = std.testing;
+    try testing.expect(altCode(.numpad_0, .{ .alt = true }));
+    try testing.expect(altCode(.numpad_9, .{ .alt = true, .num_lock = true }));
+    try testing.expect(!altCode(.numpad_0, .{}));
+    try testing.expect(!altCode(.digit_0, .{ .alt = true }));
+    try testing.expect(!altCode(.numpad_add, .{ .alt = true }));
+    try testing.expect(!altCode(.numpad_1, .{ .alt = true, .ctrl = true }));
+    try testing.expect(!altCode(.numpad_1, .{ .alt = true, .shift = true }));
 }

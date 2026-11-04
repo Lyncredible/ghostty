@@ -1959,6 +1959,9 @@ fn keyEvent(
     const scancode: c.UINT = native & 0xFF;
     const mods = key.currentMods();
 
+    // The digits of an Alt code; its character comes as WM_CHAR later.
+    if (key.altCode(key.physicalKey(native), mods)) return true;
+
     // Collect the text for this key. TranslateMessage has already
     // queued the character messages for it, so we take them out of the
     // queue so they aren't processed again.
