@@ -1478,7 +1478,9 @@ Notes:
             it appears and hides in place instead, like Windows' own
             windows. Read each time it's shown or hidden. Builds;
             `quick-terminal.ps1` turns animations off in CI and checks
-            it doesn't slide (not run yet). Not checked here, since it's
+            it doesn't slide: it passed (run 41906782926; it showed at
+            0 and hid at once, and CI's runners have animations off by
+            default). Not checked here, since it's
             a system setting.
       - [x] `quick-terminal-space-behavior` with virtual desktops (the
             counterpart of macOS Spaces): with `move` (the default),
