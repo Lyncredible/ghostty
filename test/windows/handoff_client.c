@@ -117,9 +117,15 @@ int main(int argc, char **argv) {
         info.dwFlags = STARTF_USESHOWWINDOW;
         info.wShowWindow = (WORD)atoi(argv[4]);
     }
+    // The console host hands over a handle to the console program with
+    // only some rights, which can't put it in a job or terminate it.
+    HANDLE client = NULL;
+    if (!DuplicateHandle(GetCurrentProcess(), pi.hProcess, GetCurrentProcess(), &client,
+            SYNCHRONIZE | PROCESS_QUERY_LIMITED_INFORMATION, FALSE, 0))
+        return fail("DuplicateHandle", GetLastError());
     HANDLE ghostty_in = NULL, ghostty_out = NULL;
     hr = handoff->lpVtbl->EstablishPtyHandoff(handoff, &ghostty_in, &ghostty_out, pty->hSignal,
-        pty->hPtyReference, pty->hConPtyProcess, pi.hProcess, &info);
+        pty->hPtyReference, pty->hConPtyProcess, client, &info);
     if (FAILED(hr)) return fail("EstablishPtyHandoff", hr);
     printf("handed off pid=%lu\n", (unsigned long)pi.dwProcessId);
     fflush(stdout);
