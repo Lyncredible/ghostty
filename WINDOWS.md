@@ -145,8 +145,16 @@ Notes:
         `high-contrast.ps1` turns high contrast on and off in CI and
         checks the bar's color on screen (not run yet). Not checked
         here, since it changes the whole desktop.
-  - [ ] The rest of what we draw: the scrollbar, search bar, command
-        palette, badges, split dividers and the bell border.
+  - [x] The search bar and command palette: the theme's window colors,
+        with the field framed, and hovered buttons and the selected
+        command in its highlight colors. Badges and the link preview use
+        its tooltip colors. Each checks for high contrast as it paints,
+        and `WM_SYSCOLORCHANGE` repaints the whole window. Builds, and
+        the smoke test passes here without high contrast; not checked
+        with it yet.
+  - [ ] Still the terminal's colors: the scrollbar thumb (over the
+        terminal's own colors), split dividers, split dimming and the
+        bell border.
 - [x] The cursor blinks at Windows' cursor blink rate (Settings >
       Accessibility > Text cursor, or the keyboard control panel; 530 ms
       by default, where Ghostty uses 600 ms elsewhere), read again on
