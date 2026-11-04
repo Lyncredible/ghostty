@@ -969,6 +969,14 @@ Notes:
       (`desktop-input.ps1`): a typed letter hid the pointer over the
       terminal (`GetCursorInfo` showed no cursor) and moving the mouse
       showed it again.
+  - [x] Its default follows Windows' "Hide pointer while typing" (Mouse
+        settings > Additional mouse settings > Pointer Options;
+        `SPI_GETMOUSEVANISH`), which is on by default and which Notepad
+        and other editors follow. It's read when the config is loaded;
+        a value in the config still wins. Checked: `+show-config
+        --default` says `true` here (the setting is on), and a config
+        with `false` gives `false`. Config tests pass (they keep the
+        documented default).
 - [x] Ctrl+wheel changes the font size, like other Windows apps and
       Windows Terminal, unless a program reports the mouse (it then gets
       the wheel as usual). Checked: two posted Ctrl+wheel-up notches took
