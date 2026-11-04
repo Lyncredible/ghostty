@@ -1131,6 +1131,27 @@ Notes:
     (`CoRegisterClassObject` when started with `-Embedding`), a termio
     backend that uses handed-off pipes and a process it didn't start,
     and resizes through the signal pipe instead of `ResizePseudoConsole`.
+  - The proxy isn't ours to ship after all: Windows Terminal's package
+    registers `ITerminalHandoff3` with its proxy (`OpenConsoleProxy.dll`,
+    read from its AppxManifest), and its OpenConsole (`{2EACA947-...}`)
+    is the console host that calls the terminal. So with
+    `DelegationConsole` pointing at Windows Terminal's OpenConsole and
+    `DelegationTerminal` at a Ghostty class, OpenConsole calls Ghostty
+    through Windows Terminal's proxy. The default terminal setting is
+    Windows 11 only, where Windows Terminal is installed.
+  - Packing the handles (`ConptyPackPseudoConsole`) is only a struct:
+    resizing writes `PTY_SIGNAL_RESIZE_WINDOW` (8), columns and rows to
+    the signal pipe, and closing closes the three handles
+    (microsoft/terminal `src/winconpty`), so we do that ourselves.
+  - [x] The pty and termio side: `Pty.adopt` uses a handed off session
+        (our pipes from `Pty.createPipes`, and the console's signal,
+        reference and process handles), and `Exec` adopts it instead of
+        starting the command when the runtime's surface has one
+        (`takeConsoleHandoff`), with the console program as its process.
+        Unit test `windows: adopted console`: the signal pipe gets the
+        resize packets, and closing the console closes it.
+  - [ ] The COM class (`ITerminalHandoff3`), registered by each running
+        Ghostty, and `-Embedding` launches.
   - Check in CI (installing the MSIX is fine on throwaway runners): set
     the delegation (`HKCU\Console\%%Startup`, `DelegationConsole` and
     `DelegationTerminal`), start `cmd.exe` through Explorer, and expect a
