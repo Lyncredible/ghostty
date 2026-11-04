@@ -111,7 +111,7 @@ Notes:
         caused here, so debug builds take `GHOSTTY_D3D11_LOSE_DEVICE=N`
         to act as if the Nth present found the device removed:
         `device-lost.ps1` checks the window shows the background and text
-        again (passes here; not run in CI yet). Not checked: a real
+        again (passes here, and in CI in run 41919073564). Not checked: a real
         driver restart, and images and custom shaders after one.
 - [x] Win32 apprt: window, message loop, and cross-thread wakeups.
   - [x] Per-monitor DPI, resizing, focus, and occlusion.
