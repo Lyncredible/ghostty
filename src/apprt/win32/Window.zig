@@ -272,8 +272,12 @@ pub fn show(self: *Window) void {
     // has already been set, so it's the size the window restores to.
     const config = &self.app.config;
     const maximize = config.maximize or self.restore_maximized;
-    _ = c.ShowWindow(self.hwnd, if (maximize) c.SW_SHOWMAXIMIZED else c.SW_SHOWDEFAULT);
+    // A handed off console session's window starts as its program asked.
+    const command = self.app.next_show orelse
+        if (maximize) c.SW_SHOWMAXIMIZED else c.SW_SHOWDEFAULT;
+    _ = c.ShowWindow(self.hwnd, command);
     _ = c.UpdateWindow(self.hwnd);
+    if (command == c.SW_SHOWMINNOACTIVE) return;
     if (config.fullscreen != .false and self.fullscreen == null) self.toggleFullscreen();
 }
 
