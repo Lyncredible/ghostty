@@ -747,6 +747,7 @@ fn adoptTab(self: *Window, tab: *Tab) !void {
     while (it.next()) |entry| {
         entry.view.window = self;
         _ = c.SetParent(entry.view.hwnd, self.hwnd);
+        if (entry.view.core_initialized) entry.view.core_surface.setParentWindow(@intFromPtr(self.hwnd));
     }
     self.selectTab(self.tabs.items.len - 1);
 }

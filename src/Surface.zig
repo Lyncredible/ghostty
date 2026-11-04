@@ -904,6 +904,12 @@ inline fn surfaceMailbox(self: *Surface) Mailbox {
 ///
 /// We centralize all our logic into this spot so we can intercept
 /// messages for example in readonly mode.
+/// Tell the IO thread which window shows this surface, as a native
+/// handle. Only Windows uses it, for the pseudoconsole's window.
+pub fn setParentWindow(self: *Surface, hwnd: usize) void {
+    self.queueIo(.{ .parent_window = hwnd }, .unlocked);
+}
+
 fn queueIo(
     self: *Surface,
     msg: termio.Message,

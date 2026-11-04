@@ -82,6 +82,10 @@ pub const Message = union(enum) {
     /// The surface gained or lost focus.
     focused: bool,
 
+    /// The window showing the terminal, as a native handle (only Windows
+    /// uses it: that window owns the pseudoconsole's window).
+    parent_window: usize,
+
     /// Record a Kitty clipboard protocol session grant for a password
     /// so future requests carrying it skip the permission prompt, for
     /// reads and writes respectively.

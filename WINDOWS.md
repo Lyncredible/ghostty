@@ -1214,6 +1214,24 @@ Notes:
         Ghostty is listed in Settings > For developers > Terminal, and
         choosing it makes cmd started from the Run box open in Ghostty.
         Settings' list isn't something a test here can read reliably.
+  - [x] The console window's owner: console programs get a hidden
+        pseudoconsole window from `GetConsoleWindow` (some use it to own
+        dialogs, or to find "their" window), which is now owned by the
+        Ghostty window showing the terminal, as in Windows Terminal. For
+        our own pseudoconsoles and handed off sessions alike, we send
+        PTY_SIGNAL_REPARENT_WINDOW (3, then the window as 8 bytes,
+        packed) on the console's signal pipe, as
+        `ConptyReparentPseudoConsole` does; Windows doesn't export a
+        function for it, but the inbox console host honors it. The
+        window goes to the IO thread as a new termio message,
+        `parent_window`, when a terminal starts and when its tab moves to
+        another window.
+    - Checked: with a handed off session, the owner was 0 without the
+      signal and Ghostty's window with it (by hand). `handoff.ps1` now
+      checks that both the handed off cmd's and the first window's
+      console windows are owned by their Ghostty windows (passes
+      locally). Unit test: `windows: adopted console` reads the packet.
+      Not checked: moving a tab to another window updates it.
   - Check in CI (installing the MSIX is fine on throwaway runners): set
     the delegation (`HKCU\Console\%%Startup`, `DelegationConsole` and
     `DelegationTerminal`), start `cmd.exe` through Explorer, and expect a

@@ -105,6 +105,28 @@ try {
     [void](WaitFor { Surfaces | Where-Object { $_.Handle -eq $surface.Handle -and $_.Text.Contains('typed-back') } } 'typed input to reach the handed off cmd')
     Write-Host 'Typing in it reached cmd.'
 
+    # The pseudoconsole's window (GetConsoleWindow), which console programs
+    # use for example to own dialogs, is owned by the window showing the
+    # terminal, for a handed off session as for our own.
+    $ownerScript = Join-Path $work 'owner.ps1'
+    Set-Content -Encoding ascii $ownerScript @'
+Add-Type -Name W -Namespace N -MemberDefinition '[DllImport("kernel32.dll")] public static extern System.IntPtr GetConsoleWindow(); [DllImport("user32.dll")] public static extern System.IntPtr GetWindow(System.IntPtr h, uint c);'
+"console-owner=$([N.W]::GetWindow([N.W]::GetConsoleWindow(), 4))"
+'@
+    function ConsoleOwner($target) {
+        $surface = $target
+        TypeText "powershell -NoProfile -ExecutionPolicy Bypass -File `"$ownerScript`"`r"
+        $found = WaitFor { Surfaces | Where-Object { $_.Handle -eq $target.Handle -and $_.Text -match 'console-owner=(\d+)' } } "the console window's owner"
+        [void]($found.Text -match 'console-owner=(\d+)')
+        [long]$Matches[1]
+    }
+    foreach ($target in @($surface), @(Surfaces | Where-Object { $_.Text.Contains('first-window') } | Select-Object -First 1)) {
+        $owner = ConsoleOwner $target[0]
+        $window = [GhosttyHandoff.Win32]::GetAncestor($target[0].Handle, 2).ToInt64()   # GA_ROOT
+        if ($owner -ne $window) { Fail "a console's window is owned by $owner, not by Ghostty's window $window" }
+    }
+    Write-Host "The console windows of the handed off session and of Ghostty's own are owned by their Ghostty windows."
+
     # Resizing the window resizes the console (through its signal pipe),
     # as `mode con` in it shows.
     function Columns {

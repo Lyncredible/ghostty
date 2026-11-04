@@ -71,6 +71,12 @@ pub const Backend = union(Kind) {
         }
     }
 
+    pub fn parentWindow(self: *Backend, hwnd: usize) void {
+        switch (self.*) {
+            .exec => |*exec| exec.parentWindow(hwnd),
+        }
+    }
+
     pub fn resize(
         self: *Backend,
         grid_size: renderer.GridSize,
