@@ -44,6 +44,10 @@ public static System.IntPtr Cursor() {
 public static void Key(ushort vk, bool up) {
   var i = new INPUT[1]; i[0].type = 1; i[0].u.ki.wVk = vk; i[0].u.ki.dwFlags = up ? 2u : 0u;
   SendInput(1, i, System.Runtime.InteropServices.Marshal.SizeOf(typeof(INPUT))); }
+// A key by scancode only, as a keyboard sends it (Alt codes need these).
+public static void Scan(ushort scan, bool up) {
+  var i = new INPUT[1]; i[0].type = 1; i[0].u.ki.wScan = scan; i[0].u.ki.dwFlags = 8u | (up ? 2u : 0u); // KEYEVENTF_SCANCODE
+  SendInput(1, i, System.Runtime.InteropServices.Marshal.SizeOf(typeof(INPUT))); }
 public static void Char(char ch) {
   var i = new INPUT[2];
   i[0].type = 1; i[0].u.ki.wScan = ch; i[0].u.ki.dwFlags = 4;      // KEYEVENTF_UNICODE
@@ -118,11 +122,12 @@ try {
     # An Alt code: Alt+0233 on the numpad types é, and the digits
     # themselves don't reach the shell.
     foreach ($ch in 'echo alt-'.ToCharArray()) { [GhosttyDesktop.Win32]::Char($ch) }
-    [GhosttyDesktop.Win32]::Key(0x12, $false)
-    foreach ($vk in 0x60, 0x62, 0x63, 0x63) {
-        [GhosttyDesktop.Win32]::Key($vk, $false); [GhosttyDesktop.Win32]::Key($vk, $true)
+    # Left Alt, then numpad 0, 2, 3, 3 by scancode (with Num Lock on or off).
+    [GhosttyDesktop.Win32]::Scan(0x38, $false)
+    foreach ($scan in 0x52, 0x50, 0x51, 0x51) {
+        [GhosttyDesktop.Win32]::Scan($scan, $false); [GhosttyDesktop.Win32]::Scan($scan, $true)
     }
-    [GhosttyDesktop.Win32]::Key(0x12, $true)
+    [GhosttyDesktop.Win32]::Scan(0x38, $true)
     TypeLine '-ok'
     $line = WaitFor { (Text $surface) -split "`n" | Where-Object { $_ -match '^alt-.*-ok' } | Select-Object -Last 1 } 'the Alt code line to run'
     if ($line.Trim() -ne "alt-$([char]0xE9)-ok") { Fail "the Alt code gave: $line" }

@@ -1991,8 +1991,16 @@ fn keyEvent(
     const scancode: c.UINT = native & 0xFF;
     const mods = key.currentMods();
 
-    // The digits of an Alt code; its character comes as WM_CHAR later.
-    if (key.altCode(key.physicalKey(native), mods)) return true;
+    // The digits of an Alt code; its character comes as WM_CHAR when Alt
+    // is released. If Windows made characters of the digits themselves
+    // (as it does for injected keys without scancodes), drop those.
+    if (key.altCode(key.physicalKey(native), mods)) {
+        var peeked: c.MSG = undefined;
+        while (c.PeekMessageW(&peeked, self.hwnd, c.WM_SYSCHAR, c.WM_SYSCHAR, c.PM_REMOVE) != 0 or
+            c.PeekMessageW(&peeked, self.hwnd, c.WM_CHAR, c.WM_CHAR, c.PM_REMOVE) != 0)
+        {}
+        return true;
+    }
 
     // Collect the text for this key. TranslateMessage has already
     // queued the character messages for it, so we take them out of the
