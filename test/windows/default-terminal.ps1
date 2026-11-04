@@ -66,24 +66,46 @@ if (Test-Path $key) {
     foreach ($name in $names) { $saved[$name] = (Get-ItemProperty $key -ErrorAction SilentlyContinue).$name }
 }
 
+# A warning annotation, which (unlike the step's log) the public API
+# shows, split into a few, since each one's message is limited.
+function Annotate([string]$title, [string[]]$lines) {
+    $chunk = @()
+    $size = 0
+    foreach ($line in $lines + $null) {
+        if ($null -eq $line -or $size + $line.Length -gt 3000) {
+            if ($chunk.Count -gt 0) {
+                $text = ($chunk -join "`n").Replace('%', '%25').Replace("`r", '%0D').Replace("`n", '%0A')
+                Write-Host "::warning title=$title::$text"
+            }
+            $chunk = @()
+            $size = 0
+        }
+        if ($null -ne $line) { $chunk += $line; $size += $line.Length + 1 }
+    }
+}
+
 function Fail([string]$message) {
     Write-Host "::error title=default-terminal::$message"
-    foreach ($process in Get-CimInstance Win32_Process -Filter "Name = 'ghostty.exe' or Name = 'OpenConsole.exe' or Name = 'cmd.exe'") {
-        Write-Host "process $($process.ProcessId) (parent $($process.ParentProcessId)): $($process.CommandLine)"
+    $details = @()
+    foreach ($process in Get-CimInstance Win32_Process -Filter "Name = 'ghostty.exe' or Name = 'OpenConsole.exe' or Name = 'cmd.exe' or Name = 'WindowsTerminal.exe'") {
+        $details += "process $($process.ProcessId) (parent $($process.ParentProcessId)): $($process.CommandLine)"
     }
     foreach ($process in Get-Process ghostty -ErrorAction SilentlyContinue) {
         $condition = New-Object System.Windows.Automation.PropertyCondition(
             [System.Windows.Automation.AutomationElement]::ProcessIdProperty, $process.Id)
         foreach ($window in [System.Windows.Automation.AutomationElement]::RootElement.FindAll(
                 [System.Windows.Automation.TreeScope]::Children, $condition)) {
-            Write-Host "Ghostty $($process.Id) has a window: $($window.Current.Name)"
+            $details += "Ghostty $($process.Id) has a window: $($window.Current.Name)"
         }
     }
+    Annotate 'default-terminal processes' $details
     if ($listening) {
-        Write-Host '--- debugger output ---'
-        [GhosttyDbWin]::Lines() | Select-Object -Last 80 | Write-Host
+        $ids = @(Get-Process ghostty, OpenConsole -ErrorAction SilentlyContinue | ForEach-Object { "$($_.Id):" })
+        $lines = @([GhosttyDbWin]::Lines() | Where-Object { $line = $_; $ids | Where-Object { $line.StartsWith($_) } })
+        if ($lines.Count -eq 0) { $lines = @([GhosttyDbWin]::Lines()) }
+        Annotate 'default-terminal log' @($lines | Select-Object -Last 60)
     } else {
-        Write-Host "couldn't listen to the debugger output"
+        Write-Host "::warning title=default-terminal log::couldn't listen to the debugger output"
     }
     throw $message
 }
