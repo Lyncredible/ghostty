@@ -110,6 +110,15 @@ Notes:
           window between them, where Windows suggests a scaled size
   - [x] Keyboard: layouts, dead keys, Ctrl/Alt/AltGr handling, and
         physical keys.
+    - [x] Alt codes (Alt held while typing a number on the numpad, such
+          as Alt+0233 for é): the digits went to the core as Alt+numpad
+          keys (seen in the code, not observed), before the character. Like Windows
+          Terminal, numpad digits with only Alt held are now left to
+          Windows (by scancode, so Num Lock off works too), and the
+          character arrives as `WM_CHAR` when Alt is released. Unit test:
+          `altCode`; `desktop-input.ps1` types Alt+0233 with real keys in
+          CI (not run yet). The trade-off, as in Windows Terminal:
+          programs can't get Alt+numpad digits.
   - [x] Basic IME: the system composition window, placed at the cursor.
   - [x] Mouse buttons, motion, wheel, and cursor shapes.
   - [x] Touch screens: a one finger vertical pan scrolls (with inertia)
