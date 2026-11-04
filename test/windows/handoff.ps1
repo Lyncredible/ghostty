@@ -15,6 +15,16 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+
+# Errors that Fail didn't report (it gives the log too) still get an
+# annotation, since the public API doesn't show the step's log.
+trap {
+    if (-not $script:reported) {
+        Write-Host "::error title=handoff::$($_.Exception.Message) (at line $($_.InvocationInfo.ScriptLineNumber))"
+    }
+    break
+}
+
 if (-not (Get-AppxPackage Microsoft.WindowsTerminal)) {
     Write-Host "::notice title=handoff::Windows Terminal isn't installed, so there's no proxy for the handoff interface; skipped"
     exit 0
@@ -58,6 +68,7 @@ function Annotate([string]$title, [string[]]$lines) {
 
 function Fail([string]$message) {
     Write-Host "::error title=handoff::$message"
+    $script:reported = $true
     if (Test-Path $log) {
         Annotate 'handoff log' @(Get-Content $log | Select-String -Pattern 'pseudoconsole|handoff|pty|subprocess' | ForEach-Object { $_.Line } | Select-Object -Last 40)
     }
@@ -231,3 +242,6 @@ $c = [N.W]::GetConsoleWindow()
     if ($ghostty -and -not $ghostty.HasExited) { Stop-Process -Id $ghostty.Id -Force -ErrorAction SilentlyContinue }
     Remove-Item -LiteralPath $work -Recurse -Force -ErrorAction SilentlyContinue
 }
+
+# Leave a native command's exit code out of the step's result.
+exit 0
