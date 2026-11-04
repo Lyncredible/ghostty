@@ -667,6 +667,26 @@ const WindowsPty = struct {
         self.size = size;
     }
 
+    /// Make the window that shows the terminal own the pseudoconsole's
+    /// window (the one console programs get from `GetConsoleWindow`, for
+    /// example to own their dialogs). As ConptyReparentPseudoConsole does,
+    /// we send PTY_SIGNAL_REPARENT_WINDOW (3) and the window, packed, on
+    /// the console's signal pipe, which the inbox console host also
+    /// honors (Windows doesn't export a function for it).
+    pub fn setParentWindow(self: *Pty, hwnd: usize) void {
+        if (self.console_closed) return;
+        const signal = if (self.handoff) |console| console.signal else
+            // A pseudoconsole is a pointer to its handles, the signal
+            // pipe first (microsoft/terminal src/winconpty/winconpty.h).
+            @as(*const windows.HANDLE, @ptrCast(@alignCast(self.pseudo_console))).*;
+        var packet: [10]u8 = undefined;
+        std.mem.writeInt(u16, packet[0..2], 3, .little);
+        std.mem.writeInt(u64, packet[2..10], hwnd, .little);
+        if (windows.exp.kernel32.WriteFile(signal, &packet, packet.len, null, null) == windows.FALSE) {
+            log.warn("couldn't give the pseudoconsole its parent window err={}", .{windows.GetLastError()});
+        }
+    }
+
     /// Get information about the process(es) attached to the PTY. Returns
     /// `null` if there was an error getting the information or the information
     /// is not available on a particular platform.
@@ -738,6 +758,14 @@ test "windows: adopted console" {
     try testing.expectEqual(@sizeOf(@TypeOf(packets)), read);
     try testing.expectEqualSlices(u16, &.{ 8, 80, 24, 8, 100, 30 }, &packets);
     try testing.expectEqual(@as(u16, 30), (try pty.getSize()).ws_row);
+
+    // Giving it a parent window sends PTY_SIGNAL_REPARENT_WINDOW (3) and
+    // the window, packed.
+    pty.setParentWindow(0x1234);
+    var reparent: [10]u8 = undefined;
+    try testing.expect(kernel32.ReadFile(signal_read, &reparent, reparent.len, &read, null).toBool());
+    try testing.expectEqual(reparent.len, read);
+    try testing.expectEqualSlices(u8, &.{ 3, 0, 0x34, 0x12, 0, 0, 0, 0, 0, 0 }, &reparent);
 
     // Closing the console closes its handles, so the signal pipe ends.
     pty.closeConsole();
