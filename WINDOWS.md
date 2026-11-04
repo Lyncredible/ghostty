@@ -1486,9 +1486,10 @@ Notes:
         `WM_GHOSTTY_CONFIG_ERRORS` with the message already written).
         `dialog-race.ps1` also quits with F6 while `ping` runs and lets
         the shell exit with the dialog open. Passed (run 41743000103).
-  - [ ] `dialog-race.ps1` also reloads (F5) after writing an unknown
+  - [x] `dialog-race.ps1` also reloads (F5) after writing an unknown
         option into its own config file (`XDG_CONFIG_HOME`), and lets the
-        shell exit with "Configuration Errors" open.
+        shell exit with "Configuration Errors" open. Passed (run
+        41748622636).
 - Bell handling now copies each surface's `bell-features` (including on
   reload), gates `MessageBeep` on `system`, and requests taskbar attention
   only for background windows. `FLASHW_TIMERNOFG` stops the flash on
