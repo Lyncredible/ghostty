@@ -172,6 +172,14 @@ against Windows' cursor blink rate, then turns blinking off
 screen stays still. It takes focus and changes a desktop setting, so it
 only runs in CI.
 
+## high-contrast.ps1
+
+Starts Ghostty with the tab bar shown and a blue background, checks the
+tab bar's color on screen comes from the terminal's background, turns a
+high contrast theme on (`SPI_SETHIGHCONTRAST`) and expects the theme's
+window color, then turns it off and expects the terminal's again. It
+changes the whole desktop, so it only runs in CI.
+
 ## dark-mode.ps1
 
 Starts Ghostty with a light and a dark theme, switches Windows between

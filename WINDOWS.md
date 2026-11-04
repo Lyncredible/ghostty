@@ -133,6 +133,20 @@ Notes:
           which it did for some cell heights without a nudge);
           `wheel-lines.ps1` sets it to 1 and 5 in CI (passed, run
           41819892772).
+- [ ] High contrast themes (Settings > Accessibility > Contrast
+      themes): Windows asks apps to draw their own UI with the theme's
+      system colors. Terminal contents keep their colors, as in Windows
+      Terminal.
+  - [x] The tab bar: with high contrast on (`SPI_GETHIGHCONTRAST`), the
+        bar is the theme's window color, the active tab its highlight,
+        hovered items its button face, with its text colors, and the
+        title bar keeps the theme's colors instead of the terminal's
+        (`window-theme=ghostty`). It repaints on `WM_SYSCOLORCHANGE`.
+        `high-contrast.ps1` turns high contrast on and off in CI and
+        checks the bar's color on screen (not run yet). Not checked
+        here, since it changes the whole desktop.
+  - [ ] The rest of what we draw: the scrollbar, search bar, command
+        palette, badges, split dividers and the bell border.
 - [x] The cursor blinks at Windows' cursor blink rate (Settings >
       Accessibility > Text cursor, or the keyboard control panel; 530 ms
       by default, where Ghostty uses 600 ms elsewhere), read again on
