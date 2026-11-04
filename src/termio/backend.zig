@@ -77,6 +77,12 @@ pub const Backend = union(Kind) {
         }
     }
 
+    pub fn ptyVisible(self: *Backend, visible: bool) void {
+        switch (self.*) {
+            .exec => |*exec| exec.ptyVisible(visible),
+        }
+    }
+
     pub fn resize(
         self: *Backend,
         grid_size: renderer.GridSize,

@@ -1244,6 +1244,19 @@ Notes:
       (Windows Terminal's OpenConsole) and conpty.dll always do. The
       next run (db796e2fb) passed on Server 2022, which supports that
       but doesn't prove it (the failure could also have been a flake).
+  - [x] The console window's state: while a terminal isn't visible (its
+        window minimized, or another tab selected), its pseudoconsole's
+        window shows as minimized, so console programs that check
+        (`IsIconic(GetConsoleWindow())`) can tell, as with Windows
+        Terminal. We send PTY_SIGNAL_SHOWHIDE_WINDOW (1, then 0 or 1)
+        with the same build gate, from a new termio message,
+        `pty_visible`, which the win32 runtime sends with each
+        visibility change.
+    - Checked: by hand, a handed off session's console window was
+      minimized after the signal with 0 and not with 1. `handoff.ps1`
+      checks that visible terminals' console windows aren't minimized
+      and that the session started minimized has a minimized one
+      (passes locally). Unit test: `windows: adopted console`.
   - Check in CI (installing the MSIX is fine on throwaway runners): set
     the delegation (`HKCU\Console\%%Startup`, `DelegationConsole` and
     `DelegationTerminal`), start `cmd.exe` through Explorer, and expect a

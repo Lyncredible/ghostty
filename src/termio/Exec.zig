@@ -316,6 +316,11 @@ pub fn parentWindow(self: *Exec, hwnd: usize) void {
     self.subprocess.setParentWindow(hwnd);
 }
 
+/// Called when the terminal is shown or hidden.
+pub fn ptyVisible(self: *Exec, visible: bool) void {
+    self.subprocess.setVisible(visible);
+}
+
 pub fn resize(
     self: *Exec,
     grid_size: renderer.GridSize,
@@ -701,6 +706,8 @@ const Subprocess = struct {
     handoff: ?ptypkg.ConsoleHandoff = null,
     /// The window showing the terminal (see `setParentWindow`), or 0.
     parent_window: usize = 0,
+    /// Whether the terminal is visible (see `setVisible`).
+    visible: bool = true,
 
     rt_pre_exec_info: Command.RtPreExecInfo,
     rt_post_fork_info: Command.RtPostForkInfo,
@@ -1079,6 +1086,7 @@ const Subprocess = struct {
         self.pty = pty;
         if (comptime builtin.target.os.tag == .windows) {
             if (self.parent_window != 0) self.pty.?.setParentWindow(self.parent_window);
+            if (!self.visible) self.pty.?.setVisible(false);
         }
         errdefer if (!in_child) {
             if (comptime builtin.target.os.tag != .windows) {
@@ -1292,6 +1300,7 @@ const Subprocess = struct {
             .ws_ypixel = @intCast(self.screen_size.height),
         }, handoff);
         if (self.parent_window != 0) self.pty.?.setParentWindow(self.parent_window);
+        if (!self.visible) self.pty.?.setVisible(false);
         self.process = .{ .fork_exec = .{
             .path = self.args[0],
             .args = self.args,
@@ -1314,6 +1323,15 @@ const Subprocess = struct {
         self.parent_window = hwnd;
         if (comptime builtin.target.os.tag != .windows) return;
         if (self.pty) |*pty| pty.setParentWindow(hwnd);
+    }
+
+    /// On Windows, the pseudoconsole's window shows as minimized while
+    /// the terminal isn't visible. If the pty isn't open yet, `start`
+    /// sends it.
+    fn setVisible(self: *Subprocess, visible: bool) void {
+        self.visible = visible;
+        if (comptime builtin.target.os.tag != .windows) return;
+        if (self.pty) |*pty| pty.setVisible(visible);
     }
 
     fn closeHandoff(handoff: ptypkg.ConsoleHandoff) void {

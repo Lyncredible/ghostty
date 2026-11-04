@@ -108,23 +108,27 @@ try {
 
     # The pseudoconsole's window (GetConsoleWindow), which console programs
     # use for example to own dialogs, is owned by the window showing the
-    # terminal, for a handed off session as for our own.
+    # terminal, for a handed off session as for our own. It shows as
+    # minimized (IsIconic) while the terminal isn't visible.
     $ownerScript = Join-Path $work 'owner.ps1'
     Set-Content -Encoding ascii $ownerScript @'
-Add-Type -Name W -Namespace N -MemberDefinition '[DllImport("kernel32.dll")] public static extern System.IntPtr GetConsoleWindow(); [DllImport("user32.dll")] public static extern System.IntPtr GetWindow(System.IntPtr h, uint c);'
-"console-owner=$([N.W]::GetWindow([N.W]::GetConsoleWindow(), 4))"
+Add-Type -Name W -Namespace N -MemberDefinition '[DllImport("kernel32.dll")] public static extern System.IntPtr GetConsoleWindow(); [DllImport("user32.dll")] public static extern System.IntPtr GetWindow(System.IntPtr h, uint c); [DllImport("user32.dll")] public static extern bool IsIconic(System.IntPtr h);'
+$c = [N.W]::GetConsoleWindow()
+"console-owner=$([N.W]::GetWindow($c, 4)) console-iconic=$([N.W]::IsIconic($c))"
 '@
     function ConsoleOwner($target) {
         $surface = $target
         TypeText "powershell -NoProfile -ExecutionPolicy Bypass -File `"$ownerScript`"`r"
-        $found = WaitFor { Surfaces | Where-Object { $_.Handle -eq $target.Handle -and $_.Text -match 'console-owner=(\d+)' } } "the console window's owner"
-        [void]($found.Text -match 'console-owner=(\d+)')
-        [long]$Matches[1]
+        $pattern = 'console-owner=(\d+) console-iconic=(\w+)'
+        $found = WaitFor { Surfaces | Where-Object { $_.Handle -eq $target.Handle -and $_.Text -match $pattern } } "the console window's owner"
+        [void]($found.Text -match $pattern)
+        @{ Owner = [long]$Matches[1]; Iconic = $Matches[2] -eq 'True' }
     }
     foreach ($target in @($surface), @(Surfaces | Where-Object { $_.Text.Contains('first-window') } | Select-Object -First 1)) {
-        $owner = ConsoleOwner $target[0]
+        $state = ConsoleOwner $target[0]
         $window = [GhosttyHandoff.Win32]::GetAncestor($target[0].Handle, 2).ToInt64()   # GA_ROOT
-        if ($owner -ne $window) { Fail "a console's window is owned by $owner, not by Ghostty's window $window" }
+        if ($state.Owner -ne $window) { Fail "a console's window is owned by $($state.Owner), not by Ghostty's window $window" }
+        if ($state.Iconic) { Fail "a visible terminal's console window shows as minimized" }
     }
     Write-Host "The console windows of the handed off session and of Ghostty's own are owned by their Ghostty windows."
 
@@ -144,7 +148,7 @@ Add-Type -Name W -Namespace N -MemberDefinition '[DllImport("kernel32.dll")] pub
     } 'a new tab'
     PressKey $tab.Handle 0x77 0x42   # F8: move_tab_to_new_window
     [void](WaitFor { [GhosttyHandoff.Win32]::GetAncestor($tab.Handle, 2) -ne $firstWindow } 'the tab to move to a new window')
-    $owner = ConsoleOwner $tab
+    $owner = (ConsoleOwner $tab).Owner
     $window = [GhosttyHandoff.Win32]::GetAncestor($tab.Handle, 2).ToInt64()
     if ($owner -ne $window) { Fail "a tab moved to a new window has its console window owned by $owner, not by its new window $window" }
     Write-Host 'A tab moved to a new window has its console window owned by the new window.'
@@ -188,6 +192,8 @@ Add-Type -Name W -Namespace N -MemberDefinition '[DllImport("kernel32.dll")] pub
         Fail "the window of a session that asked to start minimized isn't minimized"
     }
     Write-Host 'A session that asked to start minimized got a minimized window.'
+    if (-not (ConsoleOwner $surface).Iconic) { Fail "a minimized terminal's console window doesn't show as minimized" }
+    Write-Host 'Its console window shows as minimized too.'
 } finally {
     if ($handoff -and -not $handoff.HasExited) { Stop-Process -Id $handoff.Id -Force -ErrorAction SilentlyContinue }
     if ($ghostty -and -not $ghostty.HasExited) { Stop-Process -Id $ghostty.Id -Force -ErrorAction SilentlyContinue }

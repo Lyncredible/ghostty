@@ -86,6 +86,10 @@ pub const Message = union(enum) {
     /// uses it: that window owns the pseudoconsole's window).
     parent_window: usize,
 
+    /// Whether the terminal is visible (only Windows uses it: the
+    /// pseudoconsole's window shows as minimized while it isn't).
+    pty_visible: bool,
+
     /// Record a Kitty clipboard protocol session grant for a password
     /// so future requests carrying it skip the permission prompt, for
     /// reads and writes respectively.
