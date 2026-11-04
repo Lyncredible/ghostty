@@ -111,8 +111,10 @@ Notes:
         caused here, so debug builds take `GHOSTTY_D3D11_LOSE_DEVICE=N`
         to act as if the Nth present found the device removed:
         `device-lost.ps1` checks the window shows the background and text
-        again (passes here, and in CI in run 41919073564). Not checked: a real
-        driver restart, and images and custom shaders after one.
+        again (passes here, and in CI in run 41919073564). It also runs
+        with a custom shader that swaps red and blue, whose colors show
+        after the device is replaced (passes here; not run in CI yet).
+        Not checked: a real driver restart, and images after one.
 - [x] Win32 apprt: window, message loop, and cross-thread wakeups.
   - [x] Per-monitor DPI, resizing, focus, and occlusion.
     - [x] A DPI change while running: the fork's CI runs
