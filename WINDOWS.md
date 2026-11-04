@@ -144,8 +144,11 @@ Notes:
       on screen and turns blinking off in CI. Its first run
       (41819892772) failed before any check, most likely compiling C#
       against System.Drawing, which is split up in PowerShell 7; the
-      capture is now in PowerShell, as in `dark-mode.ps1` (not run yet). It couldn't be timed here, since the cursor only blinks
-      in a focused window, and taking focus on this desktop is avoided.
+      capture is now in PowerShell, as in `dark-mode.ps1`. It passed
+      (run 41832654292): the blinks matched the runner's blink time, and
+      the screen stayed still with blinking off. It couldn't be timed
+      here, since the cursor only blinks in a focused window, and taking
+      focus on this desktop is avoided.
   - [x] Touch screens: a one finger vertical pan scrolls (with inertia)
         through `WM_GESTURE`, instead of selecting text with emulated
         mouse input. Needs a check on a touch screen.
@@ -1278,6 +1281,11 @@ Notes:
       (Windows Terminal's OpenConsole) and conpty.dll always do. The
       next run (db796e2fb) passed on Server 2022, which supports that
       but doesn't prove it (the failure could also have been a flake).
+    - Run 41826029078 once found a console window owned by no window,
+      which passed before and after (and always here). The test now
+      names the session, asks again 3 s later, and annotates Ghostty's
+      log of signals to the pseudoconsole, for the next time it fails.
+      The next run (41832654292) passed.
   - [x] The console window's state: while a terminal isn't visible (its
         window minimized, or another tab selected), its pseudoconsole's
         window shows as minimized, so console programs that check
