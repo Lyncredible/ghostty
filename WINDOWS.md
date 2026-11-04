@@ -1179,6 +1179,12 @@ Notes:
         (locally 45, then 24).
   - [ ] An `-Embedding` launch (needs the class registered with COM, so
         only the CI test with the MSIX installed covers it).
+  - Decided: a COM launch doesn't restore saved windows (only the
+    handed off session's window opens), and quits with its last window
+    as any launch does (`quit-after-last-window-closed` is on by default
+    on Windows). A handed off window still open when Ghostty quits is
+    saved like any other, so `window-save-state` brings it back as a
+    shell in its place; the console program itself can't come back.
   - [ ] Register the class and the `com.microsoft.windows.terminal.host`
         extension in the MSIX (with a `console.host` one naming Windows
         Terminal's OpenConsole, in case Settings only lists packages with
