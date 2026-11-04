@@ -38,8 +38,29 @@ $clientLog = Join-Path $work 'client.log'
 $ghostty = $null
 $handoff = $null
 
+# A warning annotation, which (unlike the step's log) the public API
+# shows, split into a few, since each one's message is limited.
+function Annotate([string]$title, [string[]]$lines) {
+    $chunk = @()
+    $size = 0
+    foreach ($line in $lines + $null) {
+        if ($null -eq $line -or $size + $line.Length -gt 3000) {
+            if ($chunk.Count -gt 0) {
+                $text = ($chunk -join "`n").Replace('%', '%25').Replace("`r", '%0D').Replace("`n", '%0A')
+                Write-Host "::warning title=$title::$text"
+            }
+            $chunk = @()
+            $size = 0
+        }
+        if ($null -ne $line) { $chunk += $line; $size += $line.Length + 1 }
+    }
+}
+
 function Fail([string]$message) {
     Write-Host "::error title=handoff::$message"
+    if (Test-Path $log) {
+        Annotate 'handoff log' @(Get-Content $log | Select-String -Pattern 'pseudoconsole|handoff|pty|subprocess' | ForEach-Object { $_.Line } | Select-Object -Last 40)
+    }
     Write-Host '--- handoff_client ---'
     if (Test-Path $clientLog) { Get-Content $clientLog | Write-Host }
     if (Test-Path "$clientLog.err") { Get-Content "$clientLog.err" | Write-Host }
@@ -114,20 +135,31 @@ try {
     Set-Content -Encoding ascii $ownerScript @'
 Add-Type -Name W -Namespace N -MemberDefinition '[DllImport("kernel32.dll")] public static extern System.IntPtr GetConsoleWindow(); [DllImport("user32.dll")] public static extern System.IntPtr GetWindow(System.IntPtr h, uint c); [DllImport("user32.dll")] public static extern bool IsIconic(System.IntPtr h);'
 $c = [N.W]::GetConsoleWindow()
-"console-owner=$([N.W]::GetWindow($c, 4)) console-iconic=$([N.W]::IsIconic($c))"
+"console-$($args[0])-owner=$([N.W]::GetWindow($c, 4)) console-iconic=$([N.W]::IsIconic($c))"
 '@
     function ConsoleOwner($target) {
         $surface = $target
-        TypeText "powershell -NoProfile -ExecutionPolicy Bypass -File `"$ownerScript`"`r"
-        $pattern = 'console-owner=(\d+) console-iconic=(\w+)'
+        # A new marker each time, so earlier answers on screen don't match.
+        $script:ownerQueries++
+        $n = $script:ownerQueries
+        TypeText "powershell -NoProfile -ExecutionPolicy Bypass -File `"$ownerScript`" q$n`r"
+        $pattern = "console-q$n-owner=(\d+) console-iconic=(\w+)"
         $found = WaitFor { Surfaces | Where-Object { $_.Handle -eq $target.Handle -and $_.Text -match $pattern } } "the console window's owner"
         [void]($found.Text -match $pattern)
         @{ Owner = [long]$Matches[1]; Iconic = $Matches[2] -eq 'True' }
     }
-    foreach ($target in @($surface), @(Surfaces | Where-Object { $_.Text.Contains('first-window') } | Select-Object -First 1)) {
-        $state = ConsoleOwner $target[0]
-        $window = [GhosttyHandoff.Win32]::GetAncestor($target[0].Handle, 2).ToInt64()   # GA_ROOT
-        if ($state.Owner -ne $window) { Fail "a console's window is owned by $($state.Owner), not by Ghostty's window $window" }
+    $targets = @(
+        @{ Name = 'the handed off session'; Surface = $surface },
+        @{ Name = "Ghostty's own session"; Surface = (Surfaces | Where-Object { $_.Text.Contains('first-window') } | Select-Object -First 1) })
+    foreach ($target in $targets) {
+        $state = ConsoleOwner $target.Surface
+        $window = [GhosttyHandoff.Win32]::GetAncestor($target.Surface.Handle, 2).ToInt64()   # GA_ROOT
+        if ($state.Owner -ne $window) {
+            # Once more, to tell a late signal from a lost one.
+            Start-Sleep -Seconds 3
+            $again = (ConsoleOwner $target.Surface).Owner
+            Fail "the console window of $($target.Name) is owned by $($state.Owner) (then $again, 3 s later), not by Ghostty's window $window"
+        }
         if ($state.Iconic) { Fail "a visible terminal's console window shows as minimized" }
     }
     Write-Host "The console windows of the handed off session and of Ghostty's own are owned by their Ghostty windows."
