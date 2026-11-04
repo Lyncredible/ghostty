@@ -148,8 +148,8 @@ fn establish(
     };
     var keep: [4]*anyopaque = undefined;
     var kept: usize = 0;
-    for ([_]c.HANDLE{ signal, reference, server, client }) |handle| {
-        keep[kept] = duplicate(handle) orelse {
+    for ([_]c.HANDLE{ signal, reference, server, client }, 0..) |handle, i| {
+        keep[kept] = (if (i == 3) reopen(handle) else null) orelse duplicate(handle) orelse {
             pipes.close();
             for (keep[0..kept]) |h| _ = c.CloseHandle(h);
             if (title) |v| alloc.free(v);
@@ -171,6 +171,22 @@ fn establish(
     in.* = pipes.in_pipe_pty;
     out.* = pipes.out_pipe_pty;
     return S_OK;
+}
+
+/// The console host hands us the console program's handle with only some
+/// rights: watching it for its exit (libxev puts it in a job) and ending
+/// it need more. It's the user's own program, so we open it again with
+/// them, by its id, which isn't reused while the handle we got is open.
+fn reopen(process: c.HANDLE) ?*anyopaque {
+    const pid = c.GetProcessId(process);
+    if (pid == 0) return null;
+    const access = c.PROCESS_SET_QUOTA | c.PROCESS_TERMINATE | c.SYNCHRONIZE |
+        c.PROCESS_QUERY_INFORMATION | c.PROCESS_QUERY_LIMITED_INFORMATION;
+    const result = c.OpenProcess(access, c.FALSE, pid) orelse {
+        log.warn("couldn't open the handed off console program pid={} err={}", .{ pid, c.GetLastError() });
+        return null;
+    };
+    return result;
 }
 
 fn duplicate(handle: c.HANDLE) ?*anyopaque {
