@@ -1167,7 +1167,11 @@ Notes:
         the startup info (title, show state), and resizing the handed
         off console through its signal pipe in a live session.
   - [ ] Register the class and the `com.microsoft.windows.terminal.host`
-        extension in the MSIX.
+        extension in the MSIX (with a `console.host` one naming Windows
+        Terminal's OpenConsole, in case Settings only lists packages with
+        both). The manifest packs (the packaging API validates it; a
+        broken element fails). CI test `default-terminal.ps1` sets the
+        delegation and starts cmd in a new console.
   - Check in CI (installing the MSIX is fine on throwaway runners): set
     the delegation (`HKCU\Console\%%Startup`, `DelegationConsole` and
     `DelegationTerminal`), start `cmd.exe` through Explorer, and expect a
