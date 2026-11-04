@@ -1113,7 +1113,8 @@ Notes:
 - [ ] Be a "default terminal application" (Windows 11, Settings > For
       developers > Terminal), so console programs started from Explorer,
       Run or a shortcut open in Ghostty instead of a console window, as
-      Windows Terminal does. Researched (2026-11-03), not started:
+      Windows Terminal does. Works in CI with the MSIX installed and the
+      delegation set; what's left is whether Settings lists us (a person):
   - Windows' console host calls a COM server registered by the terminal's
     package (`com.microsoft.windows.terminal.host` app extension) through
     `ITerminalHandoff3::EstablishPtyHandoff` (microsoft/terminal,
@@ -1177,15 +1178,16 @@ Notes:
   - [x] Resizing a handed off console in a live session: `handoff.ps1`
         resizes the window and `mode con` in cmd shows fewer columns
         (locally 45, then 24).
-  - [ ] An `-Embedding` launch (needs the class registered with COM, so
-        only the CI test with the MSIX installed covers it).
+  - [x] An `-Embedding` launch (needs the class registered with COM, so
+        only the CI test with the MSIX installed covers it): passes in CI
+        (43be924f4), see below.
   - Decided: a COM launch doesn't restore saved windows (only the
     handed off session's window opens), and quits with its last window
     as any launch does (`quit-after-last-window-closed` is on by default
     on Windows). A handed off window still open when Ghostty quits is
     saved like any other, so `window-save-state` brings it back as a
     shell in its place; the console program itself can't come back.
-  - [ ] Register the class and the `com.microsoft.windows.terminal.host`
+  - [x] Register the class and the `com.microsoft.windows.terminal.host`
         extension in the MSIX (with a `console.host` one naming Windows
         Terminal's OpenConsole, in case Settings only lists packages with
         both). The manifest packs (the packaging API validates it; a
@@ -1206,6 +1208,12 @@ Notes:
       PROCESS_QUERY_LIMITED_INFORMATION), which reproduced it locally,
       and `Handoff.reopen` opens the program again by its id with the
       rights we need, which fixed it locally.
+    - Third run (43be924f4) passes: cmd started in a new console showed
+      its output in the packaged Ghostty that COM started.
+  - [ ] Manual check (a person, on Windows 11 with the MSIX installed):
+        Ghostty is listed in Settings > For developers > Terminal, and
+        choosing it makes cmd started from the Run box open in Ghostty.
+        Settings' list isn't something a test here can read reliably.
   - Check in CI (installing the MSIX is fine on throwaway runners): set
     the delegation (`HKCU\Console\%%Startup`, `DelegationConsole` and
     `DelegationTerminal`), start `cmd.exe` through Explorer, and expect a
