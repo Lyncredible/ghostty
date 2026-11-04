@@ -109,8 +109,9 @@ flash. It changes the foreground window, so it only runs in CI.
 Opens the dialogs that keybindings show, with keys posted to the
 terminal: "Close terminal?" (`close_surface` while `ping` runs), whose OK
 must close the terminal, and then that dialog and "Change Terminal
-Title" (`prompt_surface_title`) and "Quit Ghostty?" (`quit`) while the
-shell exits, after which
+Title" (`prompt_surface_title`) "Quit Ghostty?" (`quit`), and
+"Configuration Errors" (`reload_config` after its own config file gained
+an unknown option) while the shell exits, after which
 Ghostty must exit cleanly or stay responsive. It shows dialogs, so it
 refuses to run unless `CI` is `true`.
 
