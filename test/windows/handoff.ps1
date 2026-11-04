@@ -88,7 +88,8 @@ try {
     # Ghostty as a new window.
     $env:GHOSTTY_LOG = 'debug'
     $ghostty = Start-Process -FilePath $Exe -PassThru -RedirectStandardError $log -ArgumentList `
-        '--window-save-state=never', '--class=com.example.ghostty-handoff-test', '"--command=cmd.exe /k echo first-%USERNAME:~0,0%window"'
+        '--window-save-state=never', '--class=com.example.ghostty-handoff-test',
+        '--keybind=f7=new_tab', '--keybind=f8=move_tab_to_new_window', '"--command=cmd.exe /k echo first-%USERNAME:~0,0%window"'
     [void](WaitFor { Surfaces | Where-Object { $_.Text.Contains('first-window') } } "Ghostty's first window")
     [void](WaitFor { Select-String -Path $log -Pattern 'registered the terminal handoff class' -Quiet } 'the handoff class to be registered')
 
@@ -126,6 +127,27 @@ Add-Type -Name W -Namespace N -MemberDefinition '[DllImport("kernel32.dll")] pub
         if ($owner -ne $window) { Fail "a console's window is owned by $owner, not by Ghostty's window $window" }
     }
     Write-Host "The console windows of the handed off session and of Ghostty's own are owned by their Ghostty windows."
+
+    # Moving a tab to a new window gives its console window the new owner.
+    function PressKey($handle, [int]$vk, [int]$scan) {
+        [void][GhosttyHandoff.Win32]::PostMessageW($handle, 0x0100, [IntPtr]$vk, [IntPtr](1 -bor ($scan -shl 16)))   # WM_KEYDOWN
+        [void][GhosttyHandoff.Win32]::PostMessageW($handle, 0x0101, [IntPtr]$vk, [IntPtr]([long]0xC0000001 -bor ($scan -shl 16)))   # WM_KEYUP
+    }
+    $first = Surfaces | Where-Object { $_.Text.Contains('first-window') } | Select-Object -First 1
+    $firstWindow = [GhosttyHandoff.Win32]::GetAncestor($first.Handle, 2)
+    PressKey $first.Handle 0x76 0x41   # F7: new_tab
+    $tab = WaitFor {
+        Surfaces | Where-Object {
+            $_.Handle -ne $first.Handle -and $_.Text.Contains('first-window') -and
+                [GhosttyHandoff.Win32]::GetAncestor($_.Handle, 2) -eq $firstWindow
+        } | Select-Object -First 1
+    } 'a new tab'
+    PressKey $tab.Handle 0x77 0x42   # F8: move_tab_to_new_window
+    [void](WaitFor { [GhosttyHandoff.Win32]::GetAncestor($tab.Handle, 2) -ne $firstWindow } 'the tab to move to a new window')
+    $owner = ConsoleOwner $tab
+    $window = [GhosttyHandoff.Win32]::GetAncestor($tab.Handle, 2).ToInt64()
+    if ($owner -ne $window) { Fail "a tab moved to a new window has its console window owned by $owner, not by its new window $window" }
+    Write-Host 'A tab moved to a new window has its console window owned by the new window.'
 
     # Resizing the window resizes the console (through its signal pipe),
     # as `mode con` in it shows.
