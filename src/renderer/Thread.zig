@@ -673,8 +673,13 @@ fn cursorTimerCallback(
         return .disarm;
     };
 
-    t.flags.cursor_blink_visible = !t.flags.cursor_blink_visible;
-    t.wakeup.notify() catch {};
+    // With blinking turned off in Windows' settings, the cursor stays on.
+    // The timer keeps running so turning it back on applies.
+    const blinks = systemCursorBlink() != .off;
+    if (blinks or !t.flags.cursor_blink_visible) {
+        t.flags.cursor_blink_visible = !t.flags.cursor_blink_visible or !blinks;
+        t.wakeup.notify() catch {};
+    }
 
     t.cursor_h.run(
         &t.loop,
@@ -743,7 +748,45 @@ fn cursorBlinkInterval() u64 {
         return CURSOR_BLINK_INTERVAL * 5;
     }
 
-    return CURSOR_BLINK_INTERVAL;
+    return switch (systemCursorBlink()) {
+        .interval => |ms| ms,
+        .default, .off => CURSOR_BLINK_INTERVAL,
+    };
+}
+
+/// The text cursor's blink rate from the system's settings, where there
+/// is one (Windows: Settings > Accessibility > Text cursor, or the
+/// keyboard control panel), so the terminal's cursor blinks like the
+/// rest of the system's.
+const SystemCursorBlink = union(enum) {
+    default,
+    off,
+    interval: u64,
+};
+
+fn systemCursorBlink() SystemCursorBlink {
+    if (comptime builtin.os.tag != .windows) return .default;
+    return systemCursorBlinkFrom(GetCaretBlinkTime());
+}
+
+fn systemCursorBlinkFrom(ms: u32) SystemCursorBlink {
+    return switch (ms) {
+        // GetCaretBlinkTime failed.
+        0 => .default,
+        // INFINITE: blinking is turned off.
+        std.math.maxInt(u32) => .off,
+        else => .{ .interval = @max(ms, 100) },
+    };
+}
+
+extern "user32" fn GetCaretBlinkTime() callconv(.winapi) u32;
+
+test systemCursorBlinkFrom {
+    const testing = std.testing;
+    try testing.expectEqual(SystemCursorBlink.default, systemCursorBlinkFrom(0));
+    try testing.expectEqual(SystemCursorBlink.off, systemCursorBlinkFrom(std.math.maxInt(u32)));
+    try testing.expectEqual(SystemCursorBlink{ .interval = 530 }, systemCursorBlinkFrom(530));
+    try testing.expectEqual(SystemCursorBlink{ .interval = 100 }, systemCursorBlinkFrom(1));
 }
 
 /// Schedules incremental terminal compression after renderer activity stops.
