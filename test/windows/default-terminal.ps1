@@ -20,6 +20,45 @@ $package = Get-AppxPackage GhosttyWindowsUnofficial
 if (-not $package) { throw "the MSIX isn't installed" }
 Add-Type -AssemblyName UIAutomationClient, UIAutomationTypes
 
+# Ghostty logs to the debugger output (OutputDebugString), which is the
+# only log a Ghostty that COM starts has, so we listen to it (DBWIN).
+Add-Type -TypeDefinition @'
+using System;
+using System.Collections.Generic;
+using System.Runtime.InteropServices;
+using System.Threading;
+public static class GhosttyDbWin {
+    [DllImport("kernel32.dll", CharSet = CharSet.Unicode)] static extern IntPtr CreateEventW(IntPtr a, bool manual, bool initial, string name);
+    [DllImport("kernel32.dll", CharSet = CharSet.Unicode)] static extern IntPtr CreateFileMappingW(IntPtr file, IntPtr a, uint protect, uint high, uint low, string name);
+    [DllImport("kernel32.dll")] static extern IntPtr MapViewOfFile(IntPtr map, uint access, uint high, uint low, UIntPtr size);
+    [DllImport("kernel32.dll")] static extern bool SetEvent(IntPtr e);
+    [DllImport("kernel32.dll")] static extern uint WaitForSingleObject(IntPtr h, uint ms);
+    static readonly List<string> lines = new List<string>();
+    public static bool Start() {
+        IntPtr ready = CreateEventW(IntPtr.Zero, false, false, "DBWIN_BUFFER_READY");
+        IntPtr data = CreateEventW(IntPtr.Zero, false, false, "DBWIN_DATA_READY");
+        IntPtr map = CreateFileMappingW(new IntPtr(-1), IntPtr.Zero, 4, 0, 4096, "DBWIN_BUFFER");
+        if (ready == IntPtr.Zero || data == IntPtr.Zero || map == IntPtr.Zero) return false;
+        IntPtr view = MapViewOfFile(map, 4, 0, 0, new UIntPtr(4096));
+        if (view == IntPtr.Zero) return false;
+        var thread = new Thread(() => {
+            while (true) {
+                SetEvent(ready);
+                if (WaitForSingleObject(data, 1000) != 0) continue;
+                int pid = Marshal.ReadInt32(view);
+                string text = Marshal.PtrToStringAnsi(view + 4);
+                lock (lines) lines.Add(pid + ": " + (text ?? "").TrimEnd());
+            }
+        });
+        thread.IsBackground = true;
+        thread.Start();
+        return true;
+    }
+    public static string[] Lines() { lock (lines) return lines.ToArray(); }
+}
+'@
+$listening = [GhosttyDbWin]::Start()
+
 $key = 'HKCU:\Console\%%Startup'
 $names = 'DelegationConsole', 'DelegationTerminal'
 $saved = @{}
@@ -29,6 +68,23 @@ if (Test-Path $key) {
 
 function Fail([string]$message) {
     Write-Host "::error title=default-terminal::$message"
+    foreach ($process in Get-CimInstance Win32_Process -Filter "Name = 'ghostty.exe' or Name = 'OpenConsole.exe' or Name = 'cmd.exe'") {
+        Write-Host "process $($process.ProcessId) (parent $($process.ParentProcessId)): $($process.CommandLine)"
+    }
+    foreach ($process in Get-Process ghostty -ErrorAction SilentlyContinue) {
+        $condition = New-Object System.Windows.Automation.PropertyCondition(
+            [System.Windows.Automation.AutomationElement]::ProcessIdProperty, $process.Id)
+        foreach ($window in [System.Windows.Automation.AutomationElement]::RootElement.FindAll(
+                [System.Windows.Automation.TreeScope]::Children, $condition)) {
+            Write-Host "Ghostty $($process.Id) has a window: $($window.Current.Name)"
+        }
+    }
+    if ($listening) {
+        Write-Host '--- debugger output ---'
+        [GhosttyDbWin]::Lines() | Select-Object -Last 80 | Write-Host
+    } else {
+        Write-Host "couldn't listen to the debugger output"
+    }
     throw $message
 }
 

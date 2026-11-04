@@ -40,7 +40,7 @@ pub fn register(app: *App) void {
         target = null;
         return;
     }
-    log.debug("registered the terminal handoff class", .{});
+    log.info("registered the terminal handoff class", .{});
 }
 
 pub fn unregister() void {
