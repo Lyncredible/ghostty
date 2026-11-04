@@ -107,6 +107,12 @@ if ($Msix) {
     # console launcher (ghostty.com) is also bin\ghostty-cli.exe here.
     Copy-Item (Join-Path $package "bin\ghostty.com") (Join-Path $layout "bin\ghostty-cli.exe")
 
+    # The app extensions' public folder (for the default terminal
+    # application), which they must name. Empty folders aren't packed.
+    $public = Join-Path $layout "Public"
+    New-Item -ItemType Directory -Force $public | Out-Null
+    Set-Content -LiteralPath (Join-Path $public "README.txt") "Ghostty's terminal handoff (Windows' default terminal application)."
+
     # Logos, from the executable's icon.
     $assets = Join-Path $layout "Assets"
     New-Item -ItemType Directory -Force $assets | Out-Null
@@ -134,9 +140,11 @@ if ($Msix) {
 <?xml version="1.0" encoding="utf-8"?>
 <Package xmlns="http://schemas.microsoft.com/appx/manifest/foundation/windows10"
          xmlns:uap="http://schemas.microsoft.com/appx/manifest/uap/windows10"
+         xmlns:uap3="http://schemas.microsoft.com/appx/manifest/uap/windows10/3"
          xmlns:uap5="http://schemas.microsoft.com/appx/manifest/uap/windows10/5"
+         xmlns:com="http://schemas.microsoft.com/appx/manifest/com/windows10"
          xmlns:rescap="http://schemas.microsoft.com/appx/manifest/foundation/windows10/restrictedcapabilities"
-         IgnorableNamespaces="uap uap5 rescap">
+         IgnorableNamespaces="uap uap3 uap5 com rescap">
   <Identity Name="GhosttyWindowsUnofficial"
             Publisher="CN=Unofficial Build, OID.2.25.311729368913984317654407730594956997722=1"
             Version="$msixVersion"
@@ -168,6 +176,32 @@ if ($Msix) {
             <uap5:ExecutionAlias Alias="ghostty.exe" />
           </uap5:AppExecutionAlias>
         </uap5:Extension>
+        <!-- Windows' default terminal application (Windows 11): console
+             sessions are handed to our class (apprt/win32/Handoff.zig)
+             by Windows Terminal's OpenConsole, through its proxy. -->
+        <com:Extension Category="windows.comServer">
+          <com:ComServer>
+            <com:ExeServer DisplayName="Ghostty terminal handoff" Executable="bin\ghostty.exe">
+              <com:Class Id="7EC9F94F-09DD-4C7F-A79B-57532EBAFCDD" />
+            </com:ExeServer>
+          </com:ComServer>
+        </com:Extension>
+        <uap3:Extension Category="windows.appExtension">
+          <uap3:AppExtension Name="com.microsoft.windows.terminal.host" Id="Terminal"
+                             DisplayName="Ghostty (unofficial Windows build)" PublicFolder="Public">
+            <uap3:Properties>
+              <Clsid>{7EC9F94F-09DD-4C7F-A79B-57532EBAFCDD}</Clsid>
+            </uap3:Properties>
+          </uap3:AppExtension>
+        </uap3:Extension>
+        <uap3:Extension Category="windows.appExtension">
+          <uap3:AppExtension Name="com.microsoft.windows.console.host" Id="OpenConsole"
+                             DisplayName="Windows Terminal's OpenConsole" PublicFolder="Public">
+            <uap3:Properties>
+              <Clsid>{2EACA947-7F5F-4CFA-BA87-8F7FBEEFBE69}</Clsid>
+            </uap3:Properties>
+          </uap3:AppExtension>
+        </uap3:Extension>
       </Extensions>
     </Application>
     <Application Id="Cli" Executable="bin\ghostty-cli.exe" EntryPoint="Windows.FullTrustApplication">
