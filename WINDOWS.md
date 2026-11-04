@@ -1473,6 +1473,13 @@ Notes:
           left when reversing). The terminal size never changes. `center`
           appears in place. Sampled while sliding in: top -182, -73, -8,
           -2, then 0 and unclipped after ~140 ms.
+      - [x] With Windows' animation effects off (Settings >
+            Accessibility > Visual effects; `SPI_GETCLIENTAREAANIMATION`),
+            it appears and hides in place instead, like Windows' own
+            windows. Read each time it's shown or hidden. Builds;
+            `quick-terminal.ps1` turns animations off in CI and checks
+            it doesn't slide (not run yet). Not checked here, since it's
+            a system setting.
       - [x] `quick-terminal-space-behavior` with virtual desktops (the
             counterpart of macOS Spaces): with `move` (the default),
             showing the quick terminal moves it to the virtual desktop
