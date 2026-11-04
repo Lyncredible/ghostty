@@ -169,9 +169,13 @@ try {
     [void][GhosttyContrast.Win32]::SendMessageW($window, 0x0117, $menu, [IntPtr]0)   # WM_INITMENUPOPUP
     [void][GhosttyContrast.Win32]::SendMessageW($window, 0x0112, [IntPtr](11 -shl 4), [IntPtr]0)   # WM_SYSCOMMAND
     $search = WaitFor { $h = [GhosttyContrast.Win32]::VisibleChild($window, 'GhosttySearchBar'); if ($h -ne [IntPtr]::Zero) { $h } } 'the search bar'
-    $rect = New-Object GhosttyContrast.Win32+RECT
-    [void][GhosttyContrast.Win32]::GetWindowRect($search, [ref]$rect)
-    [void](WaitFor { $script:last = ScreenColor ($rect.l + 2) ($rect.t + 2); $last -eq $expected } "the search bar to be the theme's window color $expected")
+    # Its position is read again each time, in case it's still moving.
+    [void](WaitFor {
+            $rect = New-Object GhosttyContrast.Win32+RECT
+            [void][GhosttyContrast.Win32]::GetWindowRect($search, [ref]$rect)
+            $script:last = "$(ScreenColor ($rect.l + 2) ($rect.t + 2)) at $($rect.l),$($rect.t)-$($rect.r),$($rect.b)"
+            $last -like "$expected *"
+        } "the search bar to be the theme's window color $expected")
     Write-Host "With high contrast, the search bar is $last too."
 
     if (-not [GhosttyContrast.Win32]::SetHighContrast($false)) { Fail "couldn't turn high contrast off" }
