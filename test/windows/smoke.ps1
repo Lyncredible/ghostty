@@ -36,9 +36,27 @@ $commandArg = '"--command=' + $Command.Replace('"', '\"') + '"'
 $process = Start-Process -FilePath $Exe -PassThru -RedirectStandardError $log `
     -ArgumentList (@($commandArg, '--window-save-state=never') + $Extra)
 
+# A warning annotation, which (unlike the step's log) the public API
+# shows, split into a few, since each one's message is limited.
+function Annotate([string]$title, [string[]]$lines) {
+    $chunk = @()
+    $size = 0
+    foreach ($line in $lines + $null) {
+        if ($null -eq $line -or $size + $line.Length -gt 3000) {
+            if ($chunk.Count -gt 0) {
+                $text = ($chunk -join "`n").Replace('%', '%25').Replace("`r", '%0D').Replace("`n", '%0A')
+                Write-Host "::warning title=$title::$text"
+            }
+            $chunk = @()
+            $size = 0
+        }
+        if ($null -ne $line) { $chunk += $line; $size += $line.Length + 1 }
+    }
+}
+
 function Fail([string]$message) {
-    Write-Host "--- Ghostty's log ---"
-    if (Test-Path $log) { Get-Content $log -Tail 60 | Write-Host }
+    Write-Host "::error title=smoke::$message"
+    if (Test-Path $log) { Annotate 'smoke log' @(Get-Content $log -Tail 40) }
     throw $message
 }
 

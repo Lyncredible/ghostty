@@ -410,11 +410,16 @@ const WindowsPty = struct {
         /// The flags to create pseudoconsoles with.
         flags: windows.DWORD,
 
+        /// Whether it's the one built into Windows, whose console host
+        /// may be too old for some signals (see `setParentWindow`).
+        is_inbox: bool = false,
+
         const inbox: Conpty = .{
             .create = &windows.exp.kernel32.CreatePseudoConsole,
             .resize = &windows.exp.kernel32.ResizePseudoConsole,
             .close = &windows.exp.kernel32.ClosePseudoConsole,
             .flags = 0,
+            .is_inbox = true,
         };
 
         fn load() Conpty {
@@ -672,9 +677,14 @@ const WindowsPty = struct {
     /// example to own their dialogs). As ConptyReparentPseudoConsole does,
     /// we send PTY_SIGNAL_REPARENT_WINDOW (3) and the window, packed, on
     /// the console's signal pipe, which the inbox console host also
-    /// honors (Windows doesn't export a function for it).
+    /// honors (Windows doesn't export a function for it), if it's new
+    /// enough. An older one may end the session on a signal it doesn't
+    /// know, so we only send it to inbox console hosts from builds we've
+    /// seen honor it. Handed off sessions come from Windows Terminal's
+    /// OpenConsole, and conpty.dll is as new, so those always get it.
     pub fn setParentWindow(self: *Pty, hwnd: usize) void {
         if (self.console_closed) return;
+        if (self.handoff == null and self.conpty.is_inbox and windowsBuild() < 26100) return;
         const signal = if (self.handoff) |console| console.signal else
             // A pseudoconsole is a pointer to its handles, the signal
             // pipe first (microsoft/terminal src/winconpty/winconpty.h).
@@ -685,6 +695,13 @@ const WindowsPty = struct {
         if (windows.exp.kernel32.WriteFile(signal, &packet, packet.len, null, null) == windows.FALSE) {
             log.warn("couldn't give the pseudoconsole its parent window err={}", .{windows.GetLastError()});
         }
+    }
+
+    fn windowsBuild() u32 {
+        var info: std.os.windows.RTL_OSVERSIONINFOW = undefined;
+        info.dwOSVersionInfoSize = @sizeOf(std.os.windows.RTL_OSVERSIONINFOW);
+        if (std.os.windows.ntdll.RtlGetVersion(&info) != .SUCCESS) return 0;
+        return info.dwBuildNumber;
     }
 
     /// Get information about the process(es) attached to the PTY. Returns
