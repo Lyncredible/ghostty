@@ -1,6 +1,8 @@
 # Checks, for CI, the quick terminal: it toggles it over IPC
 # (+toggle-quick-terminal) and samples its position while it slides in from
-# the top and back out, then checks that it's hidden. Then it switches to a
+# the top and back out, then checks that it's hidden. With Windows'
+# animation effects turned off (SPI_SETCLIENTAREAANIMATION, restored
+# after), it checks it appears and hides without sliding. Then it switches to a
 # new virtual desktop (Ctrl+Win+D) and checks that showing the quick
 # terminal again shows it there, without Windows switching back. It
 # sends real keys and adds a virtual desktop, so it only runs in CI.
@@ -35,6 +37,10 @@ Add-Type -Namespace GhosttyQuick -Name Win32 -MemberDefinition @'
 [DllImport("user32.dll")] public static extern bool IsWindowVisible(System.IntPtr h);
 [DllImport("user32.dll")] public static extern System.IntPtr GetForegroundWindow();
 [DllImport("user32.dll")] public static extern bool SetProcessDPIAware();
+[DllImport("user32.dll")] static extern bool SystemParametersInfoW(uint action, uint param, ref bool value, uint ini);
+[DllImport("user32.dll")] static extern bool SystemParametersInfoW(uint action, uint param, System.IntPtr value, uint ini);
+public static bool Animations() { bool on = true; SystemParametersInfoW(0x1042, 0, ref on, 0); return on; }   // SPI_GETCLIENTAREAANIMATION
+public static bool SetAnimations(bool on) { return SystemParametersInfoW(0x1043, 0, (System.IntPtr)(on ? 1 : 0), 2); }   // SPI_SETCLIENTAREAANIMATION, SPIF_SENDCHANGE
 delegate bool EnumProc(System.IntPtr h, System.IntPtr l);
 [DllImport("user32.dll")] static extern bool EnumWindows(EnumProc f, System.IntPtr l);
 [DllImport("user32.dll")] static extern uint GetWindowThreadProcessId(System.IntPtr h, out uint pid);
@@ -140,6 +146,28 @@ try {
     Notice "sliding out, its top was: $($out -join ', ')"
     if ($out[-1] -ne 'hidden') { Fail "the quick terminal didn't hide after sliding out" }
     if (-not ($out | Where-Object { $_ -is [int] -and $_ -lt 0 })) { Fail "the quick terminal didn't slide out above the screen" }
+
+    # Without animation effects, it appears and hides in place.
+    if (-not $Remain) {
+        $animations = [GhosttyQuick.Win32]::Animations()
+        if (-not [GhosttyQuick.Win32]::SetAnimations($false)) { Fail "couldn't turn animation effects off" }
+        try {
+            Toggle
+            [void](WaitFor { [GhosttyQuick.Win32]::IsWindowVisible($quick) } 'the quick terminal without animations')
+            $in = SampleTops $quick
+            Notice "without animations, showing it, its top was: $($in -join ', ')"
+            if ($in | Where-Object { $_ -is [int] -and $_ -ne 0 }) { Fail "the quick terminal slid in with animation effects off" }
+            [void](WaitFor { [GhosttyQuick.Win32]::GetForegroundWindow() -eq $quick } 'the quick terminal to be in front')
+            Toggle
+            $out = SampleTops $quick
+            Notice "without animations, hiding it, its top was: $($out -join ', ')"
+            if ($out[-1] -ne 'hidden') { Fail "the quick terminal didn't hide with animation effects off" }
+            if ($out | Where-Object { $_ -is [int] -and $_ -ne 0 }) { Fail "the quick terminal slid out with animation effects off" }
+        } finally {
+            [void][GhosttyQuick.Win32]::SetAnimations($animations)
+        }
+        Write-Host 'Without animation effects, the quick terminal appears and hides in place.'
+    }
 
     # A new virtual desktop, which Ctrl+Win+D creates and switches to: the
     # normal window is then on another desktop.

@@ -358,11 +358,14 @@ fn quickTarget(self: *const Window) ?c.RECT {
 
 /// Slide the quick terminal toward being shown (1) or hidden (0), from
 /// wherever it is now, over `quick-terminal-animation-duration`. It's
-/// hidden at the end of sliding out.
+/// hidden at the end of sliding out. With Windows' animation effects
+/// turned off, it appears and disappears in place.
 fn slideQuick(self: *Window, to: f32) void {
     const config = &self.app.config;
     const seconds = config.@"quick-terminal-animation-duration";
-    const animate = seconds > 0 and config.@"quick-terminal-position" != .center;
+    const animate = seconds > 0 and
+        config.@"quick-terminal-position" != .center and
+        util.animations();
     const distance: f64 = @abs(to - self.quick_shown);
     self.quick_slide = .{
         .from = self.quick_shown,
