@@ -1232,6 +1232,15 @@ Notes:
       console windows are owned by their Ghostty windows (passes
       locally). Unit test: `windows: adopted console` reads the packet.
       Not checked: moving a tab to another window updates it.
+    - On Windows Server 2022 (build 20348) in CI, the first smoke test
+      (cmd) failed right after this landed (d8e51b58a), with no details
+      (smoke.ps1 only printed to the log; it now reports its failure
+      and Ghostty's log as annotations). Most likely the older inbox
+      console host doesn't know the signal and ends the session, so
+      inbox pseudoconsoles only get it from build 26100 on (seen to
+      work here and on the Server 2025 runner); handed off sessions
+      (Windows Terminal's OpenConsole) and conpty.dll always do. Not
+      proven: the next 2022 run passing would support it.
   - Check in CI (installing the MSIX is fine on throwaway runners): set
     the delegation (`HKCU\Console\%%Startup`, `DelegationConsole` and
     `DelegationTerminal`), start `cmd.exe` through Explorer, and expect a
