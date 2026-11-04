@@ -175,9 +175,14 @@ pub fn wndProc(hwnd: c.HWND, msg: c.UINT, wparam: c.WPARAM, lparam: c.LPARAM) ca
 
             var rect: c.RECT = undefined;
             _ = c.GetClientRect(hwnd, &rect);
-            const border = c.CreateSolidBrush(self.border);
+            const col = (util.TipColors{
+                .border = self.border,
+                .background = self.background,
+                .foreground = self.foreground,
+            }).effective();
+            const border = c.CreateSolidBrush(col.border);
             defer _ = c.DeleteObject(border);
-            const background = c.CreateSolidBrush(self.background);
+            const background = c.CreateSolidBrush(col.background);
             defer _ = c.DeleteObject(background);
             _ = c.FillRect(dc, &rect, border);
             var inner = rect;
@@ -188,7 +193,7 @@ pub fn wndProc(hwnd: c.HWND, msg: c.UINT, wparam: c.WPARAM, lparam: c.LPARAM) ca
             const old = c.SelectObject(dc, self.font);
             defer _ = c.SelectObject(dc, old);
             _ = c.SetBkMode(dc, c.TRANSPARENT);
-            _ = c.SetTextColor(dc, self.foreground);
+            _ = c.SetTextColor(dc, col.foreground);
             _ = c.DrawTextW(
                 dc,
                 text.ptr,

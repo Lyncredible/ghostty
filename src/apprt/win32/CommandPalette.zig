@@ -450,17 +450,59 @@ fn updateFonts(self: *CommandPalette) void {
     _ = c.SendMessageW(self.edit, c.WM_SETFONT, @intFromPtr(self.font), c.TRUE);
 }
 
+/// The colors to draw with: the terminal's, or with a high contrast
+/// theme on, the theme's (the field is framed, and the selected entry is
+/// highlighted).
+const Colors = struct {
+    background_brush: c.HBRUSH,
+    field: c.COLORREF,
+    field_brush: c.HBRUSH,
+    foreground: c.COLORREF,
+    dim: c.COLORREF,
+    selected_brush: c.HBRUSH,
+    selected_text: c.COLORREF,
+    selected_dim: c.COLORREF,
+    frame: bool,
+};
+
+fn colors(self: *const CommandPalette) Colors {
+    if (util.highContrast()) return .{
+        .background_brush = c.GetSysColorBrush(c.COLOR_WINDOW),
+        .field = c.GetSysColor(c.COLOR_WINDOW),
+        .field_brush = c.GetSysColorBrush(c.COLOR_WINDOW),
+        .foreground = c.GetSysColor(c.COLOR_WINDOWTEXT),
+        .dim = c.GetSysColor(c.COLOR_WINDOWTEXT),
+        .selected_brush = c.GetSysColorBrush(c.COLOR_HIGHLIGHT),
+        .selected_text = c.GetSysColor(c.COLOR_HIGHLIGHTTEXT),
+        .selected_dim = c.GetSysColor(c.COLOR_HIGHLIGHTTEXT),
+        .frame = true,
+    };
+    return .{
+        .background_brush = self.background_brush,
+        .field = self.field,
+        .field_brush = self.field_brush,
+        .foreground = self.foreground,
+        .dim = self.dim,
+        .selected_brush = self.field_brush,
+        .selected_text = self.foreground,
+        .selected_dim = self.dim,
+        .frame = false,
+    };
+}
+
 fn paint(self: *CommandPalette, dc: c.HDC) void {
     var rect: c.RECT = undefined;
     _ = c.GetClientRect(self.hwnd, &rect);
-    _ = c.FillRect(dc, &rect, self.background_brush);
+    const col = self.colors();
+    _ = c.FillRect(dc, &rect, col.background_brush);
 
     // The field behind the edit control, slightly larger than it.
     var edit_rect: c.RECT = undefined;
     _ = c.GetWindowRect(self.edit, &edit_rect);
     _ = c.MapWindowPoints(null, self.hwnd, @ptrCast(&edit_rect), 2);
     _ = c.InflateRect(&edit_rect, self.scale(6), self.scale(4));
-    _ = c.FillRect(dc, &edit_rect, self.field_brush);
+    _ = c.FillRect(dc, &edit_rect, col.field_brush);
+    if (col.frame) _ = c.FrameRect(dc, &edit_rect, c.GetSysColorBrush(c.COLOR_WINDOWTEXT));
 }
 
 fn drawItem(self: *CommandPalette, item: *const c.DRAWITEMSTRUCT) void {
@@ -470,8 +512,9 @@ fn drawItem(self: *CommandPalette, item: *const c.DRAWITEMSTRUCT) void {
     const entry = &self.entries[index];
     const dc = item.hDC;
 
+    const col = self.colors();
     const selected = item.itemState & c.ODS_SELECTED != 0;
-    _ = c.FillRect(dc, &item.rcItem, if (selected) self.field_brush else self.background_brush);
+    _ = c.FillRect(dc, &item.rcItem, if (selected) col.selected_brush else col.background_brush);
     _ = c.SetBkMode(dc, c.TRANSPARENT);
 
     const p = self.scale(pad);
@@ -484,7 +527,7 @@ fn drawItem(self: *CommandPalette, item: *const c.DRAWITEMSTRUCT) void {
     // The shortcut, on the right, and the description are dimmed.
     const old_font = c.SelectObject(dc, self.small_font);
     defer _ = c.SelectObject(dc, old_font);
-    _ = c.SetTextColor(dc, self.dim);
+    _ = c.SetTextColor(dc, if (selected) col.selected_dim else col.dim);
     var shortcut_rect = rect;
     if (entry.shortcut.len > 0) {
         var size: c.SIZE = undefined;
@@ -502,7 +545,7 @@ fn drawItem(self: *CommandPalette, item: *const c.DRAWITEMSTRUCT) void {
     }
 
     _ = c.SelectObject(dc, self.font);
-    _ = c.SetTextColor(dc, self.foreground);
+    _ = c.SetTextColor(dc, if (selected) col.selected_text else col.foreground);
     var title_rect = rect;
     if (has_description) title_rect.bottom = middle;
     _ = c.DrawTextW(
@@ -542,12 +585,13 @@ pub fn wndProc(hwnd: c.HWND, msg: c.UINT, wparam: c.WPARAM, lparam: c.LPARAM) ca
 
         c.WM_CTLCOLOREDIT => {
             const dc = util.handle(c.HDC, wparam);
-            _ = c.SetTextColor(dc, self.foreground);
-            _ = c.SetBkColor(dc, self.field);
-            return @bitCast(@intFromPtr(self.field_brush));
+            const col = self.colors();
+            _ = c.SetTextColor(dc, col.foreground);
+            _ = c.SetBkColor(dc, col.field);
+            return @bitCast(@intFromPtr(col.field_brush));
         },
 
-        c.WM_CTLCOLORLISTBOX => return @bitCast(@intFromPtr(self.background_brush)),
+        c.WM_CTLCOLORLISTBOX => return @bitCast(@intFromPtr(self.colors().background_brush)),
 
         c.WM_DRAWITEM => {
             const item: *const c.DRAWITEMSTRUCT = @ptrFromInt(@as(usize, @bitCast(lparam)));
