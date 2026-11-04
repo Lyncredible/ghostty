@@ -164,6 +164,15 @@ pub fn highContrast() bool {
     return hc.dwFlags & c.HCF_HIGHCONTRASTON != 0;
 }
 
+/// Whether Windows animates its controls and windows (Settings >
+/// Accessibility > Visual effects > Animation effects). Our own
+/// animations are skipped when it's off.
+pub fn animations() bool {
+    var on: c.BOOL = c.TRUE;
+    if (c.SystemParametersInfoW(c.SPI_GETCLIENTAREAANIMATION, 0, &on, 0) == 0) return true;
+    return on != c.FALSE;
+}
+
 /// The colors of a tooltip-like box (border, background, text): the given
 /// ones, or with a high contrast theme on, the theme's tooltip colors.
 pub const TipColors = struct {
