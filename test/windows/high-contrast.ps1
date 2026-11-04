@@ -31,6 +31,18 @@ Add-Type -Namespace GhosttyContrast -Name Win32 -MemberDefinition @'
 [DllImport("user32.dll")] public static extern bool SetForegroundWindow(System.IntPtr h);
 [DllImport("user32.dll")] public static extern bool SetProcessDPIAware();
 [DllImport("user32.dll")] public static extern uint GetSysColor(int index);
+[StructLayout(LayoutKind.Sequential)] public struct POINT { public int x, y; }
+[DllImport("user32.dll")] public static extern System.IntPtr WindowFromPoint(POINT p);
+[DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(System.IntPtr h, out uint pid);
+// The class and process of the window at a point on screen.
+public static string WindowAt(int x, int y) {
+  var p = new POINT(); p.x = x; p.y = y;
+  var h = WindowFromPoint(p);
+  var s = new System.Text.StringBuilder(64);
+  GetClassNameW(h, s, 64);
+  uint pid; GetWindowThreadProcessId(h, out pid);
+  return s.ToString() + " of process " + pid;
+}
 [DllImport("user32.dll", CharSet = CharSet.Unicode)] public static extern System.IntPtr FindWindowExW(System.IntPtr parent, System.IntPtr after, string cls, string title);
 [DllImport("user32.dll")] public static extern System.IntPtr SendMessageW(System.IntPtr h, uint m, System.IntPtr w, System.IntPtr l);
 [DllImport("user32.dll")] public static extern System.IntPtr GetSystemMenu(System.IntPtr h, bool revert);
@@ -173,7 +185,11 @@ try {
     [void](WaitFor {
             $rect = New-Object GhosttyContrast.Win32+RECT
             [void][GhosttyContrast.Win32]::GetWindowRect($search, [ref]$rect)
-            $script:last = "$(ScreenColor ($rect.l + 2) ($rect.t + 2)) at $($rect.l),$($rect.t)-$($rect.r),$($rect.b)"
+            $x = $rect.l + 2; $y = $rect.t + 2
+            $script:last = "$(ScreenColor $x $y) at $($rect.l),$($rect.t)-$($rect.r),$($rect.b) where there's " +
+                "$([GhosttyContrast.Win32]::WindowAt($x, $y)) (Ghostty is $($process.Id)); the middle is " +
+                "$(ScreenColor (($rect.l + $rect.r) / 2) (($rect.t + $rect.b) / 2)) and the right end " +
+                "$(ScreenColor ($rect.r - 3) (($rect.t + $rect.b) / 2))"
             $last -like "$expected *"
         } "the search bar to be the theme's window color $expected")
     Write-Host "With high contrast, the search bar is $last too."
