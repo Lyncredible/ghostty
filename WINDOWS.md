@@ -119,8 +119,8 @@ Notes:
           `altCode`; `desktop-input.ps1` types Alt+0233 with real keys in
           CI. The first run (41815294434) sent virtual keys without
           scancodes: Windows didn't compose é and made "0233" of the
-          digits instead (so the digits are now also dropped). It now
-          sends scancodes, as a keyboard does (not run yet). The trade-off, as in Windows Terminal:
+          digits instead (so the digits are now also dropped). With
+          scancodes, as a keyboard sends, it passed (run 41819892772). The trade-off, as in Windows Terminal:
           programs can't get Alt+numpad digits.
   - [x] Basic IME: the system composition window, placed at the cursor.
   - [x] Mouse buttons, motion, wheel, and cursor shapes.
@@ -131,8 +131,8 @@ Notes:
           changes with the defaults. Scrolling a screen at a time counts
           as 3. Unit test: `wheelScale` (rounding must not lose a line,
           which it did for some cell heights without a nudge);
-          `wheel-lines.ps1` sets it to 1 and 5 in CI (not run yet: run
-          41815294434 stopped at an earlier failure).
+          `wheel-lines.ps1` sets it to 1 and 5 in CI (passed, run
+          41819892772).
 - [x] The cursor blinks at Windows' cursor blink rate (Settings >
       Accessibility > Text cursor, or the keyboard control panel; 530 ms
       by default, where Ghostty uses 600 ms elsewhere), read again on
@@ -141,8 +141,10 @@ Notes:
       in the renderer thread, which owns the blink timer; programs and
       `cursor-style-blink` still decide whether it blinks at all. Unit
       test: `systemCursorBlinkFrom`. `cursor-blink.ps1` times the blinks
-      on screen and turns blinking off in CI (not run yet: the first
-      run stopped at an earlier failure). It couldn't be timed here, since the cursor only blinks
+      on screen and turns blinking off in CI. Its first run
+      (41819892772) failed before any check, most likely compiling C#
+      against System.Drawing, which is split up in PowerShell 7; the
+      capture is now in PowerShell, as in `dark-mode.ps1` (not run yet). It couldn't be timed here, since the cursor only blinks
       in a focused window, and taking focus on this desktop is avoided.
   - [x] Touch screens: a one finger vertical pan scrolls (with inertia)
         through `WM_GESTURE`, instead of selecting text with emulated

@@ -13,8 +13,15 @@ param(
 
 $ErrorActionPreference = 'Stop'
 if ($env:CI -ne 'true') { throw "this takes focus and changes a desktop setting, so it only runs in CI" }
+# Errors before the checks start (such as compiling the helpers) get an
+# annotation too.
+trap {
+    if (-not $script:reported) { Write-Host "::error title=cursor-blink::$($_.Exception.Message)" }
+    break
+}
 
-Add-Type -ReferencedAssemblies System.Drawing -Namespace GhosttyBlink -Name Win32 -MemberDefinition @'
+Add-Type -AssemblyName System.Drawing
+Add-Type -Namespace GhosttyBlink -Name Win32 -MemberDefinition @'
 [StructLayout(LayoutKind.Sequential)] public struct RECT { public int l, t, r, b; }
 [StructLayout(LayoutKind.Sequential)] public struct POINT { public int x, y; }
 [DllImport("user32.dll")] public static extern bool GetClientRect(System.IntPtr h, out RECT r);
@@ -24,17 +31,6 @@ Add-Type -ReferencedAssemblies System.Drawing -Namespace GhosttyBlink -Name Win3
 [DllImport("user32.dll")] public static extern bool SetProcessDPIAware();
 [DllImport("user32.dll")] public static extern uint GetCaretBlinkTime();
 [DllImport("user32.dll", SetLastError = true)] public static extern bool SetCaretBlinkTime(uint ms);
-// A hash of the window's client area on screen.
-public static long Hash(System.IntPtr h) {
-  RECT r; GetClientRect(h, out r);
-  var p = new POINT(); ClientToScreen(h, ref p);
-  using (var bmp = new System.Drawing.Bitmap(r.r, r.b)) {
-    using (var g = System.Drawing.Graphics.FromImage(bmp)) g.CopyFromScreen(p.x, p.y, 0, 0, bmp.Size);
-    long sum = 0;
-    for (int y = 0; y < bmp.Height; y += 2) for (int x = 0; x < bmp.Width; x += 2) sum = sum * 31 + bmp.GetPixel(x, y).ToArgb();
-    return sum;
-  }
-}
 '@
 [void][GhosttyBlink.Win32]::SetProcessDPIAware()
 
@@ -48,12 +44,29 @@ function Fail([string]$message) {
     throw $message
 }
 
+# A hash of the window's client area on screen.
+function ScreenHash {
+    $rect = New-Object GhosttyBlink.Win32+RECT
+    [void][GhosttyBlink.Win32]::GetClientRect($window, [ref]$rect)
+    $point = New-Object GhosttyBlink.Win32+POINT
+    [void][GhosttyBlink.Win32]::ClientToScreen($window, [ref]$point)
+    $bitmap = New-Object System.Drawing.Bitmap $rect.r, $rect.b
+    try {
+        $graphics = [System.Drawing.Graphics]::FromImage($bitmap)
+        $graphics.CopyFromScreen($point.x, $point.y, 0, 0, $bitmap.Size)
+        $graphics.Dispose()
+        $stream = New-Object System.IO.MemoryStream
+        $bitmap.Save($stream, [System.Drawing.Imaging.ImageFormat]::Bmp)
+        [Convert]::ToBase64String([Security.Cryptography.SHA256]::Create().ComputeHash($stream.ToArray()))
+    } finally { $bitmap.Dispose() }
+}
+
 # The times (in ms) the window changed on screen within $ms.
 function Changes([int]$ms) {
     $sw = [Diagnostics.Stopwatch]::StartNew()
     $last = $null; $changes = @()
     while ($sw.ElapsedMilliseconds -lt $ms) {
-        $hash = [GhosttyBlink.Win32]::Hash($window)
+        $hash = ScreenHash
         if ($null -ne $last -and $hash -ne $last) { $changes += $sw.ElapsedMilliseconds }
         $last = $hash
         Start-Sleep -Milliseconds 10
@@ -84,6 +97,7 @@ try {
     Write-Host 'With blinking off, the cursor stays on.'
 } catch {
     if (-not $script:reported) { Write-Host "::error title=cursor-blink::$($_.Exception.Message)" }
+    $script:reported = $true
     throw
 } finally {
     [void][GhosttyBlink.Win32]::SetCaretBlinkTime($saved)
