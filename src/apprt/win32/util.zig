@@ -164,6 +164,23 @@ pub fn highContrast() bool {
     return hc.dwFlags & c.HCF_HIGHCONTRASTON != 0;
 }
 
+/// The colors of a tooltip-like box (border, background, text): the given
+/// ones, or with a high contrast theme on, the theme's tooltip colors.
+pub const TipColors = struct {
+    border: c.COLORREF,
+    background: c.COLORREF,
+    foreground: c.COLORREF,
+
+    pub fn effective(self: TipColors) TipColors {
+        if (!highContrast()) return self;
+        return .{
+            .border = c.GetSysColor(c.COLOR_INFOTEXT),
+            .background = c.GetSysColor(c.COLOR_INFOBK),
+            .foreground = c.GetSysColor(c.COLOR_INFOTEXT),
+        };
+    }
+};
+
 /// Make the menus of this process (popup menus and the system menu) dark
 /// or light, to match our windows rather than the system's app theme.
 ///

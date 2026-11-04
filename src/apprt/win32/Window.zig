@@ -2033,10 +2033,12 @@ pub fn wndProc(
         },
 
         // Sent when a high contrast theme is turned on or off, or its
-        // colors change; the tab bar draws with them.
+        // colors change. What we draw ourselves (the tab bar, search
+        // bar, command palette and badges) checks for high contrast as
+        // it paints, so repaint it all.
         c.WM_SYSCOLORCHANGE => {
             self.updateTheme();
-            self.tab_bar.invalidate();
+            _ = c.RedrawWindow(hwnd, null, null, c.RDW_INVALIDATE | c.RDW_ERASE | c.RDW_ALLCHILDREN);
             return c.DefWindowProcW(hwnd, msg, wparam, lparam);
         },
 

@@ -259,11 +259,46 @@ fn editChanged(self: *SearchBar) void {
     self.emit(.{ .changed = utf8[0..n] });
 }
 
+/// The colors to draw with: the terminal's, or with a high contrast
+/// theme on, the theme's (the field is framed, and hovered buttons are
+/// highlighted).
+const Colors = struct {
+    background: c.COLORREF,
+    field: c.COLORREF,
+    field_brush: c.HBRUSH,
+    foreground: c.COLORREF,
+    hot: c.COLORREF,
+    hot_text: c.COLORREF,
+    frame: bool,
+};
+
+fn colors(self: *const SearchBar) Colors {
+    if (util.highContrast()) return .{
+        .background = c.GetSysColor(c.COLOR_WINDOW),
+        .field = c.GetSysColor(c.COLOR_WINDOW),
+        .field_brush = c.GetSysColorBrush(c.COLOR_WINDOW),
+        .foreground = c.GetSysColor(c.COLOR_WINDOWTEXT),
+        .hot = c.GetSysColor(c.COLOR_HIGHLIGHT),
+        .hot_text = c.GetSysColor(c.COLOR_HIGHLIGHTTEXT),
+        .frame = true,
+    };
+    return .{
+        .background = self.background,
+        .field = self.field,
+        .field_brush = self.edit_brush,
+        .foreground = self.foreground,
+        .hot = self.field,
+        .hot_text = self.foreground,
+        .frame = false,
+    };
+}
+
 fn paint(self: *SearchBar, dc: c.HDC) void {
     var rect: c.RECT = undefined;
     _ = c.GetClientRect(self.hwnd, &rect);
+    const col = self.colors();
 
-    const background = c.CreateSolidBrush(self.background);
+    const background = c.CreateSolidBrush(col.background);
     defer _ = c.DeleteObject(background);
     _ = c.FillRect(dc, &rect, background);
 
@@ -272,12 +307,13 @@ fn paint(self: *SearchBar, dc: c.HDC) void {
     _ = c.GetWindowRect(self.edit, &edit_rect);
     _ = c.MapWindowPoints(null, self.hwnd, @ptrCast(&edit_rect), 2);
     _ = c.InflateRect(&edit_rect, self.scale(4), self.scale(3));
-    _ = c.FillRect(dc, &edit_rect, self.edit_brush);
+    _ = c.FillRect(dc, &edit_rect, col.field_brush);
+    if (col.frame) _ = c.FrameRect(dc, &edit_rect, c.GetSysColorBrush(c.COLOR_WINDOWTEXT));
 
     const old_font = c.SelectObject(dc, self.font);
     defer _ = c.SelectObject(dc, old_font);
     _ = c.SetBkMode(dc, c.TRANSPARENT);
-    _ = c.SetTextColor(dc, self.foreground);
+    _ = c.SetTextColor(dc, col.foreground);
 
     // The match count, left of the buttons.
     var count_rect = self.buttonRect(.previous);
@@ -305,10 +341,11 @@ fn paint(self: *SearchBar, dc: c.HDC) void {
     }) |entry| {
         var r = self.buttonRect(entry[0]);
         if (self.hot == entry[0]) {
-            const hot = c.CreateSolidBrush(self.field);
+            const hot = c.CreateSolidBrush(col.hot);
             defer _ = c.DeleteObject(hot);
             _ = c.FillRect(dc, &r, hot);
         }
+        _ = c.SetTextColor(dc, if (self.hot == entry[0]) col.hot_text else col.foreground);
         var glyph = [_]u16{entry[1]};
         _ = c.DrawTextW(dc, &glyph, 1, &r, c.DT_SINGLELINE | c.DT_VCENTER | c.DT_CENTER | c.DT_NOPREFIX);
     }
@@ -373,9 +410,10 @@ pub fn wndProc(hwnd: c.HWND, msg: c.UINT, wparam: c.WPARAM, lparam: c.LPARAM) ca
 
         c.WM_CTLCOLOREDIT => {
             const dc = util.handle(c.HDC, wparam);
-            _ = c.SetTextColor(dc, self.foreground);
-            _ = c.SetBkColor(dc, self.field);
-            return @bitCast(@intFromPtr(self.edit_brush));
+            const col = self.colors();
+            _ = c.SetTextColor(dc, col.foreground);
+            _ = c.SetBkColor(dc, col.field);
+            return @bitCast(@intFromPtr(col.field_brush));
         },
 
         c.WM_COMMAND => {
