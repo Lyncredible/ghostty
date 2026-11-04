@@ -1191,6 +1191,11 @@ Notes:
         both). The manifest packs (the packaging API validates it; a
         broken element fails). CI test `default-terminal.ps1` sets the
         delegation and starts cmd in a new console.
+    - First CI run (033f2b0a2): COM did start the packaged Ghostty, but
+      cmd's output never showed up in it within 60 s. The handoff test
+      with the unpackaged build passed in the same run. The test now
+      collects Ghostty's debugger output and the processes involved,
+      and reports them as annotations, to find where it stops.
   - Check in CI (installing the MSIX is fine on throwaway runners): set
     the delegation (`HKCU\Console\%%Startup`, `DelegationConsole` and
     `DelegationTerminal`), start `cmd.exe` through Explorer, and expect a
