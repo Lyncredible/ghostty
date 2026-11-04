@@ -180,6 +180,15 @@ high contrast theme on (`SPI_SETHIGHCONTRAST`) and expects the theme's
 window color, then turns it off and expects the terminal's again. It
 changes the whole desktop, so it only runs in CI.
 
+## device-lost.ps1
+
+Starts a debug build with `GHOSTTY_D3D11_LOSE_DEVICE=3`, which acts as if
+the Direct3D device was removed at the third present (as when Windows
+updates or restarts the graphics driver), and checks the log says the
+device was replaced and the renderer is healthy again, and that the window
+(read with `PrintWindow`) shows the background and cmd's banner. It only
+opens Ghostty's own window, so it can run anywhere.
+
 ## dark-mode.ps1
 
 Starts Ghostty with a light and a dark theme, switches Windows between

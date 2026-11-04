@@ -81,6 +81,14 @@ pub fn createDevice(self: *const Device) !Created {
     return create(@ptrCast(self.adapter));
 }
 
+/// Create a device on the adapter Windows considers primary now, to
+/// replace a lost one: after a driver update, our adapter is gone.
+pub fn createDefault() !Created {
+    const adapter = chooseAdapter();
+    defer com.releaseOpt(adapter);
+    return create(@ptrCast(adapter));
+}
+
 /// Run on a thread at startup by the core. The first device in a process
 /// loads the graphics driver, which took about 115 ms on a GeForce GT 750M
 /// against 24 ms for later ones, and releasing it let the driver unload
@@ -184,6 +192,13 @@ fn create(adapter: ?*c.IDXGIAdapter) !Created {
                 "D3D11CreateDevice failed driver={} flags=0x{x} hr=0x{x:0>8}",
                 .{ attempt.driver, attempt.flags, @as(u32, @bitCast(hr)) },
             );
+            // Our adapter can be gone, such as after a driver update, so
+            // try the default one before falling back to WARP. (A debug
+            // device fails without the debug layer installed, and the next
+            // attempt is without it.)
+            if (attempt_adapter != null and attempt.flags & c.D3D11_CREATE_DEVICE_DEBUG == 0) {
+                if (create(null)) |created| return created else |_| {}
+            }
             continue;
         }
 

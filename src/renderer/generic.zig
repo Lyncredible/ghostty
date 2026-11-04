@@ -268,6 +268,10 @@ pub fn Renderer(comptime GraphicsAPI: type) type {
         /// Whether or not we have custom shaders.
         has_custom_shaders: bool = false,
 
+        /// True when our graphics API lost its device and replacing it
+        /// failed, so `drawFrame` tries again. See `recoverDevice`.
+        device_lost: bool = false,
+
         /// Our shader pipelines.
         shaders: Shaders,
 
@@ -1229,6 +1233,42 @@ pub fn Renderer(comptime GraphicsAPI: type) type {
             }
         }
 
+        /// Replace a graphics device that was lost, such as when Windows
+        /// updates or restarts the graphics driver: everything made from
+        /// it is released, including images and shaders, then the API
+        /// makes a new device and the next frame rebuilds the rest, as
+        /// after `displayRealized`. Returns whether the new device is
+        /// ready. If not, `drawFrame` tries again.
+        ///
+        /// Caller must lock the draw mutex.
+        fn recoverDevice(self: *Self) bool {
+            self.display_realized = false;
+            self.releaseGpuResources();
+            self.images.deinit(self.alloc);
+            self.images = .empty;
+            if (self.bg_image) |img| {
+                img.deinit(self.alloc);
+                self.bg_image = null;
+            }
+
+            self.api.recreateDevice() catch |err| {
+                if (!self.device_lost) log.err("unable to replace the lost graphics device err={}", .{err});
+                self.device_lost = true;
+                return false;
+            };
+            self.device_lost = false;
+            self.display_realized = true;
+            self.reinitialize_shaders = true;
+            self.target_config_modified +%= 1;
+
+            // Kitty images come back from the terminal on the next
+            // update, but the background image has to be loaded again.
+            self.prepBackgroundImage() catch |err| {
+                log.warn("error loading the background image again err={}", .{err});
+            };
+            return true;
+        }
+
         /// Release the GPU resources we hold while the surface is not
         /// visible. Today this is the swap chain (render targets, font
         /// atlas texture copies, cell buffers, custom shader textures),
@@ -1724,7 +1764,20 @@ pub fn Renderer(comptime GraphicsAPI: type) type {
             const sync_display_link = locked: {
                 self.draw_mutex.lockUncancelable(global.io());
                 defer self.draw_mutex.unlock(global.io());
-                break :locked try self.drawFrameLocked(sync);
+                if (comptime !@hasDecl(GraphicsAPI, "recreateDevice")) {
+                    break :locked try self.drawFrameLocked(sync);
+                } else {
+                    // A lost device shows up as failed presents, which a
+                    // frame reports in its health, or as errors.
+                    if (self.device_lost and !self.recoverDevice()) return;
+                    const result = self.drawFrameLocked(sync);
+                    if (self.api.deviceLost()) {
+                        log.warn("the graphics device was lost, replacing it", .{});
+                        if (!self.recoverDevice()) return;
+                        break :locked try self.drawFrameLocked(sync);
+                    }
+                    break :locked try result;
+                }
             };
 
             if (sync_display_link) self.syncDisplayLink(null, null);
