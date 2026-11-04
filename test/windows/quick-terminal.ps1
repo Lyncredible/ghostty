@@ -1,8 +1,9 @@
 # Checks, for CI, the quick terminal: it toggles it over IPC
 # (+toggle-quick-terminal) and samples its position while it slides in from
-# the top and back out, then checks that it's hidden. With Windows'
-# animation effects turned off (SPI_SETCLIENTAREAANIMATION, restored
-# after), it checks it appears and hides without sliding. Then it switches to a
+# the top and back out, then checks that it's hidden, with Windows'
+# animation effects on (SPI_SETCLIENTAREAANIMATION; they're off on CI's
+# runners). With them off, it checks it appears and hides without
+# sliding. The setting is restored after. Then it switches to a
 # new virtual desktop (Ctrl+Win+D) and checks that showing the quick
 # terminal again shows it there, without Windows switching back. It
 # sends real keys and adds a virtual desktop, so it only runs in CI.
@@ -128,6 +129,10 @@ function SampleTops($hwnd) {
     return , $tops
 }
 
+$animations = [GhosttyQuick.Win32]::Animations()
+Notice "animation effects are $(if ($animations) { 'on' } else { 'off' }) here"
+if (-not [GhosttyQuick.Win32]::SetAnimations($true)) { Fail "couldn't turn animation effects on" }
+
 try {
     # Wait for the normal window, so the toggles go to this instance.
     [void](WaitFor { $process.Refresh(); $process.MainWindowHandle -ne 0 } 'the window')
@@ -149,7 +154,6 @@ try {
 
     # Without animation effects, it appears and hides in place.
     if (-not $Remain) {
-        $animations = [GhosttyQuick.Win32]::Animations()
         if (-not [GhosttyQuick.Win32]::SetAnimations($false)) { Fail "couldn't turn animation effects off" }
         try {
             Toggle
@@ -164,7 +168,7 @@ try {
             if ($out[-1] -ne 'hidden') { Fail "the quick terminal didn't hide with animation effects off" }
             if ($out | Where-Object { $_ -is [int] -and $_ -ne 0 }) { Fail "the quick terminal slid out with animation effects off" }
         } finally {
-            [void][GhosttyQuick.Win32]::SetAnimations($animations)
+            [void][GhosttyQuick.Win32]::SetAnimations($true)
         }
         Write-Host 'Without animation effects, the quick terminal appears and hides in place.'
     }
@@ -197,6 +201,7 @@ try {
     }
     Write-Host 'The quick terminal shows on the new desktop.'
 } finally {
+    [void][GhosttyQuick.Win32]::SetAnimations($animations)
     if (-not $process.HasExited) { Stop-Process -Id $process.Id -Force }
     # Close the desktop we added (Ctrl+Win+F4).
     [GhosttyQuick.Win32]::Chord(0x11, 0x5B, 0x73)
