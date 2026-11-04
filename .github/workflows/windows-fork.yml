@@ -145,6 +145,12 @@ jobs:
         shell: pwsh
         run: ./test/windows/wheel-lines.ps1 -Exe zig-out/bin/ghostty.exe
 
+      # The cursor blinks at Windows' rate, and not when that's off.
+      - name: Cursor blink test
+        timeout-minutes: 5
+        shell: pwsh
+        run: ./test/windows/cursor-blink.ps1 -Exe zig-out/bin/ghostty.exe
+
       - name: Dark mode test
         shell: pwsh
         run: ./test/windows/dark-mode.ps1 -Exe zig-out/bin/ghostty.exe

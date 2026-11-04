@@ -130,6 +130,17 @@ Notes:
           which it did for some cell heights without a nudge);
           `wheel-lines.ps1` sets it to 1 and 5 in CI (not run yet, since
           pushing failed).
+- [x] The cursor blinks at Windows' cursor blink rate (Settings >
+      Accessibility > Text cursor, or the keyboard control panel; 530 ms
+      by default, where Ghostty uses 600 ms elsewhere), read again on
+      every blink, and stays on when blinking is turned off there
+      (`GetCaretBlinkTime` is INFINITE), like other Windows apps. This is
+      in the renderer thread, which owns the blink timer; programs and
+      `cursor-style-blink` still decide whether it blinks at all. Unit
+      test: `systemCursorBlinkFrom`. `cursor-blink.ps1` times the blinks
+      on screen and turns blinking off in CI (not run yet, since pushing
+      failed). It couldn't be timed here, since the cursor only blinks
+      in a focused window, and taking focus on this desktop is avoided.
   - [x] Touch screens: a one finger vertical pan scrolls (with inertia)
         through `WM_GESTURE`, instead of selecting text with emulated
         mouse input. Needs a check on a touch screen.
