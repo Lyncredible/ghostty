@@ -284,6 +284,13 @@ pub const exp = struct {
             hFile: HANDLE,
             lpOverlapped: ?*OVERLAPPED,
         ) callconv(.winapi) BOOL;
+        pub extern "kernel32" fn WriteFile(
+            hFile: HANDLE,
+            lpBuffer: *const anyopaque,
+            nNumberOfBytesToWrite: DWORD,
+            lpNumberOfBytesWritten: ?*DWORD,
+            lpOverlapped: ?*OVERLAPPED,
+        ) callconv(.winapi) BOOL;
         pub extern "kernel32" fn ReadFile(
             hFile: HANDLE,
             lpBuffer: LPVOID,

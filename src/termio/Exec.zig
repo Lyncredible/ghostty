@@ -671,6 +671,10 @@ pub const Config = struct {
 
     rt_pre_exec_info: Command.RtPreExecInfo,
     rt_post_fork_info: Command.RtPostForkInfo,
+
+    /// A console session that Windows handed us, to show instead of
+    /// starting `command`. init takes ownership of its handles.
+    handoff: ?ptypkg.ConsoleHandoff = null,
 };
 
 const Subprocess = struct {
@@ -688,6 +692,8 @@ const Subprocess = struct {
     /// for getProcessInfo, which other threads call. 0 when it's not
     /// running.
     windows_pid: std.atomic.Value(u32) = .init(0),
+    /// A handed off console session, until `start` adopts it.
+    handoff: ?ptypkg.ConsoleHandoff = null,
 
     rt_pre_exec_info: Command.RtPreExecInfo,
     rt_post_fork_info: Command.RtPostForkInfo,
@@ -715,6 +721,8 @@ const Subprocess = struct {
     /// Initialize the subprocess. This will NOT start it, this only sets
     /// up the internal state necessary to start it later.
     pub fn init(gpa: Allocator, cfg: Config) !Subprocess {
+        errdefer if (cfg.handoff) |handoff| closeHandoff(handoff);
+
         // We have a lot of maybe-allocations that all share the same lifetime
         // so use an arena so we don't end up in an accounting nightmare.
         var arena = std.heap.ArenaAllocator.init(gpa);
@@ -1015,6 +1023,7 @@ const Subprocess = struct {
 
             .rt_pre_exec_info = cfg.rt_pre_exec_info,
             .rt_post_fork_info = cfg.rt_post_fork_info,
+            .handoff = cfg.handoff,
 
             // Should be initialized with initTerminal call.
             .grid_size = .{},
@@ -1025,6 +1034,7 @@ const Subprocess = struct {
     /// Clean up the subprocess. This will stop the subprocess if it is started.
     pub fn deinit(self: *Subprocess) void {
         self.stop();
+        if (self.handoff) |handoff| closeHandoff(handoff);
         if (self.pty) |*pty| pty.deinit();
         if (self.env) |*env| env.deinit();
         self.arena.deinit();
@@ -1038,6 +1048,13 @@ const Subprocess = struct {
         write: Pty.Fd,
     } {
         assert(self.pty == null and self.process == null);
+
+        if (comptime builtin.target.os.tag == .windows) {
+            if (self.handoff) |handoff| {
+                self.adoptHandoff(handoff);
+                return .{ .read = handoff.out_pipe, .write = handoff.in_pipe };
+            }
+        }
 
         // This function is funny because on POSIX systems it can
         // fail in the forked process. This is flipped to true if
@@ -1252,6 +1269,39 @@ const Subprocess = struct {
     fn childPreExec(self: *Subprocess) !void {
         // Setup our pty
         try self.pty.?.childPreExec();
+    }
+
+    /// Show the handed off console session instead of starting a command:
+    /// its console program is our process.
+    fn adoptHandoff(self: *Subprocess, handoff: ptypkg.ConsoleHandoff) void {
+        self.handoff = null;
+        self.pty = Pty.adopt(.{
+            .ws_row = @intCast(self.grid_size.rows),
+            .ws_col = @intCast(self.grid_size.columns),
+            .ws_xpixel = @intCast(self.screen_size.width),
+            .ws_ypixel = @intCast(self.screen_size.height),
+        }, handoff);
+        self.process = .{ .fork_exec = .{
+            .path = self.args[0],
+            .args = self.args,
+            .os_pre_exec = null,
+            .rt_pre_exec = null,
+            .rt_pre_exec_info = self.rt_pre_exec_info,
+            .rt_post_fork = null,
+            .rt_post_fork_info = self.rt_post_fork_info,
+            .pid = handoff.client,
+        } };
+        const pid = windows.exp.kernel32.GetProcessId(handoff.client);
+        self.windows_pid.store(pid, .release);
+        log.info("adopted a handed off console pid={}", .{pid});
+    }
+
+    fn closeHandoff(handoff: ptypkg.ConsoleHandoff) void {
+        if (comptime builtin.target.os.tag != .windows) return;
+        handoff.console.close();
+        _ = windows.exp.kernel32.CloseHandle(handoff.in_pipe);
+        _ = windows.exp.kernel32.CloseHandle(handoff.out_pipe);
+        _ = windows.exp.kernel32.CloseHandle(handoff.client);
     }
 
     /// Called to notify that we exited externally so we can unset our
