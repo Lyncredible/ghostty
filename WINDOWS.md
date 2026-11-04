@@ -1239,8 +1239,9 @@ Notes:
       console host doesn't know the signal and ends the session, so
       inbox pseudoconsoles only get it from build 26100 on (seen to
       work here and on the Server 2025 runner); handed off sessions
-      (Windows Terminal's OpenConsole) and conpty.dll always do. Not
-      proven: the next 2022 run passing would support it.
+      (Windows Terminal's OpenConsole) and conpty.dll always do. The
+      next run (db796e2fb) passed on Server 2022, which supports that
+      but doesn't prove it (the failure could also have been a flake).
   - Check in CI (installing the MSIX is fine on throwaway runners): set
     the delegation (`HKCU\Console\%%Startup`, `DelegationConsole` and
     `DelegationTerminal`), start `cmd.exe` through Explorer, and expect a
