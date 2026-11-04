@@ -157,6 +157,13 @@ Fills cmd with numbered lines, drags a software finger down the terminal
 with `InjectTouchInput`, and checks that earlier lines scrolled into
 view. It only runs in CI.
 
+## wheel-lines.ps1
+
+Fills cmd with numbered lines, sets Windows' "lines to scroll at a time"
+to 1 and then 5 (for the session, not saved), posts a wheel notch for
+each, and checks the view scrolled that many lines. It changes a desktop
+setting, so it only runs in CI.
+
 ## dark-mode.ps1
 
 Starts Ghostty with a light and a dark theme, switches Windows between
