@@ -13,6 +13,7 @@ const CoreSurface = @import("../../Surface.zig");
 const internal_os = @import("../../os/main.zig");
 const cli = @import("../../cli.zig");
 const global = @import("../../global.zig");
+const ptypkg = @import("../../pty.zig");
 
 const util = @import("util.zig");
 const c = util.c;
@@ -29,6 +30,7 @@ const SearchBar = @import("SearchBar.zig");
 const CommandPalette = @import("CommandPalette.zig");
 const InspectorWindow = @import("InspectorWindow.zig");
 const SaveState = @import("SaveState.zig");
+const Handoff = @import("Handoff.zig");
 const JumpList = @import("JumpList.zig");
 const SplitDrag = @import("SplitDrag.zig");
 const shell = @import("shell.zig");
@@ -67,8 +69,15 @@ const WM_GHOSTTY_EXPORT = c.WM_APP + 7;
 /// Posted to quit, asking first if a terminal is busy.
 const WM_GHOSTTY_QUIT = c.WM_APP + 8;
 
+/// Posted to open windows for `pending_handoffs`.
+const WM_GHOSTTY_HANDOFF = c.WM_APP + 9;
+
 /// The ID of the timer on our message window for the quit timer.
 const quit_timer_id = 1;
+
+/// The ID of the timer on our message window that quits a launch by COM
+/// (`-Embedding`) that no console session was handed to.
+const handoff_timer_id = 2;
 
 /// The window class names we register.
 pub const window_class = std.unicode.utf8ToUtf16LeStringLiteral("GhosttyWindow");
@@ -138,6 +147,16 @@ session_saved: bool = false,
 /// The single instance lock for our app class, held while we run.
 instance_mutex: ?c.HANDLE = null,
 
+/// Whether COM started us (`-Embedding`) to take a console session.
+launched_by_com: bool = false,
+
+/// Console sessions handed to us (see Handoff.zig), waiting for windows.
+pending_handoffs: std.ArrayList(ptypkg.ConsoleHandoff) = .empty,
+
+/// The session for the next surface we create, which takes it
+/// (`Surface.takeConsoleHandoff`).
+next_handoff: ?ptypkg.ConsoleHandoff = null,
+
 pub fn init(
     self: *App,
     core_app: *CoreApp,
@@ -164,12 +183,15 @@ pub fn init(
 
     // Single instance: a launch that the running instance of our class can
     // open as a new window is handed to it, and we exit without a window.
+    // When COM starts us, it's for a console session that's handed to us,
+    // so we stay.
     const class = config.class orelse Ipc.default_class;
+    const launched_by_com = Handoff.launchedByCom(alloc);
     var instance_mutex: ?c.HANDLE = null;
     switch (Ipc.claim(class)) {
         .primary => |mutex| instance_mutex = mutex,
         .failed => log.warn("unable to create the single instance lock", .{}),
-        .secondary => if (forwardLaunch(alloc, &config, class)) {
+        .secondary => if (!launched_by_com and forwardLaunch(alloc, &config, class)) {
             log.info("opened this launch in the running instance", .{});
             std.process.exit(0);
         } else {
@@ -232,12 +254,14 @@ pub fn init(
         .notifier = .init(msg_hwnd, util.loadIcon(hinstance, 1)),
         .global_keys = .init(alloc, msg_hwnd),
         .instance_mutex = instance_mutex,
+        .launched_by_com = launched_by_com,
     };
 
     _ = c.SetWindowLongPtrW(msg_hwnd, util.GWLP_USERDATA, @bitCast(@intFromPtr(self)));
     self.global_keys.update(&self.config);
     JumpList.updateInBackground(self.config.class);
     SaveState.registerRestart(self);
+    Handoff.register(self);
     if (self.config._diagnostics.items().len > 0) {
         _ = c.PostMessageW(msg_hwnd, WM_GHOSTTY_CONFIG_ERRORS, 0, 0);
     }
@@ -532,8 +556,13 @@ pub fn run(self: *App) !void {
     self.updateColorScheme();
 
     // Create our initial window, if requested. Otherwise we start the
-    // quit timer, as if the last window was just closed.
-    if (self.config.@"initial-window") {
+    // quit timer, as if the last window was just closed. COM starts us
+    // for a console session, whose window opens when it arrives.
+    if (self.launched_by_com) {
+        if (c.SetTimer(self.msg_hwnd, handoff_timer_id, 30 * std.time.ms_per_s, null) == 0) {
+            log.warn("failed to start the handoff timer err={}", .{c.GetLastError()});
+        }
+    } else if (self.config.@"initial-window") {
         if (!try self.restoreWindows()) _ = try self.newWindow(.{ .parent = null });
     } else {
         self.armQuitTimer();
@@ -688,6 +717,10 @@ pub fn lastWindow(self: *const App) ?*Window {
 }
 
 pub fn terminate(self: *App) void {
+    Handoff.unregister();
+    for (self.pending_handoffs.items) |handoff| Handoff.close(handoff);
+    self.pending_handoffs.deinit(self.core_app.alloc);
+
     // Close any windows that are still open. This deinitializes their
     // surfaces, which must happen before the core app is destroyed.
     self.releaseClosedWindows();
@@ -818,6 +851,18 @@ fn msgWndProc(
                 _ = c.KillTimer(hwnd, quit_timer_id);
                 // Only quit if no surfaces were opened in the meantime.
                 if (self.core_app.surfaces.items.len == 0) self.quit();
+                return 0;
+            } else if (wparam == handoff_timer_id) {
+                _ = c.KillTimer(hwnd, handoff_timer_id);
+                if (self.core_app.surfaces.items.len == 0) {
+                    log.warn("COM started us, but no console session arrived", .{});
+                    self.quit();
+                }
+                return 0;
+            },
+
+            WM_GHOSTTY_HANDOFF => {
+                self.openHandoffs();
                 return 0;
             },
 
@@ -1575,6 +1620,30 @@ const PendingLink = struct {
         alloc.destroy(self);
     }
 };
+
+/// Open a window for a console session handed to us (Handoff.zig), once
+/// the call that handed it returns.
+pub fn handOff(self: *App, handoff: ptypkg.ConsoleHandoff) void {
+    self.pending_handoffs.append(self.core_app.alloc, handoff) catch {
+        Handoff.close(handoff);
+        return;
+    };
+    _ = c.PostMessageW(self.msg_hwnd, WM_GHOSTTY_HANDOFF, 0, 0);
+}
+
+fn openHandoffs(self: *App) void {
+    while (self.pending_handoffs.pop()) |handoff| {
+        self.next_handoff = handoff;
+        _ = self.newWindow(.{ .parent = null }) catch |err| {
+            log.warn("error opening a window for a console session err={}", .{err});
+        };
+        // The window's surface takes it; if none did, nobody will.
+        if (self.next_handoff) |left| {
+            Handoff.close(left);
+            self.next_handoff = null;
+        }
+    }
+}
 
 const PendingExport = struct {
     owner: c.HWND,

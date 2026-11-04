@@ -1150,8 +1150,24 @@ Notes:
         (`takeConsoleHandoff`), with the console program as its process.
         Unit test `windows: adopted console`: the signal pipe gets the
         resize packets, and closing the console closes it.
-  - [ ] The COM class (`ITerminalHandoff3`), registered by each running
-        Ghostty, and `-Embedding` launches.
+  - [x] The COM class (`apprt/win32/Handoff.zig`): each running Ghostty
+        registers it (`CoRegisterClassObject`), and a handoff opens a new
+        window whose terminal adopts the session. COM's `-Embedding` is
+        ignored by the config parser, a COM launch doesn't forward itself
+        to a running instance or open a default window, and it quits
+        after 30 s if no session arrives.
+    - Checked locally with `test/windows/handoff.ps1`: through Windows
+      Terminal's proxy, a session that `handoff_client.c` handed to a
+      running Ghostty opened a window showing cmd's output, posted
+      typing reached cmd, and `exit` closed that window while the first
+      one stayed. (The client first had to start cmd with
+      `STARTF_USESTDHANDLES`, or cmd wrote to the client's redirected
+      output instead of the pseudoconsole.)
+  - [ ] An `-Embedding` launch (needs the class registered with COM),
+        the startup info (title, show state), and resizing the handed
+        off console through its signal pipe in a live session.
+  - [ ] Register the class and the `com.microsoft.windows.terminal.host`
+        extension in the MSIX.
   - Check in CI (installing the MSIX is fine on throwaway runners): set
     the delegation (`HKCU\Console\%%Startup`, `DelegationConsole` and
     `DelegationTerminal`), start `cmd.exe` through Explorer, and expect a

@@ -32,6 +32,7 @@ const drop = @import("drop.zig");
 const SplitDrag = @import("SplitDrag.zig");
 const Accessibility = @import("Accessibility.zig");
 const internal_os = @import("../../os/main.zig");
+const ptypkg = @import("../../pty.zig");
 const windows = internal_os.windows;
 
 const log = std.log.scoped(.win32);
@@ -408,6 +409,15 @@ pub fn deinit(self: *Surface) void {
 
 pub fn core(self: *Surface) *CoreSurface {
     return &self.core_surface;
+}
+
+/// The console session for our terminal to show, if one was handed to us
+/// for this surface (see Handoff.zig). The core calls this once, as it
+/// creates our terminal, and takes ownership.
+pub fn takeConsoleHandoff(self: *Surface) ?ptypkg.ConsoleHandoff {
+    const handoff = self.app.next_handoff;
+    self.app.next_handoff = null;
+    return handoff;
 }
 
 pub fn rtApp(self: *const Surface) *App {
