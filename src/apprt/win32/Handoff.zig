@@ -57,6 +57,56 @@ pub fn close(handoff: ptypkg.ConsoleHandoff) void {
     _ = c.CloseHandle(handoff.client);
 }
 
+/// A session handed to us, waiting for its window, with how the console
+/// program asked for its window to start.
+pub const Pending = struct {
+    handoff: ptypkg.ConsoleHandoff,
+
+    /// The title it starts with, until the program sets one.
+    title: ?[:0]u8 = null,
+
+    /// How to show its window, if not as a new window normally would be.
+    show: ?c_int = null,
+
+    /// Close a pending session that no window took.
+    pub fn discard(self: Pending, alloc: std.mem.Allocator) void {
+        close(self.handoff);
+        if (self.title) |title| alloc.free(title);
+    }
+};
+
+/// How to show the window for a session whose program started with the
+/// given STARTUPINFO flags and show command, or null to show it as a new
+/// window normally is (which follows `maximize`). As with conhost, the
+/// show command only counts with STARTF_USESHOWWINDOW. We don't hide a
+/// window that asks to be hidden, since nothing could show it again, but
+/// keep it minimized and inactive instead.
+pub fn showCommand(flags: u32, show: u16) ?c_int {
+    if (flags & c.STARTF_USESHOWWINDOW == 0) return null;
+    return switch (show) {
+        c.SW_HIDE,
+        c.SW_SHOWMINIMIZED,
+        c.SW_MINIMIZE,
+        c.SW_SHOWMINNOACTIVE,
+        c.SW_FORCEMINIMIZE,
+        => c.SW_SHOWMINNOACTIVE,
+        c.SW_SHOWMAXIMIZED => c.SW_SHOWMAXIMIZED,
+        c.SW_SHOWNOACTIVATE, c.SW_SHOWNA => c.SW_SHOWNOACTIVATE,
+        else => null,
+    };
+}
+
+test showCommand {
+    const testing = std.testing;
+    try testing.expectEqual(null, showCommand(0, c.SW_SHOWMAXIMIZED));
+    try testing.expectEqual(c.SW_SHOWMAXIMIZED, showCommand(c.STARTF_USESHOWWINDOW, c.SW_SHOWMAXIMIZED));
+    try testing.expectEqual(c.SW_SHOWMINNOACTIVE, showCommand(c.STARTF_USESHOWWINDOW, c.SW_SHOWMINNOACTIVE));
+    try testing.expectEqual(c.SW_SHOWMINNOACTIVE, showCommand(c.STARTF_USESHOWWINDOW, c.SW_HIDE));
+    try testing.expectEqual(c.SW_SHOWNOACTIVATE, showCommand(c.STARTF_USESHOWWINDOW, c.SW_SHOWNA));
+    try testing.expectEqual(null, showCommand(c.STARTF_USESHOWWINDOW, c.SW_SHOWNORMAL));
+    try testing.expectEqual(null, showCommand(c.STARTF_USESHOWWINDOW, c.SW_SHOWDEFAULT));
+}
+
 /// Whether this launch is COM starting us to take a handoff.
 pub fn launchedByCom(alloc: std.mem.Allocator) bool {
     var it = cli.args.argsIterator(alloc, global.args()) catch return false;
@@ -80,28 +130,43 @@ fn establish(
     info: ?*const StartupInfo,
 ) HRESULT {
     const app = target orelse return E_UNEXPECTED;
-    if (info) |startup| log.info("console handoff title={?f} show={}", .{
-        if (startup.title) |title| std.unicode.fmtUtf16Le(title[0..SysStringLen(title)]) else null,
-        startup.show_window,
-    });
-
-    const pipes = Pty.createPipes() catch return E_UNEXPECTED;
+    const alloc = app.core_app.alloc;
+    var title: ?[:0]u8 = null;
+    var show: ?c_int = null;
+    if (info) |startup| {
+        if (startup.title) |value| {
+            const len = SysStringLen(value);
+            if (len > 0) title = std.unicode.utf16LeToUtf8AllocZ(alloc, value[0..len]) catch null;
+        }
+        show = showCommand(startup.flags, startup.show_window);
+        log.info("console handoff title={?s} flags=0x{x} show={}", .{ title, startup.flags, startup.show_window });
+    }
+    // We return an HRESULT, so errdefer wouldn't run.
+    const pipes = Pty.createPipes() catch {
+        if (title) |v| alloc.free(v);
+        return E_UNEXPECTED;
+    };
     var keep: [4]*anyopaque = undefined;
     var kept: usize = 0;
     for ([_]c.HANDLE{ signal, reference, server, client }) |handle| {
         keep[kept] = duplicate(handle) orelse {
             pipes.close();
             for (keep[0..kept]) |h| _ = c.CloseHandle(h);
+            if (title) |v| alloc.free(v);
             return E_UNEXPECTED;
         };
         kept += 1;
     }
 
     app.handOff(.{
-        .in_pipe = pipes.in_pipe,
-        .out_pipe = pipes.out_pipe,
-        .console = .{ .signal = keep[0], .reference = keep[1], .server = keep[2] },
-        .client = keep[3],
+        .handoff = .{
+            .in_pipe = pipes.in_pipe,
+            .out_pipe = pipes.out_pipe,
+            .console = .{ .signal = keep[0], .reference = keep[1], .server = keep[2] },
+            .client = keep[3],
+        },
+        .title = title,
+        .show = show,
     });
     in.* = pipes.in_pipe_pty;
     out.* = pipes.out_pipe_pty;

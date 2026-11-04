@@ -7,9 +7,11 @@
 // pseudoconsole's. It uses Windows Terminal's proxy for the interface.
 //
 //     zig cc handoff_client.c -o handoff_client.exe -lole32 -loleaut32
-//     handoff_client.exe "cmd.exe /k echo handoff-ok" 15
+//     handoff_client.exe "cmd.exe /k echo handoff-ok" 15 [title] [show]
 //
 // It exits after the given number of seconds, or when the command exits.
+// The title and show command (SW_*) are the startup info it passes, as
+// the console host passes the console program's.
 
 #define COBJMACROS
 #include <windows.h>
@@ -65,7 +67,7 @@ static int fail(const char *what, HRESULT hr) {
 
 int main(int argc, char **argv) {
     if (argc < 3) {
-        fprintf(stderr, "usage: handoff_client <command> <seconds>\n");
+        fprintf(stderr, "usage: handoff_client <command> <seconds> [title] [show]\n");
         return 2;
     }
     DWORD seconds = (DWORD)atoi(argv[2]);
@@ -108,8 +110,13 @@ int main(int argc, char **argv) {
 
     const PseudoConsole *pty = (const PseudoConsole *)hpc;
     TERMINAL_STARTUP_INFO info = {0};
-    info.pszTitle = SysAllocString(L"handoff_client");
-    info.wShowWindow = SW_SHOWNORMAL;
+    wchar_t title[256] = L"handoff_client";
+    if (argc > 3) MultiByteToWideChar(CP_UTF8, 0, argv[3], -1, title, 256);
+    info.pszTitle = SysAllocString(title);
+    if (argc > 4) {
+        info.dwFlags = STARTF_USESHOWWINDOW;
+        info.wShowWindow = (WORD)atoi(argv[4]);
+    }
     HANDLE ghostty_in = NULL, ghostty_out = NULL;
     hr = handoff->lpVtbl->EstablishPtyHandoff(handoff, &ghostty_in, &ghostty_out, pty->hSignal,
         pty->hPtyReference, pty->hConPtyProcess, pi.hProcess, &info);

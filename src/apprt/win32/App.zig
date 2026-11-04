@@ -151,11 +151,15 @@ instance_mutex: ?c.HANDLE = null,
 launched_by_com: bool = false,
 
 /// Console sessions handed to us (see Handoff.zig), waiting for windows.
-pending_handoffs: std.ArrayList(ptypkg.ConsoleHandoff) = .empty,
+pending_handoffs: std.ArrayList(Handoff.Pending) = .empty,
 
 /// The session for the next surface we create, which takes it
 /// (`Surface.takeConsoleHandoff`).
 next_handoff: ?ptypkg.ConsoleHandoff = null,
+
+/// How to show the next window, if not as a new window normally is
+/// (`Window.show`), for a handed off session's window.
+next_show: ?c_int = null,
 
 pub fn init(
     self: *App,
@@ -718,7 +722,7 @@ pub fn lastWindow(self: *const App) ?*Window {
 
 pub fn terminate(self: *App) void {
     Handoff.unregister();
-    for (self.pending_handoffs.items) |handoff| Handoff.close(handoff);
+    for (self.pending_handoffs.items) |pending| pending.discard(self.core_app.alloc);
     self.pending_handoffs.deinit(self.core_app.alloc);
 
     // Close any windows that are still open. This deinitializes their
@@ -1623,25 +1627,36 @@ const PendingLink = struct {
 
 /// Open a window for a console session handed to us (Handoff.zig), once
 /// the call that handed it returns.
-pub fn handOff(self: *App, handoff: ptypkg.ConsoleHandoff) void {
-    self.pending_handoffs.append(self.core_app.alloc, handoff) catch {
-        Handoff.close(handoff);
+pub fn handOff(self: *App, pending: Handoff.Pending) void {
+    self.pending_handoffs.append(self.core_app.alloc, pending) catch {
+        pending.discard(self.core_app.alloc);
         return;
     };
     _ = c.PostMessageW(self.msg_hwnd, WM_GHOSTTY_HANDOFF, 0, 0);
 }
 
 fn openHandoffs(self: *App) void {
-    while (self.pending_handoffs.pop()) |handoff| {
-        self.next_handoff = handoff;
-        _ = self.newWindow(.{ .parent = null }) catch |err| {
+    const alloc = self.core_app.alloc;
+    while (self.pending_handoffs.pop()) |pending| {
+        defer if (pending.title) |title| alloc.free(title);
+        self.next_handoff = pending.handoff;
+        self.next_show = pending.show;
+        const window = self.newWindow(.{ .parent = null }) catch |err| window: {
             log.warn("error opening a window for a console session err={}", .{err});
+            break :window null;
         };
+        self.next_show = null;
         // The window's surface takes it; if none did, nobody will.
         if (self.next_handoff) |left| {
             Handoff.close(left);
             self.next_handoff = null;
+            continue;
         }
+        // The title it starts with, as the terminal's own title, so the
+        // program's titles replace it.
+        if (window) |w| if (pending.title) |title| {
+            w.activeSurface().setTitle(title);
+        };
     }
 }
 

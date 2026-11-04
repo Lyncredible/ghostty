@@ -1163,9 +1163,22 @@ Notes:
       one stayed. (The client first had to start cmd with
       `STARTF_USESTDHANDLES`, or cmd wrote to the client's redirected
       output instead of the pseudoconsole.)
-  - [ ] An `-Embedding` launch (needs the class registered with COM),
-        the startup info (title, show state), and resizing the handed
-        off console through its signal pipe in a live session.
+  - [x] The startup info: a window for a program that asked (with
+        `STARTF_USESHOWWINDOW`) to start minimized or maximized starts
+        that way (a hidden one starts minimized and inactive instead, so
+        it can't get lost), and its title is the terminal's title until
+        the console sends one (`Handoff.showCommand`, unit tested).
+    - Checked locally and in `handoff.ps1`: a session asking for
+      `SW_SHOWMINNOACTIVE` got a minimized window, and one asking for
+      `SW_SHOWMAXIMIZED` (tried by hand) a maximized one. The title isn't
+      checked: the console sends its own title as soon as it starts (the
+      test client's is the program's path; Windows' console host's is the
+      same title it passes us).
+  - [x] Resizing a handed off console in a live session: `handoff.ps1`
+        resizes the window and `mode con` in cmd shows fewer columns
+        (locally 45, then 24).
+  - [ ] An `-Embedding` launch (needs the class registered with COM, so
+        only the CI test with the MSIX installed covers it).
   - [ ] Register the class and the `com.microsoft.windows.terminal.host`
         extension in the MSIX (with a `console.host` one naming Windows
         Terminal's OpenConsole, in case Settings only lists packages with
