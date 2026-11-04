@@ -710,7 +710,9 @@ const WindowsPty = struct {
             @as(*const windows.HANDLE, @ptrCast(@alignCast(self.pseudo_console))).*;
         if (windows.exp.kernel32.WriteFile(signal, packet.ptr, @intCast(packet.len), null, null) == windows.FALSE) {
             log.warn("couldn't signal the pseudoconsole id={} err={}", .{ packet[0], windows.GetLastError() });
+            return;
         }
+        log.debug("signaled the pseudoconsole id={} handoff={}", .{ packet[0], self.handoff != null });
     }
 
     fn windowsBuild() u32 {
