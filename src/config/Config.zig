@@ -998,6 +998,11 @@ palette: Palette = .{},
 /// and you're likely to have a bad experience if you set either extreme.
 ///
 /// The default value is "3" for discrete devices and "1" for precision devices.
+///
+/// On Windows, mouse wheels also follow the "lines to scroll at a time"
+/// system setting: the discrete multiplier is scaled by it over its
+/// default of 3, so with the default multiplier, a wheel notch scrolls the
+/// number of lines that setting says.
 @"mouse-scroll-multiplier": MouseScrollMultiplier = .default,
 
 /// The opacity level (opposite of transparency) of the background. A value of

@@ -139,6 +139,12 @@ jobs:
         shell: pwsh
         run: ./test/windows/touch-scroll.ps1 -Exe zig-out/bin/ghostty.exe
 
+      # The mouse wheel follows the "lines to scroll at a time" setting.
+      - name: Wheel lines test
+        timeout-minutes: 5
+        shell: pwsh
+        run: ./test/windows/wheel-lines.ps1 -Exe zig-out/bin/ghostty.exe
+
       - name: Dark mode test
         shell: pwsh
         run: ./test/windows/dark-mode.ps1 -Exe zig-out/bin/ghostty.exe

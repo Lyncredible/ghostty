@@ -117,10 +117,19 @@ Notes:
           Windows (by scancode, so Num Lock off works too), and the
           character arrives as `WM_CHAR` when Alt is released. Unit test:
           `altCode`; `desktop-input.ps1` types Alt+0233 with real keys in
-          CI (not run yet). The trade-off, as in Windows Terminal:
+          CI (not run yet, since pushing failed). The trade-off, as in Windows Terminal:
           programs can't get Alt+numpad digits.
   - [x] Basic IME: the system composition window, placed at the cursor.
   - [x] Mouse buttons, motion, wheel, and cursor shapes.
+    - [x] The wheel follows Windows' "lines to scroll at a time"
+          setting (Settings > Bluetooth & devices > Mouse), like other
+          Windows apps: notches are scaled by it over its default, 3,
+          which `mouse-scroll-multiplier`'s default also is, so nothing
+          changes with the defaults. Scrolling a screen at a time counts
+          as 3. Unit test: `wheelScale` (rounding must not lose a line,
+          which it did for some cell heights without a nudge);
+          `wheel-lines.ps1` sets it to 1 and 5 in CI (not run yet, since
+          pushing failed).
   - [x] Touch screens: a one finger vertical pan scrolls (with inertia)
         through `WM_GESTURE`, instead of selecting text with emulated
         mouse input. Needs a check on a touch screen.
