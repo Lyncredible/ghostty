@@ -133,7 +133,7 @@ Notes:
           which it did for some cell heights without a nudge);
           `wheel-lines.ps1` sets it to 1 and 5 in CI (passed, run
           41819892772).
-- [ ] High contrast themes (Settings > Accessibility > Contrast
+- [x] High contrast themes (Settings > Accessibility > Contrast
       themes): Windows asks apps to draw their own UI with the theme's
       system colors. Terminal contents keep their colors, as in Windows
       Terminal.
