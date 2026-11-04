@@ -4,8 +4,9 @@
 # its Nth present; this checks the log says the device was replaced, the
 # renderer is healthy again, and the window (read with PrintWindow) shows
 # the terminal's background and text (cmd's banner, in the top rows).
-# It runs twice: plain, and with a custom shader that swaps red and blue,
-# whose colors must show after the device is replaced too.
+# It runs three times: plain, with a custom shader that swaps red and
+# blue, and with a solid background image, whose colors must show after
+# the device is replaced too.
 # It only opens Ghostty's own window, so it can run anywhere.
 #
 #     ./device-lost.ps1 -Exe zig-out/bin/ghostty.exe
@@ -39,6 +40,16 @@ void mainImage(out vec4 fragColor, in vec2 fragCoord) {
     fragColor = vec4(texture(iChannel0, uv).bgr, 1.0);
 }
 '@
+
+# A solid background image, stretched over the terminal.
+$image = Join-Path $work 'background.png'
+$bitmap = New-Object System.Drawing.Bitmap 16, 16
+try {
+    $graphics = [System.Drawing.Graphics]::FromImage($bitmap)
+    $graphics.Clear([System.Drawing.Color]::FromArgb(0xCC, 0x33, 0x00))
+    $graphics.Dispose()
+    $bitmap.Save($image, [System.Drawing.Imaging.ImageFormat]::Png)
+} finally { $bitmap.Dispose() }
 
 function Fail([string]$message) {
     Write-Host "::error title=device-lost::$message"
@@ -117,6 +128,7 @@ function Check([string]$name, [string[]]$extra, [string]$background) {
 try {
     Check 'plain' @() '#336699'
     Check 'shader' @("--custom-shader=$shader") '#996633'
+    Check 'background-image' @("--background-image=$image", '--background-image-fit=stretch') '#CC3300'
 } finally {
     Remove-Item -LiteralPath $work -Recurse -Force -ErrorAction SilentlyContinue
 }
