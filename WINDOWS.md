@@ -152,7 +152,7 @@ Notes:
         and `WM_SYSCOLORCHANGE` repaints the whole window. Builds, and
         the smoke test passes here without high contrast; not checked
         with it here; `high-contrast.ps1` also checks the search bar in
-        CI: it passed (run 41848225367). The command palette, badges and
+        CI: it passed (run 41848225367, and in a split in 41888293257). The command palette, badges and
         link preview were not checked with it.
   - [x] Over the terminal, which keeps its own colors: split dividers
         use the terminal's foreground instead of a faint blend of it
@@ -161,7 +161,10 @@ Notes:
         highlight color, solid. Split dimming stays as configured: it
         dims with the terminal's own background. Builds, and the smoke
         test passes here without high contrast; `high-contrast.ps1` also
-        checks the divider in CI (not run yet). The scrollbar and bell
+        checks the divider in CI, with high contrast off, on and off
+        again: it passed (run 41888293257). The test reads the theme's
+        window color again with each check, since a theme's colors can
+        arrive after Windows reports high contrast is on. The scrollbar and bell
         border aren't checked with high contrast.
 - [x] The cursor blinks at Windows' cursor blink rate (Settings >
       Accessibility > Text cursor, or the keyboard control panel; 530 ms
