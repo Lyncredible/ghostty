@@ -29,6 +29,23 @@ Add-Type -Namespace GhosttyContrast -Name Win32 -MemberDefinition @'
 [DllImport("user32.dll")] public static extern bool SetProcessDPIAware();
 [DllImport("user32.dll")] public static extern uint GetSysColor(int index);
 [DllImport("user32.dll", CharSet = CharSet.Unicode)] public static extern System.IntPtr FindWindowExW(System.IntPtr parent, System.IntPtr after, string cls, string title);
+[DllImport("user32.dll")] public static extern System.IntPtr SendMessageW(System.IntPtr h, uint m, System.IntPtr w, System.IntPtr l);
+[DllImport("user32.dll")] public static extern System.IntPtr GetSystemMenu(System.IntPtr h, bool revert);
+[DllImport("user32.dll")] public static extern bool IsWindowVisible(System.IntPtr h);
+[DllImport("user32.dll", CharSet = CharSet.Unicode)] public static extern int GetClassNameW(System.IntPtr h, System.Text.StringBuilder s, int n);
+public delegate bool EnumProc(System.IntPtr h, System.IntPtr l);
+[DllImport("user32.dll")] public static extern bool EnumChildWindows(System.IntPtr h, EnumProc f, System.IntPtr l);
+// The first visible window of a class under a window.
+public static System.IntPtr VisibleChild(System.IntPtr parent, string cls) {
+  System.IntPtr found = System.IntPtr.Zero;
+  EnumChildWindows(parent, (h, l) => {
+    var s = new System.Text.StringBuilder(64);
+    GetClassNameW(h, s, 64);
+    if (s.ToString() == cls && IsWindowVisible(h)) { found = h; return false; }
+    return true;
+  }, System.IntPtr.Zero);
+  return found;
+}
 [DllImport("user32.dll", SetLastError = true)] public static extern bool SystemParametersInfoW(uint action, uint size, ref HIGHCONTRAST hc, uint ini);
 public static bool HighContrast() {
   var hc = new HIGHCONTRAST(); hc.cbSize = Marshal.SizeOf(hc);
@@ -61,17 +78,20 @@ function WaitFor([scriptblock]$condition, [string]$what) {
         if ($result) { return $result }
         Start-Sleep -Milliseconds 250
     }
-    Fail "timed out waiting for $what (the tab bar was $script:last)"
+    Fail "timed out waiting for $what (it was $script:last)"
 }
 
 # The color of the tab bar's empty part, on screen, as #RRGGBB.
 function BarColor {
     $rect = New-Object GhosttyContrast.Win32+RECT
     [void][GhosttyContrast.Win32]::GetWindowRect($bar, [ref]$rect)
+    ScreenColor ($rect.l + [int](($rect.r - $rect.l) * 0.7)) ($rect.t + 2)
+}
+
+function ScreenColor([int]$x, [int]$y) {
     $bitmap = New-Object System.Drawing.Bitmap 1, 1
     $graphics = [System.Drawing.Graphics]::FromImage($bitmap)
-    $x = $rect.l + [int](($rect.r - $rect.l) * 0.7)
-    $graphics.CopyFromScreen($x, $rect.t + 2, 0, 0, (New-Object System.Drawing.Size 1, 1))
+    $graphics.CopyFromScreen($x, $y, 0, 0, (New-Object System.Drawing.Size 1, 1))
     $pixel = $bitmap.GetPixel(0, 0)
     $graphics.Dispose(); $bitmap.Dispose()
     '#{0:X2}{1:X2}{2:X2}' -f $pixel.R, $pixel.G, $pixel.B
@@ -103,6 +123,16 @@ try {
     $expected = WaitFor { if ([GhosttyContrast.Win32]::HighContrast()) { SysColor 5 } } 'high contrast to be on'   # COLOR_WINDOW
     [void](WaitFor { $script:last = BarColor; $last -eq $expected } "the tab bar to be the theme's window color $expected")
     Write-Host "With high contrast, the tab bar is $last, the theme's window color."
+
+    # The search bar too: Find… from the window menu (its eleventh command).
+    $menu = [GhosttyContrast.Win32]::GetSystemMenu($window, $false)
+    [void][GhosttyContrast.Win32]::SendMessageW($window, 0x0117, $menu, [IntPtr]0)   # WM_INITMENUPOPUP
+    [void][GhosttyContrast.Win32]::SendMessageW($window, 0x0112, [IntPtr](11 -shl 4), [IntPtr]0)   # WM_SYSCOMMAND
+    $search = WaitFor { $h = [GhosttyContrast.Win32]::VisibleChild($window, 'GhosttySearchBar'); if ($h -ne [IntPtr]::Zero) { $h } } 'the search bar'
+    $rect = New-Object GhosttyContrast.Win32+RECT
+    [void][GhosttyContrast.Win32]::GetWindowRect($search, [ref]$rect)
+    [void](WaitFor { $script:last = ScreenColor ($rect.l + 2) ($rect.t + 2); $last -eq $expected } "the search bar to be the theme's window color $expected")
+    Write-Host "With high contrast, the search bar is $last too."
 
     if (-not [GhosttyContrast.Win32]::SetHighContrast($false)) { Fail "couldn't turn high contrast off" }
     [void](WaitFor { $script:last = BarColor; $last -eq $terminal } "the tab bar to be $terminal again")
