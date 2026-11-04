@@ -143,8 +143,8 @@ Notes:
         title bar keeps the theme's colors instead of the terminal's
         (`window-theme=ghostty`). It repaints on `WM_SYSCOLORCHANGE`.
         `high-contrast.ps1` turns high contrast on and off in CI and
-        checks the bar's color on screen (not run yet). Not checked
-        here, since it changes the whole desktop.
+        checks the bar's color on screen: it passed (run 41840078517).
+        Not checked here, since it changes the whole desktop.
   - [x] The search bar and command palette: the theme's window colors,
         with the field framed, and hovered buttons and the selected
         command in its highlight colors. Badges and the link preview use
