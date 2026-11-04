@@ -1392,7 +1392,8 @@ Notes:
           backgrounds (HKCU, `--working-directory=%V`). Checked: the keys
           were created and removed, and the command opened at the folder.
   - [x] CI: the `build-windows` job packages the portable zip and
-        uploads it as a 14-day artifact (not run yet; needs a push)
+        uploads it as a 14-day artifact; the ARM64 job does too. Run
+        41906782926 uploaded both (about 40 MB each).
   - [x] MSIX package (`package.ps1 -Msix`): `dist/windows/msix.zig` packs
         a layout with the packaging API built into Windows
         (`IAppxPackageWriter`), so no Windows SDK is needed, and checks it
