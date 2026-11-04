@@ -1231,7 +1231,9 @@ Notes:
       checks that both the handed off cmd's and the first window's
       console windows are owned by their Ghostty windows (passes
       locally). Unit test: `windows: adopted console` reads the packet.
-      Not checked: moving a tab to another window updates it.
+      It also moves a tab to a new window (`move_tab_to_new_window`)
+      and checks that the tab's console window is then owned by the new
+      window (passes locally).
     - On Windows Server 2022 (build 20348) in CI, the first smoke test
       (cmd) failed right after this landed (d8e51b58a), with no details
       (smoke.ps1 only printed to the log; it now reports its failure
