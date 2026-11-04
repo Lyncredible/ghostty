@@ -675,25 +675,41 @@ const WindowsPty = struct {
     /// Make the window that shows the terminal own the pseudoconsole's
     /// window (the one console programs get from `GetConsoleWindow`, for
     /// example to own their dialogs). As ConptyReparentPseudoConsole does,
-    /// we send PTY_SIGNAL_REPARENT_WINDOW (3) and the window, packed, on
-    /// the console's signal pipe, which the inbox console host also
-    /// honors (Windows doesn't export a function for it), if it's new
-    /// enough. An older one may end the session on a signal it doesn't
-    /// know, so we only send it to inbox console hosts from builds we've
-    /// seen honor it. Handed off sessions come from Windows Terminal's
-    /// OpenConsole, and conpty.dll is as new, so those always get it.
+    /// we send PTY_SIGNAL_REPARENT_WINDOW (3) and the window, packed.
     pub fn setParentWindow(self: *Pty, hwnd: usize) void {
+        var packet: [10]u8 = undefined;
+        std.mem.writeInt(u16, packet[0..2], 3, .little);
+        std.mem.writeInt(u64, packet[2..10], hwnd, .little);
+        self.newerSignal(&packet);
+    }
+
+    /// Show the pseudoconsole's window as minimized while the terminal
+    /// isn't visible, so console programs that ask (`IsIconic` on
+    /// `GetConsoleWindow`) can tell. As ConptyShowHidePseudoConsole does,
+    /// we send PTY_SIGNAL_SHOWHIDE_WINDOW (1) and whether it's shown.
+    pub fn setVisible(self: *Pty, visible: bool) void {
+        var packet: [4]u8 = undefined;
+        std.mem.writeInt(u16, packet[0..2], 1, .little);
+        std.mem.writeInt(u16, packet[2..4], @intFromBool(visible), .little);
+        self.newerSignal(&packet);
+    }
+
+    /// Send a signal that newer console hosts know, on the console's
+    /// signal pipe. Windows doesn't export functions for these, but the
+    /// inbox console host honors them if it's new enough. An older one
+    /// may end the session on a signal it doesn't know, so we only send
+    /// them to inbox console hosts from builds we've seen honor them.
+    /// Handed off sessions come from Windows Terminal's OpenConsole, and
+    /// conpty.dll is as new, so those always get them.
+    fn newerSignal(self: *Pty, packet: []const u8) void {
         if (self.console_closed) return;
         if (self.handoff == null and self.conpty.is_inbox and windowsBuild() < 26100) return;
         const signal = if (self.handoff) |console| console.signal else
             // A pseudoconsole is a pointer to its handles, the signal
             // pipe first (microsoft/terminal src/winconpty/winconpty.h).
             @as(*const windows.HANDLE, @ptrCast(@alignCast(self.pseudo_console))).*;
-        var packet: [10]u8 = undefined;
-        std.mem.writeInt(u16, packet[0..2], 3, .little);
-        std.mem.writeInt(u64, packet[2..10], hwnd, .little);
-        if (windows.exp.kernel32.WriteFile(signal, &packet, packet.len, null, null) == windows.FALSE) {
-            log.warn("couldn't give the pseudoconsole its parent window err={}", .{windows.GetLastError()});
+        if (windows.exp.kernel32.WriteFile(signal, packet.ptr, @intCast(packet.len), null, null) == windows.FALSE) {
+            log.warn("couldn't signal the pseudoconsole id={} err={}", .{ packet[0], windows.GetLastError() });
         }
     }
 
@@ -783,6 +799,13 @@ test "windows: adopted console" {
     try testing.expect(kernel32.ReadFile(signal_read, &reparent, reparent.len, &read, null).toBool());
     try testing.expectEqual(reparent.len, read);
     try testing.expectEqualSlices(u8, &.{ 3, 0, 0x34, 0x12, 0, 0, 0, 0, 0, 0 }, &reparent);
+
+    // Hiding and showing it send PTY_SIGNAL_SHOWHIDE_WINDOW (1).
+    pty.setVisible(false);
+    pty.setVisible(true);
+    var shown: [4]u16 = undefined;
+    try testing.expect(kernel32.ReadFile(signal_read, @ptrCast(&shown), @sizeOf(@TypeOf(shown)), &read, null).toBool());
+    try testing.expectEqualSlices(u16, &.{ 1, 0, 1, 1 }, &shown);
 
     // Closing the console closes its handles, so the signal pipe ends.
     pty.closeConsole();

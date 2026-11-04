@@ -910,6 +910,12 @@ pub fn setParentWindow(self: *Surface, hwnd: usize) void {
     self.queueIo(.{ .parent_window = hwnd }, .unlocked);
 }
 
+/// Tell the IO thread whether this surface is visible. Only Windows
+/// uses it, for the pseudoconsole's window.
+pub fn setPtyVisible(self: *Surface, visible: bool) void {
+    self.queueIo(.{ .pty_visible = visible }, .unlocked);
+}
+
 fn queueIo(
     self: *Surface,
     msg: termio.Message,

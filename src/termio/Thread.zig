@@ -370,6 +370,7 @@ fn drainMailbox(
             .linefeed_mode => |v| self.flags.linefeed_mode = v,
             .focused => |v| try io.focusGained(data, v),
             .parent_window => |v| io.backend.parentWindow(v),
+            .pty_visible => |v| io.backend.ptyVisible(v),
             .write_small => |v| try io.queueWrite(
                 data,
                 v.data[0..v.len],
