@@ -152,7 +152,8 @@ Notes:
         and `WM_SYSCOLORCHANGE` repaints the whole window. Builds, and
         the smoke test passes here without high contrast; not checked
         with it here; `high-contrast.ps1` also checks the search bar in
-        CI (not run yet).
+        CI: it passed (run 41848225367). The command palette, badges and
+        link preview were not checked with it.
   - [ ] Still the terminal's colors: the scrollbar thumb (over the
         terminal's own colors), split dividers, split dimming and the
         bell border.
