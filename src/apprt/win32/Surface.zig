@@ -1780,7 +1780,7 @@ pub fn wndProc(
             }
 
             const xoff: f64, const yoff: f64 = if (msg == c.WM_MOUSEWHEEL)
-                .{ 0, delta }
+                .{ 0, wheelScale(delta, wheelLines()) }
             else horizontal: {
                 // Positive horizontal wheel deltas scroll right, which
                 // is a negative x offset for the core. We pass whole
@@ -1932,6 +1932,38 @@ pub fn openShell(self: *Surface, target: Menu.Target, shell: ?configpkg.Command)
         } }) catch |err| {
             log.warn("error opening a shell window err={}", .{err});
         },
+    }
+}
+
+/// Windows' "lines to scroll at a time" setting. Wheel notches are
+/// scaled by it over its default, 3, which is also the default of
+/// `mouse-scroll-multiplier`, so by default a notch scrolls that many
+/// lines. Scrolling a screen at a time isn't supported; it counts as 3.
+fn wheelLines() f64 {
+    var lines: c.UINT = 3;
+    if (c.SystemParametersInfoW(c.SPI_GETWHEELSCROLLLINES, 0, &lines, 0) == 0 or
+        lines == c.WHEEL_PAGESCROLL) return 3;
+    return @floatFromInt(lines);
+}
+
+/// Scales wheel notches by the lines setting over its default, 3. The
+/// core multiplies this by the cell height and `mouse-scroll-multiplier`
+/// and scrolls only whole cells, so thirds that round down would lose a
+/// line; a tiny nudge away from zero keeps them whole.
+fn wheelScale(notches: f64, lines: f64) f64 {
+    return notches * lines / 3 * (1 + 1e-12);
+}
+
+test wheelScale {
+    // As the core does with the default multiplier, for many cell heights.
+    var cell: f64 = 5;
+    while (cell < 200) : (cell += 1) {
+        for ([_]f64{ 1, 2, 4, 5, 7, 10, 100 }) |lines| {
+            for ([_]f64{ 1, -1 }) |notches| {
+                const offset = wheelScale(notches, lines) * cell * 3;
+                try std.testing.expectEqual(notches * lines, @trunc(offset / cell));
+            }
+        }
     }
 }
 
