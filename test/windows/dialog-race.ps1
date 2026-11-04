@@ -1,7 +1,8 @@
 # Checks the dialogs that keybindings open: "Close terminal?" (from
 # close_surface while a program runs), "Change Terminal Title" (from
 # prompt_surface_title) and "Quit Ghostty?" (from quit while a program
-# runs). OK in the first closes the terminal, and when the shell exits
+# runs), and "Configuration Errors" (from reload_config after the config
+# file gained an error). OK in the first closes the terminal, and when the shell exits
 # while any of them is open, Ghostty closes cleanly (the
 # terminal is destroyed during the dialog's message loop). It posts keys
 # to Ghostty's own window, but it shows dialogs, so it only runs in CI.
@@ -67,17 +68,19 @@ function Text($surface) {
 
 # Start Ghostty running $command, wait for its output, press the key
 # (F8 closes, F9 asks for a title, F6 quits), and wait for the dialog.
-function StartAndPress([string]$command, [int]$vk, [string]$title) {
+function StartAndPress([string]$command, [int]$vk, [string]$title, [scriptblock]$beforePress) {
     $script:log = Join-Path ([IO.Path]::GetTempPath()) "ghostty-dialog-race-$([guid]::NewGuid()).log"
     $env:GHOSTTY_LOG = 'debug'
     $script:process = Start-Process -FilePath $Exe -PassThru -RedirectStandardError $script:log -ArgumentList `
         '--window-save-state=never', '--confirm-close-surface=true', '--keybind=f8=close_surface',
-        '--keybind=f9=prompt_surface_title', '--keybind=f6=quit', "`"--command=$command`""
+        '--keybind=f9=prompt_surface_title', '--keybind=f6=quit',
+        '--keybind=f5=reload_config', "`"--command=$command`""
     # Keep a handle, so the exit code is still there after it exits.
     [void]$script:process.Handle
     $surface = WaitFor { $s = SurfaceElement; if ($s -and (Text $s).Contains('ready-ok')) { $s } } "'ready-ok' on screen"
     $hwnd = [IntPtr]$surface.Current.NativeWindowHandle
-    $scan = @{ 0x77 = 0x00420001; 0x78 = 0x00430001; 0x75 = 0x00400001 }[$vk]
+    if ($beforePress) { & $beforePress }
+    $scan = @{ 0x77 = 0x00420001; 0x78 = 0x00430001; 0x75 = 0x00400001; 0x74 = 0x003F0001 }[$vk]
     [void]$W::PostMessageW($hwnd, 0x0100, [IntPtr]$vk, [IntPtr]$scan)                  # WM_KEYDOWN
     [void]$W::PostMessageW($hwnd, 0x0101, [IntPtr]$vk, [IntPtr]($scan -bor 0xC0000000)) # WM_KEYUP
     return WaitFor { Dialog $title } "the '$title' dialog"
@@ -114,6 +117,14 @@ $short = 'cmd.exe /c echo ready-%USERNAME:~0,0%ok & ping -n 4 127.0.0.1 >nul'
 $closeTitle = 'Close terminal?'
 $titleTitle = 'Change Terminal Title'
 $quitTitle = 'Quit Ghostty?'
+$errorsTitle = 'Configuration Errors'
+
+# A config of our own, which starts out without errors.
+$configHome = Join-Path ([IO.Path]::GetTempPath()) "ghostty-dialog-race-$([guid]::NewGuid())"
+$configFile = Join-Path $configHome 'ghostty\config.ghostty'
+New-Item -ItemType Directory (Split-Path $configFile) | Out-Null
+Set-Content -LiteralPath $configFile '# no errors yet'
+$env:XDG_CONFIG_HOME = $configHome
 
 try {
     # OK closes the terminal.
@@ -136,6 +147,11 @@ try {
 
     [void](StartAndPress $short 0x75 $quitTitle)
     CheckShellExit $quitTitle
+    Close
+
+    [void](StartAndPress $short 0x74 $errorsTitle { Set-Content -LiteralPath $configFile 'not-a-real-option = 1' })
+    CheckShellExit $errorsTitle
 } finally {
     Close
+    Remove-Item -LiteralPath $configHome -Recurse -Force -ErrorAction SilentlyContinue
 }
