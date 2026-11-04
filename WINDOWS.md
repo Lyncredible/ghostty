@@ -151,7 +151,8 @@ Notes:
         its tooltip colors. Each checks for high contrast as it paints,
         and `WM_SYSCOLORCHANGE` repaints the whole window. Builds, and
         the smoke test passes here without high contrast; not checked
-        with it yet.
+        with it here; `high-contrast.ps1` also checks the search bar in
+        CI (not run yet).
   - [ ] Still the terminal's colors: the scrollbar thumb (over the
         terminal's own colors), split dividers, split dimming and the
         bell border.
