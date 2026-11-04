@@ -1345,10 +1345,14 @@ fn dividerColor(self: *const Window) c.COLORREF {
     const config = &self.app.config;
     if (config.@"split-divider-color") |v| return rgb(v.r, v.g, v.b);
 
+    // A high contrast theme gets the terminal's foreground itself, which
+    // stands out from the terminals on either side.
+    const fg = config.foreground;
+    if (util.highContrast()) return rgb(fg.r, fg.g, fg.b);
+
     // By default, blend the background toward the foreground a little so
     // the divider is visible but subtle in both light and dark themes.
     const bg = config.background;
-    const fg = config.foreground;
     return rgb(
         mix(bg.r, fg.r),
         mix(bg.g, fg.g),

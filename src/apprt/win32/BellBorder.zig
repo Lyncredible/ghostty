@@ -1,6 +1,7 @@
 //! A click-through layered child window that draws a border around a
 //! surface while its bell is ringing, for the `border` bell feature.
-//! Like GTK, this uses the system accent color at half opacity.
+//! Like GTK, this uses the system accent color at half opacity. A high
+//! contrast theme gets its highlight color, solid.
 const BellBorder = @This();
 
 const std = @import("std");
@@ -62,22 +63,31 @@ pub fn setVisible(self: *BellBorder, visible: bool) void {
     if (visible == self.visible) return;
     self.visible = visible;
     if (visible) {
+        _ = c.SetLayeredWindowAttributes(
+            self.hwnd,
+            transparent_key,
+            if (util.highContrast()) 255 else 128,
+            c.LWA_COLORKEY | c.LWA_ALPHA,
+        );
         _ = c.MoveWindow(self.hwnd, 0, 0, self.surface_width, self.surface_height, c.FALSE);
         _ = c.InvalidateRect(self.hwnd, null, c.FALSE);
     }
     _ = c.ShowWindow(self.hwnd, if (visible) c.SW_SHOWNA else c.SW_HIDE);
 }
 
-/// The system accent color, falling back to a Windows blue.
+/// The system accent color, falling back to a Windows blue, or a high
+/// contrast theme's highlight color.
 fn accentColor() c.COLORREF {
-    var argb: c.DWORD = 0;
-    var opaque_blend: c.BOOL = 0;
-    if (c.DwmGetColorizationColor(&argb, &opaque_blend) < 0) return rgb(0, 120, 215);
-    const color = rgb(
-        @truncate(argb >> 16),
-        @truncate(argb >> 8),
-        @truncate(argb),
-    );
+    const color = if (util.highContrast()) c.GetSysColor(c.COLOR_HIGHLIGHT) else color: {
+        var argb: c.DWORD = 0;
+        var opaque_blend: c.BOOL = 0;
+        if (c.DwmGetColorizationColor(&argb, &opaque_blend) < 0) return rgb(0, 120, 215);
+        break :color rgb(
+            @truncate(argb >> 16),
+            @truncate(argb >> 8),
+            @truncate(argb),
+        );
+    };
     // Avoid our transparent color key.
     return if (color == transparent_key) rgb(0xFE, 0, 0xFF) else color;
 }

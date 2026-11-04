@@ -154,9 +154,15 @@ Notes:
         with it here; `high-contrast.ps1` also checks the search bar in
         CI: it passed (run 41848225367). The command palette, badges and
         link preview were not checked with it.
-  - [ ] Still the terminal's colors: the scrollbar thumb (over the
-        terminal's own colors), split dividers, split dimming and the
-        bell border.
+  - [x] Over the terminal, which keeps its own colors: split dividers
+        use the terminal's foreground instead of a faint blend of it
+        (unless `split-divider-color` is set), the scrollbar thumb is
+        solid instead of see-through, and the bell border is the theme's
+        highlight color, solid. Split dimming stays as configured: it
+        dims with the terminal's own background. Builds, and the smoke
+        test passes here without high contrast; `high-contrast.ps1` also
+        checks the divider in CI (not run yet). The scrollbar and bell
+        border aren't checked with high contrast.
 - [x] The cursor blinks at Windows' cursor blink rate (Settings >
       Accessibility > Text cursor, or the keyboard control panel; 530 ms
       by default, where Ghostty uses 600 ms elsewhere), read again on

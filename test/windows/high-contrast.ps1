@@ -3,7 +3,10 @@
 # bar shown and a blue background, checks the bar's color on screen comes
 # from the terminal's, turns high contrast on (SPI_SETHIGHCONTRAST) and
 # expects the theme's window color, then turns it off again and expects the
-# terminal's again. It changes the whole desktop, so it only runs in CI.
+# terminal's again. It also splits the window and checks the divider turns
+# from a blend of the terminal's colors into its foreground, and that the
+# search bar gets the theme's window color. It changes the whole desktop,
+# so it only runs in CI.
 #
 #     ./high-contrast.ps1 -Exe zig-out/bin/ghostty.exe
 
@@ -35,6 +38,17 @@ Add-Type -Namespace GhosttyContrast -Name Win32 -MemberDefinition @'
 [DllImport("user32.dll", CharSet = CharSet.Unicode)] public static extern int GetClassNameW(System.IntPtr h, System.Text.StringBuilder s, int n);
 public delegate bool EnumProc(System.IntPtr h, System.IntPtr l);
 [DllImport("user32.dll")] public static extern bool EnumChildWindows(System.IntPtr h, EnumProc f, System.IntPtr l);
+// The visible windows of a class under a window.
+public static System.Collections.Generic.List<System.IntPtr> VisibleChildren(System.IntPtr parent, string cls) {
+  var found = new System.Collections.Generic.List<System.IntPtr>();
+  EnumChildWindows(parent, (h, l) => {
+    var s = new System.Text.StringBuilder(64);
+    GetClassNameW(h, s, 64);
+    if (s.ToString() == cls && IsWindowVisible(h)) found.Add(h);
+    return true;
+  }, System.IntPtr.Zero);
+  return found;
+}
 // The first visible window of a class under a window.
 public static System.IntPtr VisibleChild(System.IntPtr parent, string cls) {
   System.IntPtr found = System.IntPtr.Zero;
@@ -62,7 +76,8 @@ public static bool SetHighContrast(bool on) {
 $wasOn = [GhosttyContrast.Win32]::HighContrast()
 if ($wasOn) { [void][GhosttyContrast.Win32]::SetHighContrast($false) }
 $process = Start-Process -FilePath $Exe -PassThru -ArgumentList '--command=cmd.exe', `
-    '--window-save-state=never', '--window-show-tab-bar=always', '--background=#336699'
+    '--window-save-state=never', '--window-show-tab-bar=always', '--background=#336699', `
+    '--foreground=#FFCC00', '--unfocused-split-opacity=1'
 
 function Fail([string]$message) {
     Write-Host "::error title=high-contrast::$message"
@@ -107,6 +122,22 @@ function SysColor([int]$index) {
 function Darken([int]$v) { [int][Math]::Round($v * 0.75, [MidpointRounding]::AwayFromZero) }
 $terminal = '#{0:X2}{1:X2}{2:X2}' -f (Darken 0x33), (Darken 0x66), (Darken 0x99)
 
+# The divider is the background mixed a quarter of the way to the
+# foreground, or under high contrast the foreground itself.
+function Mix([int]$bg, [int]$fg) { [int][Math]::Floor(($bg * 3 + $fg) / 4) }
+$blend = '#{0:X2}{1:X2}{2:X2}' -f (Mix 0x33 0xFF), (Mix 0x66 0xCC), (Mix 0x99 0x00)
+
+# The color of the divider between the two splits, halfway down.
+function DividerColor {
+    $rects = foreach ($h in [GhosttyContrast.Win32]::VisibleChildren($window, 'GhosttySurface')) {
+        $rect = New-Object GhosttyContrast.Win32+RECT
+        [void][GhosttyContrast.Win32]::GetWindowRect($h, [ref]$rect)
+        $rect
+    }
+    $left = $rects | Sort-Object l | Select-Object -First 1
+    ScreenColor $left.r ([int](($left.t + $left.b) / 2))
+}
+
 try {
     $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
     while ($process.MainWindowHandle -eq 0 -and (Get-Date) -lt $deadline) { Start-Sleep -Milliseconds 200; $process.Refresh() }
@@ -119,13 +150,22 @@ try {
     [void](WaitFor { $script:last = BarColor; $last -eq $terminal } "the tab bar to be $terminal")
     Write-Host "Without high contrast, the tab bar is $last, from the terminal's background."
 
+    # Split right from the window menu (its seventh command).
+    $menu = [GhosttyContrast.Win32]::GetSystemMenu($window, $false)
+    [void][GhosttyContrast.Win32]::SendMessageW($window, 0x0117, $menu, [IntPtr]0)   # WM_INITMENUPOPUP
+    [void][GhosttyContrast.Win32]::SendMessageW($window, 0x0112, [IntPtr](7 -shl 4), [IntPtr]0)   # WM_SYSCOMMAND
+    [void](WaitFor { [GhosttyContrast.Win32]::VisibleChildren($window, 'GhosttySurface').Count -eq 2 } 'a second split')
+    [void](WaitFor { $script:last = DividerColor; $last -eq $blend } "the divider to be $blend")
+    Write-Host "Without high contrast, the divider is $last, a blend of the terminal's colors."
+
     if (-not [GhosttyContrast.Win32]::SetHighContrast($true)) { Fail "couldn't turn high contrast on" }
     $expected = WaitFor { if ([GhosttyContrast.Win32]::HighContrast()) { SysColor 5 } } 'high contrast to be on'   # COLOR_WINDOW
     [void](WaitFor { $script:last = BarColor; $last -eq $expected } "the tab bar to be the theme's window color $expected")
     Write-Host "With high contrast, the tab bar is $last, the theme's window color."
+    [void](WaitFor { $script:last = DividerColor; $last -eq '#FFCC00' } 'the divider to be the foreground #FFCC00')
+    Write-Host "With high contrast, the divider is $last, the terminal's foreground."
 
     # The search bar too: Find… from the window menu (its eleventh command).
-    $menu = [GhosttyContrast.Win32]::GetSystemMenu($window, $false)
     [void][GhosttyContrast.Win32]::SendMessageW($window, 0x0117, $menu, [IntPtr]0)   # WM_INITMENUPOPUP
     [void][GhosttyContrast.Win32]::SendMessageW($window, 0x0112, [IntPtr](11 -shl 4), [IntPtr]0)   # WM_SYSCOMMAND
     $search = WaitFor { $h = [GhosttyContrast.Win32]::VisibleChild($window, 'GhosttySearchBar'); if ($h -ne [IntPtr]::Zero) { $h } } 'the search bar'
@@ -137,6 +177,8 @@ try {
     if (-not [GhosttyContrast.Win32]::SetHighContrast($false)) { Fail "couldn't turn high contrast off" }
     [void](WaitFor { $script:last = BarColor; $last -eq $terminal } "the tab bar to be $terminal again")
     Write-Host "With high contrast off again, the tab bar is $last."
+    [void](WaitFor { $script:last = DividerColor; $last -eq $blend } "the divider to be $blend again")
+    Write-Host "With high contrast off again, the divider is $last."
 } catch {
     if (-not $script:reported) { Write-Host "::error title=high-contrast::$($_.Exception.Message)" }
     $script:reported = $true
