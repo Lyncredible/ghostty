@@ -113,8 +113,11 @@ Notes:
         `device-lost.ps1` checks the window shows the background and text
         again (passes here, and in CI in run 41919073564). It also runs
         with a custom shader that swaps red and blue, whose colors show
-        after the device is replaced (passed in CI run 41927770848).
-        Not checked: a real driver restart, and images after one.
+        after the device is replaced (passed in CI run 41927770848),
+        and with a solid background image, whose color shows after it
+        (passes here; not run in CI yet). Kitty images can't reach a
+        terminal through ConPTY (see below), so their reload isn't
+        checked. Not checked: a real driver restart.
 - [x] Win32 apprt: window, message loop, and cross-thread wakeups.
   - [x] Per-monitor DPI, resizing, focus, and occlusion.
     - [x] A DPI change while running: the fork's CI runs
