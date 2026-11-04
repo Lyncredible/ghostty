@@ -117,7 +117,10 @@ Notes:
           Windows (by scancode, so Num Lock off works too), and the
           character arrives as `WM_CHAR` when Alt is released. Unit test:
           `altCode`; `desktop-input.ps1` types Alt+0233 with real keys in
-          CI (not run yet, since pushing failed). The trade-off, as in Windows Terminal:
+          CI. The first run (41815294434) sent virtual keys without
+          scancodes: Windows didn't compose é and made "0233" of the
+          digits instead (so the digits are now also dropped). It now
+          sends scancodes, as a keyboard does (not run yet). The trade-off, as in Windows Terminal:
           programs can't get Alt+numpad digits.
   - [x] Basic IME: the system composition window, placed at the cursor.
   - [x] Mouse buttons, motion, wheel, and cursor shapes.
@@ -128,8 +131,8 @@ Notes:
           changes with the defaults. Scrolling a screen at a time counts
           as 3. Unit test: `wheelScale` (rounding must not lose a line,
           which it did for some cell heights without a nudge);
-          `wheel-lines.ps1` sets it to 1 and 5 in CI (not run yet, since
-          pushing failed).
+          `wheel-lines.ps1` sets it to 1 and 5 in CI (not run yet: run
+          41815294434 stopped at an earlier failure).
 - [x] The cursor blinks at Windows' cursor blink rate (Settings >
       Accessibility > Text cursor, or the keyboard control panel; 530 ms
       by default, where Ghostty uses 600 ms elsewhere), read again on
@@ -138,8 +141,8 @@ Notes:
       in the renderer thread, which owns the blink timer; programs and
       `cursor-style-blink` still decide whether it blinks at all. Unit
       test: `systemCursorBlinkFrom`. `cursor-blink.ps1` times the blinks
-      on screen and turns blinking off in CI (not run yet, since pushing
-      failed). It couldn't be timed here, since the cursor only blinks
+      on screen and turns blinking off in CI (not run yet: the first
+      run stopped at an earlier failure). It couldn't be timed here, since the cursor only blinks
       in a focused window, and taking focus on this desktop is avoided.
   - [x] Touch screens: a one finger vertical pan scrolls (with inertia)
         through `WM_GESTURE`, instead of selecting text with emulated
