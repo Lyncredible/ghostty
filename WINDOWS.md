@@ -1110,6 +1110,31 @@ Notes:
             read back. The test fails if the announcement has it; CI run
             41421935996 got just "uia-9064  D:\a\ghostty\ghostty>".
       - [ ] Hearing it in Narrator (a person, with audio).
+- [ ] Be a "default terminal application" (Windows 11, Settings > For
+      developers > Terminal), so console programs started from Explorer,
+      Run or a shortcut open in Ghostty instead of a console window, as
+      Windows Terminal does. Researched (2026-11-03), not started:
+  - Windows' console host calls a COM server registered by the terminal's
+    package (`com.microsoft.windows.terminal.host` app extension) through
+    `ITerminalHandoff3::EstablishPtyHandoff` (microsoft/terminal,
+    `src/host/proxy/ITerminalHandoff.idl`; v1 and v2 are older builds).
+    The terminal returns the input and output pipes and gets the signal
+    pipe (resizes), a reference handle, the server and client processes,
+    and a `TERMINAL_STARTUP_INFO` (title, icon, size, show state).
+  - The handles cross processes, so the IIDs need a proxy/stub DLL in the
+    package (Windows Terminal ships `OpenConsoleProxy.dll`, built by
+    MIDL). The ConPTY NuGet package doesn't include it (checked its file
+    list), and this machine has no Windows SDK for MIDL. Options: generate
+    the proxy C with MIDL once and build it with `zig cc` (mingw has
+    `rpcproxy.h`), or build Windows Terminal's (MIT) from source.
+  - Then: ghostty.exe as a packaged COM local server
+    (`CoRegisterClassObject` when started with `-Embedding`), a termio
+    backend that uses handed-off pipes and a process it didn't start,
+    and resizes through the signal pipe instead of `ResizePseudoConsole`.
+  - Check in CI (installing the MSIX is fine on throwaway runners): set
+    the delegation (`HKCU\Console\%%Startup`, `DelegationConsole` and
+    `DelegationTerminal`), start `cmd.exe` through Explorer, and expect a
+    Ghostty window running it.
 - [x] Taskbar jump list with a "New Window" task, which starts
       `ghostty.exe` again (single instance opens the window in the running
       app). Checked: the shell wrote the custom destinations file with the
