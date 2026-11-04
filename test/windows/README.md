@@ -164,6 +164,14 @@ to 1 and then 5 (for the session, not saved), posts a wheel notch for
 each, and checks the view scrolled that many lines. It changes a desktop
 setting, so it only runs in CI.
 
+## cursor-blink.ps1
+
+Focuses a small Ghostty window, times the cursor's blinks on screen
+against Windows' cursor blink rate, then turns blinking off
+(`SetCaretBlinkTime(INFINITE)`, restored afterwards) and checks the
+screen stays still. It takes focus and changes a desktop setting, so it
+only runs in CI.
+
 ## dark-mode.ps1
 
 Starts Ghostty with a light and a dark theme, switches Windows between
