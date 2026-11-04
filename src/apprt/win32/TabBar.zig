@@ -339,6 +339,8 @@ const Colors = struct {
 };
 
 fn colors(self: *const TabBar) Colors {
+    if (util.highContrast()) return highContrastColors();
+
     // The active terminal's colors, which programs may have changed.
     const config = &self.window.app.config;
     const surface = if (self.window.tabs.items.len > 0) self.window.activeSurface() else null;
@@ -355,6 +357,30 @@ fn colors(self: *const TabBar) Colors {
         .text = fg,
         .text_inactive = blend(fg, bg, 0.4),
         .separator = blend(bg, fg, 0.15),
+    };
+}
+
+/// The colors of a high contrast theme: the bar is a window, the active
+/// tab is highlighted (like a selected item), and hovered items are
+/// buttons.
+fn highContrastColors() Colors {
+    const text = sysColor(c.COLOR_WINDOWTEXT);
+    return .{
+        .bar = sysColor(c.COLOR_WINDOW),
+        .active = sysColor(c.COLOR_HIGHLIGHT),
+        .hover = sysColor(c.COLOR_BTNFACE),
+        .text = sysColor(c.COLOR_HIGHLIGHTTEXT),
+        .text_inactive = text,
+        .separator = text,
+    };
+}
+
+fn sysColor(index: c_int) Rgb {
+    const v = c.GetSysColor(index);
+    return .{
+        .r = @truncate(v),
+        .g = @truncate(v >> 8),
+        .b = @truncate(v >> 16),
     };
 }
 
