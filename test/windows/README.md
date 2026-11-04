@@ -188,7 +188,8 @@ updates or restarts the graphics driver), and checks the log says the
 device was replaced and the renderer is healthy again, and that the window
 (read with `PrintWindow`) shows the background and cmd's banner. It runs
 again with a custom shader that swaps red and blue, and expects the
-swapped background. It only opens Ghostty's own window, so it can run
+swapped background, and with a solid background image (stretched), and
+expects its color. It only opens Ghostty's own window, so it can run
 anywhere.
 
 ## dark-mode.ps1
