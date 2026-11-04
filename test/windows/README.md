@@ -115,6 +115,18 @@ an unknown option) while the shell exits, after which
 Ghostty must exit cleanly or stay responsive. It shows dialogs, so it
 refuses to run unless `CI` is `true`.
 
+## handoff.ps1
+
+Hands a console session to a running Ghostty the way Windows' console
+host does when Ghostty is the default terminal application:
+`handoff_client.c` (built with `zig cc`) creates a pseudoconsole running
+cmd and calls Ghostty's terminal handoff class (`ITerminalHandoff3`) with
+its handles, relaying the pipes Ghostty returns. A new window must show
+cmd's output, typed input (posted `WM_CHAR`s) must reach cmd, and when cmd
+exits its window must close while Ghostty keeps running. It needs Windows
+Terminal (for the interface's proxy) and skips without it. It doesn't
+change the default terminal, so it can run locally.
+
 ## start-menu.ps1
 
 Starts an installed Ghostty the way the Start menu does (the MSIX by its

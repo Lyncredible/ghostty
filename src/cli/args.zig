@@ -1,4 +1,5 @@
 const std = @import("std");
+const builtin = @import("builtin");
 const mem = std.mem;
 const assert = @import("../quirks.zig").inlineAssert;
 const Allocator = mem.Allocator;
@@ -25,6 +26,20 @@ pub const Error = error{
     InvalidField,
     InvalidValue,
 };
+
+/// Whether an argument is COM's `-Embedding` (or `/Embedding`), which it
+/// adds when it starts a local server.
+pub fn isComEmbedding(arg: []const u8) bool {
+    return arg.len > 1 and (arg[0] == '-' or arg[0] == '/') and
+        std.ascii.eqlIgnoreCase(arg[1..], "Embedding");
+}
+
+test isComEmbedding {
+    try std.testing.expect(isComEmbedding("-Embedding"));
+    try std.testing.expect(isComEmbedding("/embedding"));
+    try std.testing.expect(!isComEmbedding("--Embedding"));
+    try std.testing.expect(!isComEmbedding("-e"));
+}
 
 /// Parse the command line arguments from iter into dst.
 ///
@@ -104,6 +119,12 @@ pub fn parse(
                 try dst.help();
                 return;
             }
+        }
+
+        // COM starts its local servers with this, as when Windows hands
+        // us a console session (see apprt/win32/Handoff.zig).
+        if (comptime builtin.target.os.tag == .windows) {
+            if (isComEmbedding(arg)) continue;
         }
 
         // If this doesn't start with "--" then it isn't a config
