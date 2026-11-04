@@ -113,7 +113,7 @@ Notes:
         `device-lost.ps1` checks the window shows the background and text
         again (passes here, and in CI in run 41919073564). It also runs
         with a custom shader that swaps red and blue, whose colors show
-        after the device is replaced (passes here; not run in CI yet).
+        after the device is replaced (passed in CI run 41927770848).
         Not checked: a real driver restart, and images after one.
 - [x] Win32 apprt: window, message loop, and cross-thread wakeups.
   - [x] Per-monitor DPI, resizing, focus, and occlusion.
