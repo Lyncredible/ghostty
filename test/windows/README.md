@@ -206,11 +206,12 @@ needs an unlocked desktop.
 ## quick-terminal.ps1
 
 Toggles the quick terminal over IPC, samples its position while it slides
-in and out, and checks that it ends up hidden. With Windows' animation
-effects turned off (restored after), it checks that it appears and hides
-without sliding. Then it adds a virtual
-desktop (Ctrl+Win+D) and checks that showing the quick terminal shows it
-there, without Windows switching back. It sends real keys, so it only runs in CI.
+in and out with Windows' animation effects turned on (they're off on CI's
+runners), and checks that it ends up hidden. With them off, it checks that
+it appears and hides without sliding. The setting is restored after. Then
+it adds a virtual desktop (Ctrl+Win+D) and checks that showing the quick
+terminal shows it there, without Windows switching back. It sends real
+keys and changes a system setting, so it only runs in CI.
 
 ## translucent.ps1
 
