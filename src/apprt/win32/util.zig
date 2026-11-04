@@ -155,6 +155,15 @@ pub fn windowsBuild() u32 {
     return info.dwBuildNumber;
 }
 
+/// Whether a high contrast theme is on (Settings > Accessibility >
+/// Contrast themes). Our own drawn UI then uses the theme's system colors
+/// (`GetSysColor`), as Windows asks of apps, instead of the terminal's.
+pub fn highContrast() bool {
+    var hc: c.HIGHCONTRASTW = .{ .cbSize = @sizeOf(c.HIGHCONTRASTW), .dwFlags = 0, .lpszDefaultScheme = null };
+    if (c.SystemParametersInfoW(c.SPI_GETHIGHCONTRAST, hc.cbSize, &hc, 0) == 0) return false;
+    return hc.dwFlags & c.HCF_HIGHCONTRASTON != 0;
+}
+
 /// Make the menus of this process (popup menus and the system menu) dark
 /// or light, to match our windows rather than the system's app theme.
 ///

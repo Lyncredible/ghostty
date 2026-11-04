@@ -151,6 +151,12 @@ jobs:
         shell: pwsh
         run: ./test/windows/cursor-blink.ps1 -Exe zig-out/bin/ghostty.exe
 
+      # The tab bar uses a high contrast theme's colors.
+      - name: High contrast test
+        timeout-minutes: 5
+        shell: pwsh
+        run: ./test/windows/high-contrast.ps1 -Exe zig-out/bin/ghostty.exe
+
       - name: Dark mode test
         shell: pwsh
         run: ./test/windows/dark-mode.ps1 -Exe zig-out/bin/ghostty.exe

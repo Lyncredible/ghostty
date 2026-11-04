@@ -1526,7 +1526,8 @@ fn updateTheme(self: *Window) void {
     const DWMWA_CAPTION_COLOR = 35;
     const DWMWA_TEXT_COLOR = 36;
     const DWMWA_COLOR_DEFAULT: c.COLORREF = 0xFFFFFFFF;
-    const ghostty = config.@"window-theme" == .ghostty;
+    // High contrast themes color title bars themselves.
+    const ghostty = config.@"window-theme" == .ghostty and !util.highContrast();
     const background = config.@"window-titlebar-background" orelse config.background;
     const foreground = config.@"window-titlebar-foreground" orelse config.foreground;
     const caption: c.COLORREF = if (ghostty) rgb(background.r, background.g, background.b) else DWMWA_COLOR_DEFAULT;
@@ -2028,6 +2029,14 @@ pub fn wndProc(
         c.WM_SETTINGCHANGE => {
             self.app.updateColorScheme();
             self.updateTheme();
+            return c.DefWindowProcW(hwnd, msg, wparam, lparam);
+        },
+
+        // Sent when a high contrast theme is turned on or off, or its
+        // colors change; the tab bar draws with them.
+        c.WM_SYSCOLORCHANGE => {
+            self.updateTheme();
+            self.tab_bar.invalidate();
             return c.DefWindowProcW(hwnd, msg, wparam, lparam);
         },
 
