@@ -171,9 +171,15 @@ try {
     Write-Host "Without high contrast, the divider is $last, a blend of the terminal's colors."
 
     if (-not [GhosttyContrast.Win32]::SetHighContrast($true)) { Fail "couldn't turn high contrast on" }
-    $expected = WaitFor { if ([GhosttyContrast.Win32]::HighContrast()) { SysColor 5 } } 'high contrast to be on'   # COLOR_WINDOW
-    [void](WaitFor { $script:last = BarColor; $last -eq $expected } "the tab bar to be the theme's window color $expected")
-    Write-Host "With high contrast, the tab bar is $last, the theme's window color."
+    [void](WaitFor { [GhosttyContrast.Win32]::HighContrast() } 'high contrast to be on')
+    # The theme's colors can come in after the flag, so the window color
+    # (COLOR_WINDOW) is read again with each check.
+    [void](WaitFor {
+            $color = BarColor; $window_color = SysColor 5
+            $script:last = "$color, where the theme's window color is $window_color"
+            $color -eq $window_color
+        } "the tab bar to be the theme's window color")
+    Write-Host "With high contrast, the tab bar is $last."
     [void](WaitFor { $script:last = DividerColor; $last -eq '#FFCC00' } 'the divider to be the foreground #FFCC00')
     Write-Host "With high contrast, the divider is $last, the terminal's foreground."
 
@@ -190,8 +196,10 @@ try {
                 "$([GhosttyContrast.Win32]::WindowAt($x, $y)) (Ghostty is $($process.Id)); the middle is " +
                 "$(ScreenColor (($rect.l + $rect.r) / 2) (($rect.t + $rect.b) / 2)) and the right end " +
                 "$(ScreenColor ($rect.r - 3) (($rect.t + $rect.b) / 2))"
-            $last -like "$expected *"
-        } "the search bar to be the theme's window color $expected")
+            $window_color = SysColor 5
+            $script:last += ", and the theme's window color is $window_color"
+            $last -like "$window_color *"
+        } "the search bar to be the theme's window color")
     Write-Host "With high contrast, the search bar is $last too."
 
     if (-not [GhosttyContrast.Win32]::SetHighContrast($false)) { Fail "couldn't turn high contrast off" }
