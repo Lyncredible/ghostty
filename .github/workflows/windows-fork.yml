@@ -201,6 +201,7 @@ jobs:
           $version = & $cli +version 2>&1 | Out-String
           if ($LASTEXITCODE -ne 0 -or $version -notmatch "Ghostty") { throw "ghostty-cli +version failed: $version" }
           ./test/windows/start-menu.ps1 -Msix
+          ./test/windows/default-terminal.ps1
           Remove-AppxPackage $pkg.PackageFullName
 
       # Install the zip with its install.ps1, start it from its Start menu

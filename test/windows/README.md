@@ -127,6 +127,14 @@ exits its window must close while Ghostty keeps running. It needs Windows
 Terminal (for the interface's proxy) and skips without it. It doesn't
 change the default terminal, so it can run locally.
 
+## default-terminal.ps1
+
+With the MSIX installed, sets the console delegation to Windows
+Terminal's OpenConsole and the terminal delegation to Ghostty's handoff
+class (what Settings > For developers > Terminal sets), starts cmd in a
+new console, and checks that its output shows up in the packaged Ghostty.
+It changes the default terminal (and restores it), so it only runs in CI.
+
 ## start-menu.ps1
 
 Starts an installed Ghostty the way the Start menu does (the MSIX by its
