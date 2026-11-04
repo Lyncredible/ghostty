@@ -1054,6 +1054,7 @@ pub fn setVisible(self: *Surface, visible: bool) void {
     self.core_surface.occlusionCallback(visible) catch |err| {
         log.err("error in occlusion callback err={}", .{err});
     };
+    self.core_surface.setPtyVisible(visible);
 }
 
 pub fn getContentScale(self: *const Surface) !apprt.ContentScale {
