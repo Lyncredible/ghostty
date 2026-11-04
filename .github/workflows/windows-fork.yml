@@ -90,6 +90,13 @@ jobs:
 
       # "Close terminal?" and "Change Terminal Title" from keybindings:
       # OK closes, and the shell exiting while one is open doesn't crash.
+      # A console session handed to a running Ghostty through its terminal
+      # handoff class (as when it's the default terminal application).
+      - name: Console handoff test
+        timeout-minutes: 5
+        shell: pwsh
+        run: ./test/windows/handoff.ps1 -Exe zig-out/bin/ghostty.exe
+
       - name: Keybinding dialogs test
         timeout-minutes: 5
         shell: pwsh
