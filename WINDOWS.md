@@ -1196,6 +1196,16 @@ Notes:
       with the unpackaged build passed in the same run. The test now
       collects Ghostty's debugger output and the processes involved,
       and reports them as annotations, to find where it stops.
+    - Second run (4878ccef2): COM started `ghostty.exe -Embedding`, the
+      handoff arrived (title `C:\Windows\system32\cmd.exe`), a window
+      opened and adopted cmd, but its IO thread failed with
+      ACCESS_DENIED. The console host hands over cmd's handle with only
+      some rights, and libxev's process watcher puts the process in a
+      job, which needs more (as does ending it). `handoff_client.c` now
+      passes a handle like that (SYNCHRONIZE and
+      PROCESS_QUERY_LIMITED_INFORMATION), which reproduced it locally,
+      and `Handoff.reopen` opens the program again by its id with the
+      rights we need, which fixed it locally.
   - Check in CI (installing the MSIX is fine on throwaway runners): set
     the delegation (`HKCU\Console\%%Startup`, `DelegationConsole` and
     `DelegationTerminal`), start `cmd.exe` through Explorer, and expect a
