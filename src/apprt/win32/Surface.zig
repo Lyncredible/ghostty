@@ -307,15 +307,17 @@ pub fn init(self: *Surface, app: *App, window: *Window, opts: Options) !void {
     errdefer self.link_preview.deinit(alloc);
     try self.scrollbar.init(hwnd, app.hinstance, &config, self, scrollToRow);
     errdefer self.scrollbar.deinit();
-    try self.readonly_badge.init(hwnd, app.hinstance, &config, .top_right);
+    // Badges make their windows when they first show, just below the
+    // scrollbar, as if they were made here.
+    self.readonly_badge.init(hwnd, app.hinstance, &config, .top_right, self.scrollbar.hwnd);
     errdefer self.readonly_badge.deinit(alloc);
-    try self.key_badge.init(hwnd, app.hinstance, &config, .bottom_center);
+    self.key_badge.init(hwnd, app.hinstance, &config, .bottom_center, self.scrollbar.hwnd);
     errdefer self.key_badge.deinit(alloc);
-    try self.health_badge.init(hwnd, app.hinstance, &config, .center);
+    self.health_badge.init(hwnd, app.hinstance, &config, .center, self.scrollbar.hwnd);
     errdefer self.health_badge.deinit(alloc);
-    try self.toast_badge.init(hwnd, app.hinstance, &config, .bottom_center);
+    self.toast_badge.init(hwnd, app.hinstance, &config, .bottom_center, self.scrollbar.hwnd);
     errdefer self.toast_badge.deinit(alloc);
-    try self.resize_badge.init(hwnd, app.hinstance, &config, .center);
+    self.resize_badge.init(hwnd, app.hinstance, &config, .center, self.scrollbar.hwnd);
     errdefer self.resize_badge.deinit(alloc);
     try self.drop_zone.init(hwnd, app.hinstance, &config);
     errdefer self.drop_zone.deinit();
