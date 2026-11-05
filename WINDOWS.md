@@ -611,7 +611,8 @@ Notes:
           terminal with its overlay just above the bell border and below
           the search bar and palette. The link preview needs a real Ctrl
           key held down, so `links.ps1` (CI only) checks it: holding Ctrl
-          over a link shows it, just above the scrollbar.
+          over a link shows it, just above the scrollbar. Both pass in CI
+          run 41968407024.
     - [x] The drop zone too, which shows only while a split is dragged
           (it goes on top when it shows, so when it's made doesn't
           matter). `overlays.ps1` drags the first terminal's handle over
@@ -621,7 +622,8 @@ Notes:
           top when it does). With the drop zone: a new tab, three runs of
           four, alternating with the build before: 14-18 ms, from 15-21.
           `overlays.ps1` checks that a split shows the first terminal's
-          handle, and drags it.
+          handle, and drags it. Splits, which make the dim overlay and
+          handles anyway, gain less: 26-31 ms, from 27-34 (one 39).
     - [x] The scrollbar stays made up front (about 1.5 ms): nearly every
           terminal scrolls, so it would be made anyway, and the overlays
           made later find their places from it.
