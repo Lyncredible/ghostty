@@ -286,8 +286,8 @@ UI Automation.
 ## overlays.ps1
 
 Checks that a new surface has no badge, search bar, command palette, dim
-overlay, bell border, link preview or drop zone windows (they're made when
-they first show), then toggles read-only mode with a posted key: the read-only badge
+overlay, bell border, link preview, drop zone or drag handle windows
+(they're made when they first show), then toggles read-only mode with a posted key: the read-only badge
 must show in the top right, just below the scrollbar in the surface's child
 windows (where it was when badges were made up front), and hide again. A
 posted F8 types `echo` and a BEL into cmd: the bell border must show just
