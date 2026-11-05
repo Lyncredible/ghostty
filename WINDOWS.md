@@ -659,6 +659,20 @@ Notes:
         tabs 296 MB (from 658). Frame rates were the same (light shader 69
         fps, heavy 69, four splits 274 in all, maximized heavy 49), and so
         was output throughput (about 1 MB/s through ConPTY either way).
+  - [x] The offscreen target itself: the renderer drew each frame into a
+        texture the size of the surface and copied it into the swap
+        chain's back buffer. It now draws into the back buffer (one view
+        of buffer 0, which Direct3D 11 rotates for a flip model swap
+        chain; an sRGB view for linear blending; released before a resize
+        or a lost device). ReleaseFast, the same 2854x1456 window, ten
+        tabs: 10.8 MB of private bytes a tab (from 28.5) and 34.7 MB of
+        dedicated GPU memory (from 52.1); 1 tab 37.6 MB (from 54.8). At
+        200x60 cells: 11.7 MB a tab, from 45.5. It also saves a copy of
+        the surface each frame. Checked: the device-lost test (plain,
+        shader, background image), smoke, the blending capture (the same
+        counts as before), and a capture after each of twelve typed
+        letters, then a split: the same lit pixel counts as the build
+        before, each letter showing in the next frame.
   - PowerShell's integration added about 180 ms per tab (590 ms with
     `shell-integration = none`). Its first prompt used three things that
     are slow the first time in 5.1: `New-Object` (63 ms), a regular
