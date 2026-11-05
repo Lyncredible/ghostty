@@ -1,12 +1,18 @@
-# Checks the read-only badge: a surface makes its badges' windows only
-# when they first show, so a new terminal has none. Toggling read-only
+# Checks the overlays a surface makes only when they first show: a new
+# terminal has no badge, search bar, command palette, dim overlay, bell
+# border or link preview window. Toggling read-only
 # mode (a posted F9 bound to `toggle_readonly`) must show one in the top
 # right, in the order it would have been made in: just below the
 # scrollbar, and above the overlays made after it (such as the drop
 # zone). The search bar and command palette are made when they first
 # open too, so a new surface has neither. Toggling read-only mode again
-# must hide the badge. Then the search bar and the command palette
-# (opened from the window menu) must show on top, and close again.
+# must hide the badge. A bell (a posted F8 types `echo` and BEL) must
+# show the bell border, just above the scrollbar. Then the search bar and
+# the command palette (opened from the window menu) must show on top, and
+# close again. Last, a split from the window menu must dim the first
+# terminal, with its dim overlay above the bell border and below the
+# search bar and palette. The link preview isn't shown: it needs a real
+# Ctrl key held down.
 # It only posts messages to Ghostty's own window, so it can run anywhere.
 #
 #     ./overlays.ps1 -Exe zig-out/bin/ghostty.exe
@@ -44,7 +50,8 @@ $W = [GhosttyBadges.Win32]
 
 $log = Join-Path ([IO.Path]::GetTempPath()) "ghostty-overlays-$PID.log"
 $process = Start-Process -FilePath $Exe -PassThru -RedirectStandardError $log -ArgumentList '--command=cmd.exe',
-    '--window-save-state=never', '--keybind=f9=toggle_readonly'
+    '--window-save-state=never', '--keybind=f9=toggle_readonly', '"--keybind=f8=text:echo \x07\r"',
+    '--bell-features=no-attention,border'
 
 function Fail([string]$message) {
     Write-Host "::error title=overlays::$message"
@@ -88,8 +95,8 @@ try {
     $script:surface = WaitFor { $h = $W::FindWindowExW($window, [IntPtr]::Zero, 'GhosttySurface', $null); if ($h -ne [IntPtr]::Zero) { $h } } 'the surface'
     [void](WaitFor { (Children) -contains 'GhosttyDragHandle' } "the surface's overlays")
     Start-Sleep -Seconds 1
-    if ((Children) | Where-Object { $_ -match '^Ghostty(Badge|SearchBar|CommandPalette)' }) { Fail "a new surface already has a badge, search bar or command palette window: $((Children) -join ', ')" }
-    Write-Host "A new surface has no badge, search bar or command palette windows: $((Children) -join ', ')"
+    if ((Children) | Where-Object { $_ -match '^Ghostty(Badge|SearchBar|CommandPalette|DimOverlay|BellBorder|LinkPreview)' }) { Fail "a new surface already has a lazily made overlay window: $((Children) -join ', ')" }
+    Write-Host "A new surface has no badge, search bar, command palette, dim overlay, bell border or link preview windows: $((Children) -join ', ')"
 
     $W::Key($surface, 0x78, 0x43)   # F9: toggle_readonly
     [void](WaitFor { (Children) -contains 'GhosttyBadge*' } 'the read-only badge to show')
@@ -110,6 +117,14 @@ try {
     $W::Key($surface, 0x78, 0x43)
     [void](WaitFor { -not ((Children) -contains 'GhosttyBadge*') } 'the read-only badge to hide')
     Write-Host 'Leaving read-only mode hides it.'
+
+    $W::Key($surface, 0x77, 0x42)   # F8: echo BEL
+    [void](WaitFor { (Children) -contains 'GhosttyBellBorder*' } 'the bell border to show')
+    $children = @(Children)
+    $bell = [Array]::IndexOf($children, 'GhosttyBellBorder*')
+    $scrollbar = [Array]::IndexOf(@($children | ForEach-Object { $_.TrimEnd('*') }), 'GhosttyScrollbar')
+    if ($bell -ne $scrollbar - 1) { Fail "the bell border isn't just above the scrollbar: $($children -join ', ')" }
+    Write-Host "A bell shows the bell border, just above the scrollbar: $($children -join ', ')"
 
     # The window menu's Find... (11) and Command Palette (17), after
     # WM_INITMENUPOPUP, which builds it.
@@ -132,6 +147,20 @@ try {
         [void](WaitFor { -not ((Children) -contains "$($overlay.Class)*") } "$($overlay.Class) to close")
         Write-Host "$($overlay.Class) opens on top$(if ($list -ne [IntPtr]::Zero) { " listing $entries entries" }) and closes: $($children -join ', ')"
     }
+
+    # Split Right (7) focuses the new terminal and dims this one.
+    [void]$W::SendMessageW($window, 0x0117, $menu, [IntPtr]0)
+    [void]$W::SendMessageW($window, 0x0112, [IntPtr](7 -shl 4), [IntPtr]0)
+    [void](WaitFor { (Children) -contains 'GhosttyDimOverlay*' } 'the first terminal to dim')
+    $children = @(Children)
+    $names = @($children | ForEach-Object { $_.TrimEnd('*') })
+    $dim = [Array]::IndexOf($names, 'GhosttyDimOverlay')
+    if ($dim -ne [Array]::IndexOf($names, 'GhosttyBellBorder') - 1 -or
+        $dim -lt [Array]::IndexOf($names, 'GhosttySearchBar') -or
+        $dim -lt [Array]::IndexOf($names, 'GhosttyCommandPalette')) {
+        Fail "the dim overlay isn't just above the bell border and below the search bar and palette: $($children -join ', ')"
+    }
+    Write-Host "A split dims the first terminal, its overlay just above the bell border: $($children -join ', ')"
 } finally {
     if (-not $process.HasExited) { Stop-Process -Id $process.Id -Force }
     Remove-Item -LiteralPath $log -Force -ErrorAction SilentlyContinue

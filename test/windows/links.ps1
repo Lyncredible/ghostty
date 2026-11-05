@@ -1,7 +1,9 @@
 # Checks that Ctrl+clicking an OSC 8 hyperlink goes through the checks for
 # links from terminal output (src/apprt/win32/link.zig): a text file opens
 # (in Notepad), a script is blocked with a dialog and doesn't run, and an
-# ms-settings: link asks first (we answer No). It Ctrl+clicks with
+# ms-settings: link asks first (we answer No). Holding Ctrl over a link
+# must show its URL, in a link preview window made then, just above the
+# scrollbar (where it was when it was made up front). It Ctrl+clicks with
 # SendInput, which goes to whatever window is in the foreground, and it
 # opens Notepad, so this only runs in CI, never on a developer's machine.
 #
@@ -30,6 +32,9 @@ Add-Type -Namespace GhosttyLinks -Name Win32 -MemberDefinition @'
 [DllImport("user32.dll")] public static extern bool PostMessageW(System.IntPtr h, uint m, System.IntPtr w, System.IntPtr l);
 [DllImport("user32.dll", CharSet = CharSet.Unicode)] public static extern System.IntPtr FindWindowExW(System.IntPtr parent, System.IntPtr after, string cls, string title);
 [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(System.IntPtr h, out uint pid);
+[DllImport("user32.dll")] public static extern System.IntPtr GetWindow(System.IntPtr h, uint cmd);
+[DllImport("user32.dll")] public static extern bool IsWindowVisible(System.IntPtr h);
+[DllImport("user32.dll", CharSet = CharSet.Unicode)] public static extern int GetClassNameW(System.IntPtr h, System.Text.StringBuilder s, int n);
 public static void Key(ushort vk, bool up) {
   var i = new INPUT[1]; i[0].type = 1; i[0].u.ki.wVk = vk; i[0].u.ki.dwFlags = up ? 2u : 0u;
   SendInput(1, i, System.Runtime.InteropServices.Marshal.SizeOf(typeof(INPUT))); }
@@ -128,13 +133,26 @@ function ClickLink([string]$url) {
     $rect = $surface.Current.BoundingRectangle
     $x = [int]($rect.Left + 40); $y = [int]($rect.Top + $rect.Height / 2)
     $W::Key(0x11, $false)                                 # Ctrl down
-    [void]$W::SetCursorPos($x, $y)
-    $W::mouse_event(0x0001, 1, 0, 0, [IntPtr]::Zero)      # a move, so Ghostty sees the link
-    Start-Sleep -Milliseconds 300
-    $W::mouse_event(0x0002, 0, 0, 0, [IntPtr]::Zero)      # left down
-    $W::mouse_event(0x0004, 0, 0, 0, [IntPtr]::Zero)      # left up
-    Start-Sleep -Milliseconds 300
-    $W::Key(0x11, $true)                                  # Ctrl up
+    try {
+        [void]$W::SetCursorPos($x, $y)
+        $W::mouse_event(0x0001, 1, 0, 0, [IntPtr]::Zero)      # a move, so Ghostty sees the link
+        Start-Sleep -Milliseconds 300
+
+        $h = [IntPtr]$surface.Current.NativeWindowHandle
+        $preview = WaitFor {
+            $p = $W::FindWindowExW($h, [IntPtr]::Zero, 'GhosttyLinkPreview', $null)
+            if ($p -ne [IntPtr]::Zero -and $W::IsWindowVisible($p)) { $p }
+        } 'the link preview to show'
+        $name = New-Object System.Text.StringBuilder 64
+        [void]$W::GetClassNameW($W::GetWindow($preview, 2), $name, $name.Capacity)   # GW_HWNDNEXT
+        if ($name.ToString() -ne 'GhosttyScrollbar') { Fail "the link preview is just above $name, not the scrollbar" }
+
+        $W::mouse_event(0x0002, 0, 0, 0, [IntPtr]::Zero)      # left down
+        $W::mouse_event(0x0004, 0, 0, 0, [IntPtr]::Zero)      # left up
+        Start-Sleep -Milliseconds 300
+    } finally {
+        $W::Key(0x11, $true)                                  # Ctrl up
+    }
 }
 
 function Close {
@@ -149,7 +167,7 @@ try {
     $notepad = WaitFor {
         Get-Process -ErrorAction SilentlyContinue | Where-Object { $_.MainWindowTitle -like '*notes*' } | Select-Object -First 1
     } 'Notepad to open notes.txt'
-    Write-Host "A link to a text file opened it ($($notepad.ProcessName): '$($notepad.MainWindowTitle)')."
+    Write-Host "Holding Ctrl over a link showed its URL, and a link to a text file opened it ($($notepad.ProcessName): '$($notepad.MainWindowTitle)')."
     Stop-Process -Id $notepad.Id -Force -ErrorAction SilentlyContinue
     Close
 
