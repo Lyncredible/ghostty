@@ -3,7 +3,9 @@
 //!
 //! It's a layered child window like our other overlays, since the surface's
 //! flip model swap chain covers regular child windows. Being a child, it
-//! takes keyboard focus without deactivating the top-level window.
+//! takes keyboard focus without deactivating the top-level window. Its
+//! windows are made the first time it shows, since most surfaces are never
+//! searched (it took about 3 ms of each new tab).
 const SearchBar = @This();
 
 const std = @import("std");
@@ -12,6 +14,8 @@ const Config = @import("../../config.zig").Config;
 
 const util = @import("util.zig");
 const c = util.c;
+
+const log = std.log.scoped(.win32);
 
 pub const class_name = std.unicode.utf8ToUtf16LeStringLiteral("GhosttySearchBar");
 
@@ -34,6 +38,8 @@ const count_width = 56;
 
 hwnd: c.HWND = null,
 edit: c.HWND = null,
+parent: c.HWND = null,
+instance: c.HINSTANCE = null,
 font: c.HFONT = null,
 edit_brush: c.HBRUSH = null,
 edit_proc: c.WNDPROC = null,
@@ -62,8 +68,18 @@ pub fn init(
     config: *const Config,
     ctx: *anyopaque,
     on_event: *const fn (ctx: *anyopaque, event: Event) void,
-) !void {
-    self.hwnd = c.CreateWindowExW(
+) void {
+    self.parent = parent;
+    self.instance = instance;
+    self.ctx = ctx;
+    self.on_event = on_event;
+    self.setCount(null, null);
+    self.updateConfig(config);
+}
+
+fn createWindows(self: *SearchBar) !void {
+    if (self.hwnd != null) return;
+    const hwnd = c.CreateWindowExW(
         c.WS_EX_LAYERED | c.WS_EX_CONTROLPARENT,
         class_name,
         null,
@@ -72,17 +88,17 @@ pub fn init(
         0,
         0,
         0,
-        parent,
+        self.parent,
         null,
-        instance,
+        self.instance,
         null,
     ) orelse return error.CreateWindowFailed;
-    errdefer _ = c.DestroyWindow(self.hwnd);
-    if (c.SetLayeredWindowAttributes(self.hwnd, 0, 255, c.LWA_ALPHA) == 0) {
+    errdefer _ = c.DestroyWindow(hwnd);
+    if (c.SetLayeredWindowAttributes(hwnd, 0, 255, c.LWA_ALPHA) == 0) {
         return error.SetOpacityFailed;
     }
 
-    self.edit = c.CreateWindowExW(
+    const edit = c.CreateWindowExW(
         0,
         std.unicode.utf8ToUtf16LeStringLiteral("EDIT"),
         null,
@@ -91,28 +107,26 @@ pub fn init(
         0,
         0,
         0,
-        self.hwnd,
+        hwnd,
         null,
-        instance,
+        self.instance,
         null,
     ) orelse return error.CreateWindowFailed;
-    _ = c.SendMessageW(self.edit, c.EM_SETCUEBANNER, c.TRUE, @bitCast(@intFromPtr(
+    _ = c.SendMessageW(edit, c.EM_SETCUEBANNER, c.TRUE, @bitCast(@intFromPtr(
         std.unicode.utf8ToUtf16LeStringLiteral("Find").ptr,
     )));
 
     // Subclass the edit control for Enter and Escape.
-    _ = c.SetWindowLongPtrW(self.edit, util.GWLP_USERDATA, @bitCast(@intFromPtr(self)));
+    _ = c.SetWindowLongPtrW(edit, util.GWLP_USERDATA, @bitCast(@intFromPtr(self)));
     self.edit_proc = @ptrFromInt(@as(usize, @bitCast(c.SetWindowLongPtrW(
-        self.edit,
+        edit,
         c.GWLP_WNDPROC,
         @bitCast(@intFromPtr(&editProc)),
     ))));
 
-    self.ctx = ctx;
-    self.on_event = on_event;
-    _ = c.SetWindowLongPtrW(self.hwnd, util.GWLP_USERDATA, @bitCast(@intFromPtr(self)));
-    self.setCount(null, null);
-    self.updateConfig(config);
+    self.hwnd = hwnd;
+    self.edit = edit;
+    _ = c.SetWindowLongPtrW(hwnd, util.GWLP_USERDATA, @bitCast(@intFromPtr(self)));
 }
 
 pub fn deinit(self: *SearchBar) void {
@@ -134,15 +148,20 @@ pub fn updateConfig(self: *SearchBar, config: *const Config) void {
     self.foreground = rgb(fg.r, fg.g, fg.b);
     if (self.edit_brush != null) _ = c.DeleteObject(self.edit_brush);
     self.edit_brush = c.CreateSolidBrush(self.field);
-    _ = c.InvalidateRect(self.hwnd, null, c.TRUE);
+    if (self.hwnd != null) _ = c.InvalidateRect(self.hwnd, null, c.TRUE);
 }
 
 pub fn visible(self: *const SearchBar) bool {
+    if (self.hwnd == null) return false;
     return c.GetWindowLongPtrW(self.hwnd, c.GWL_STYLE) & c.WS_VISIBLE != 0;
 }
 
 /// Show and focus the search box. A non-empty needle replaces the text.
 pub fn show(self: *SearchBar, alloc: Allocator, needle: []const u8) void {
+    self.createWindows() catch |err| {
+        log.warn("unable to create the search bar err={}", .{err});
+        return;
+    };
     if (needle.len > 0) {
         if (util.utf16Alloc(alloc, needle)) |text| {
             defer alloc.free(text);
@@ -158,7 +177,7 @@ pub fn show(self: *SearchBar, alloc: Allocator, needle: []const u8) void {
 }
 
 pub fn hide(self: *SearchBar) void {
-    _ = c.ShowWindow(self.hwnd, c.SW_HIDE);
+    if (self.hwnd != null) _ = c.ShowWindow(self.hwnd, c.SW_HIDE);
     self.setCount(null, null);
 }
 

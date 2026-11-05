@@ -2,7 +2,9 @@
 //! `command-palette-entry` commands and of the open terminals, like GTK's.
 //!
 //! It's a layered child window of the surface, like the search bar, since
-//! the surface's flip model swap chain covers regular child windows.
+//! the surface's flip model swap chain covers regular child windows. Its
+//! windows are made the first time it opens (they took about 3 ms of each
+//! new tab).
 const CommandPalette = @This();
 
 const std = @import("std");
@@ -66,6 +68,8 @@ const pad = 8;
 hwnd: c.HWND = null,
 edit: c.HWND = null,
 list: c.HWND = null,
+parent: c.HWND = null,
+instance: c.HINSTANCE = null,
 font: c.HFONT = null,
 small_font: c.HFONT = null,
 edit_proc: c.WNDPROC = null,
@@ -77,6 +81,9 @@ background: c.COLORREF = 0,
 field: c.COLORREF = 0,
 foreground: c.COLORREF = 0xFFFFFF,
 dim: c.COLORREF = 0xAAAAAA,
+
+/// Whether the background is dark, for a dark list scrollbar.
+dark: bool = false,
 background_brush: c.HBRUSH = null,
 field_brush: c.HBRUSH = null,
 
@@ -94,8 +101,17 @@ pub fn init(
     config: *const Config,
     ctx: *anyopaque,
     on_choose: *const fn (ctx: *anyopaque, choice: Choice) void,
-) !void {
-    self.hwnd = c.CreateWindowExW(
+) void {
+    self.parent = parent;
+    self.instance = instance;
+    self.ctx = ctx;
+    self.on_choose = on_choose;
+    self.updateConfig(config);
+}
+
+fn createWindows(self: *CommandPalette) !void {
+    if (self.hwnd != null) return;
+    const hwnd = c.CreateWindowExW(
         c.WS_EX_LAYERED | c.WS_EX_CONTROLPARENT,
         class_name,
         null,
@@ -104,17 +120,17 @@ pub fn init(
         0,
         0,
         0,
-        parent,
+        self.parent,
         null,
-        instance,
+        self.instance,
         null,
     ) orelse return error.CreateWindowFailed;
-    errdefer _ = c.DestroyWindow(self.hwnd);
-    if (c.SetLayeredWindowAttributes(self.hwnd, 0, 255, c.LWA_ALPHA) == 0) {
+    errdefer _ = c.DestroyWindow(hwnd);
+    if (c.SetLayeredWindowAttributes(hwnd, 0, 255, c.LWA_ALPHA) == 0) {
         return error.SetOpacityFailed;
     }
 
-    self.edit = c.CreateWindowExW(
+    const edit = c.CreateWindowExW(
         0,
         std.unicode.utf8ToUtf16LeStringLiteral("EDIT"),
         null,
@@ -123,12 +139,12 @@ pub fn init(
         0,
         0,
         0,
-        self.hwnd,
+        hwnd,
         null,
-        instance,
+        self.instance,
         null,
     ) orelse return error.CreateWindowFailed;
-    self.list = c.CreateWindowExW(
+    const list = c.CreateWindowExW(
         0,
         std.unicode.utf8ToUtf16LeStringLiteral("LISTBOX"),
         null,
@@ -138,24 +154,35 @@ pub fn init(
         0,
         0,
         0,
-        self.hwnd,
+        hwnd,
         null,
-        instance,
+        self.instance,
         null,
     ) orelse return error.CreateWindowFailed;
 
     // Subclass the edit control to move through the list from the field.
-    _ = c.SetWindowLongPtrW(self.edit, util.GWLP_USERDATA, @bitCast(@intFromPtr(self)));
+    _ = c.SetWindowLongPtrW(edit, util.GWLP_USERDATA, @bitCast(@intFromPtr(self)));
     self.edit_proc = @ptrFromInt(@as(usize, @bitCast(c.SetWindowLongPtrW(
-        self.edit,
+        edit,
         c.GWLP_WNDPROC,
         @bitCast(@intFromPtr(&editProc)),
     ))));
 
-    self.ctx = ctx;
-    self.on_choose = on_choose;
-    _ = c.SetWindowLongPtrW(self.hwnd, util.GWLP_USERDATA, @bitCast(@intFromPtr(self)));
-    self.updateConfig(config);
+    self.hwnd = hwnd;
+    self.edit = edit;
+    self.list = list;
+    _ = c.SetWindowLongPtrW(hwnd, util.GWLP_USERDATA, @bitCast(@intFromPtr(self)));
+    self.updateListTheme();
+}
+
+/// A dark scrollbar for a dark background.
+fn updateListTheme(self: *const CommandPalette) void {
+    if (self.list == null) return;
+    _ = c.SetWindowTheme(
+        self.list,
+        if (self.dark) std.unicode.utf8ToUtf16LeStringLiteral("DarkMode_Explorer") else null,
+        null,
+    );
 }
 
 pub fn deinit(self: *CommandPalette) void {
@@ -183,15 +210,10 @@ pub fn updateConfig(self: *CommandPalette, config: *const Config) void {
     if (self.field_brush != null) _ = c.DeleteObject(self.field_brush);
     self.background_brush = c.CreateSolidBrush(self.background);
 
-    // A dark scrollbar for a dark background.
-    const dark = bg.toTerminalRGB().perceivedLuminance() <= 0.5;
-    _ = c.SetWindowTheme(
-        self.list,
-        if (dark) std.unicode.utf8ToUtf16LeStringLiteral("DarkMode_Explorer") else null,
-        null,
-    );
+    self.dark = bg.toTerminalRGB().perceivedLuminance() <= 0.5;
+    self.updateListTheme();
     self.field_brush = c.CreateSolidBrush(self.field);
-    _ = c.InvalidateRect(self.hwnd, null, c.TRUE);
+    if (self.hwnd != null) _ = c.InvalidateRect(self.hwnd, null, c.TRUE);
 }
 
 pub fn visible(self: *const CommandPalette) bool {
@@ -207,6 +229,10 @@ pub fn show(
     contents: Contents,
     targets: []const Target,
 ) void {
+    self.createWindows() catch |err| {
+        log.warn("unable to create the command palette err={}", .{err});
+        return;
+    };
     if (self.arena) |*arena| arena.deinit();
     self.arena = .init(alloc);
     self.contents = contents;
