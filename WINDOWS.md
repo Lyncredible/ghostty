@@ -355,6 +355,13 @@ Notes:
         With a window waiting for undo, closing the last open one quit
         the app. This found a use-after-free: closing a single-terminal
         window with the close button reset a flag on the freed window.
+- [x] `alpha-blending` on Windows (its docs now say `native` is sRGB
+      there, as on Linux). Red text on green, captured with PrintWindow
+      (the first 300 rows): `native` has 4,185 dark edge pixels (the
+      brighter of red and green under 170), `linear` and
+      `linear-corrected` none. The corrected mode draws the text a
+      little heavier (28,637 mostly red pixels, against 27,400), as its
+      docs say: plain linear blending thins dark text.
 - [x] `font-thicken` and `font-thicken-strength` with FreeType (so on
       Windows): outlines are emboldened by a quarter of a pixel up to a
       whole pixel overall, by strength. Measured on a screenshot of the
