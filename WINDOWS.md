@@ -49,19 +49,23 @@ roughly in order:
 - **Renderer:** a `direct3d11` backend (`src/renderer/Direct3D11.zig`,
   `src/renderer/direct3d11/`). It implements the same GraphicsAPI contract
   as Metal and OpenGL, and is the default renderer on Windows.
-  - Each surface has its own D3D11 device and context.
+  - Each surface has its own D3D11 device and context. A spare device is
+    made ahead on a thread, so new surfaces don't wait for one.
   - Frames render to an offscreen target, which is copied into a flip-model
     swap chain on the surface `HWND`.
   - Embedders can use it through the new `GHOSTTY_PLATFORM_WINDOWS`
     platform, which passes an `HWND`.
 - **Shaders:** `src/renderer/shaders/shaders.hlsl` is a hand port of the
-  GLSL shaders. It's compiled at runtime with `D3DCompile`
+  GLSL shaders. Builds on Windows compile it with `D3DCompile` at build
+  time and embed the bytecode; builds elsewhere compile it at runtime
   (`d3dcompiler_47.dll` ships with Windows).
   - Built-in shader bytecode is compiled once per process and reused when
     creating pipelines for each surface's D3D device.
   - Custom shaders go GLSL → SPIR-V → HLSL via spirv-cross.
 - **PTY:** ConPTY (`src/pty.zig`, `src/termio/Exec.zig`).
-- **Fonts:** the existing `freetype_windows` backend.
+- **Fonts:** the existing `freetype_windows` backend. FreeType
+  rasterizes, as the discussion's plan has it; DirectWrite finds
+  fallback fonts and answers font name queries.
 
 ## Building and testing
 
@@ -545,7 +549,7 @@ Notes:
         while config and fonts load, and `createDevice` takes it (waiting
         if it isn't done). ReleaseFast, cmd, five warm runs: the window
         showed after 242 ms instead of 330, the prompt after 280 instead
-        of 362. Tabs, splits, and windows after it still create their own.
+        of 362. (Later surfaces take a spare; see below.)
   - [x] The jump list was written on the main thread at startup (shell
         COM objects and a file replace, a third of the busy samples left).
         It's now written on a thread of its own: the window showed after
@@ -566,6 +570,16 @@ Notes:
         goes. cmd's new tab to prompt: 98-125 ms (from 128-143). Checked:
         the tab bar, a new tab, and right and down splits got the same
         sizes and positions as before.
+  - [x] Every new surface still made its Direct3D device on the UI
+        thread: a test program took about 24 ms for each device after the
+        first, and each added about 4.3 MB of private bytes. We now keep a
+        spare: a surface takes it, and a thread makes the next one (the
+        startup warmup makes the first). ReleaseFast, a split from the
+        system menu (`SendMessage`, so it's the UI thread's time), three
+        runs of four: 63-78 ms before, 34-44 ms after. The spare costs
+        about 5 MB (private bytes after start: 50.5 MB, now 55.3 MB).
+        Checked: the device-lost and smoke tests pass, and closing the
+        window exits.
 - [x] Memory per tab: each new tab raised the commit charge (private
       bytes) by about 110 MB, while the working set grew by 10 MB. Listing
       the committed regions showed three 16 MB thread stacks per tab: on
