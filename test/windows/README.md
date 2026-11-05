@@ -280,3 +280,11 @@ Starts a drag selection (posted button and move messages), then takes the
 mouse capture away with `WM_CANCELMODE`, as when another window takes it
 mid-drag. Later moves must not change the selection, which is read through
 UI Automation.
+
+## badges.ps1
+
+Checks that a new surface has no badge windows (they're made when they
+first show), then toggles read-only mode with a posted key: the read-only
+badge must show in the top right, just below the scrollbar in the
+surface's child windows (where it was when badges were made up front), and
+hide again. It only posts messages to Ghostty's own window.

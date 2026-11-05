@@ -583,6 +583,18 @@ Notes:
         Checked: the device-lost and smoke tests pass (here, and in CI
         run 41946175189), and closing the
         window exits.
+  - [x] The rest of a new tab's time on the UI thread (ReleaseFast,
+        timed in place): the core's surface took about 10 ms (the
+        renderer 3-4, ConPTY and the shell 2.5-3), and our overlays'
+        windows about 22: five badges 6-7 ms, the search bar and command
+        palette 6-7, the dim overlay and bell border 3, the link preview
+        and scrollbar 3, the drop zone and drag handle 2-3. Badges now
+        make their windows the first time they show, just below the
+        scrollbar, as before (0.5 ms for all five). Tab creation: 28-31 ms
+        from 33-39. Test: `test/windows/badges.ps1`, which fails on the
+        build before (it finds five badge windows in a new surface).
+    - [ ] The other overlays the same way, starting with the search bar
+          and command palette.
 - [x] Memory per tab: each new tab raised the commit charge (private
       bytes) by about 110 MB, while the working set grew by 10 MB. Listing
       the committed regions showed three 16 MB thread stacks per tab: on
