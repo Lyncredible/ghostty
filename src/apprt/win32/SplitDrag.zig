@@ -13,6 +13,8 @@ const c = util.c;
 const Surface = @import("Surface.zig");
 const Tab = @import("Tab.zig");
 
+const log = std.log.scoped(.win32);
+
 pub const Direction = Tab.Tree.Split.Direction;
 
 /// Sizes at 96 DPI.
@@ -153,10 +155,20 @@ pub const DropZone = struct {
     pub const class_name = std.unicode.utf8ToUtf16LeStringLiteral("GhosttyDropZone");
 
     hwnd: c.HWND = null,
+    parent: c.HWND = null,
+    instance: c.HINSTANCE = null,
     brush: c.HBRUSH = null,
 
-    pub fn init(self: *DropZone, parent: c.HWND, instance: c.HINSTANCE, config: *const Config) !void {
-        self.hwnd = c.CreateWindowExW(
+    /// The window is made the first time the highlight shows. It goes on
+    /// top whenever it shows, so when it's made doesn't matter.
+    pub fn init(self: *DropZone, parent: c.HWND, instance: c.HINSTANCE, config: *const Config) void {
+        self.parent = parent;
+        self.instance = instance;
+        self.updateConfig(config);
+    }
+
+    fn createWindow(self: *DropZone) !void {
+        const hwnd = c.CreateWindowExW(
             c.WS_EX_LAYERED | c.WS_EX_TRANSPARENT | c.WS_EX_NOACTIVATE,
             class_name,
             null,
@@ -165,15 +177,15 @@ pub const DropZone = struct {
             0,
             0,
             0,
-            parent,
+            self.parent,
             null,
-            instance,
+            self.instance,
             null,
         ) orelse return error.CreateWindowFailed;
-        errdefer self.deinit();
-        if (c.SetLayeredWindowAttributes(self.hwnd, 0, 70, c.LWA_ALPHA) == 0) return error.SetOpacityFailed;
-        _ = c.SetWindowLongPtrW(self.hwnd, util.GWLP_USERDATA, @bitCast(@intFromPtr(self)));
-        self.updateConfig(config);
+        errdefer _ = c.DestroyWindow(hwnd);
+        if (c.SetLayeredWindowAttributes(hwnd, 0, 70, c.LWA_ALPHA) == 0) return error.SetOpacityFailed;
+        _ = c.SetWindowLongPtrW(hwnd, util.GWLP_USERDATA, @bitCast(@intFromPtr(self)));
+        self.hwnd = hwnd;
     }
 
     pub fn deinit(self: *DropZone) void {
@@ -194,11 +206,15 @@ pub const DropZone = struct {
     /// Highlight the half of the parent in a direction, or hide.
     pub fn set(self: *DropZone, direction: ?Direction) void {
         const dir = direction orelse {
-            _ = c.ShowWindow(self.hwnd, c.SW_HIDE);
+            if (self.hwnd != null) _ = c.ShowWindow(self.hwnd, c.SW_HIDE);
+            return;
+        };
+        if (self.hwnd == null) self.createWindow() catch |err| {
+            log.warn("unable to create the drop zone err={}", .{err});
             return;
         };
         var parent: c.RECT = undefined;
-        _ = c.GetClientRect(c.GetParent(self.hwnd), &parent);
+        _ = c.GetClientRect(self.parent, &parent);
         const half_w = @divTrunc(parent.right, 2);
         const half_h = @divTrunc(parent.bottom, 2);
         const rect: c.RECT = switch (dir) {
