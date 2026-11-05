@@ -2043,7 +2043,9 @@ Notes:
   blob for the process, guarded across render threads. Each surface still
   creates its own device-specific shader objects. Native build passes and
   multiple tabs and splits rendered correctly in the UI. Custom shader
-  bytecode remains uncached; startup timing has not been benchmarked.
+  bytecode is cached too (see below). A custom shader adds nothing to a
+  new tab's time on the UI thread (ReleaseFast, three runs of four: 13-17
+  ms with and without), since shaders load on the renderer's thread.
 - The documented plain `zig build` selects the MSVC ABI and fails on this
   machine with `WindowsSdkNotFound`. The GNU target build succeeds with Zig
   alone. Keep the explicit `-Dtarget=x86_64-windows-gnu` command in the
