@@ -100,10 +100,14 @@ function Surfaces {
         foreach ($surface in $window.FindAll([System.Windows.Automation.TreeScope]::Descendants,
                 (New-Object System.Windows.Automation.PropertyCondition(
                     [System.Windows.Automation.AutomationElement]::ClassNameProperty, 'GhosttySurface')))) {
-            @{
-                Handle = [IntPtr]$surface.Current.NativeWindowHandle
-                Text = $surface.GetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern).Current.Value
-            }
+            # A terminal that's being made or closed can have no handle or
+            # text yet; the next poll sees it.
+            try {
+                $handle = $surface.Current.NativeWindowHandle
+                $text = $surface.GetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern).Current.Value
+            } catch { continue }
+            if (-not $handle) { continue }
+            @{ Handle = [IntPtr]$handle; Text = $text }
         }
     }
 }
