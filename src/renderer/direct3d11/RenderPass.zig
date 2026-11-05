@@ -92,7 +92,7 @@ pub fn begin(
     for (opts.attachments, 0..) |at, i| {
         const rtv: *c.ID3D11RenderTargetView, const w, const h = switch (at.target) {
             .texture => |t| .{ t.rtv.?, t.width, t.height },
-            .target => |t| .{ t.rtv, t.width, t.height },
+            .target => |t| .{ t.rtv.?, t.width, t.height },
         };
         rtvs[i] = rtv;
         if (i == 0) {
