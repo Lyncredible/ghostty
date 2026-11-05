@@ -336,9 +336,9 @@ pub fn init(self: *Surface, app: *App, window: *Window, opts: Options) !void {
         .dwBlock = c.GC_PAN_WITH_SINGLE_FINGER_HORIZONTALLY | c.GC_PAN_WITH_GUTTER,
     };
     _ = c.SetGestureConfig(hwnd, 0, 1, &gesture, @sizeOf(c.GESTURECONFIG));
-    try self.search_bar.init(hwnd, app.hinstance, &config, self, searchEvent);
+    self.search_bar.init(hwnd, app.hinstance, &config, self, searchEvent);
     errdefer self.search_bar.deinit();
-    try self.command_palette.init(hwnd, app.hinstance, &config, self, commandPaletteChoice);
+    self.command_palette.init(hwnd, app.hinstance, &config, self, commandPaletteChoice);
     errdefer self.command_palette.deinit();
 
     // Initialize our surface now that we have the stable pointer.
@@ -595,7 +595,7 @@ pub fn startSearch(self: *Surface, needle: []const u8) void {
 
 /// Hide the search bar, for the end_search action.
 pub fn endSearch(self: *Surface) void {
-    const had_focus = c.GetFocus() == self.search_bar.edit;
+    const had_focus = self.search_bar.edit != null and c.GetFocus() == self.search_bar.edit;
     self.search_bar.hide();
     self.search_total = null;
     self.search_selected = null;

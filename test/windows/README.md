@@ -281,10 +281,13 @@ mouse capture away with `WM_CANCELMODE`, as when another window takes it
 mid-drag. Later moves must not change the selection, which is read through
 UI Automation.
 
-## badges.ps1
+## overlays.ps1
 
-Checks that a new surface has no badge windows (they're made when they
-first show), then toggles read-only mode with a posted key: the read-only
-badge must show in the top right, just below the scrollbar in the
-surface's child windows (where it was when badges were made up front), and
-hide again. It only posts messages to Ghostty's own window.
+Checks that a new surface has no badge, search bar or command palette
+windows (they're made when they first show), then toggles read-only mode
+with a posted key: the read-only badge must show in the top right, just
+below the scrollbar in the surface's child windows (where it was when
+badges were made up front), and hide again. Then it opens the search bar
+and the command palette from the window menu: each must show on top (the
+palette with its commands listed) and close with a posted Escape. It only
+posts messages to Ghostty's own window.
