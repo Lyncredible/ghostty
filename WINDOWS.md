@@ -576,7 +576,9 @@ Notes:
         spare: a surface takes it, and a thread makes the next one (the
         startup warmup makes the first). ReleaseFast, a split from the
         system menu (`SendMessage`, so it's the UI thread's time), three
-        runs of four: 63-78 ms before, 34-44 ms after. The spare costs
+        runs of four: 63-78 ms before, 34-44 ms after. A new tab from
+        the system menu, the same way: 54-74 ms before, 30-36 ms after
+        (UI Automation counted four tabs after three). The spare costs
         about 5 MB (private bytes after start: 50.5 MB, now 55.3 MB).
         Checked: the device-lost and smoke tests pass (here, and in CI
         run 41946175189), and closing the
