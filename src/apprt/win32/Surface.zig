@@ -326,7 +326,7 @@ pub fn init(self: *Surface, app: *App, window: *Window, opts: Options) !void {
     errdefer self.toast_badge.deinit(alloc);
     self.resize_badge.init(hwnd, app.hinstance, &config, .center, self.scrollbar.hwnd);
     errdefer self.resize_badge.deinit(alloc);
-    try self.drop_zone.init(hwnd, app.hinstance, &config);
+    self.drop_zone.init(hwnd, app.hinstance, &config);
     errdefer self.drop_zone.deinit();
     try self.drag_handle.init(self, app.hinstance, &config);
     errdefer self.drag_handle.deinit();
