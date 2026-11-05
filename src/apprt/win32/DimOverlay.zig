@@ -8,17 +8,37 @@ const Config = @import("../../config.zig").Config;
 const util = @import("util.zig");
 const c = util.c;
 
+const log = std.log.scoped(.win32);
+
 pub const class_name = std.unicode.utf8ToUtf16LeStringLiteral("GhosttyDimOverlay");
 
 hwnd: c.HWND = null,
+parent: c.HWND = null,
+instance: c.HINSTANCE = null,
+/// The overlays this goes above, in order; see `util.placeAbove`.
+above: [3]*const c.HWND = undefined,
 brush: c.HBRUSH = null,
 alpha: u8 = 0,
 dimmed: bool = false,
 width: c_int = 0,
 height: c_int = 0,
 
-pub fn init(self: *DimOverlay, parent: c.HWND, instance: c.HINSTANCE, config: *const Config) !void {
-    self.hwnd = c.CreateWindowExW(
+/// The window is made the first time the overlay shows.
+pub fn init(
+    self: *DimOverlay,
+    parent: c.HWND,
+    instance: c.HINSTANCE,
+    config: *const Config,
+    above: [3]*const c.HWND,
+) !void {
+    self.parent = parent;
+    self.instance = instance;
+    self.above = above;
+    try self.updateConfig(config);
+}
+
+fn createWindow(self: *DimOverlay) !void {
+    const hwnd = c.CreateWindowExW(
         c.WS_EX_LAYERED | c.WS_EX_TRANSPARENT | c.WS_EX_NOACTIVATE,
         class_name,
         null,
@@ -27,14 +47,18 @@ pub fn init(self: *DimOverlay, parent: c.HWND, instance: c.HINSTANCE, config: *c
         0,
         0,
         0,
-        parent,
+        self.parent,
         null,
-        instance,
+        self.instance,
         null,
     ) orelse return error.CreateWindowFailed;
-    errdefer self.deinit();
-    _ = c.SetWindowLongPtrW(self.hwnd, util.GWLP_USERDATA, @bitCast(@intFromPtr(self)));
-    try self.updateConfig(config);
+    errdefer _ = c.DestroyWindow(hwnd);
+    if (c.SetLayeredWindowAttributes(hwnd, 0, self.alpha, c.LWA_ALPHA) == 0) {
+        return error.SetOpacityFailed;
+    }
+    _ = c.SetWindowLongPtrW(hwnd, util.GWLP_USERDATA, @bitCast(@intFromPtr(self)));
+    util.placeAbove(hwnd, &self.above);
+    self.hwnd = hwnd;
 }
 
 pub fn deinit(self: *DimOverlay) void {
@@ -54,13 +78,15 @@ pub fn updateConfig(self: *DimOverlay, config: *const Config) !void {
     errdefer _ = c.DeleteObject(brush);
 
     const alpha: u8 = @intFromFloat(@round((1 - config.@"unfocused-split-opacity") * 255));
-    if (c.SetLayeredWindowAttributes(self.hwnd, 0, alpha, c.LWA_ALPHA) == 0) {
-        return error.SetOpacityFailed;
+    if (self.hwnd != null) {
+        if (c.SetLayeredWindowAttributes(self.hwnd, 0, alpha, c.LWA_ALPHA) == 0) {
+            return error.SetOpacityFailed;
+        }
+        _ = c.InvalidateRect(self.hwnd, null, c.FALSE);
     }
     if (self.brush != null) _ = c.DeleteObject(self.brush);
     self.brush = brush;
     self.alpha = alpha;
-    _ = c.InvalidateRect(self.hwnd, null, c.FALSE);
     self.updateVisibility();
 }
 
@@ -75,7 +101,7 @@ pub fn resize(self: *DimOverlay, width: c_int, height: c_int) void {
 
 fn shown(self: *const DimOverlay) bool {
     // IsWindowVisible also checks the parents, which can be hidden tabs.
-    return c.GetWindowLongPtrW(self.hwnd, c.GWL_STYLE) & c.WS_VISIBLE != 0;
+    return self.hwnd != null and c.GetWindowLongPtrW(self.hwnd, c.GWL_STYLE) & c.WS_VISIBLE != 0;
 }
 
 pub fn setDimmed(self: *DimOverlay, dimmed: bool) void {
@@ -86,6 +112,10 @@ pub fn setDimmed(self: *DimOverlay, dimmed: bool) void {
 fn updateVisibility(self: *DimOverlay) void {
     const visible = self.dimmed and self.alpha != 0;
     if (visible == self.shown()) return;
+    if (self.hwnd == null) self.createWindow() catch |err| {
+        log.warn("unable to create the dim overlay err={}", .{err});
+        return;
+    };
     if (visible) _ = c.MoveWindow(self.hwnd, 0, 0, self.width, self.height, c.FALSE);
     _ = c.ShowWindow(self.hwnd, if (visible) c.SW_SHOWNA else c.SW_HIDE);
 }

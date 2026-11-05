@@ -600,10 +600,21 @@ Notes:
           menu: each shows on top (the palette listing 88 entries) and
           closes with Escape. Passes here, and in CI run 41960209709
           (with the rest of the Windows tests).
-    - [ ] The dim overlay, bell border, link preview, scrollbar, drop
-          zone and drag handle (about 9 ms in all) are still made up
-          front. Some show without an action of their own (the scrollbar
-          and drag handle), so they need more care.
+    - [x] The dim overlay, bell border and link preview too: each makes
+          its window when it first shows, and moves it to where it would
+          be had it been made up front (above the scrollbar, the dim
+          overlay above the bell border, above the link preview). A new
+          tab, three runs of four, alternating with the build before:
+          15-20 ms, from 18-24. `overlays.ps1` checks that a new surface
+          has none, that a bell (with `bell-features=border`) shows the
+          border just above the scrollbar, and that a split dims the first
+          terminal with its overlay just above the bell border and below
+          the search bar and palette. The link preview needs a real Ctrl
+          key held down, so `links.ps1` (CI only) checks it: holding Ctrl
+          over a link shows it, just above the scrollbar.
+    - [ ] The scrollbar, drop zone and drag handle (about 5 ms) are still
+          made up front. The scrollbar and drag handle show without an
+          action of their own, so they need more care.
 - [x] Memory per tab: each new tab raised the commit charge (private
       bytes) by about 110 MB, while the working set grew by 10 MB. Listing
       the committed regions showed three 16 MB thread stacks per tab: on

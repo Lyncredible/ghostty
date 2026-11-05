@@ -85,7 +85,9 @@ on the runner's desktop.
 Ctrl+clicks OSC 8 hyperlinks and checks the checks for links from
 terminal output: a link to a text file opens it in Notepad, a link to a
 `.vbs` script shows "Link Blocked" and the script doesn't run, and an
-`ms-settings:` link asks first (the script answers No). It sends real
+`ms-settings:` link asks first (the script answers No). Before each
+click, holding Ctrl over the link must show the link preview, just above
+the scrollbar in the surface's child windows. It sends real
 input and opens apps, so it refuses to run unless `CI` is `true`.
 
 ## paste-race.ps1
@@ -283,11 +285,16 @@ UI Automation.
 
 ## overlays.ps1
 
-Checks that a new surface has no badge, search bar or command palette
-windows (they're made when they first show), then toggles read-only mode
-with a posted key: the read-only badge must show in the top right, just
-below the scrollbar in the surface's child windows (where it was when
-badges were made up front), and hide again. Then it opens the search bar
-and the command palette from the window menu: each must show on top (the
-palette with its commands listed) and close with a posted Escape. It only
-posts messages to Ghostty's own window.
+Checks that a new surface has no badge, search bar, command palette, dim
+overlay, bell border or link preview windows (they're made when they first
+show), then toggles read-only mode with a posted key: the read-only badge
+must show in the top right, just below the scrollbar in the surface's child
+windows (where it was when badges were made up front), and hide again. A
+posted F8 types `echo` and a BEL into cmd: the bell border must show just
+above the scrollbar. Then it opens the search bar and the command palette
+from the window menu: each must show on top (the palette with its commands
+listed) and close with a posted Escape. Last, a split from the window menu
+must dim the first terminal, with its dim overlay just above the bell
+border and below the search bar and palette. It only posts messages to
+Ghostty's own window. (The link preview needs a real Ctrl key, so
+`links.ps1` checks it.)

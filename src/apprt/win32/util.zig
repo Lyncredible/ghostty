@@ -96,6 +96,27 @@ pub fn paintOpaque(
     _ = c.EndBufferedPaint(buffer, c.TRUE);
 }
 
+/// Move a child window to just above the first of the given siblings
+/// that has a window, for an overlay made when it first shows: new child
+/// windows go below their older siblings, so this puts it back where it
+/// would be had it been made with the others.
+pub fn placeAbove(hwnd: c.HWND, siblings: []const *const c.HWND) void {
+    for (siblings) |sibling| {
+        if (sibling.* == null) continue;
+        // With no window above the sibling this is HWND_TOP.
+        _ = c.SetWindowPos(
+            hwnd,
+            c.GetWindow(sibling.*, c.GW_HWNDPREV),
+            0,
+            0,
+            0,
+            0,
+            c.SWP_NOMOVE | c.SWP_NOSIZE | c.SWP_NOACTIVATE,
+        );
+        return;
+    }
+}
+
 /// The low and high words of an LPARAM/WPARAM as signed values. These are
 /// equivalent to GET_X_LPARAM and GET_Y_LPARAM.
 pub fn loword(v: anytype) i16 {
