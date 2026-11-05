@@ -1,6 +1,8 @@
 //! A small label over a surface, such as the read-only indicator. Like our
 //! other overlays this is a click-through layered child window, since the
-//! surface's flip model swap chain covers regular child windows.
+//! surface's flip model swap chain covers regular child windows. Its
+//! window is made the first time it shows, since most badges never do:
+//! a surface's five took about 6 ms of each new tab.
 const Badge = @This();
 
 const std = @import("std");
@@ -10,12 +12,21 @@ const Config = @import("../../config.zig").Config;
 const util = @import("util.zig");
 const c = util.c;
 
+const log = std.log.scoped(.win32);
+
 pub const class_name = std.unicode.utf8ToUtf16LeStringLiteral("GhosttyBadge");
 
 /// Where the badge is placed within the surface.
 pub const Anchor = enum { top_left, top_center, top_right, bottom_left, bottom_center, bottom_right, center };
 
 hwnd: c.HWND = null,
+parent: c.HWND = null,
+instance: c.HINSTANCE = null,
+
+/// The overlay our window goes just below when it's made, to keep the
+/// order the overlays were made in.
+after: c.HWND = null,
+
 anchor: Anchor = .top_right,
 font: c.HFONT = null,
 
@@ -32,9 +43,18 @@ pub fn init(
     instance: c.HINSTANCE,
     config: *const Config,
     anchor: Anchor,
-) !void {
+    after: c.HWND,
+) void {
+    self.parent = parent;
+    self.instance = instance;
+    self.after = after;
     self.anchor = anchor;
-    self.hwnd = c.CreateWindowExW(
+    self.updateConfig(config);
+}
+
+fn createWindow(self: *Badge) !void {
+    if (self.hwnd != null) return;
+    const hwnd = c.CreateWindowExW(
         c.WS_EX_LAYERED | c.WS_EX_TRANSPARENT | c.WS_EX_NOACTIVATE,
         class_name,
         null,
@@ -43,17 +63,23 @@ pub fn init(
         0,
         0,
         0,
-        parent,
+        self.parent,
         null,
-        instance,
+        self.instance,
         null,
     ) orelse return error.CreateWindowFailed;
-    errdefer _ = c.DestroyWindow(self.hwnd);
-    if (c.SetLayeredWindowAttributes(self.hwnd, 0, 230, c.LWA_ALPHA) == 0) {
+    errdefer _ = c.DestroyWindow(hwnd);
+    if (c.SetLayeredWindowAttributes(hwnd, 0, 230, c.LWA_ALPHA) == 0) {
         return error.SetOpacityFailed;
     }
-    _ = c.SetWindowLongPtrW(self.hwnd, util.GWLP_USERDATA, @bitCast(@intFromPtr(self)));
-    self.updateConfig(config);
+    _ = c.SetWindowLongPtrW(hwnd, util.GWLP_USERDATA, @bitCast(@intFromPtr(self)));
+
+    // New child windows go below the ones before them, so a badge made
+    // late would go below overlays made after it, such as the search bar.
+    if (self.after != null) {
+        _ = c.SetWindowPos(hwnd, self.after, 0, 0, 0, 0, c.SWP_NOMOVE | c.SWP_NOSIZE | c.SWP_NOACTIVATE);
+    }
+    self.hwnd = hwnd;
 }
 
 pub fn deinit(self: *Badge, alloc: Allocator) void {
@@ -91,12 +117,16 @@ pub fn parentResized(self: *Badge) void {
 
 fn layout(self: *Badge) void {
     const text = self.text orelse {
-        _ = c.ShowWindow(self.hwnd, c.SW_HIDE);
+        if (self.hwnd != null) _ = c.ShowWindow(self.hwnd, c.SW_HIDE);
+        return;
+    };
+    self.createWindow() catch |err| {
+        log.warn("unable to create a badge err={}", .{err});
         return;
     };
 
     var parent: c.RECT = undefined;
-    _ = c.GetClientRect(c.GetParent(self.hwnd), &parent);
+    _ = c.GetClientRect(self.parent, &parent);
     const dpi: c_int = @intCast(c.GetDpiForWindow(self.hwnd));
     self.updateFont(dpi);
 
