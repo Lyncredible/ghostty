@@ -617,9 +617,14 @@ Notes:
           matter). `overlays.ps1` drags the first terminal's handle over
           the second with posted mouse messages: the drop zone shows on
           top, and letting go over the first hides it and moves nothing.
-    - [ ] The scrollbar and drag handle (about 3-4 ms) are still made up
-          front. They show without an action of their own (the scrollbar
-          with scrollback, the handle in a split), so they need more care.
+    - [x] The drag handle too, which shows only in a split (and goes on
+          top when it does). With the drop zone: a new tab, three runs of
+          four, alternating with the build before: 14-18 ms, from 15-21.
+          `overlays.ps1` checks that a split shows the first terminal's
+          handle, and drags it.
+    - [x] The scrollbar stays made up front (about 1.5 ms): nearly every
+          terminal scrolls, so it would be made anyway, and the overlays
+          made later find their places from it.
 - [x] Memory per tab: each new tab raised the commit charge (private
       bytes) by about 110 MB, while the working set grew by 10 MB. Listing
       the committed regions showed three 16 MB thread stacks per tab: on
