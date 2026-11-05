@@ -598,7 +598,8 @@ Notes:
           from the system menu, three runs of four: 18-23 ms, from 30-36
           with only the spare device. The test opens both from the window
           menu: each shows on top (the palette listing 88 entries) and
-          closes with Escape.
+          closes with Escape. Passes here, and in CI run 41960209709
+          (with the rest of the Windows tests).
     - [ ] The dim overlay, bell border, link preview, scrollbar, drop
           zone and drag handle (about 9 ms in all) are still made up
           front. Some show without an action of their own (the scrollbar
