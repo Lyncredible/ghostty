@@ -1,18 +1,19 @@
 # Checks the overlays a surface makes only when they first show: a new
 # terminal has no badge, search bar, command palette, dim overlay, bell
-# border or link preview window. Toggling read-only
+# border, link preview or drop zone window. Toggling read-only
 # mode (a posted F9 bound to `toggle_readonly`) must show one in the top
 # right, in the order it would have been made in: just below the
-# scrollbar, and above the overlays made after it (such as the drop
-# zone). The search bar and command palette are made when they first
+# scrollbar, and above the overlays made after it (the drag handle). The search bar and command palette are made when they first
 # open too, so a new surface has neither. Toggling read-only mode again
 # must hide the badge. A bell (a posted F8 types `echo` and BEL) must
 # show the bell border, just above the scrollbar. Then the search bar and
 # the command palette (opened from the window menu) must show on top, and
 # close again. Last, a split from the window menu must dim the first
 # terminal, with its dim overlay above the bell border and below the
-# search bar and palette. The link preview isn't shown: it needs a real
-# Ctrl key held down.
+# search bar and palette. Then dragging the first terminal's drag handle
+# (posted mouse messages) over the second must show its drop zone on top,
+# and letting go over the first terminal must hide it and move nothing.
+# The link preview isn't shown: it needs a real Ctrl key held down.
 # It only posts messages to Ghostty's own window, so it can run anywhere.
 #
 #     ./overlays.ps1 -Exe zig-out/bin/ghostty.exe
@@ -36,6 +37,14 @@ Add-Type -Namespace GhosttyBadges -Name Win32 -MemberDefinition @'
 [DllImport("user32.dll")] public static extern System.IntPtr GetWindow(System.IntPtr h, uint cmd);
 [DllImport("user32.dll")] public static extern bool IsWindowVisible(System.IntPtr h);
 [DllImport("user32.dll")] public static extern bool GetWindowRect(System.IntPtr h, out RECT r);
+[StructLayout(LayoutKind.Sequential)] public struct POINT { public int x, y; }
+[DllImport("user32.dll")] public static extern bool ScreenToClient(System.IntPtr h, ref POINT p);
+[DllImport("user32.dll")] public static extern System.IntPtr SetThreadDpiAwarenessContext(System.IntPtr context);
+// A mouse message to h at a point on the screen.
+public static void Mouse(System.IntPtr h, uint msg, uint keys, int x, int y) {
+  var p = new POINT { x = x, y = y }; ScreenToClient(h, ref p);
+  PostMessageW(h, msg, (System.IntPtr)keys, (System.IntPtr)((p.x & 0xFFFF) | (p.y << 16)));
+}
 [DllImport("user32.dll", CharSet = CharSet.Unicode)] public static extern System.IntPtr FindWindowExW(System.IntPtr parent, System.IntPtr after, string cls, string title);
 [DllImport("user32.dll", CharSet = CharSet.Unicode)] public static extern int GetClassNameW(System.IntPtr h, System.Text.StringBuilder s, int n);
 // A key press and release, with the scan code in lParam.
@@ -47,6 +56,8 @@ public static void Key(System.IntPtr h, int vk, int scan) {
 }
 '@
 $W = [GhosttyBadges.Win32]
+# Window rectangles in physical pixels, as Ghostty sees them.
+[void]$W::SetThreadDpiAwarenessContext([IntPtr]-4)   # per monitor v2
 
 $log = Join-Path ([IO.Path]::GetTempPath()) "ghostty-overlays-$PID.log"
 $process = Start-Process -FilePath $Exe -PassThru -RedirectStandardError $log -ArgumentList '--command=cmd.exe',
@@ -95,16 +106,16 @@ try {
     $script:surface = WaitFor { $h = $W::FindWindowExW($window, [IntPtr]::Zero, 'GhosttySurface', $null); if ($h -ne [IntPtr]::Zero) { $h } } 'the surface'
     [void](WaitFor { (Children) -contains 'GhosttyDragHandle' } "the surface's overlays")
     Start-Sleep -Seconds 1
-    if ((Children) | Where-Object { $_ -match '^Ghostty(Badge|SearchBar|CommandPalette|DimOverlay|BellBorder|LinkPreview)' }) { Fail "a new surface already has a lazily made overlay window: $((Children) -join ', ')" }
-    Write-Host "A new surface has no badge, search bar, command palette, dim overlay, bell border or link preview windows: $((Children) -join ', ')"
+    if ((Children) | Where-Object { $_ -match '^Ghostty(Badge|SearchBar|CommandPalette|DimOverlay|BellBorder|LinkPreview|DropZone)' }) { Fail "a new surface already has a lazily made overlay window: $((Children) -join ', ')" }
+    Write-Host "A new surface has no badge, search bar, command palette, dim overlay, bell border, link preview or drop zone windows: $((Children) -join ', ')"
 
     $W::Key($surface, 0x78, 0x43)   # F9: toggle_readonly
     [void](WaitFor { (Children) -contains 'GhosttyBadge*' } 'the read-only badge to show')
     $children = @(Children)
     $badge = [Array]::IndexOf($children, 'GhosttyBadge*')
     $scrollbar = [Array]::IndexOf(@($children | ForEach-Object { $_.TrimEnd('*') }), 'GhosttyScrollbar')
-    $drop = [Array]::IndexOf(@($children | ForEach-Object { $_.TrimEnd('*') }), 'GhosttyDropZone')
-    if ($badge -ne $scrollbar + 1 -or $drop -lt $badge) { Fail "the badge isn't just below the scrollbar and above the drop zone: $($children -join ', ')" }
+    $handle = [Array]::IndexOf(@($children | ForEach-Object { $_.TrimEnd('*') }), 'GhosttyDragHandle')
+    if ($badge -ne $scrollbar + 1 -or $handle -lt $badge) { Fail "the badge isn't just below the scrollbar and above the drag handle: $($children -join ', ')" }
 
     $h = $W::FindWindowExW($surface, [IntPtr]::Zero, 'GhosttyBadge', $null)
     $b = New-Object GhosttyBadges.Win32+RECT; [void]$W::GetWindowRect($h, [ref]$b)
@@ -161,6 +172,24 @@ try {
         Fail "the dim overlay isn't just above the bell border and below the search bar and palette: $($children -join ', ')"
     }
     Write-Host "A split dims the first terminal, its overlay just above the bell border: $($children -join ', ')"
+
+    $first = $script:surface
+    $second = WaitFor { $h = $W::FindWindowExW($window, $first, 'GhosttySurface', $null); if ($h -ne [IntPtr]::Zero) { $h } } 'the second terminal'
+    $handle = $W::FindWindowExW($first, [IntPtr]::Zero, 'GhosttyDragHandle', $null)
+    $a = New-Object GhosttyBadges.Win32+RECT; [void]$W::GetWindowRect($first, [ref]$a)
+    $b = New-Object GhosttyBadges.Win32+RECT; [void]$W::GetWindowRect($second, [ref]$b)
+    $W::Mouse($handle, 0x0201, 1, $a.l + 10, $a.t + 2)   # WM_LBUTTONDOWN
+    $W::Mouse($handle, 0x0200, 1, $b.r - 10, [int](($b.t + $b.b) / 2))   # WM_MOUSEMOVE, near the second's right side
+    $script:surface = $second
+    [void](WaitFor { (Children) -contains 'GhosttyDropZone*' } "the second terminal's drop zone to show")
+    $children = @(Children)
+    if ($children[0] -ne 'GhosttyDropZone*') { Fail "the drop zone isn't on top: $($children -join ', ')" }
+    $W::Mouse($handle, 0x0200, 1, [int](($a.l + $a.r) / 2), [int](($a.t + $a.b) / 2))
+    $W::Mouse($handle, 0x0202, 0, [int](($a.l + $a.r) / 2), [int](($a.t + $a.b) / 2))   # WM_LBUTTONUP over the first
+    [void](WaitFor { -not ((Children) -contains 'GhosttyDropZone*') } 'the drop zone to hide')
+    $a2 = New-Object GhosttyBadges.Win32+RECT; [void]$W::GetWindowRect($first, [ref]$a2)
+    if ($a2.l -ne $a.l -or $a2.t -ne $a.t -or $a2.r -ne $a.r) { Fail "letting go over the first terminal moved it" }
+    Write-Host "Dragging the first terminal's handle over the second shows its drop zone on top, and letting go over the first hides it: $($children -join ', ')"
 } finally {
     if (-not $process.HasExited) { Stop-Process -Id $process.Id -Force }
     Remove-Item -LiteralPath $log -Force -ErrorAction SilentlyContinue

@@ -286,8 +286,8 @@ UI Automation.
 ## overlays.ps1
 
 Checks that a new surface has no badge, search bar, command palette, dim
-overlay, bell border or link preview windows (they're made when they first
-show), then toggles read-only mode with a posted key: the read-only badge
+overlay, bell border, link preview or drop zone windows (they're made when
+they first show), then toggles read-only mode with a posted key: the read-only badge
 must show in the top right, just below the scrollbar in the surface's child
 windows (where it was when badges were made up front), and hide again. A
 posted F8 types `echo` and a BEL into cmd: the bell border must show just
@@ -295,6 +295,9 @@ above the scrollbar. Then it opens the search bar and the command palette
 from the window menu: each must show on top (the palette with its commands
 listed) and close with a posted Escape. Last, a split from the window menu
 must dim the first terminal, with its dim overlay just above the bell
-border and below the search bar and palette. It only posts messages to
+border and below the search bar and palette. Then it drags the first
+terminal's drag handle over the second with posted mouse messages: the
+second's drop zone must show on top, and letting go over the first must
+hide it and move nothing. It only posts messages to
 Ghostty's own window. (The link preview needs a real Ctrl key, so
 `links.ps1` checks it.)

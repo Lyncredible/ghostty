@@ -612,9 +612,14 @@ Notes:
           the search bar and palette. The link preview needs a real Ctrl
           key held down, so `links.ps1` (CI only) checks it: holding Ctrl
           over a link shows it, just above the scrollbar.
-    - [ ] The scrollbar, drop zone and drag handle (about 5 ms) are still
-          made up front. The scrollbar and drag handle show without an
-          action of their own, so they need more care.
+    - [x] The drop zone too, which shows only while a split is dragged
+          (it goes on top when it shows, so when it's made doesn't
+          matter). `overlays.ps1` drags the first terminal's handle over
+          the second with posted mouse messages: the drop zone shows on
+          top, and letting go over the first hides it and moves nothing.
+    - [ ] The scrollbar and drag handle (about 3-4 ms) are still made up
+          front. They show without an action of their own (the scrollbar
+          with scrollback, the handle in a split), so they need more care.
 - [x] Memory per tab: each new tab raised the commit charge (private
       bytes) by about 110 MB, while the working set grew by 10 MB. Listing
       the committed regions showed three 16 MB thread stacks per tab: on
