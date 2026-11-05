@@ -164,10 +164,10 @@ jobs:
         shell: pwsh
         run: ./test/windows/device-lost.ps1 -Exe zig-out/bin/ghostty.exe
 
-      - name: Badges test
+      - name: Overlays test
         timeout-minutes: 5
         shell: pwsh
-        run: ./test/windows/badges.ps1 -Exe zig-out/bin/ghostty.exe
+        run: ./test/windows/overlays.ps1 -Exe zig-out/bin/ghostty.exe
 
       - name: Dark mode test
         shell: pwsh

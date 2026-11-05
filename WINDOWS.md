@@ -591,10 +591,18 @@ Notes:
         and scrollbar 3, the drop zone and drag handle 2-3. Badges now
         make their windows the first time they show, just below the
         scrollbar, as before (0.5 ms for all five). Tab creation: 28-31 ms
-        from 33-39. Test: `test/windows/badges.ps1`, which fails on the
+        from 33-39. Test: `test/windows/overlays.ps1`, which fails on the
         build before (it finds five badge windows in a new surface).
-    - [ ] The other overlays the same way, starting with the search bar
-          and command palette.
+    - [x] The search bar and command palette too: they make their windows
+          when they first open, and go on top then, as before. A new tab
+          from the system menu, three runs of four: 18-23 ms, from 30-36
+          with only the spare device. The test opens both from the window
+          menu: each shows on top (the palette listing 88 entries) and
+          closes with Escape.
+    - [ ] The dim overlay, bell border, link preview, scrollbar, drop
+          zone and drag handle (about 9 ms in all) are still made up
+          front. Some show without an action of their own (the scrollbar
+          and drag handle), so they need more care.
 - [x] Memory per tab: each new tab raised the commit charge (private
       bytes) by about 110 MB, while the working set grew by 10 MB. Listing
       the committed regions showed three 16 MB thread stacks per tab: on
