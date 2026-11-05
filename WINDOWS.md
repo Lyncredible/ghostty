@@ -623,7 +623,7 @@ Notes:
           four, alternating with the build before: 14-18 ms, from 15-21.
           `overlays.ps1` checks that a split shows the first terminal's
           handle, and drags it. Splits, which make the dim overlay and
-          handles anyway, gain less: 26-31 ms, from 27-34 (one 39) The drop
+          handles anyway, gain less: 26-31 ms, from 27-34 (one 39). The drop
           zone and handle changes pass in CI run 41972958123.
     - [x] The scrollbar stays made up front (about 1.5 ms): nearly every
           terminal scrolls, so it would be made anyway, and the overlays
