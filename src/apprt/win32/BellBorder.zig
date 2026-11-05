@@ -8,6 +8,8 @@ const std = @import("std");
 const util = @import("util.zig");
 const c = util.c;
 
+const log = std.log.scoped(.win32);
+
 pub const class_name = std.unicode.utf8ToUtf16LeStringLiteral("GhosttyBellBorder");
 
 /// The border width in pixels at 96 DPI.
@@ -18,12 +20,23 @@ const width = 3;
 const transparent_key: c.COLORREF = 0x00FF00FF;
 
 hwnd: c.HWND = null,
+parent: c.HWND = null,
+instance: c.HINSTANCE = null,
+/// The overlays this goes above, in order; see `util.placeAbove`.
+above: [2]*const c.HWND = undefined,
 visible: bool = false,
 surface_width: c_int = 0,
 surface_height: c_int = 0,
 
-pub fn init(self: *BellBorder, parent: c.HWND, instance: c.HINSTANCE) !void {
-    self.hwnd = c.CreateWindowExW(
+/// The window is made the first time the border shows.
+pub fn init(self: *BellBorder, parent: c.HWND, instance: c.HINSTANCE, above: [2]*const c.HWND) void {
+    self.parent = parent;
+    self.instance = instance;
+    self.above = above;
+}
+
+fn createWindow(self: *BellBorder) !void {
+    const hwnd = c.CreateWindowExW(
         c.WS_EX_LAYERED | c.WS_EX_TRANSPARENT | c.WS_EX_NOACTIVATE,
         class_name,
         null,
@@ -32,18 +45,13 @@ pub fn init(self: *BellBorder, parent: c.HWND, instance: c.HINSTANCE) !void {
         0,
         0,
         0,
-        parent,
+        self.parent,
         null,
-        instance,
+        self.instance,
         null,
     ) orelse return error.CreateWindowFailed;
-    errdefer self.deinit();
-    if (c.SetLayeredWindowAttributes(
-        self.hwnd,
-        transparent_key,
-        128,
-        c.LWA_COLORKEY | c.LWA_ALPHA,
-    ) == 0) return error.SetOpacityFailed;
+    util.placeAbove(hwnd, &self.above);
+    self.hwnd = hwnd;
 }
 
 pub fn deinit(self: *BellBorder) void {
@@ -61,6 +69,10 @@ pub fn resize(self: *BellBorder, w: c_int, h: c_int) void {
 
 pub fn setVisible(self: *BellBorder, visible: bool) void {
     if (visible == self.visible) return;
+    if (self.hwnd == null) self.createWindow() catch |err| {
+        log.warn("unable to create the bell border err={}", .{err});
+        return;
+    };
     self.visible = visible;
     if (visible) {
         _ = c.SetLayeredWindowAttributes(

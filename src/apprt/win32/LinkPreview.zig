@@ -10,9 +10,15 @@ const Config = @import("../../config.zig").Config;
 const util = @import("util.zig");
 const c = util.c;
 
+const log = std.log.scoped(.win32);
+
 pub const class_name = std.unicode.utf8ToUtf16LeStringLiteral("GhosttyLinkPreview");
 
 hwnd: c.HWND = null,
+parent: c.HWND = null,
+instance: c.HINSTANCE = null,
+/// The overlay this goes above; see `util.placeAbove`.
+above: *const c.HWND = undefined,
 font: c.HFONT = null,
 
 /// The URL being shown, if any.
@@ -26,10 +32,24 @@ border: c.COLORREF = 0x555555,
 /// Whether we're in the right corner, because the mouse is in the left.
 right: bool = false,
 
-pub fn init(self: *LinkPreview, parent: c.HWND, instance: c.HINSTANCE, config: *const Config) !void {
+/// The window is made the first time a URL shows.
+pub fn init(
+    self: *LinkPreview,
+    parent: c.HWND,
+    instance: c.HINSTANCE,
+    config: *const Config,
+    above: *const c.HWND,
+) void {
+    self.parent = parent;
+    self.instance = instance;
+    self.above = above;
+    self.updateConfig(config);
+}
+
+fn createWindow(self: *LinkPreview) !void {
     // Like our other overlays this is layered: the flip model swap chain
     // of the surface would cover a regular child window.
-    self.hwnd = c.CreateWindowExW(
+    const hwnd = c.CreateWindowExW(
         c.WS_EX_LAYERED | c.WS_EX_TRANSPARENT | c.WS_EX_NOACTIVATE,
         class_name,
         null,
@@ -38,17 +58,18 @@ pub fn init(self: *LinkPreview, parent: c.HWND, instance: c.HINSTANCE, config: *
         0,
         0,
         0,
-        parent,
+        self.parent,
         null,
-        instance,
+        self.instance,
         null,
     ) orelse return error.CreateWindowFailed;
-    errdefer _ = c.DestroyWindow(self.hwnd);
-    if (c.SetLayeredWindowAttributes(self.hwnd, 0, 255, c.LWA_ALPHA) == 0) {
+    errdefer _ = c.DestroyWindow(hwnd);
+    if (c.SetLayeredWindowAttributes(hwnd, 0, 255, c.LWA_ALPHA) == 0) {
         return error.SetOpacityFailed;
     }
-    _ = c.SetWindowLongPtrW(self.hwnd, util.GWLP_USERDATA, @bitCast(@intFromPtr(self)));
-    self.updateConfig(config);
+    _ = c.SetWindowLongPtrW(hwnd, util.GWLP_USERDATA, @bitCast(@intFromPtr(self)));
+    util.placeAbove(hwnd, &.{self.above});
+    self.hwnd = hwnd;
 }
 
 pub fn deinit(self: *LinkPreview, alloc: Allocator) void {
@@ -88,18 +109,22 @@ pub fn parentResized(self: *LinkPreview) void {
     if (self.text == null) return;
     var pt: c.POINT = undefined;
     _ = c.GetCursorPos(&pt);
-    _ = c.ScreenToClient(c.GetParent(self.hwnd), &pt);
+    _ = c.ScreenToClient(self.parent, &pt);
     self.layout(pt);
 }
 
 fn layout(self: *LinkPreview, cursor: c.POINT) void {
     const text = self.text orelse {
-        _ = c.ShowWindow(self.hwnd, c.SW_HIDE);
+        if (self.hwnd != null) _ = c.ShowWindow(self.hwnd, c.SW_HIDE);
+        return;
+    };
+    if (self.hwnd == null) self.createWindow() catch |err| {
+        log.warn("unable to create the link preview err={}", .{err});
         return;
     };
 
     var parent_rect: c.RECT = undefined;
-    _ = c.GetClientRect(c.GetParent(self.hwnd), &parent_rect);
+    _ = c.GetClientRect(self.parent, &parent_rect);
     const dpi: c_int = @intCast(c.GetDpiForWindow(self.hwnd));
     self.updateFont(dpi);
 

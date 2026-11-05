@@ -297,16 +297,23 @@ pub fn init(self: *Surface, app: *App, window: *Window, opts: Options) !void {
     self.notify_on_command_finish_action = config.@"notify-on-command-finish-action";
     self.notify_on_command_finish_after = config.@"notify-on-command-finish-after";
     self.progress_style = config.@"progress-style";
-    try self.dim_overlay.init(hwnd, app.hinstance, &config);
-    errdefer self.dim_overlay.deinit();
-    self.dim_overlay.resize(@intCast(self.size.width), @intCast(self.size.height));
-    try self.bell_border.init(hwnd, app.hinstance);
-    errdefer self.bell_border.deinit();
-    self.bell_border.resize(@intCast(self.size.width), @intCast(self.size.height));
-    try self.link_preview.init(hwnd, app.hinstance, &config);
-    errdefer self.link_preview.deinit(alloc);
     try self.scrollbar.init(hwnd, app.hinstance, &config, self, scrollToRow);
     errdefer self.scrollbar.deinit();
+    // The dim overlay, bell border and link preview make their windows
+    // when they first show, in their places above the scrollbar, as if
+    // they were made here in this order before it.
+    try self.dim_overlay.init(hwnd, app.hinstance, &config, .{
+        &self.bell_border.hwnd,
+        &self.link_preview.hwnd,
+        &self.scrollbar.hwnd,
+    });
+    errdefer self.dim_overlay.deinit();
+    self.dim_overlay.resize(@intCast(self.size.width), @intCast(self.size.height));
+    self.bell_border.init(hwnd, app.hinstance, .{ &self.link_preview.hwnd, &self.scrollbar.hwnd });
+    errdefer self.bell_border.deinit();
+    self.bell_border.resize(@intCast(self.size.width), @intCast(self.size.height));
+    self.link_preview.init(hwnd, app.hinstance, &config, &self.scrollbar.hwnd);
+    errdefer self.link_preview.deinit(alloc);
     // Badges make their windows when they first show, just below the
     // scrollbar, as if they were made here.
     self.readonly_badge.init(hwnd, app.hinstance, &config, .top_right, self.scrollbar.hwnd);
