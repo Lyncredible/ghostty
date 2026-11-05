@@ -11,6 +11,7 @@ const std = @import("std");
 const builtin = @import("builtin");
 const Allocator = std.mem.Allocator;
 
+const internal_os = @import("../../os/main.zig");
 const com = @import("com.zig");
 const c = com.c;
 
@@ -36,6 +37,10 @@ pub fn init(alloc: Allocator, options: Options) !*Device {
 }
 
 pub fn deinit(self: *Device, alloc: Allocator) void {
+    if (warm.take()) |created| {
+        com.release(created.context);
+        com.release(created.device);
+    }
     com.releaseOpt(self.adapter);
     alloc.destroy(self);
 }
@@ -74,11 +79,36 @@ pub const Created = struct {
     context: *c.ID3D11DeviceContext,
 };
 
-/// Create a new ID3D11Device and its immediate context. The first one
-/// is the device `warmup` made, if it started.
+/// Create a new ID3D11Device and its immediate context. This takes the
+/// spare device, if there is one, which `warmup` makes for the first
+/// surface, and then starts making the next spare on a thread: a device
+/// took about 24 ms to create after the first, on the UI thread of every
+/// new tab, split, and window, while a spare costs about 4 MB.
 pub fn createDevice(self: *const Device) !Created {
-    if (warm.take()) |created| return created;
-    return create(@ptrCast(self.adapter));
+    const created = warm.take() orelse try create(@ptrCast(self.adapter));
+    self.makeSpare();
+    return created;
+}
+
+fn makeSpare(self: *const Device) void {
+    if (!warm.start()) return;
+    if (self.adapter) |adapter| _ = com.call(adapter, "AddRef", .{});
+    const thread = std.Thread.spawn(
+        internal_os.thread_spawn_config,
+        spare,
+        .{self.adapter},
+    ) catch |err| {
+        log.warn("unable to start making a spare device err={}", .{err});
+        com.releaseOpt(self.adapter);
+        warm.finish(null);
+        return;
+    };
+    thread.detach();
+}
+
+fn spare(adapter: ?*c.IDXGIAdapter1) void {
+    defer com.releaseOpt(adapter);
+    warm.finish(create(@ptrCast(adapter)) catch null);
 }
 
 /// Create a device on the adapter Windows considers primary now, to
@@ -93,7 +123,8 @@ pub fn createDefault() !Created {
 /// loads the graphics driver, which took about 115 ms on a GeForce GT 750M
 /// against 24 ms for later ones, and releasing it let the driver unload
 /// some of it again. So we create the first surface's device here, while
-/// the app loads its config and fonts, and keep it for `createDevice`.
+/// the app loads its config and fonts, and keep it for `createDevice`
+/// as the first spare.
 pub fn warmup() void {
     if (!warm.start()) return;
     const adapter = chooseAdapter();
@@ -101,7 +132,7 @@ pub fn warmup() void {
     warm.finish(create(@ptrCast(adapter)) catch null);
 }
 
-/// The device made by `warmup`, until the first surface takes it.
+/// The spare device, made by `warmup` or after a surface took the last one.
 var warm: Warm = .{};
 
 const Warm = struct {
@@ -109,10 +140,10 @@ const Warm = struct {
     // translate-c can't translate).
     lock: c.SRWLOCK = std.mem.zeroes(c.SRWLOCK),
     cond: c.CONDITION_VARIABLE = std.mem.zeroes(c.CONDITION_VARIABLE),
-    state: enum { idle, warming, ready, taken } = .idle,
+    state: enum { idle, warming, ready } = .idle,
     created: ?Created = null,
 
-    /// Whether to warm up: not if a surface already made its device.
+    /// Whether to make a spare: not if there is one or it's being made.
     fn start(self: *Warm) bool {
         c.AcquireSRWLockExclusive(&self.lock);
         defer c.ReleaseSRWLockExclusive(&self.lock);
@@ -125,20 +156,20 @@ const Warm = struct {
         c.AcquireSRWLockExclusive(&self.lock);
         defer c.ReleaseSRWLockExclusive(&self.lock);
         self.created = created;
-        self.state = .ready;
+        self.state = if (created != null) .ready else .idle;
         c.WakeAllConditionVariable(&self.cond);
     }
 
-    /// The warm device, waiting for it if the warmup is still running.
-    /// Later calls (and calls before a warmup starts) get null.
+    /// The spare device, waiting for it if it's being made, or null if
+    /// there isn't one.
     fn take(self: *Warm) ?Created {
         c.AcquireSRWLockExclusive(&self.lock);
         defer c.ReleaseSRWLockExclusive(&self.lock);
         while (self.state == .warming) {
             _ = c.SleepConditionVariableSRW(&self.cond, &self.lock, c.INFINITE, 0);
         }
-        const created = if (self.state == .ready) self.created else null;
-        self.state = .taken;
+        const created = self.created;
+        self.state = .idle;
         self.created = null;
         return created;
     }
