@@ -78,6 +78,12 @@ composition: Composition,
 swap_chain_width: u32,
 swap_chain_height: u32,
 
+/// The view we render to the back buffer with, and its format. Direct3D
+/// 11 rotates a flip model swap chain's buffers behind buffer 0, so one
+/// view serves every frame until the buffers are resized.
+back_buffer_rtv: ?*c.ID3D11RenderTargetView = null,
+back_buffer_format: c.DXGI_FORMAT = c.DXGI_FORMAT_UNKNOWN,
+
 /// Whether the last present found nothing of the window shown, such as
 /// while the session is locked, and when it was (QueryPerformanceCounter).
 occluded: bool = false,
@@ -268,6 +274,7 @@ pub fn recreateDevice(self: *Direct3D11) !void {
 }
 
 fn releaseObjects(self: *Direct3D11) void {
+    self.releaseBackBuffer();
     self.default_sampler.deinit();
     com.release(self.rasterizer);
     self.composition.deinit();
@@ -457,31 +464,24 @@ fn targetFormat(self: *const Direct3D11) c.DXGI_FORMAT {
 }
 
 /// Initialize a new render target which can be presented by this API.
+/// It's bound to the back buffer when a frame begins.
 pub fn initTarget(self: *const Direct3D11, width: usize, height: usize) !Target {
-    return Target.init(.{
-        .device = self.d3d,
-        .width = width,
-        .height = height,
-        .format = self.targetFormat(),
-    });
+    _ = self;
+    return .{ .width = width, .height = height };
 }
 
-/// Present the provided target.
-pub fn present(self: *Direct3D11, target: Target) !void {
-    if (comptime builtin.mode == .debug) if (self.simulate_loss) |n| {
-        self.presents +|= 1;
-        if (self.presents == n) {
-            log.warn("simulating a lost device (GHOSTTY_D3D11_LOSE_DEVICE)", .{});
-            self.simulated_lost = true;
-        }
-        if (self.simulated_lost) return error.DeviceLost;
-    };
-
+/// Make the swap chain's buffers the size of the target, and point the
+/// target at the back buffer.
+fn bindTarget(self: *Direct3D11, target: *Target) !void {
     const width: u32 = @intCast(target.width);
     const height: u32 = @intCast(target.height);
+    const format = self.targetFormat();
 
-    // Resize the swap chain buffers to match our target if needed.
     if (width != self.swap_chain_width or height != self.swap_chain_height) {
+        // Resizing needs every reference to the buffers gone, including
+        // the context's binding of our view.
+        self.releaseBackBuffer();
+        com.call(self.context, "OMSetRenderTargets", .{ 0, null, null });
         try com.check(com.call(self.swap_chain, "ResizeBuffers", .{
             0, // keep the buffer count
             width,
@@ -492,9 +492,11 @@ pub fn present(self: *Direct3D11, target: Target) !void {
         self.swap_chain_width = width;
         self.swap_chain_height = height;
     }
+    if (self.back_buffer_rtv != null and self.back_buffer_format != format) {
+        self.releaseBackBuffer();
+    }
 
-    // Copy our target into the back buffer.
-    {
+    if (self.back_buffer_rtv == null) {
         var back_buffer_ptr: ?*anyopaque = null;
         try com.check(com.call(self.swap_chain, "GetBuffer", .{
             0,
@@ -504,11 +506,39 @@ pub fn present(self: *Direct3D11, target: Target) !void {
         const back_buffer: *c.ID3D11Texture2D = @ptrCast(@alignCast(back_buffer_ptr.?));
         defer com.release(back_buffer);
 
-        com.call(self.context, "CopyResource", .{
+        // A flip model swap chain can't have sRGB buffers, but an sRGB
+        // view of them gamma encodes what we write after blending.
+        var desc: c.D3D11_RENDER_TARGET_VIEW_DESC = std.mem.zeroes(c.D3D11_RENDER_TARGET_VIEW_DESC);
+        desc.Format = format;
+        desc.ViewDimension = c.D3D11_RTV_DIMENSION_TEXTURE2D;
+        var rtv: ?*c.ID3D11RenderTargetView = null;
+        try com.check(com.call(self.d3d, "CreateRenderTargetView", .{
             @as(*c.ID3D11Resource, @ptrCast(back_buffer)),
-            @as(*c.ID3D11Resource, @ptrCast(target.texture)),
-        });
+            &desc,
+            &rtv,
+        }), "ID3D11Device::CreateRenderTargetView");
+        self.back_buffer_rtv = rtv;
+        self.back_buffer_format = format;
     }
+    target.rtv = self.back_buffer_rtv;
+}
+
+fn releaseBackBuffer(self: *Direct3D11) void {
+    com.releaseOpt(self.back_buffer_rtv);
+    self.back_buffer_rtv = null;
+}
+
+/// Present the provided target.
+pub fn present(self: *Direct3D11, target: Target) !void {
+    _ = target;
+    if (comptime builtin.mode == .debug) if (self.simulate_loss) |n| {
+        self.presents +|= 1;
+        if (self.presents == n) {
+            log.warn("simulating a lost device (GHOSTTY_D3D11_LOSE_DEVICE)", .{});
+            self.simulated_lost = true;
+        }
+        if (self.simulated_lost) return error.DeviceLost;
+    };
 
     // While the window isn't shown, Present returns at once rather than
     // at the next refresh, and output would have us draw hundreds of
@@ -654,13 +684,14 @@ pub fn initAtlasTexture(
 
 /// Begin a frame.
 pub inline fn beginFrame(
-    self: *const Direct3D11,
+    self: *Direct3D11,
     /// Once the frame has been completed, the `frameCompleted` method
     /// on the renderer is called with the health status of the frame.
     renderer: *Renderer,
     /// The target is presented via the provided renderer's API when completed.
     target: *Target,
 ) !Frame {
+    try self.bindTarget(target);
     return try Frame.begin(.{
         .context = self.context,
         .rasterizer = self.rasterizer,
