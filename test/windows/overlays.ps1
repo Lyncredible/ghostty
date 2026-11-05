@@ -1,9 +1,9 @@
 # Checks the overlays a surface makes only when they first show: a new
 # terminal has no badge, search bar, command palette, dim overlay, bell
-# border, link preview or drop zone window. Toggling read-only
+# border, link preview, drop zone or drag handle window. Toggling read-only
 # mode (a posted F9 bound to `toggle_readonly`) must show one in the top
 # right, in the order it would have been made in: just below the
-# scrollbar, and above the overlays made after it (the drag handle). The search bar and command palette are made when they first
+# scrollbar. The search bar and command palette are made when they first
 # open too, so a new surface has neither. Toggling read-only mode again
 # must hide the badge. A bell (a posted F8 types `echo` and BEL) must
 # show the bell border, just above the scrollbar. Then the search bar and
@@ -104,18 +104,17 @@ function Children {
 try {
     $window = WaitFor { $process.Refresh(); if ($process.MainWindowHandle -ne 0) { $process.MainWindowHandle } } 'the window'
     $script:surface = WaitFor { $h = $W::FindWindowExW($window, [IntPtr]::Zero, 'GhosttySurface', $null); if ($h -ne [IntPtr]::Zero) { $h } } 'the surface'
-    [void](WaitFor { (Children) -contains 'GhosttyDragHandle' } "the surface's overlays")
+    [void](WaitFor { (Children) -contains 'GhosttyScrollbar' } "the surface's scrollbar")
     Start-Sleep -Seconds 1
-    if ((Children) | Where-Object { $_ -match '^Ghostty(Badge|SearchBar|CommandPalette|DimOverlay|BellBorder|LinkPreview|DropZone)' }) { Fail "a new surface already has a lazily made overlay window: $((Children) -join ', ')" }
-    Write-Host "A new surface has no badge, search bar, command palette, dim overlay, bell border, link preview or drop zone windows: $((Children) -join ', ')"
+    if ((Children) | Where-Object { $_ -match '^Ghostty(Badge|SearchBar|CommandPalette|DimOverlay|BellBorder|LinkPreview|DropZone|DragHandle)' }) { Fail "a new surface already has a lazily made overlay window: $((Children) -join ', ')" }
+    Write-Host "A new surface has no badge, search bar, command palette, dim overlay, bell border, link preview, drop zone or drag handle windows: $((Children) -join ', ')"
 
     $W::Key($surface, 0x78, 0x43)   # F9: toggle_readonly
     [void](WaitFor { (Children) -contains 'GhosttyBadge*' } 'the read-only badge to show')
     $children = @(Children)
     $badge = [Array]::IndexOf($children, 'GhosttyBadge*')
     $scrollbar = [Array]::IndexOf(@($children | ForEach-Object { $_.TrimEnd('*') }), 'GhosttyScrollbar')
-    $handle = [Array]::IndexOf(@($children | ForEach-Object { $_.TrimEnd('*') }), 'GhosttyDragHandle')
-    if ($badge -ne $scrollbar + 1 -or $handle -lt $badge) { Fail "the badge isn't just below the scrollbar and above the drag handle: $($children -join ', ')" }
+    if ($badge -ne $scrollbar + 1) { Fail "the badge isn't just below the scrollbar: $($children -join ', ')" }
 
     $h = $W::FindWindowExW($surface, [IntPtr]::Zero, 'GhosttyBadge', $null)
     $b = New-Object GhosttyBadges.Win32+RECT; [void]$W::GetWindowRect($h, [ref]$b)
@@ -176,6 +175,7 @@ try {
     $first = $script:surface
     $second = WaitFor { $h = $W::FindWindowExW($window, $first, 'GhosttySurface', $null); if ($h -ne [IntPtr]::Zero) { $h } } 'the second terminal'
     $handle = $W::FindWindowExW($first, [IntPtr]::Zero, 'GhosttyDragHandle', $null)
+    if ($handle -eq [IntPtr]::Zero -or -not $W::IsWindowVisible($handle)) { Fail "the first terminal shows no drag handle in a split: $((Children) -join ', ')" }
     $a = New-Object GhosttyBadges.Win32+RECT; [void]$W::GetWindowRect($first, [ref]$a)
     $b = New-Object GhosttyBadges.Win32+RECT; [void]$W::GetWindowRect($second, [ref]$b)
     $W::Mouse($handle, 0x0201, 1, $a.l + 10, $a.t + 2)   # WM_LBUTTONDOWN

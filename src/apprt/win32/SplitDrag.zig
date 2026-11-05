@@ -28,13 +28,21 @@ pub const Handle = struct {
 
     hwnd: c.HWND = null,
     surface: *Surface = undefined,
+    instance: c.HINSTANCE = null,
     brush: c.HBRUSH = null,
     shown: bool = false,
     dragging: bool = false,
 
-    pub fn init(self: *Handle, surface: *Surface, instance: c.HINSTANCE, config: *const Config) !void {
+    /// The window is made the first time the handle shows (in a split).
+    /// It goes on top whenever it shows, so when it's made doesn't matter.
+    pub fn init(self: *Handle, surface: *Surface, instance: c.HINSTANCE, config: *const Config) void {
         self.surface = surface;
-        self.hwnd = c.CreateWindowExW(
+        self.instance = instance;
+        self.updateConfig(config);
+    }
+
+    fn createWindow(self: *Handle) !void {
+        const hwnd = c.CreateWindowExW(
             c.WS_EX_LAYERED | c.WS_EX_NOACTIVATE,
             class_name,
             null,
@@ -43,15 +51,15 @@ pub const Handle = struct {
             0,
             0,
             0,
-            surface.hwnd,
+            self.surface.hwnd,
             null,
-            instance,
+            self.instance,
             null,
         ) orelse return error.CreateWindowFailed;
-        errdefer self.deinit();
-        if (c.SetLayeredWindowAttributes(self.hwnd, 0, 140, c.LWA_ALPHA) == 0) return error.SetOpacityFailed;
-        _ = c.SetWindowLongPtrW(self.hwnd, util.GWLP_USERDATA, @bitCast(@intFromPtr(self)));
-        self.updateConfig(config);
+        errdefer _ = c.DestroyWindow(hwnd);
+        if (c.SetLayeredWindowAttributes(hwnd, 0, 140, c.LWA_ALPHA) == 0) return error.SetOpacityFailed;
+        _ = c.SetWindowLongPtrW(hwnd, util.GWLP_USERDATA, @bitCast(@intFromPtr(self)));
+        self.hwnd = hwnd;
     }
 
     pub fn deinit(self: *Handle) void {
@@ -67,16 +75,21 @@ pub const Handle = struct {
         const fg = config.foreground;
         if (self.brush != null) _ = c.DeleteObject(self.brush);
         self.brush = c.CreateSolidBrush(rgb(fg.r, fg.g, fg.b));
-        _ = c.InvalidateRect(self.hwnd, null, c.TRUE);
+        if (self.hwnd != null) _ = c.InvalidateRect(self.hwnd, null, c.TRUE);
     }
 
     /// Show or hide the handle, and place it at the top center.
     pub fn setShown(self: *Handle, shown: bool) void {
         self.shown = shown;
         if (!shown) {
-            _ = c.ShowWindow(self.hwnd, c.SW_HIDE);
+            if (self.hwnd != null) _ = c.ShowWindow(self.hwnd, c.SW_HIDE);
             return;
         }
+        if (self.hwnd == null) self.createWindow() catch |err| {
+            log.warn("unable to create the drag handle err={}", .{err});
+            self.shown = false;
+            return;
+        };
         var parent: c.RECT = undefined;
         _ = c.GetClientRect(self.surface.hwnd, &parent);
         const dpi: c_int = @intCast(c.GetDpiForWindow(self.hwnd));
