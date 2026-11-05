@@ -578,7 +578,8 @@ Notes:
         system menu (`SendMessage`, so it's the UI thread's time), three
         runs of four: 63-78 ms before, 34-44 ms after. The spare costs
         about 5 MB (private bytes after start: 50.5 MB, now 55.3 MB).
-        Checked: the device-lost and smoke tests pass, and closing the
+        Checked: the device-lost and smoke tests pass (here, and in CI
+        run 41946175189), and closing the
         window exits.
 - [x] Memory per tab: each new tab raised the commit charge (private
       bytes) by about 110 MB, while the working set grew by 10 MB. Listing
