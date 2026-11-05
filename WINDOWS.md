@@ -115,7 +115,7 @@ Notes:
         with a custom shader that swaps red and blue, whose colors show
         after the device is replaced (passed in CI run 41927770848),
         and with a solid background image, whose color shows after it
-        (passes here; not run in CI yet). Kitty images can't reach a
+        (passed in CI run 41936310250). Kitty images can't reach a
         terminal through ConPTY (see below), so their reload isn't
         checked. Not checked: a real driver restart.
 - [x] Win32 apprt: window, message loop, and cross-thread wakeups.
