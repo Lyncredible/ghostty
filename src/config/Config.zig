@@ -393,7 +393,8 @@ language: ?[:0]const u8 = null,
 /// Valid values:
 ///
 /// * `native` - Perform alpha blending in the native color space for the OS.
-///   On macOS this corresponds to Display P3, and on Linux it's sRGB.
+///   On macOS this corresponds to Display P3, and on Linux and Windows it's
+///   sRGB.
 ///
 /// * `linear` - Perform alpha blending in linear space. This will eliminate
 ///   the darkening artifacts around the edges of text that are very visible
