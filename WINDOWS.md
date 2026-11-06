@@ -1191,7 +1191,7 @@ Notes:
         `SHA256SUMS.txt`, its tag at the commit. The downloaded x64 zip
         matched its checksum and `ghostty.com +version` printed
         `1.4.1-windows+ce2c8e1`.
-- [ ] DirectWrite rasterization (the discussion: text should look native
+- [x] DirectWrite rasterization (the discussion: text should look native
       on Windows). FreeType rasterizes now; a DirectWrite face (with
       ClearType-style gamma and contrast from the system) could be a
       `font-backend` option. Compare screenshots with Windows Terminal.
