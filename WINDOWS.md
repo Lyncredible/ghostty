@@ -1157,6 +1157,11 @@ Notes:
         too). Upstream's new uucode, z2d and themes archives needed the
         curl workaround above. The rebased history is on
         `windows-rebased` until it can replace `windows` (a force push).
+        The rebase gave every commit a new committer date; they were set
+        back to the originals (matching commits by author date and
+        subject), so the history keeps its timestamps. Next time use
+        `git rebase --committer-date-is-author-date`. The full unit test
+        suite passed on the rebased tree.
 - [ ] Tip builds, like upstream's `release-tip.yml` (the discussion's
       release workflow item): a rolling prerelease of the latest
       `windows` commit, so people can try it without building. Publishing
@@ -1181,8 +1186,17 @@ Notes:
   - [ ] DirectWrite's enhanced contrast and gamma (from the system's
         rendering parameters), which Windows applies when blending text;
         the mask alone is raw coverage.
-  - [ ] Side by side with Windows Terminal (needs an unlocked desktop),
-        then decide whether `directwrite` should be the default.
+  - [x] Side by side with Windows Terminal 1.25 (2026-11-05, captured
+        with `PrintWindow`, which works with the desktop locked; a new WT
+        window opened with `wt -w new` and closed with `WM_CLOSE`).
+        With the same font (MesloLGS NF 13, One Half Dark), Ghostty with
+        either rasterizer is very close to WT: same advance and line
+        height, same shapes; DirectWrite's strokes are a little lighter
+        than WT's (which also applies DirectWrite's contrast and gamma
+        when blending). A first comparison with Cascadia Mono looked much
+        heavier, but WT was actually using MesloLGS NF from its profile.
+        FreeType stays the default; `directwrite` is there for people who
+        prefer it.
 - [x] Verify IME with Microsoft Pinyin, Japanese IME, and others
 - [x] Fix tab-header close crashing the window when there are multiple
       tabs (active index and split focus must be valid during teardown)
