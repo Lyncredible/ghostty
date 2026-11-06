@@ -1431,6 +1431,22 @@ Notes:
       names the session, asks again 3 s later, and annotates Ghostty's
       log of signals to the pseudoconsole, for the next time it fails.
       The next run (41832654292) passed.
+    - It failed again in run 41980624453 (Ghostty's own session: owned
+      by 0, then 0 three seconds later), and the log shows the signal
+      was sent, once, before cmd started. The inbox console host can
+      likely lose a signal that arrives while the program connects (not
+      verified against its source), so the IO thread now sends the
+      owner and visibility again 1, 3 and 10 s after a terminal starts
+      (Windows reuses the termios timer, which it doesn't otherwise
+      run). Never reproduced here, so only CI runs can show it helps.
+  - [x] `handoff.ps1`'s resize step was flaky here on old and new builds
+        alike (3 of 6 runs failed): it typed `mode con` right after
+        resizing the window, before the console had the new size (the
+        "passing" runs read the size from before: 149 columns, then 45),
+        and at 12 rows `mode con`'s output scrolled the marker off the
+        screen. It now waits a second, asks up to 5 times for the
+        narrower size, and filters `mode con` to its Columns line: 5 of
+        5 runs passed (45 columns, then 24).
   - [x] The console window's state: while a terminal isn't visible (its
         window minimized, or another tab selected), its pseudoconsole's
         window shows as minimized, so console programs that check
