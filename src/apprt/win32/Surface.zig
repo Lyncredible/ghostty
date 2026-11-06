@@ -1903,7 +1903,11 @@ fn mouseButtonEvent(
 fn releaseButtons(self: *Surface) void {
     const buttons = self.buttons_down;
     self.buttons_down = .empty;
-    self.context_menu_pending = false;
+    // Only when the right button was still down: releasing it ourselves
+    // also sends WM_CAPTURECHANGED (it was removed from `buttons_down`
+    // first), and clearing the flag then kept the context menu from ever
+    // showing.
+    if (buttons.contains(.right)) self.context_menu_pending = false;
     var it = buttons.iterator();
     while (it.next()) |button| {
         _ = self.core_surface.mouseButtonCallback(.release, button, key.currentMods()) catch |err| {
