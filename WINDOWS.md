@@ -1169,8 +1169,13 @@ Notes:
         suite passed on the rebased tree.
 - [ ] Tip builds, like upstream's `release-tip.yml` (the discussion's
       release workflow item): a rolling prerelease of the latest
-      `windows` commit, so people can try it without building. Publishing
-      a release from every push is the owner's call, so ask first.
+      `windows` commit, so people can try it without building. Approved
+      by the owner (2026-11-05).
+  - [x] The fork workflow's `tip` job: after every job passed for a push
+        to `windows`, the packages those jobs built and tested (ReleaseSafe
+        zip and MSIX for x64 and ARM64) and their SHA-256 sums replace the
+        `windows-tip` prerelease, whose tag moves to the commit.
+  - [ ] Check the first published `windows-tip` release.
 - [ ] DirectWrite rasterization (the discussion: text should look native
       on Windows). FreeType rasterizes now; a DirectWrite face (with
       ClearType-style gamma and contrast from the system) could be a
