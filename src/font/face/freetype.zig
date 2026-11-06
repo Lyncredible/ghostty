@@ -22,6 +22,12 @@ const global = @import("../../global.zig");
 
 const F26Dot6 = opentype.sfnt.F26Dot6;
 
+/// DirectWrite rasterization, with the Windows backend.
+const dwrite_raster = if (font.options.backend == .freetype_windows)
+    @import("dwrite_raster.zig")
+else
+    struct {};
+
 const log = std.log.scoped(.font_face);
 
 pub const Face = struct {
@@ -1489,4 +1495,8 @@ test "bitmap glyph OTB" {
             );
         }
     }
+}
+
+test {
+    if (comptime font.options.backend == .freetype_windows) _ = dwrite_raster;
 }
