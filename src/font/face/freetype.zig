@@ -28,6 +28,12 @@ const dwrite_raster = if (font.options.backend == .freetype_windows)
 else
     struct {};
 
+/// A face's DirectWrite rasterizer, made when it first draws a glyph.
+const DWrite = if (font.options.backend == .freetype_windows) struct {
+    rasterizer: ?dwrite_raster.Rasterizer = null,
+    failed: bool = false,
+} else void;
+
 const log = std.log.scoped(.font_face);
 
 pub const Face = struct {
@@ -67,6 +73,10 @@ pub const Face = struct {
 
     /// The current size this font is set to.
     size: font.face.DesiredSize,
+
+    /// With `font-rasterizer = directwrite` on Windows, DirectWrite draws
+    /// outline glyphs. Guarded by `ft_mutex`.
+    dwrite: if (DWrite == void) void else ?*DWrite = if (DWrite == void) {} else null,
 
     /// Initialize a new font face with the given source in-memory.
     pub fn initFile(
@@ -119,6 +129,13 @@ pub const Face = struct {
             .size = opts.size,
         };
         result.quirks_disable_default_font_features = quirks.disableDefaultFontFeatures(&result);
+        if (comptime DWrite != void) {
+            if (opts.directwrite) {
+                const dw = try lib.alloc.create(DWrite);
+                dw.* = .{};
+                result.dwrite = dw;
+            }
+        }
 
         // In debug mode, we output information about available variation axes,
         // if they exist.
@@ -147,6 +164,12 @@ pub const Face = struct {
     }
 
     pub fn deinit(self: *Face) void {
+        if (comptime DWrite != void) {
+            if (self.dwrite) |dw| {
+                if (dw.rasterizer) |*r| r.deinit();
+                self.lib.alloc.destroy(dw);
+            }
+        }
         self.lib.alloc.destroy(self.ft_mutex);
         {
             self.lib.mutex.lockUncancelable(global.io());
@@ -440,6 +463,63 @@ pub const Face = struct {
         };
     }
 
+    /// Whether DirectWrite draws this glyph. FreeType still draws when
+    /// the outline is changed in ways DirectWrite can't do the same way.
+    fn useDirectWrite(self: Face, opts: font.Glyph.RenderOptions) bool {
+        if (comptime DWrite == void) return false;
+        const dw = self.dwrite orelse return false;
+        return !dw.failed and
+            !self.synthetic.bold and
+            !opts.thicken and
+            !self.load_flags.monochrome;
+    }
+
+    /// Draw an outline glyph with DirectWrite into `bitmap`, setting the
+    /// glyph slot's bitmap position like FreeType would. False if
+    /// FreeType should draw it instead.
+    fn renderDirectWrite(
+        self: Face,
+        alloc: Allocator,
+        glyph_index: u32,
+        t: dwrite_raster.Transform,
+        bitmap: *freetype.c.FT_Bitmap,
+    ) bool {
+        if (comptime DWrite == void) return false;
+        const dw = self.dwrite.?;
+        const r = if (dw.rasterizer) |*r| r else r: {
+            dw.rasterizer = dwrite_raster.Rasterizer.init(self.lib.alloc, self.face) catch |err| {
+                log.warn("DirectWrite can't draw this font, using FreeType err={}", .{err});
+                dw.failed = true;
+                return false;
+            };
+            break :r &dw.rasterizer.?;
+        };
+        r.syncVariations(self.face) catch |err| {
+            log.warn("error applying variations for DirectWrite err={}", .{err});
+            return false;
+        };
+
+        var drawn = (r.render(alloc, glyph_index, self.size.pixels(), t) catch |err| {
+            log.warn("error drawing glyph with DirectWrite glyph={} err={}", .{ glyph_index, err });
+            return false;
+        }) orelse return false;
+        defer drawn.deinit(alloc);
+
+        const source: freetype.c.FT_Bitmap = .{
+            .buffer = drawn.data.ptr,
+            .width = drawn.width,
+            .rows = drawn.height,
+            .pitch = @intCast(drawn.width),
+            .pixel_mode = freetype.c.FT_PIXEL_MODE_GRAY,
+            .num_grays = 256,
+        };
+        if (freetype.c.FT_Bitmap_Copy(self.lib.lib.handle, &source, bitmap) != 0) return false;
+        const glyph = self.face.handle.*.glyph;
+        glyph.*.bitmap_left = drawn.left;
+        glyph.*.bitmap_top = drawn.top;
+        return true;
+    }
+
     /// Get a rect that represents the position and size of the loaded glyph.
     fn getGlyphSize(glyph: freetype.c.FT_GlyphSlot) font.Glyph.Size {
         // If we're dealing with an outline glyph then we get the
@@ -480,8 +560,12 @@ pub const Face = struct {
         self.ft_mutex.lockUncancelable(global.io());
         defer self.ft_mutex.unlock(global.io());
 
+        // DirectWrite draws from the font's own outlines with its own grid
+        // fitting, so measure the unhinted outline for it.
+        const dwrite = self.useDirectWrite(opts);
+
         // Load the glyph.
-        try self.face.loadGlyph(glyph_index, self.glyphLoadFlags(opts.constraint.doesAnything()));
+        try self.face.loadGlyph(glyph_index, self.glyphLoadFlags(opts.constraint.doesAnything() or dwrite));
         const glyph = self.face.handle.*.glyph;
 
         // For synthetic bold, we embolden the glyph.
@@ -584,7 +668,7 @@ pub const Face = struct {
         _ = freetype.c.FT_Bitmap_Init(&bitmap);
         defer _ = freetype.c.FT_Bitmap_Done(self.lib.lib.handle, &bitmap);
         switch (glyph.*.format) {
-            freetype.c.FT_GLYPH_FORMAT_OUTLINE => {
+            freetype.c.FT_GLYPH_FORMAT_OUTLINE => outline: {
                 // Manually adjust the glyph outline with this transform.
                 //
                 // This offers better precision than using the freetype transform
@@ -599,6 +683,20 @@ pub const Face = struct {
                         @tan(std.math.degreesToRadians(12))
                     else
                         0.0;
+
+                if (dwrite) dw: {
+                    // The same transform as the loop below.
+                    const dy = y - cell_baseline - rect.y * scale_y;
+                    const t: dwrite_raster.Transform = .{
+                        .xx = scale_x,
+                        .xy = skew * scale_y,
+                        .yy = scale_y,
+                        .dx = x - rect.x * scale_x + skew * dy,
+                        .dy = dy,
+                    };
+                    if (!self.renderDirectWrite(alloc, glyph_index, t, &bitmap)) break :dw;
+                    break :outline;
+                }
 
                 const outline: *freetype.c.FT_Outline = &glyph.*.outline;
                 for (outline.points[0..@intCast(outline.n_points)]) |*p| {
@@ -1499,4 +1597,47 @@ test "bitmap glyph OTB" {
 
 test {
     if (comptime font.options.backend == .freetype_windows) _ = dwrite_raster;
+}
+
+test "directwrite rasterizer places glyphs like freetype" {
+    if (comptime DWrite == void) return error.SkipZigTest;
+    const alloc = testing.allocator;
+
+    var lib = try Library.init(alloc);
+    defer lib.deinit();
+
+    var atlas = try font.Atlas.init(alloc, 512, .grayscale);
+    defer atlas.deinit(alloc);
+
+    const size: font.face.DesiredSize = .{ .points = 12, .xdpi = 96, .ydpi = 96 };
+    var ft = try Face.init(lib, font.embedded.regular, .{ .size = size });
+    defer ft.deinit();
+    var dw = try Face.init(lib, font.embedded.regular, .{ .size = size, .directwrite = true });
+    defer dw.deinit();
+
+    const metrics = font.Metrics.calc(ft.getMetrics());
+    for ("Hgjy|@") |ch| {
+        const index = ft.glyphIndex(ch).?;
+        const a = try ft.renderGlyph(alloc, &atlas, index, .{ .grid_metrics = metrics });
+        const b = try dw.renderGlyph(alloc, &atlas, index, .{ .grid_metrics = metrics });
+        try testing.expect(!dw.dwrite.?.failed);
+        try testing.expect(b.width > 0 and b.height > 0);
+        // Grid fitting and antialiasing differ, by a pixel or so.
+        try testing.expect(@abs(@as(i64, a.offset_x) - b.offset_x) <= 1);
+        try testing.expect(@abs(@as(i64, a.offset_y) - b.offset_y) <= 1);
+        try testing.expect(@abs(@as(i64, a.width) - b.width) <= 2);
+        try testing.expect(@abs(@as(i64, a.height) - b.height) <= 2);
+    }
+
+    // Synthetic italic is a skew DirectWrite draws too, as FreeType does.
+    var italic = try ft.syntheticItalic(.{ .size = size });
+    defer italic.deinit();
+    var dw_italic = try dw.syntheticItalic(.{ .size = size, .directwrite = true });
+    defer dw_italic.deinit();
+    const index = ft.glyphIndex('H').?;
+    const a = try italic.renderGlyph(alloc, &atlas, index, .{ .grid_metrics = metrics });
+    const b = try dw_italic.renderGlyph(alloc, &atlas, index, .{ .grid_metrics = metrics });
+    try testing.expect(dw_italic.dwrite.?.rasterizer != null);
+    try testing.expect(@abs(@as(i64, a.offset_x) - b.offset_x) <= 1);
+    try testing.expect(@abs(@as(i64, a.width) - b.width) <= 2);
 }

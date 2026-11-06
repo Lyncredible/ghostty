@@ -355,3 +355,33 @@ test "a space covers nothing" {
     const glyph = freetype.c.FT_Get_Char_Index(ft.handle, ' ');
     try testing.expect(try r.render(alloc, glyph, 16, .{}) == null);
 }
+
+test "skew leans the glyph to the right" {
+    const alloc = testing.allocator;
+    const lib = try freetype.Library.init();
+    defer lib.deinit();
+    const ft = try testFace(lib);
+    defer ft.deinit();
+
+    var r = try Rasterizer.init(alloc, ft);
+    defer r.deinit();
+
+    // tan(12 degrees), as synthetic italic has it.
+    const glyph = freetype.c.FT_Get_Char_Index(ft.handle, 'H');
+    var plain = (try r.render(alloc, glyph, 16, .{})).?;
+    defer plain.deinit(alloc);
+    var skewed = (try r.render(alloc, glyph, 16, .{ .xy = 0.2126 })).?;
+    defer skewed.deinit(alloc);
+
+    // H has vertical sides, so leaning makes it wider by about its height
+    // times the skew, and its top starts further right than its bottom.
+    try testing.expect(skewed.width >= plain.width + 2);
+    const first = struct {
+        fn covered(b: Bitmap, row: u32) usize {
+            const line = b.data[row * b.width ..][0..b.width];
+            for (line, 0..) |v, i| if (v > 128) return i;
+            return line.len;
+        }
+    }.covered;
+    try testing.expect(first(skewed, 1) > first(skewed, skewed.height - 2));
+}

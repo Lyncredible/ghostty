@@ -40,6 +40,9 @@ pub const freetype_load_flags_default: FreetypeLoadFlags = if (FreetypeLoadFlags
 pub const Options = struct {
     size: DesiredSize,
     freetype_load_flags: FreetypeLoadFlags = freetype_load_flags_default,
+
+    /// Draw outline glyphs with DirectWrite (Windows only).
+    directwrite: bool = false,
 };
 
 /// The desired size for loading a font.
