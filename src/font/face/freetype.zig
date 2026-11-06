@@ -474,11 +474,11 @@ pub const Face = struct {
 
     /// Whether DirectWrite draws this glyph. FreeType still draws when
     /// the outline is changed in ways DirectWrite can't do the same way.
+    /// Synthetic bold uses DirectWrite's bold simulation.
     fn useDirectWrite(self: Face, opts: font.Glyph.RenderOptions) bool {
         if (comptime DWrite == void) return false;
         const dw = self.dwrite orelse return false;
         return !dw.failed and
-            !self.synthetic.bold and
             !opts.thicken and
             !self.load_flags.monochrome;
     }
@@ -496,7 +496,7 @@ pub const Face = struct {
         if (comptime DWrite == void) return false;
         const dw = self.dwrite.?;
         const r = if (dw.rasterizer) |*r| r else r: {
-            dw.rasterizer = dwrite_raster.Rasterizer.init(self.lib.alloc, self.face) catch |err| {
+            dw.rasterizer = dwrite_raster.Rasterizer.init(self.lib.alloc, self.face, self.synthetic.bold) catch |err| {
                 log.warn("DirectWrite can't draw this font, using FreeType err={}", .{err});
                 dw.failed = true;
                 return false;
@@ -577,8 +577,9 @@ pub const Face = struct {
         try self.face.loadGlyph(glyph_index, self.glyphLoadFlags(opts.constraint.doesAnything() or dwrite));
         const glyph = self.face.handle.*.glyph;
 
-        // For synthetic bold, we embolden the glyph.
-        if (self.synthetic.bold) {
+        // For synthetic bold, we embolden the glyph. DirectWrite uses its
+        // own bold simulation instead.
+        if (self.synthetic.bold and !dwrite) {
             // We need to scale the embolden amount based on the font size.
             // This is a heuristic I found worked well across a variety of
             // founts: 1 pixel per 64 units of height.
@@ -1649,4 +1650,31 @@ test "directwrite rasterizer places glyphs like freetype" {
     try testing.expect(dw_italic.dwrite.?.rasterizer != null);
     try testing.expect(@abs(@as(i64, a.offset_x) - b.offset_x) <= 1);
     try testing.expect(@abs(@as(i64, a.width) - b.width) <= 2);
+}
+
+test "directwrite rasterizer draws synthetic bold" {
+    if (comptime DWrite == void) return error.SkipZigTest;
+    const alloc = testing.allocator;
+
+    var lib = try Library.init(alloc);
+    defer lib.deinit();
+
+    var atlas = try font.Atlas.init(alloc, 512, .grayscale);
+    defer atlas.deinit(alloc);
+
+    const size: font.face.DesiredSize = .{ .points = 12, .xdpi = 96, .ydpi = 96 };
+    var dw = try Face.init(lib, font.embedded.regular, .{ .size = size, .directwrite = true });
+    defer dw.deinit();
+    var bold = try dw.syntheticBold(.{ .size = size, .directwrite = true });
+    defer bold.deinit();
+
+    const metrics = font.Metrics.calc(dw.getMetrics());
+    const index = dw.glyphIndex('l').?;
+    const regular = try dw.renderGlyph(alloc, &atlas, index, .{ .grid_metrics = metrics });
+    const emboldened = try bold.renderGlyph(alloc, &atlas, index, .{ .grid_metrics = metrics });
+
+    // DirectWrite drew it (not FreeType), with its bold simulation, which
+    // widens the strokes.
+    try testing.expect(bold.dwrite.?.rasterizer.?.bold);
+    try testing.expect(emboldened.width > regular.width);
 }

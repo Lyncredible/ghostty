@@ -55,10 +55,14 @@ pub const Rasterizer = struct {
     coords: [max_axes]freetype.c.FT_Fixed = undefined,
     coords_len: usize = 0,
 
+    /// DirectWrite's bold simulation, for synthetic bold.
+    bold: bool = false,
+
     const max_axes = 32;
 
-    /// Load the font data of a FreeType face into DirectWrite.
-    pub fn init(alloc: Allocator, ft: freetype.Face) Error!Rasterizer {
+    /// Load the font data of a FreeType face into DirectWrite, emboldened
+    /// with DirectWrite's simulation if `bold`.
+    pub fn init(alloc: Allocator, ft: freetype.Face, bold: bool) Error!Rasterizer {
         // Tag 0 is the whole font file (all of a collection).
         var len: c_ulong = 0;
         if (freetype.c.FT_Load_Sfnt_Table(ft.handle, 0, 0, null, &len) != 0 or len == 0)
@@ -105,6 +109,7 @@ pub const Rasterizer = struct {
             .loader = loader.?,
             .resource = resource.?,
             .face = undefined,
+            .bold = bold,
         };
         result.face = try result.createFace(ft);
         return result;
@@ -152,7 +157,10 @@ pub const Rasterizer = struct {
 
         var face: ?*c.IDWriteFontFace5 = null;
         try check(call(self.resource, "CreateFontFace", .{
-            @as(c.DWRITE_FONT_SIMULATIONS, c.DWRITE_FONT_SIMULATIONS_NONE),
+            @as(c.DWRITE_FONT_SIMULATIONS, if (self.bold)
+                c.DWRITE_FONT_SIMULATIONS_BOLD
+            else
+                c.DWRITE_FONT_SIMULATIONS_NONE),
             @as([*c]const c.DWRITE_FONT_AXIS_VALUE, if (n > 0) &values[0] else null),
             @as(c.UINT32, @intCast(n)),
             &face,
@@ -295,7 +303,7 @@ test "render a glyph like FreeType places it" {
     const ft = try testFace(lib);
     defer ft.deinit();
 
-    var r = try Rasterizer.init(alloc, ft);
+    var r = try Rasterizer.init(alloc, ft, false);
     defer r.deinit();
 
     const glyph = freetype.c.FT_Get_Char_Index(ft.handle, 'H');
@@ -329,7 +337,7 @@ test "transform scales and moves the glyph" {
     const ft = try testFace(lib);
     defer ft.deinit();
 
-    var r = try Rasterizer.init(alloc, ft);
+    var r = try Rasterizer.init(alloc, ft, false);
     defer r.deinit();
 
     const glyph = freetype.c.FT_Get_Char_Index(ft.handle, 'H');
@@ -350,7 +358,7 @@ test "a space covers nothing" {
     const ft = try testFace(lib);
     defer ft.deinit();
 
-    var r = try Rasterizer.init(alloc, ft);
+    var r = try Rasterizer.init(alloc, ft, false);
     defer r.deinit();
     const glyph = freetype.c.FT_Get_Char_Index(ft.handle, ' ');
     try testing.expect(try r.render(alloc, glyph, 16, .{}) == null);
@@ -363,7 +371,7 @@ test "skew leans the glyph to the right" {
     const ft = try testFace(lib);
     defer ft.deinit();
 
-    var r = try Rasterizer.init(alloc, ft);
+    var r = try Rasterizer.init(alloc, ft, false);
     defer r.deinit();
 
     // tan(12 degrees), as synthetic italic has it.

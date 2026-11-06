@@ -1189,7 +1189,11 @@ Notes:
   - [x] `font-rasterizer = directwrite` uses it in the FreeType face for
         outline glyphs, with the same placement transform (constraints,
         centering, synthetic italic's skew). FreeType still draws color
-        and bitmap glyphs, synthetic bold, `font-thicken` and monochrome.
+        and bitmap glyphs, `font-thicken` and monochrome.
+  - [x] Synthetic bold with DirectWrite's bold simulation
+        (`DWRITE_FONT_SIMULATIONS_BOLD`) rather than falling back to
+        FreeType's emboldening. Test: a bold `l` is drawn by DirectWrite
+        and comes out wider.
         Tests: placement of several glyphs within a pixel of FreeType's,
         and synthetic italic. Checked in the app: about 6% of the pixels
         of cmd's banner differ from FreeType's rendering.
