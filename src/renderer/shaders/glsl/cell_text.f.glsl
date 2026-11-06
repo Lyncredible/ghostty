@@ -20,6 +20,7 @@ layout(location = 0) out vec4 out_FragColor;
 void main() {
     bool use_linear_blending = (bools & USE_LINEAR_BLENDING) != 0;
     bool use_linear_correction = (bools & USE_LINEAR_CORRECTION) != 0;
+    bool use_dwrite_blending = (bools & USE_DWRITE_BLENDING) != 0;
 
     switch (in_data.atlas) {
         default:
@@ -64,6 +65,12 @@ void main() {
                     float blend_l = linearize(unlinearize(fg_l) * a + unlinearize(bg_l) * (1.0 - a));
                     a = clamp((blend_l - bg_l) / (fg_l - bg_l), 0.0, 1.0);
                 }
+            }
+
+            // DirectWrite's contrast and gamma correction, on the gamma
+            // encoded color (this mode doesn't blend linearly).
+            if (use_dwrite_blending && color.a > 0.0) {
+                a = dwrite_alpha(a, color.rgb / vec3(color.a));
             }
 
             // Multiply our whole color by the alpha mask.
