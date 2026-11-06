@@ -75,6 +75,10 @@ $process = Start-Process -FilePath $Exe -PassThru -RedirectStandardError $log -A
     '--bell-features=no-attention,border'
 
 function Fail([string]$message) {
+    $warnings = @()
+    if (Test-Path $log) { $warnings = @(Get-Content $log | Where-Object { $_ -match '\b(warning|error)\b' } | Select-Object -Last 6) }
+    if ($script:dragNote) { $message += " ($script:dragNote)" }
+    if ($warnings.Count -gt 0) { $message += " Ghostty's log: " + ($warnings -join ' | ') }
     Write-Host "::error title=overlays::$message"
     $script:reported = $true
     Write-Host "--- Ghostty's log ---"
@@ -205,6 +209,8 @@ try {
             $script:tries++
             $W::Mouse($handle, 0x0201, 1, $a.l + 10, $a.t + 2)
         }
+        $who = if ($capture -eq [IntPtr]::Zero) { 'nothing' } else { ClassOf $capture }
+        $script:dragNote = "drags: $($script:tries), capture: $who, first: $($a.l),$($a.t)-$($a.r),$($a.b), second: $($b.l),$($b.t)-$($b.r),$($b.b)"
         $W::Mouse($handle, 0x0200, 1, $b.r - 10, [int](($b.t + $b.b) / 2))
         Start-Sleep -Milliseconds 100
         (Children) -contains 'GhosttyDropZone*'
