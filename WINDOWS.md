@@ -1136,6 +1136,25 @@ Notes:
       Go through the recent failed runs step by step, fix each cause or
       make its test robust, and only check this off after several green
       runs in a row.
+- [ ] Keep the branch on top of upstream: fetch
+      `git@github.com:ghostty-org/ghostty.git` from time to time, rebase,
+      and check that the build, unit tests and the fork's CI still pass.
+  - [x] 2026-11-05: rebased onto upstream/main (277 new upstream commits).
+        Conflicts: `modes.zig` (upstream enabled `kitty_paste_events`
+        everywhere and dropped the `builtin`/`build_options` imports,
+        which `win32_input` still needs) and the bash integration's OSC 7
+        (upstream strips control bytes; the MSYS2 path is now stripped
+        too). Upstream's new uucode, z2d and themes archives needed the
+        curl workaround above. The rebased history is on
+        `windows-rebased` until it can replace `windows` (a force push).
+- [ ] Tip builds, like upstream's `release-tip.yml` (the discussion's
+      release workflow item): a rolling prerelease of the latest
+      `windows` commit, so people can try it without building. Publishing
+      a release from every push is the owner's call, so ask first.
+- [ ] DirectWrite rasterization (the discussion: text should look native
+      on Windows). FreeType rasterizes now; a DirectWrite face (with
+      ClearType-style gamma and contrast from the system) could be a
+      `font-backend` option. Compare screenshots with Windows Terminal.
 - [x] Verify IME with Microsoft Pinyin, Japanese IME, and others
 - [x] Fix tab-header close crashing the window when there are multiple
       tabs (active index and split focus must be valid during teardown)
