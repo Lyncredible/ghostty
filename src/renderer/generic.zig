@@ -734,20 +734,22 @@ pub fn Renderer(comptime GraphicsAPI: type) type {
             errdefer font_shaper.deinit();
 
             // Initialize all the data that requires a critical font section.
+            // The system's text rendering parameters, which don't change
+            // while we run (like other Windows programs, we read them once).
+            const text_blend: TextBlend = .system();
+
             const font_critical: struct {
                 metrics: font.Metrics,
+                text_boost: f32,
             } = font_critical: {
                 const grid: *font.SharedGrid = options.font_grid;
                 grid.lock.lockSharedUncancelable(global.io());
                 defer grid.lock.unlockShared(global.io());
                 break :font_critical .{
                     .metrics = grid.metrics,
+                    .text_boost = textBoost(grid),
                 };
             };
-
-            // The system's text rendering parameters, which don't change
-            // while we run (like other Windows programs, we read them once).
-            const text_blend: TextBlend = .system();
 
             var result: Self = .{
                 .alloc = alloc,
@@ -794,6 +796,7 @@ pub fn Renderer(comptime GraphicsAPI: type) type {
                         .use_dwrite_blending = options.config.blending == .directwrite,
                     },
                     .text_contrast = text_blend.contrast,
+                    .text_boost = font_critical.text_boost,
                     .text_gamma_ratios = text_blend.gamma_ratios,
                 },
                 .custom_shader_uniforms = .{
@@ -1359,6 +1362,23 @@ pub fn Renderer(comptime GraphicsAPI: type) type {
             display_link.setRunning(should_run);
         }
 
+        /// DirectWrite's extra contrast for the grid's primary font, for
+        /// a few thin fonts. The grid must be locked (shared).
+        fn textBoost(grid: *font.SharedGrid) f32 {
+            if (comptime !@hasDecl(font.Face, "name")) return 0;
+            const entry = grid.resolver.collection.getEntry(.{ .style = .regular, .idx = 0 }) catch
+                return 0;
+            // The primary face is loaded for the grid's metrics; don't
+            // load it here, under a shared lock.
+            const face = switch (entry.face) {
+                .loaded => |*f| f,
+                else => return 0,
+            };
+            var buf: [256]u8 = undefined;
+            const family = face.name(&buf) catch return 0;
+            return TextBlend.boostFor(family);
+        }
+
         /// Set the new font grid.
         ///
         /// Must be called on the render thread.
@@ -1368,6 +1388,11 @@ pub fn Renderer(comptime GraphicsAPI: type) type {
 
             // Update our grid
             self.font_grid = grid;
+            {
+                grid.lock.lockSharedUncancelable(global.io());
+                defer grid.lock.unlockShared(global.io());
+                self.uniforms.text_boost = textBoost(grid);
+            }
 
             // Update all our textures so that they sync on the next frame.
             // We can modify this without a lock because the GPU does not

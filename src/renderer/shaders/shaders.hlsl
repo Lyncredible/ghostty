@@ -28,6 +28,7 @@ cbuffer Globals : register(b1) {
     uint bg_color_packed_4u8;
     uint bools;
     float text_contrast;
+    float text_boost;
     float4 text_gamma_ratios;
 };
 
@@ -47,7 +48,7 @@ static const uint EXTEND_DOWN = 8u;
 // DirectWrite's grayscale text blending; see `dwrite_alpha` in the GLSL
 // shaders' common.glsl.
 float dwrite_alpha(float a, float3 fg) {
-    float k = text_contrast * saturate(dot(fg, float3(0.30, 0.59, 0.11)) * -4.0 + 3.0);
+    float k = text_boost + text_contrast * saturate(dot(fg, float3(0.30, 0.59, 0.11)) * -4.0 + 3.0);
     float f = dot(fg, float3(0.25, 0.5, 0.25));
     float4 g = text_gamma_ratios;
     a = a * (k + 1.0) / (a * k + 1.0);

@@ -406,6 +406,8 @@ pub const Uniforms = extern struct {
     /// DirectWrite's grayscale enhanced contrast and gamma alpha
     /// correction constants, for `use_dwrite_blending`.
     text_contrast: f32 align(4) = 0,
+    /// Extra contrast for thin fonts, not scaled down for light text.
+    text_boost: f32 align(4) = 0,
     text_gamma_ratios: [4]f32 align(16) = .{ 0, 0, 0, 0 },
 
     const Bools = packed struct(u32) {
@@ -459,6 +461,7 @@ pub const Uniforms = extern struct {
         std.debug.assert(@offsetOf(Uniforms, "bg_color") == 128);
         std.debug.assert(@offsetOf(Uniforms, "bools") == 132);
         std.debug.assert(@offsetOf(Uniforms, "text_contrast") == 136);
+        std.debug.assert(@offsetOf(Uniforms, "text_boost") == 140);
         std.debug.assert(@offsetOf(Uniforms, "text_gamma_ratios") == 144);
     }
 };

@@ -31,6 +31,13 @@ pub const Params = struct {
         .gamma_ratios = gammaRatios(1.8),
     };
 
+    /// The extra contrast DirectWrite gives a few "thin" fonts (see
+    /// `isThinFamily`), added after the contrast is scaled down for light
+    /// text, so it applies to every color.
+    pub fn boostFor(family: []const u8) f32 {
+        return if (isThinFamily(family)) 0.5 else 0;
+    }
+
     /// The system's rendering parameters, or the defaults if they can't
     /// be read (or on other systems).
     pub fn system() Params {
@@ -41,6 +48,23 @@ pub const Params = struct {
         };
     }
 };
+
+/// Whether DirectWrite treats a font family as too thin for antialiasing
+/// and boosts its contrast: fonts digitized from IBM Selectric typeballs,
+/// whose strokes are thinner than typed text (the list Windows Terminal
+/// uses, from DirectWrite).
+pub fn isThinFamily(family: []const u8) bool {
+    const thin = [_][]const u8{
+        "Courier New",
+        "Fixed Miriam Transparent",
+        "Miriam Fixed",
+        "Rod",
+        "Rod Transparent",
+        "Simplified Arabic Fixed",
+    };
+    for (thin) |name| if (std.ascii.eqlIgnoreCase(family, name)) return true;
+    return false;
+}
 
 /// The alpha correction constants for a gamma between 1.0 and 2.2, from
 /// the table DirectWrite uses for gamma-incorrect (sRGB space) blending.
@@ -127,6 +151,13 @@ test "gamma ratios clamp to the table" {
     try std.testing.expectEqual([4]f32{ 0, 0, 0, 0 }, gammaRatios(0.5));
     try std.testing.expectEqual(gammaRatios(2.2), gammaRatios(3.0));
     try std.testing.expectEqual(gammaRatios(1.8), gammaRatios(std.math.nan(f32)));
+}
+
+test "thin font families get more contrast" {
+    try std.testing.expectEqual(@as(f32, 0.5), Params.boostFor("Courier New"));
+    try std.testing.expectEqual(@as(f32, 0.5), Params.boostFor("courier new"));
+    try std.testing.expectEqual(@as(f32, 0), Params.boostFor("Courier"));
+    try std.testing.expectEqual(@as(f32, 0), Params.boostFor("Cascadia Mono"));
 }
 
 test "system parameters are in range" {
