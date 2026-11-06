@@ -40,6 +40,16 @@ Add-Type -Namespace GhosttyBadges -Name Win32 -MemberDefinition @'
 [StructLayout(LayoutKind.Sequential)] public struct POINT { public int x, y; }
 [DllImport("user32.dll")] public static extern bool ScreenToClient(System.IntPtr h, ref POINT p);
 [DllImport("user32.dll")] public static extern System.IntPtr SetThreadDpiAwarenessContext(System.IntPtr context);
+[StructLayout(LayoutKind.Sequential)] public struct GUITHREADINFO {
+  public int cbSize, flags; public System.IntPtr active, focus, capture, menuOwner, moveSize, caret; public RECT caretRect;
+}
+[DllImport("user32.dll")] public static extern bool GetGUIThreadInfo(uint thread, ref GUITHREADINFO info);
+[DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(System.IntPtr h, out uint pid);
+// The window that has the mouse capture on h's thread, or zero.
+public static System.IntPtr CaptureOf(System.IntPtr h) {
+  uint pid; var info = new GUITHREADINFO(); info.cbSize = Marshal.SizeOf(info);
+  return GetGUIThreadInfo(GetWindowThreadProcessId(h, out pid), ref info) ? info.capture : System.IntPtr.Zero;
+}
 // A mouse message to h at a point on the screen.
 public static void Mouse(System.IntPtr h, uint msg, uint keys, int x, int y) {
   var p = new POINT { x = x, y = y }; ScreenToClient(h, ref p);
@@ -178,17 +188,28 @@ try {
     if ($handle -eq [IntPtr]::Zero -or -not $W::IsWindowVisible($handle)) { Fail "the first terminal shows no drag handle in a split: $((Children) -join ', ')" }
     $a = New-Object GhosttyBadges.Win32+RECT; [void]$W::GetWindowRect($first, [ref]$a)
     $b = New-Object GhosttyBadges.Win32+RECT; [void]$W::GetWindowRect($second, [ref]$b)
-    $W::Mouse($handle, 0x0201, 1, $a.l + 10, $a.t + 2)   # WM_LBUTTONDOWN
     $script:surface = $second
-    # WM_MOUSEMOVE, near the second's right side. Posted again while
-    # waiting: when the drop zone shows, Windows sends the handle (which
-    # has the capture) a move of its own at the real cursor, which is
-    # somewhere else on a runner and hides the zone again.
+    # WM_LBUTTONDOWN on the handle, then WM_MOUSEMOVE near the second's
+    # right side. On a runner the drag sometimes ends before the zone is
+    # seen (run 42202487908: the zone was made, then hidden); losing the
+    # mouse capture cancels it. So if the handle no longer has the
+    # capture, say who does and start the drag again.
+    $script:tries = 0
     [void](WaitFor {
+        $capture = $W::CaptureOf($handle)
+        if ($script:tries -eq 0 -or $capture -ne $handle) {
+            if ($script:tries -gt 0) {
+                $who = if ($capture -eq [IntPtr]::Zero) { 'nothing' } else { ClassOf $capture }
+                Write-Host "The drag handle lost the mouse capture (now: $who); dragging again."
+            }
+            $script:tries++
+            $W::Mouse($handle, 0x0201, 1, $a.l + 10, $a.t + 2)
+        }
         $W::Mouse($handle, 0x0200, 1, $b.r - 10, [int](($b.t + $b.b) / 2))
         Start-Sleep -Milliseconds 100
         (Children) -contains 'GhosttyDropZone*'
     } "the second terminal's drop zone to show")
+    if ($script:tries -gt 1) { Write-Host "The drop zone showed after $($script:tries) drags." }
     $children = @(Children)
     if ($children[0] -ne 'GhosttyDropZone*') { Fail "the drop zone isn't on top: $($children -join ', ')" }
     $W::Mouse($handle, 0x0200, 1, [int](($a.l + $a.r) / 2), [int](($a.t + $a.b) / 2))
