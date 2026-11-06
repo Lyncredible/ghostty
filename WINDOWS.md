@@ -1185,7 +1185,14 @@ Notes:
         of cmd's banner differ from FreeType's rendering.
   - [ ] DirectWrite's enhanced contrast and gamma (from the system's
         rendering parameters), which Windows applies when blending text;
-        the mask alone is raw coverage.
+        the mask alone is raw coverage. Windows Terminal does this in its pixel
+        shader: the grayscale enhanced contrast is scaled by
+        `saturate(3 - 4 * luminance)` of the text color, so it's about
+        zero for light text on a dark background and only the gamma
+        correction applies there; dark text on light gets the full boost.
+        That would be a new blending mode in the renderer's shaders, for
+        both rasterizers. Low priority: the comparison above shows little
+        difference for light on dark.
   - [x] Side by side with Windows Terminal 1.25 (2026-11-05, captured
         with `PrintWindow`, which works with the desktop locked; a new WT
         window opened with `wt -w new` and closed with `WM_CLOSE`).
