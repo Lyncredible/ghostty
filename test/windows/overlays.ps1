@@ -179,9 +179,16 @@ try {
     $a = New-Object GhosttyBadges.Win32+RECT; [void]$W::GetWindowRect($first, [ref]$a)
     $b = New-Object GhosttyBadges.Win32+RECT; [void]$W::GetWindowRect($second, [ref]$b)
     $W::Mouse($handle, 0x0201, 1, $a.l + 10, $a.t + 2)   # WM_LBUTTONDOWN
-    $W::Mouse($handle, 0x0200, 1, $b.r - 10, [int](($b.t + $b.b) / 2))   # WM_MOUSEMOVE, near the second's right side
     $script:surface = $second
-    [void](WaitFor { (Children) -contains 'GhosttyDropZone*' } "the second terminal's drop zone to show")
+    # WM_MOUSEMOVE, near the second's right side. Posted again while
+    # waiting: when the drop zone shows, Windows sends the handle (which
+    # has the capture) a move of its own at the real cursor, which is
+    # somewhere else on a runner and hides the zone again.
+    [void](WaitFor {
+        $W::Mouse($handle, 0x0200, 1, $b.r - 10, [int](($b.t + $b.b) / 2))
+        Start-Sleep -Milliseconds 100
+        (Children) -contains 'GhosttyDropZone*'
+    } "the second terminal's drop zone to show")
     $children = @(Children)
     if ($children[0] -ne 'GhosttyDropZone*') { Fail "the drop zone isn't on top: $($children -join ', ')" }
     $W::Mouse($handle, 0x0200, 1, [int](($a.l + $a.r) / 2), [int](($a.t + $a.b) / 2))

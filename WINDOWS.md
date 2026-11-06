@@ -1158,6 +1158,16 @@ Notes:
   - [x] Run 42176318349 (f7f532a77, DirectWrite synthetic bold): all
         jobs passed and `tip` moved `windows-tip` to the commit. Three
         green runs in a row.
+  - [x] Run 42188659026 (aba736b96, after the second upstream sync): all
+        jobs passed. Four in a row.
+  - [x] Run 42195536279 (adb3798d6, `alpha-blending = directwrite`):
+        the overlays test timed out waiting for the drop zone on
+        `build-windows` (Windows 2022 passed). The zone had been made, so
+        the posted drag move reached it, and was hidden again: when it
+        shows, Windows sends the handle, which has the capture, a mouse
+        move at the real cursor, elsewhere on a runner. A test race, not
+        the change (shaders only); the test now reposts the move while
+        it waits. Passed 3 of 3 here.
 - [ ] Keep the branch on top of upstream: fetch
       `git@github.com:ghostty-org/ghostty.git` from time to time, rebase,
       and check that the build, unit tests and the fork's CI still pass.
