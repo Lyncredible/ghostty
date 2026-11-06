@@ -166,6 +166,12 @@ to 1 and then 5 (for the session, not saved), posts a wheel notch for
 each, and checks the view scrolled that many lines. It changes a desktop
 setting, so it only runs in CI.
 
+## context-menu.ps1
+
+Posts a right-click to a terminal and waits for the process's popup menu
+(`#32768`) to show. Releasing the mouse capture on the button's release
+once canceled the pending menu, so it never opened.
+
 ## cursor-blink.ps1
 
 Focuses a small Ghostty window, times the cursor's blinks on screen

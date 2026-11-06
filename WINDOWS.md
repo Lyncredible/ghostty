@@ -1118,16 +1118,15 @@ Notes:
 
 ### Next
 
-- [ ] Right-click menu in the terminal area: reported (2026-11-05) that
-      right-clicking in a terminal shows no menu. The code for one is
-      there (`Menu.context`, shown on button release when the core
-      doesn't consume the press; `right-click-action` defaults to
-      `context-menu`, and the reporter's config doesn't change it), and
-      it was once seen in a screenshot, so find out why it doesn't show
-      now. To rule out: a program that turns on mouse reporting (the core
-      then sends the click to it and consumes it), the build in use, and
-      a regression since the screenshot. Add a CI test that right-clicks
-      and checks that the menu opens.
+- [x] Right-click menu in the terminal area: reported (2026-11-05) that
+      right-clicking in a terminal shows no menu. A regression from
+      1b21987e5: on the button's release we call `ReleaseCapture`, which
+      sends `WM_CAPTURECHANGED` (to no window), and `releaseButtons` then
+      cleared the pending menu before the release handler looked at it.
+      Now it's only cleared when the right button was still held when
+      the capture was lost. `test/windows/context-menu.ps1` (in the
+      fork's CI) posts a right-click and waits for the process's popup
+      menu (`#32768`); it failed without the fix and passes with it.
 - [ ] Make GitHub CI pass reliably: in recent runs of the Windows (fork)
       workflow, `build-windows` failed while `build-windows-2022`,
       `build-windows-arm64` and `build-libghostty-vt-windows` passed.
