@@ -139,7 +139,12 @@ pub const Handle = struct {
                 return 0;
             },
             c.WM_MOUSEMOVE => {
-                if (self.dragging) self.surface.window.splitDragMove(self.surface, self.screenPoint(lparam));
+                // Only moves with the left button down: while we have the
+                // capture, Windows also sends moves of its own (e.g. when
+                // the drop zone shows) at the real cursor with the real
+                // buttons, which with posted input is somewhere else.
+                if (self.dragging and wparam & c.MK_LBUTTON != 0)
+                    self.surface.window.splitDragMove(self.surface, self.screenPoint(lparam));
                 return 0;
             },
             c.WM_LBUTTONUP => {
