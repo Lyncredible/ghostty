@@ -24,6 +24,7 @@ layout(binding = 1, std140) uniform Globals {
     uniform uint bg_color_packed_4u8;
     uniform uint bools;
     uniform float text_contrast;
+    uniform float text_boost;
     uniform vec4 text_gamma_ratios;
 };
 
@@ -44,9 +45,10 @@ const uint EXTEND_DOWN = 8u;
 // as Windows Terminal does it: the coverage `a` of a glyph drawn in the
 // gamma encoded, unpremultiplied color `fg` gets DirectWrite's enhanced
 // contrast (scaled down for light text, none at all for light enough
-// colors) and then its gamma alpha correction for the color's intensity.
+// colors), plus `text_boost` for a few thin fonts, and then its gamma
+// alpha correction for the color's intensity.
 float dwrite_alpha(float a, vec3 fg) {
-    float k = text_contrast * clamp(dot(fg, vec3(0.30, 0.59, 0.11)) * -4.0 + 3.0, 0.0, 1.0);
+    float k = text_boost + text_contrast * clamp(dot(fg, vec3(0.30, 0.59, 0.11)) * -4.0 + 3.0, 0.0, 1.0);
     float f = dot(fg, vec3(0.25, 0.5, 0.25));
     vec4 g = text_gamma_ratios;
     a = a * (k + 1.0) / (a * k + 1.0);

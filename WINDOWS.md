@@ -1254,8 +1254,15 @@ Notes:
         `native` 22.3, `directwrite` 23.7, so it closes about half the
         gap to WT. Dark text on white changes little overall (the boost
         and the gamma correction nearly cancel). The OpenGL shader isn't
-        run here (Windows uses D3D11). Not done: WT's extra +0.5 contrast
-        for "thin" fonts (Courier New and a few others).
+        run here (Windows uses D3D11).
+  - [x] DirectWrite's extra 0.5 contrast for "thin" fonts (Courier New,
+        Miriam Fixed, Rod, Simplified Arabic Fixed and their
+        variants), added after the light text scaling as in WT's
+        `DWrite_GrayscaleBlend`, so light text on dark gets it too. The
+        renderer checks the primary font's family when it starts and
+        when the font changes (`text_boost` uniform). Checked: Courier
+        New's family is read from the loaded face; light Courier New on
+        dark: ink 22.9 (`native`) to 24.2 (`directwrite`).
   - [x] Side by side with Windows Terminal 1.25 (2026-11-05, captured
         with `PrintWindow`, which works with the desktop locked; a new WT
         window opened with `wt -w new` and closed with `WM_CLOSE`).
