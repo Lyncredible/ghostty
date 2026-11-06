@@ -1201,6 +1201,9 @@ Notes:
         selection, kitty, ssh and DirectWrite tests passed. The repo's
         `.zig-cache` had grown to 153 GB and filled the disk (builds
         failed with `NoSpaceLeft`); deleting it fixed that.
+  - [x] 2026-11-06: a fourth sync (3 commits: style runs found in one
+        scan in `RowBuilder.scan`). No conflicts; the build and the
+        `RowBuilder` tests passed.
 - [x] Tip builds, like upstream's `release-tip.yml` (the discussion's
       release workflow item): a rolling prerelease of the latest
       `windows` commit, so people can try it without building. Approved
