@@ -1439,9 +1439,6 @@ pub fn setFloating(self: *Window, mode: apprt.action.FloatWindow) void {
     );
 }
 
-/// Use a light or dark title bar according to `window-theme`. This
-/// matches the GTK apprt: `auto` and `ghostty` follow the luminance of
-/// the terminal background.
 fn paintDividers(self: *Window, hdc: c.HDC) void {
     var rect: c.RECT = undefined;
     _ = c.GetClientRect(self.hwnd, &rect);
@@ -1508,9 +1505,13 @@ fn updateBackdrop(self: *Window) void {
     _ = c.InvalidateRect(self.hwnd, null, c.TRUE);
 }
 
+/// Use a light or dark title bar according to `window-theme` (or the
+/// theme chosen with `set_window_theme`). This matches the GTK apprt:
+/// `auto` and `ghostty` follow the luminance of the terminal background.
 fn updateTheme(self: *Window) void {
     const config = &self.app.config;
-    const dark = switch (config.@"window-theme") {
+    const theme = self.app.windowTheme();
+    const dark = switch (theme) {
         .auto, .ghostty => config.background.toTerminalRGB().perceivedLuminance() <= 0.5,
         .system => systemUsesDarkTheme(),
         .dark => true,
@@ -1534,7 +1535,7 @@ fn updateTheme(self: *Window) void {
     const DWMWA_TEXT_COLOR = 36;
     const DWMWA_COLOR_DEFAULT: c.COLORREF = 0xFFFFFFFF;
     // High contrast themes color title bars themselves.
-    const ghostty = config.@"window-theme" == .ghostty and !util.highContrast();
+    const ghostty = theme == .ghostty and !util.highContrast();
     const background = config.@"window-titlebar-background" orelse config.background;
     const foreground = config.@"window-titlebar-foreground" orelse config.foreground;
     const caption: c.COLORREF = if (ghostty) rgb(background.r, background.g, background.b) else DWMWA_COLOR_DEFAULT;

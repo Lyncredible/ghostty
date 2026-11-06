@@ -1791,6 +1791,17 @@ Notes:
         child of the surface, like the search bar. Checked natively: it
         opened from the menu, filtered, and Enter on `new_split:right`
         split the terminal.
+  - [x] `set_window_theme` (new upstream, 2026-11): like GTK, it
+        overrides `window-theme` for the session (outlasting config
+        reloads until `config` goes back): the title bar and menus follow
+        it, and `light` or `dark` also force the color scheme reported to
+        the core, which picks `theme = light:...,dark:...`. Test:
+        `test/windows/window-theme.ps1` (both directions, after a reload,
+        and back to `config`).
+  - [ ] The other actions Win32 doesn't handle (found 2026-11-06):
+        `show_child_exited` (the core prints its own message in the
+        terminal when the apprt doesn't handle it), `secure_input`
+        (macOS's secure keyboard entry), `show_gtk_inspector` (GTK only).
 - [x] Config options the Win32 apprt ignored (found 2026-10-25)
   - [x] `focus-follows-mouse`: hovering a split focuses it when the
         cursor really moves, the window is in front, no button is held,
