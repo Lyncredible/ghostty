@@ -204,16 +204,25 @@ $c = [N.W]::GetConsoleWindow()
     # as `mode con` in it shows.
     function Columns {
         param([string]$marker)
-        TypeText "cls & echo $marker-%USERNAME:~0,0%cols & mode con`r"
+        # Only the line we need: the window is short enough that all of
+        # `mode con` would scroll the marker away.
+        TypeText "cls & echo $marker-%USERNAME:~0,0%cols & mode con | find `"Columns`"`r"
         $text = WaitFor { Surfaces | Where-Object { $_.Handle -eq $surface.Handle -and $_.Text -match "$marker-cols[\s\S]*Columns:\s+(\d+)" } } "cmd's columns ($marker)"
         [void]($text.Text -match "$marker-cols[\s\S]*Columns:\s+(\d+)")
         [int]$Matches[1]
     }
     $top = [GhosttyHandoff.Win32]::GetAncestor($surface.Handle, 2)   # GA_ROOT
+    # The new size reaches the console a little after the window's, so
+    # we wait before the first reading and ask again for the second.
     [void][GhosttyHandoff.Win32]::SetWindowPos($top, [IntPtr]::Zero, 0, 0, 900, 600, 0x16)   # SWP_NOMOVE|SWP_NOZORDER|SWP_NOACTIVATE
+    Start-Sleep -Seconds 1
     $wide = Columns 'wide'
     [void][GhosttyHandoff.Win32]::SetWindowPos($top, [IntPtr]::Zero, 0, 0, 500, 600, 0x16)
-    $narrow = Columns 'narrow'
+    for ($try = 1; $try -le 5; $try++) {
+        $narrow = Columns "narrow$try"
+        if ($narrow -lt $wide) { break }
+        Start-Sleep -Seconds 1
+    }
     if ($narrow -ge $wide) { Fail "resizing the window didn't resize the console: $wide columns, then $narrow" }
     Write-Host "Resizing the window resized the console ($wide columns, then $narrow)."
 
