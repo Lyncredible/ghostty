@@ -1136,6 +1136,16 @@ Notes:
       Go through the recent failed runs step by step, fix each cause or
       make its test robust, and only check this off after several green
       runs in a row.
+  - Failures since 2026-11-03, by step: console handoff (4, the latest
+    two before 5b8d2604e and 5534c5750), high contrast (3, until
+    d4b442474 read the theme's color with each check), and one each for
+    quick terminal, cursor blink, desktop input, unsafe paste dialog,
+    blur smoke test (Windows 2022) and
+    MSIX install, each on the commit that changed that feature and fixed
+    by the next. ARM64 builds failed three times on 2026-11-03/04, not
+    since.
+  - [x] Run 42156713724 (ca326980c, with both handoff fixes): all jobs
+        passed. One green run; more needed.
 - [ ] Keep the branch on top of upstream: fetch
       `git@github.com:ghostty-org/ghostty.git` from time to time, rebase,
       and check that the build, unit tests and the fork's CI still pass.
