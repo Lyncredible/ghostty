@@ -406,6 +406,15 @@ language: ?[:0]const u8 = null,
 ///   for text that makes it look nearly or completely identical to `native`,
 ///   but without any of the darkening artifacts.
 ///
+/// * `directwrite` - Same as `native`, but text is blended like DirectWrite
+///   blends grayscale antialiased text: with the enhanced contrast and gamma
+///   from the system's text rendering parameters (the "Adjust ClearType
+///   text" tool), as Windows Terminal does. Dark text on a light background
+///   looks bolder; light text on dark is nearly unchanged. Pairs well with
+///   `font-rasterizer = directwrite`, but works with either rasterizer.
+///   On other systems it uses Windows' default parameters (gamma 1.8,
+///   contrast 1). Not implemented on macOS, where it's the same as `native`.
+///
 /// Available since: 1.1.0
 @"alpha-blending": AlphaBlending =
     if (builtin.target.os.tag == .macos)
@@ -9986,10 +9995,11 @@ pub const AlphaBlending = enum {
     native,
     linear,
     @"linear-corrected",
+    directwrite,
 
     pub fn isLinear(self: AlphaBlending) bool {
         return switch (self) {
-            .native => false,
+            .native, .directwrite => false,
             .linear, .@"linear-corrected" => true,
         };
     }

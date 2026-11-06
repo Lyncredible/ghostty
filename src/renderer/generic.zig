@@ -22,6 +22,7 @@ const Overlay = @import("Overlay.zig");
 const imagepkg = @import("image.zig");
 const ImageState = imagepkg.State;
 const shadertoy = @import("shadertoy.zig");
+const TextBlend = @import("text_blend.zig").Params;
 const assert = @import("../quirks.zig").inlineAssert;
 const Allocator = std.mem.Allocator;
 const ArenaAllocator = std.heap.ArenaAllocator;
@@ -744,6 +745,10 @@ pub fn Renderer(comptime GraphicsAPI: type) type {
                 };
             };
 
+            // The system's text rendering parameters, which don't change
+            // while we run (like other Windows programs, we read them once).
+            const text_blend: TextBlend = .system();
+
             var result: Self = .{
                 .alloc = alloc,
                 .config = options.config,
@@ -786,7 +791,10 @@ pub fn Renderer(comptime GraphicsAPI: type) type {
                         .use_display_p3 = options.config.colorspace == .@"display-p3",
                         .use_linear_blending = options.config.blending.isLinear(),
                         .use_linear_correction = options.config.blending == .@"linear-corrected",
+                        .use_dwrite_blending = options.config.blending == .directwrite,
                     },
+                    .text_contrast = text_blend.contrast,
+                    .text_gamma_ratios = text_blend.gamma_ratios,
                 },
                 .custom_shader_uniforms = .{
                     .resolution = .{ 0, 0, 1 },
@@ -2250,6 +2258,7 @@ pub fn Renderer(comptime GraphicsAPI: type) type {
             self.uniforms.bools.use_display_p3 = config.colorspace == .@"display-p3";
             self.uniforms.bools.use_linear_blending = config.blending.isLinear();
             self.uniforms.bools.use_linear_correction = config.blending == .@"linear-corrected";
+            self.uniforms.bools.use_dwrite_blending = config.blending == .directwrite;
 
             const bg_image_config_changed =
                 self.config.bg_image_fit != config.bg_image_fit or

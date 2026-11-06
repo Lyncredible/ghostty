@@ -252,7 +252,15 @@ pub const Uniforms = extern struct {
         /// with linear alpha blending have a similar apparent weight
         /// (thickness) to gamma-incorrect blending.
         use_linear_correction: bool align(1) = false,
+
+        /// `alpha-blending = directwrite`, which the Metal shaders
+        /// don't implement (it blends like `native` there).
+        use_dwrite_blending: bool align(1) = false,
     },
+
+    /// Unused by the Metal shaders, see `use_dwrite_blending`.
+    text_contrast: f32 align(4) = 0,
+    text_gamma_ratios: [4]f32 align(16) = .{ 0, 0, 0, 0 },
 
     const PaddingExtend = packed struct(u8) {
         left: bool = false,
