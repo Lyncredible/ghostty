@@ -422,3 +422,43 @@ jobs:
           $code = $LASTEXITCODE
           "exit code: 0x{0:X8}" -f $code
           exit $code
+
+  # Once every job passed for a push to the windows branch, the packages
+  # those jobs built and tested (ReleaseSafe zip and unsigned MSIX, x64 and
+  # ARM64) replace the rolling windows-tip prerelease, like upstream's tip
+  # release. Other branches, such as windows-rebased, don't publish.
+  tip:
+    if: github.repository != 'ghostty-org/ghostty' && github.event_name == 'push' && github.ref == 'refs/heads/windows'
+    needs: [build-windows, build-windows-2022, build-windows-arm64, build-libghostty-vt-windows]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download packages
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: ghostty-windows-unofficial*
+          path: dist
+          merge-multiple: true
+
+      - name: Checksums
+        working-directory: dist
+        run: |
+          ls -la
+          ls *.zip *.msix >/dev/null
+          sha256sum *.zip *.msix > SHA256SUMS.txt
+          cat SHA256SUMS.txt
+
+      # Delete the previous tip release and its tag, then make the new one
+      # at this commit. The tag moves with each tip.
+      - name: Publish windows-tip
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release delete windows-tip --repo "$GITHUB_REPOSITORY" --cleanup-tag --yes || true
+          gh release create windows-tip dist/* \
+            --repo "$GITHUB_REPOSITORY" \
+            --target "$GITHUB_SHA" \
+            --prerelease \
+            --title "Ghostty for Windows (unofficial) tip" \
+            --notes "The latest commit of the windows branch that passed every Windows job: $GITHUB_SHA ($(date -u +%Y-%m-%d)). Unofficial and unsigned: install the zip with its install.ps1, or the MSIX with Add-AppxPackage -AllowUnsigned. See WINDOWS.md. Replaced on every passing push."
