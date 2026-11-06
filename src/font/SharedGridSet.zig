@@ -169,6 +169,7 @@ fn collection(
         .library = self.font_lib,
         .size = size,
         .freetype_load_flags = key.freetype_load_flags,
+        .directwrite = key.directwrite,
     };
 
     var c = Collection.init();
@@ -504,6 +505,7 @@ pub const DerivedConfig = struct {
     @"adjust-box-thickness": ?Metrics.Modifier,
     @"adjust-icon-height": ?Metrics.Modifier,
     @"freetype-load-flags": font.face.FreetypeLoadFlags,
+    @"font-rasterizer": configpkg.FontRasterizer,
 
     /// Initialize a DerivedConfig. The config should be either a
     /// config.Config or another DerivedConfig to clone from.
@@ -544,6 +546,7 @@ pub const DerivedConfig = struct {
             .@"adjust-box-thickness" = config.@"adjust-box-thickness",
             .@"adjust-icon-height" = config.@"adjust-icon-height",
             .@"freetype-load-flags" = if (font.face.FreetypeLoadFlags != void) config.@"freetype-load-flags" else {},
+            .@"font-rasterizer" = config.@"font-rasterizer",
 
             // This must be last so the arena contains all our allocations
             // from above since Zig does assignment in order.
@@ -586,6 +589,9 @@ pub const Key = struct {
     /// The freetype load flags configuration, only non-void if the
     /// freetype backend is enabled.
     freetype_load_flags: font.face.FreetypeLoadFlags = font.face.freetype_load_flags_default,
+
+    /// Draw outline glyphs with DirectWrite. Only with the Windows backend.
+    directwrite: bool = false,
 
     const style_offsets_len = std.enums.directEnumArrayLen(Style, 0);
     const StyleOffsets = [style_offsets_len]usize;
@@ -714,6 +720,8 @@ pub const Key = struct {
                 config.@"freetype-load-flags"
             else
                 font.face.freetype_load_flags_default,
+            .directwrite = font.options.backend == .freetype_windows and
+                config.@"font-rasterizer" == .directwrite,
         };
     }
 
@@ -744,6 +752,7 @@ pub const Key = struct {
         self.codepoint_map.hash(hasher);
         autoHash(hasher, self.metric_modifiers.count());
         autoHash(hasher, self.freetype_load_flags);
+        autoHash(hasher, self.directwrite);
         if (self.metric_modifiers.count() > 0) {
             inline for (@typeInfo(Metrics.Key).@"enum".field_names) |field| {
                 const key = @field(Metrics.Key, field);
