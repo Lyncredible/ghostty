@@ -1163,11 +1163,16 @@ Notes:
   - [x] Run 42195536279 (adb3798d6, `alpha-blending = directwrite`):
         the overlays test timed out waiting for the drop zone on
         `build-windows` (Windows 2022 passed). The zone had been made, so
-        the posted drag move reached it, and was hidden again: when it
-        shows, Windows sends the handle, which has the capture, a mouse
-        move at the real cursor, elsewhere on a runner. A test race, not
-        the change (shaders only); the test now reposts the move while
-        it waits. Passed 3 of 3 here.
+        the posted drag move reached it, and was hidden again. Not the
+        change (shaders only). A first guess (a mouse move from Windows
+        at the real cursor hid it) was wrong: reposting the move while
+        waiting failed the same way in run 42202487908. Hiding it while
+        later moves do nothing means the drag ended, which happens when
+        the handle loses the mouse capture (`WM_CAPTURECHANGED`, nothing
+        is really holding the button on a runner). The test now checks
+        which window has the capture on Ghostty's thread
+        (`GetGUIThreadInfo`); if it isn't the handle, it prints who has
+        it and drags again. Passed 3 of 3 here with one drag each.
 - [ ] Keep the branch on top of upstream: fetch
       `git@github.com:ghostty-org/ghostty.git` from time to time, rebase,
       and check that the build, unit tests and the fork's CI still pass.
