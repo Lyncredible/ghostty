@@ -1155,6 +1155,9 @@ Notes:
         (checked with a unit test at 80, 120 and 200 columns), and the
         next run, 42168399346, passed every job including Links. Two
         green runs (42156713724, 42168399346).
+  - [x] Run 42176318349 (f7f532a77, DirectWrite synthetic bold): all
+        jobs passed and `tip` moved `windows-tip` to the commit. Three
+        green runs in a row.
 - [ ] Keep the branch on top of upstream: fetch
       `git@github.com:ghostty-org/ghostty.git` from time to time, rebase,
       and check that the build, unit tests and the fork's CI still pass.
@@ -1171,6 +1174,10 @@ Notes:
         subject), so the history keeps its timestamps. Next time use
         `git rebase --committer-date-is-author-date`. The full unit test
         suite passed on the rebased tree.
+  - [x] 2026-11-06: rebased onto upstream/main again (2 commits: hidden
+        visibility for simdutf, highway and wuffs). No conflicts; dates
+        kept with `--committer-date-is-author-date`. Build and the
+        terminal and DirectWrite tests passed.
 - [x] Tip builds, like upstream's `release-tip.yml` (the discussion's
       release workflow item): a rolling prerelease of the latest
       `windows` commit, so people can try it without building. Approved
