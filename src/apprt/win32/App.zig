@@ -123,6 +123,10 @@ quick_terminal: ?*Window = null,
 /// Set by toggle_background_opacity to make translucent windows opaque.
 background_opaque: bool = false,
 
+/// The window theme chosen with `set_window_theme`, which outlasts config
+/// reloads until another one (`config` goes back to `window-theme`).
+window_theme_override: apprt.action.WindowTheme = .config,
+
 /// All of our open top-level windows.
 windows: std.ArrayList(*Window) = .empty,
 
@@ -1473,6 +1477,12 @@ pub fn performAction(
 
         .reload_config => try self.reloadConfig(target, value),
 
+        .set_window_theme => {
+            self.window_theme_override = value;
+            self.updateColorScheme();
+            for (self.windows.items) |window| window.configChanged();
+        },
+
         .open_config => {
             const alloc = self.core_app.alloc;
             const path = configpkg.edit.openPath(alloc) catch |err| {
@@ -1493,11 +1503,27 @@ pub fn performAction(
     return true;
 }
 
+/// The window theme in effect: `window-theme`, unless `set_window_theme`
+/// chose another.
+pub fn windowTheme(self: *const App) configpkg.Config.WindowTheme {
+    return switch (self.window_theme_override) {
+        .config => self.config.@"window-theme",
+        .system => .system,
+        .light => .light,
+        .dark => .dark,
+    };
+}
+
 /// Tell the core whether Windows uses the light or dark app mode, which
 /// picks the theme of `theme = light:...,dark:...` and answers color
 /// scheme queries. The core ignores reports that don't change the scheme.
+/// Like GTK, `set_window_theme` with `light` or `dark` forces it.
 pub fn updateColorScheme(self: *App) void {
-    const scheme: apprt.ColorScheme = if (Window.systemUsesDarkTheme()) .dark else .light;
+    const scheme: apprt.ColorScheme = switch (self.window_theme_override) {
+        .light => .light,
+        .dark => .dark,
+        .config, .system => if (Window.systemUsesDarkTheme()) .dark else .light,
+    };
     self.core_app.colorSchemeEvent(self, scheme) catch |err| {
         log.warn("error updating app color scheme err={}", .{err});
     };
