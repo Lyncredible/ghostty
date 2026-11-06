@@ -194,28 +194,18 @@ try {
     $b = New-Object GhosttyBadges.Win32+RECT; [void]$W::GetWindowRect($second, [ref]$b)
     $script:surface = $second
     # WM_LBUTTONDOWN on the handle, then WM_MOUSEMOVE near the second's
-    # right side. On a runner the drag sometimes ends before the zone is
-    # seen (run 42202487908: the zone was made, then hidden); losing the
-    # mouse capture cancels it. So if the handle no longer has the
-    # capture, say who does and start the drag again.
-    $script:tries = 0
+    # right side. While the handle has the capture Windows sends it moves
+    # of its own at the real cursor (elsewhere, with no button down), which
+    # the handle must ignore or the zone hides again (from run 42195536279
+    # on windows-latest).
+    $W::Mouse($handle, 0x0201, 1, $a.l + 10, $a.t + 2)
+    $W::Mouse($handle, 0x0200, 1, $b.r - 10, [int](($b.t + $b.b) / 2))
     [void](WaitFor {
         $capture = $W::CaptureOf($handle)
-        if ($script:tries -eq 0 -or $capture -ne $handle) {
-            if ($script:tries -gt 0) {
-                $who = if ($capture -eq [IntPtr]::Zero) { 'nothing' } else { ClassOf $capture }
-                Write-Host "The drag handle lost the mouse capture (now: $who); dragging again."
-            }
-            $script:tries++
-            $W::Mouse($handle, 0x0201, 1, $a.l + 10, $a.t + 2)
-        }
         $who = if ($capture -eq [IntPtr]::Zero) { 'nothing' } else { ClassOf $capture }
-        $script:dragNote = "drags: $($script:tries), capture: $who, first: $($a.l),$($a.t)-$($a.r),$($a.b), second: $($b.l),$($b.t)-$($b.r),$($b.b)"
-        $W::Mouse($handle, 0x0200, 1, $b.r - 10, [int](($b.t + $b.b) / 2))
-        Start-Sleep -Milliseconds 100
+        $script:dragNote = "capture: $who, first: $($a.l),$($a.t)-$($a.r),$($a.b), second: $($b.l),$($b.t)-$($b.r),$($b.b)"
         (Children) -contains 'GhosttyDropZone*'
     } "the second terminal's drop zone to show")
-    if ($script:tries -gt 1) { Write-Host "The drop zone showed after $($script:tries) drags." }
     $children = @(Children)
     if ($children[0] -ne 'GhosttyDropZone*') { Fail "the drop zone isn't on top: $($children -join ', ')" }
     $W::Mouse($handle, 0x0200, 1, [int](($a.l + $a.r) / 2), [int](($a.t + $a.b) / 2))

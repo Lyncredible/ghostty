@@ -1160,19 +1160,19 @@ Notes:
         green runs in a row.
   - [x] Run 42188659026 (aba736b96, after the second upstream sync): all
         jobs passed. Four in a row.
-  - [x] Run 42195536279 (adb3798d6, `alpha-blending = directwrite`):
-        the overlays test timed out waiting for the drop zone on
-        `build-windows` (Windows 2022 passed). The zone had been made, so
-        the posted drag move reached it, and was hidden again. Not the
-        change (shaders only). A first guess (a mouse move from Windows
-        at the real cursor hid it) was wrong: reposting the move while
-        waiting failed the same way in run 42202487908. Hiding it while
-        later moves do nothing means the drag ended, which happens when
-        the handle loses the mouse capture (`WM_CAPTURECHANGED`, nothing
-        is really holding the button on a runner). The test now checks
-        which window has the capture on Ghostty's thread
-        (`GetGUIThreadInfo`); if it isn't the handle, it prints who has
-        it and drags again. Passed 3 of 3 here with one drag each.
+  - [x] Runs 42195536279 to 42216483721 (from adb3798d6): the overlays
+        test timed out waiting for the drop zone on `build-windows` four
+        times in a row (Windows 2022 passed). The zone was made, then
+        hidden again. Reposting the move or dragging again didn't help.
+        The error message now carries the drag state and Ghostty's
+        warnings (the job log needs a token, annotations don't), which
+        showed the handle still had the capture and the points were
+        right. Cause: while it has the capture, the handle also gets
+        moves Windows makes itself (when the drop zone shows) at the real
+        cursor, which with posted input is elsewhere, so the zone moved
+        away at once. The handle now ignores moves without the left
+        button down, which a real drag always has. Likely a runner image
+        change on `windows-latest`, since `aba736b96` passed just before.
 - [ ] Keep the branch on top of upstream: fetch
       `git@github.com:ghostty-org/ghostty.git` from time to time, rebase,
       and check that the build, unit tests and the fork's CI still pass.
