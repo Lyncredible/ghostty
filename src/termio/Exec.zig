@@ -190,6 +190,7 @@ pub fn threadEnter(
         .read_thread_fd = pty_fds.read,
         .termios_timer = termios_timer,
         .windows_drain = if (comptime builtin.target.os.tag == .windows) .{
+            .subprocess = &self.subprocess,
             .pty = if (self.subprocess.pty) |*pty| pty else null,
             .read_eof = &self.read_eof,
             .wait_after_command = self.wait_after_command,
@@ -222,7 +223,8 @@ pub fn threadEnter(
 
     // Start our termios timer. We don't support this on Windows.
     // Fundamentally, we could support this on Windows so we're just
-    // waiting for someone to implement it.
+    // waiting for someone to implement it. There, the timer instead
+    // sends the console's window signals again (see consoleSignalTimer).
     if (comptime builtin.target.os.tag != .windows) {
         termios_timer.run(
             td.loop,
@@ -232,7 +234,56 @@ pub fn threadEnter(
             td,
             termiosTimer,
         );
+    } else {
+        termios_timer.run(
+            td.loop,
+            &td.backend.exec.termios_timer_c,
+            CONSOLE_SIGNAL_RESEND_MS[0],
+            termio.Termio.ThreadData,
+            td,
+            consoleSignalTimer,
+        );
     }
+}
+
+/// When we send the console's window signals again after a terminal
+/// starts, each counted from the one before.
+const CONSOLE_SIGNAL_RESEND_MS = [_]u64{ 1000, 2000, 7000 };
+
+/// Send the pseudoconsole its window's owner and state again. We first
+/// send them before the console program starts, and the inbox console
+/// host can lose a signal that arrives while the program connects (seen
+/// in CI: the console window then had no owner for good), so we repeat
+/// them once the program has likely connected. Repeating them is
+/// harmless.
+fn consoleSignalTimer(
+    td_: ?*termio.Termio.ThreadData,
+    _: *xev.Loop,
+    _: *xev.Completion,
+    r: xev.Timer.RunError!void,
+) xev.CallbackAction {
+    _ = r catch return .disarm;
+    const td = td_.?;
+    assert(td.backend == .exec);
+    const exec = &td.backend.exec;
+    const subprocess = exec.windows_drain.subprocess;
+    if (subprocess.pty) |*pty| {
+        if (subprocess.parent_window != 0) pty.setParentWindow(subprocess.parent_window);
+        pty.setVisible(subprocess.visible);
+    }
+
+    exec.console_signals_sent += 1;
+    if (exec.console_signals_sent < CONSOLE_SIGNAL_RESEND_MS.len) {
+        exec.termios_timer.run(
+            td.loop,
+            &exec.termios_timer_c,
+            CONSOLE_SIGNAL_RESEND_MS[exec.console_signals_sent],
+            termio.Termio.ThreadData,
+            td,
+            consoleSignalTimer,
+        );
+    }
+    return .disarm;
 }
 
 pub fn threadExit(self: *Exec, td: *termio.Termio.ThreadData) void {
@@ -624,6 +675,8 @@ pub const ThreadData = struct {
     /// What we need on Windows to let the read thread finish the
     /// pseudoconsole's output before reporting that the process exited.
     windows_drain: if (builtin.target.os.tag == .windows) struct {
+        /// Also used to send the console's window signals again.
+        subprocess: *Subprocess,
         pty: ?*Pty,
         read_eof: *std.Io.Event,
         wait_after_command: bool,
@@ -634,6 +687,10 @@ pub const ThreadData = struct {
     termios_timer: xev.Timer,
     termios_timer_c: xev.Completion = .{},
     termios_timer_running: bool = true,
+
+    /// On Windows, how many times the timer has sent the console's
+    /// window signals again (see consoleSignalTimer).
+    console_signals_sent: usize = 0,
 
     /// The last known termios mode. Used for change detection
     /// to prevent unnecessary locking of expensive mutexes.
