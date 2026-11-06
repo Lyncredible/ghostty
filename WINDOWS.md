@@ -1118,6 +1118,25 @@ Notes:
 
 ### Next
 
+- [ ] Right-click menu in the terminal area: reported (2026-11-05) that
+      right-clicking in a terminal shows no menu. The code for one is
+      there (`Menu.context`, shown on button release when the core
+      doesn't consume the press; `right-click-action` defaults to
+      `context-menu`, and the reporter's config doesn't change it), and
+      it was once seen in a screenshot, so find out why it doesn't show
+      now. To rule out: a program that turns on mouse reporting (the core
+      then sends the click to it and consumes it), the build in use, and
+      a regression since the screenshot. Add a CI test that right-clicks
+      and checks that the menu opens.
+- [ ] Make GitHub CI pass reliably: in recent runs of the Windows (fork)
+      workflow, `build-windows` failed while `build-windows-2022`,
+      `build-windows-arm64` and `build-libghostty-vt-windows` passed.
+      The latest failure (run 41980624453) was the console handoff
+      test's intermittent "owned by 0"; 5b8d2604e resends the console's
+      window signals and 5534c5750 fixes the test's racy resize step.
+      Go through the recent failed runs step by step, fix each cause or
+      make its test robust, and only check this off after several green
+      runs in a row.
 - [x] Verify IME with Microsoft Pinyin, Japanese IME, and others
 - [x] Fix tab-header close crashing the window when there are multiple
       tabs (active index and split focus must be valid during teardown)
