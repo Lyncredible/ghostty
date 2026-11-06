@@ -1146,6 +1146,11 @@ Notes:
     since.
   - [x] Run 42156713724 (ca326980c, with both handoff fixes): all jobs
         passed. One green run; more needed.
+  - [ ] Run 42164080425 (`windows-rebased`, the first full run after
+        rebasing onto upstream): the Links test timed out waiting for the
+        link preview while holding Ctrl over an OSC 8 link. It had never
+        failed before; upstream changed how pages store hyperlinks.
+        Rerun to tell a flake from a regression.
 - [ ] Keep the branch on top of upstream: fetch
       `git@github.com:ghostty-org/ghostty.git` from time to time, rebase,
       and check that the build, unit tests and the fork's CI still pass.
