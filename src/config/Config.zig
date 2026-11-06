@@ -555,8 +555,9 @@ language: ?[:0]const u8 = null,
 ///   * `directwrite` - DirectWrite, which draws text in the rest of
 ///     Windows, with its own grid fitting and grayscale antialiasing.
 ///     FreeType still loads and measures the font, so cell sizes are the
-///     same as with `freetype`. Color glyphs, bitmap fonts, synthetic bold
-///     and `font-thicken` still use FreeType.
+///     same as with `freetype`. Synthetic bold uses DirectWrite's bold
+///     simulation. Color glyphs, bitmap fonts and `font-thicken` still use
+///     FreeType.
 ///
 /// Changing this applies to new font grids, such as after the font size
 /// changes or in new windows.
