@@ -1146,11 +1146,15 @@ Notes:
     since.
   - [x] Run 42156713724 (ca326980c, with both handoff fixes): all jobs
         passed. One green run; more needed.
-  - [ ] Run 42164080425 (`windows-rebased`, the first full run after
+  - [x] Run 42164080425 (`windows-rebased`, the first full run after
         rebasing onto upstream): the Links test timed out waiting for the
         link preview while holding Ctrl over an OSC 8 link. It had never
         failed before; upstream changed how pages store hyperlinks.
-        Rerun to tell a flake from a regression.
+        Rerun to tell a flake from a regression. Not a regression: the
+        core keeps OSC 8 links on every row after the same 60 lines scroll
+        (checked with a unit test at 80, 120 and 200 columns), and the
+        next run, 42168399346, passed every job including Links. Two
+        green runs (42156713724, 42168399346).
 - [ ] Keep the branch on top of upstream: fetch
       `git@github.com:ghostty-org/ghostty.git` from time to time, rebase,
       and check that the build, unit tests and the fork's CI still pass.
@@ -1167,7 +1171,7 @@ Notes:
         subject), so the history keeps its timestamps. Next time use
         `git rebase --committer-date-is-author-date`. The full unit test
         suite passed on the rebased tree.
-- [ ] Tip builds, like upstream's `release-tip.yml` (the discussion's
+- [x] Tip builds, like upstream's `release-tip.yml` (the discussion's
       release workflow item): a rolling prerelease of the latest
       `windows` commit, so people can try it without building. Approved
       by the owner (2026-11-05).
@@ -1175,7 +1179,11 @@ Notes:
         to `windows`, the packages those jobs built and tested (ReleaseSafe
         zip and MSIX for x64 and ARM64) and their SHA-256 sums replace the
         `windows-tip` prerelease, whose tag moves to the commit.
-  - [ ] Check the first published `windows-tip` release.
+  - [x] First `windows-tip` (run 42168399346, ce2c8e1d7, 2026-11-05):
+        a prerelease with the x64 and ARM64 zip and MSIX and
+        `SHA256SUMS.txt`, its tag at the commit. The downloaded x64 zip
+        matched its checksum and `ghostty.com +version` printed
+        `1.4.1-windows+ce2c8e1`.
 - [ ] DirectWrite rasterization (the discussion: text should look native
       on Windows). FreeType rasterizes now; a DirectWrite face (with
       ClearType-style gamma and contrast from the system) could be a
