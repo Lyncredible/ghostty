@@ -22,11 +22,20 @@ const global = @import("../../global.zig");
 
 const F26Dot6 = opentype.sfnt.F26Dot6;
 
-/// DirectWrite rasterization, with the Windows backend.
+/// DirectWrite rasterization, with the Windows backend. Elsewhere only
+/// its transform type exists, so the code that uses it still compiles.
 const dwrite_raster = if (font.options.backend == .freetype_windows)
     @import("dwrite_raster.zig")
 else
-    struct {};
+    struct {
+        pub const Transform = struct {
+            xx: f64 = 1,
+            xy: f64 = 0,
+            yy: f64 = 1,
+            dx: f64 = 0,
+            dy: f64 = 0,
+        };
+    };
 
 /// A face's DirectWrite rasterizer, made when it first draws a glyph.
 const DWrite = if (font.options.backend == .freetype_windows) struct {
