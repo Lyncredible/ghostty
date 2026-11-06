@@ -307,3 +307,12 @@ second's drop zone must show on top, and letting go over the first must
 hide it and move nothing. It only posts messages to
 Ghostty's own window. (The link preview needs a real Ctrl key, so
 `links.ps1` checks it.)
+
+## window-theme.ps1
+
+Checks `set_window_theme` with `theme = light:Builtin Light,dark:Builtin
+Dark`: forcing the window theme opposite to Windows's app mode shows the
+other theme, it outlasts a config reload, forcing the other one and back
+works, and `config` follows the app mode again. Keys bound to the actions
+are posted to the terminal and the background is read with `PrintWindow`,
+so it runs on a locked desktop and changes no desktop settings.
