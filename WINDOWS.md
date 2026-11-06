@@ -1160,8 +1160,8 @@ Notes:
         which `win32_input` still needs) and the bash integration's OSC 7
         (upstream strips control bytes; the MSYS2 path is now stripped
         too). Upstream's new uucode, z2d and themes archives needed the
-        curl workaround above. The rebased history is on
-        `windows-rebased` until it can replace `windows` (a force push).
+        curl workaround above. The rebased history replaced `windows`
+        (force-pushed with the owner's approval).
         The rebase gave every commit a new committer date; they were set
         back to the originals (matching commits by author date and
         subject), so the history keeps its timestamps. Next time use
