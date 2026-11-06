@@ -547,6 +547,21 @@ language: ?[:0]const u8 = null,
 /// Example: `hinting`, `no-hinting`, `force-autohint`, `no-force-autohint`
 @"freetype-load-flags": FreetypeLoadFlags = .{},
 
+/// What draws the glyphs of outline fonts. Only Windows has a choice:
+///
+///   * `freetype` - FreeType, with `freetype-load-flags`, as on Linux.
+///     This is the default.
+///
+///   * `directwrite` - DirectWrite, which draws text in the rest of
+///     Windows, with its own grid fitting and grayscale antialiasing.
+///     FreeType still loads and measures the font, so cell sizes are the
+///     same as with `freetype`. Color glyphs, bitmap fonts, synthetic bold
+///     and `font-thicken` still use FreeType.
+///
+/// Changing this applies to new font grids, such as after the font size
+/// changes or in new windows.
+@"font-rasterizer": FontRasterizer = .freetype,
+
 /// A theme to use. This can be a built-in theme name, a custom theme
 /// name, or an absolute path to a custom theme file. Ghostty also supports
 /// specifying a different theme to use for light and dark mode. Each
@@ -10002,6 +10017,11 @@ pub const BackgroundImageFit = enum {
 };
 
 /// See freetype-load-flag
+pub const FontRasterizer = enum {
+    freetype,
+    directwrite,
+};
+
 pub const FreetypeLoadFlags = packed struct {
     // The defaults here at the time of writing this match the defaults
     // for Freetype itself. Ghostty hasn't made any opinionated changes

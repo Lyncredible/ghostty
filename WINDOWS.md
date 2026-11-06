@@ -1155,6 +1155,24 @@ Notes:
       on Windows). FreeType rasterizes now; a DirectWrite face (with
       ClearType-style gamma and contrast from the system) could be a
       `font-backend` option. Compare screenshots with Windows Terminal.
+  - [x] `src/font/face/dwrite_raster.zig` draws an outline glyph's
+        coverage with `IDWriteGlyphRunAnalysis` (natural symmetric
+        rendering, grayscale antialiasing) from the font data FreeType
+        loaded (the whole file, from `FT_Load_Sfnt_Table` tag 0, through
+        DirectWrite's in-memory loader, so the embedded fonts work) and
+        FreeType's variation coordinates.
+  - [x] `font-rasterizer = directwrite` uses it in the FreeType face for
+        outline glyphs, with the same placement transform (constraints,
+        centering, synthetic italic's skew). FreeType still draws color
+        and bitmap glyphs, synthetic bold, `font-thicken` and monochrome.
+        Tests: placement of several glyphs within a pixel of FreeType's,
+        and synthetic italic. Checked in the app: about 6% of the pixels
+        of cmd's banner differ from FreeType's rendering.
+  - [ ] DirectWrite's enhanced contrast and gamma (from the system's
+        rendering parameters), which Windows applies when blending text;
+        the mask alone is raw coverage.
+  - [ ] Side by side with Windows Terminal (needs an unlocked desktop),
+        then decide whether `directwrite` should be the default.
 - [x] Verify IME with Microsoft Pinyin, Japanese IME, and others
 - [x] Fix tab-header close crashing the window when there are multiple
       tabs (active index and split focus must be valid during teardown)

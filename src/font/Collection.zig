@@ -714,6 +714,9 @@ pub const LoadOptions = struct {
     /// of flags see `pkg.freetype.face.LoadFlags`.
     freetype_load_flags: font.face.FreetypeLoadFlags = font.face.freetype_load_flags_default,
 
+    /// Draw outline glyphs with DirectWrite (Windows only).
+    directwrite: bool = false,
+
     pub fn deinit(self: *LoadOptions, alloc: Allocator) void {
         _ = self;
         _ = alloc;
@@ -724,6 +727,7 @@ pub const LoadOptions = struct {
         return .{
             .size = self.size,
             .freetype_load_flags = self.freetype_load_flags,
+            .directwrite = self.directwrite,
         };
     }
 };
