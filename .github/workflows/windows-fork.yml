@@ -1,6 +1,6 @@
 on:
   push:
-    branches: [windows]
+    branches: [windows, 'windows-*']
   workflow_dispatch: {}
 
 name: Windows (fork)
