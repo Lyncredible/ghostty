@@ -1173,6 +1173,8 @@ Notes:
         away at once. The handle now ignores moves without the left
         button down, which a real drag always has. Likely a runner image
         change on `windows-latest`, since `aba736b96` passed just before.
+  - [x] Run 42224003628 (7606f8cf7, with the drag handle fix): all jobs
+        passed and `windows-tip` moved to it.
 - [ ] Keep the branch on top of upstream: fetch
       `git@github.com:ghostty-org/ghostty.git` from time to time, rebase,
       and check that the build, unit tests and the fork's CI still pass.
@@ -1193,6 +1195,12 @@ Notes:
         visibility for simdutf, highway and wuffs). No conflicts; dates
         kept with `--committer-date-is-author-date`. Build and the
         terminal and DirectWrite tests passed.
+  - [x] 2026-11-06: a third sync (11 upstream commits: triple-click
+        selection over blank lines, kitty image eviction, ssh terminfo
+        install, translations). No conflicts. The build and the
+        selection, kitty, ssh and DirectWrite tests passed. The repo's
+        `.zig-cache` had grown to 153 GB and filled the disk (builds
+        failed with `NoSpaceLeft`); deleting it fixed that.
 - [x] Tip builds, like upstream's `release-tip.yml` (the discussion's
       release workflow item): a rolling prerelease of the latest
       `windows` commit, so people can try it without building. Approved
