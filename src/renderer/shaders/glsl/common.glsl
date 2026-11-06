@@ -23,6 +23,8 @@ layout(binding = 1, std140) uniform Globals {
     uniform uint cursor_color_packed_4u8;
     uniform uint bg_color_packed_4u8;
     uniform uint bools;
+    uniform float text_contrast;
+    uniform vec4 text_gamma_ratios;
 };
 
 // Bools
@@ -30,12 +32,27 @@ const uint CURSOR_WIDE = 1u;
 const uint USE_DISPLAY_P3 = 2u;
 const uint USE_LINEAR_BLENDING = 4u;
 const uint USE_LINEAR_CORRECTION = 8u;
+const uint USE_DWRITE_BLENDING = 16u;
 
 // Padding extend enum
 const uint EXTEND_LEFT = 1u;
 const uint EXTEND_RIGHT = 2u;
 const uint EXTEND_UP = 4u;
 const uint EXTEND_DOWN = 8u;
+
+// DirectWrite's grayscale text blending (`alpha-blending = directwrite`),
+// as Windows Terminal does it: the coverage `a` of a glyph drawn in the
+// gamma encoded, unpremultiplied color `fg` gets DirectWrite's enhanced
+// contrast (scaled down for light text, none at all for light enough
+// colors) and then its gamma alpha correction for the color's intensity.
+float dwrite_alpha(float a, vec3 fg) {
+    float k = text_contrast * clamp(dot(fg, vec3(0.30, 0.59, 0.11)) * -4.0 + 3.0, 0.0, 1.0);
+    float f = dot(fg, vec3(0.25, 0.5, 0.25));
+    vec4 g = text_gamma_ratios;
+    a = a * (k + 1.0) / (a * k + 1.0);
+    a = a + a * (1.0 - a) * ((g.x * f + g.y) * a + (g.z * f + g.w));
+    return clamp(a, 0.0, 1.0);
+}
 
 //----------------------------------------------------------------------------//
 // Functions for Unpacking Values

@@ -27,6 +27,8 @@ cbuffer Globals : register(b1) {
     uint cursor_color_packed_4u8;
     uint bg_color_packed_4u8;
     uint bools;
+    float text_contrast;
+    float4 text_gamma_ratios;
 };
 
 // Bools
@@ -34,12 +36,24 @@ static const uint CURSOR_WIDE = 1u;
 static const uint USE_DISPLAY_P3 = 2u;
 static const uint USE_LINEAR_BLENDING = 4u;
 static const uint USE_LINEAR_CORRECTION = 8u;
+static const uint USE_DWRITE_BLENDING = 16u;
 
 // Padding extend enum
 static const uint EXTEND_LEFT = 1u;
 static const uint EXTEND_RIGHT = 2u;
 static const uint EXTEND_UP = 4u;
 static const uint EXTEND_DOWN = 8u;
+
+// DirectWrite's grayscale text blending; see `dwrite_alpha` in the GLSL
+// shaders' common.glsl.
+float dwrite_alpha(float a, float3 fg) {
+    float k = text_contrast * saturate(dot(fg, float3(0.30, 0.59, 0.11)) * -4.0 + 3.0);
+    float f = dot(fg, float3(0.25, 0.5, 0.25));
+    float4 g = text_gamma_ratios;
+    a = a * (k + 1.0) / (a * k + 1.0);
+    a = a + a * (1.0 - a) * ((g.x * f + g.y) * a + (g.z * f + g.w));
+    return saturate(a);
+}
 
 //----------------------------------------------------------------------------//
 // Functions for Unpacking Values
@@ -387,6 +401,7 @@ Texture2D<float4> atlas_color : register(t1);
 float4 cell_text_fragment(CellTextVertexOut input) : SV_Target {
     bool use_linear_blending = (bools & USE_LINEAR_BLENDING) != 0;
     bool use_linear_correction = (bools & USE_LINEAR_CORRECTION) != 0;
+    bool use_dwrite_blending = (bools & USE_DWRITE_BLENDING) != 0;
 
     int3 texel = int3(int2(floor(input.tex_coord)), 0);
 
@@ -441,6 +456,12 @@ float4 cell_text_fragment(CellTextVertexOut input) : SV_Target {
             float blend_l = linearize(unlinearize(fg_l) * a + unlinearize(bg_l) * (1.0 - a));
             a = clamp((blend_l - bg_l) / (fg_l - bg_l), 0.0, 1.0);
         }
+    }
+
+    // DirectWrite's contrast and gamma correction (see `dwrite_alpha`),
+    // on the gamma encoded color (this mode doesn't blend linearly).
+    if (use_dwrite_blending && color.a > 0.0) {
+        a = dwrite_alpha(a, color.rgb / color.a);
     }
 
     // Multiply our whole color by the alpha mask.

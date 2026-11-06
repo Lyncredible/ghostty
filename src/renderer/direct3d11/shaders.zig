@@ -403,6 +403,11 @@ pub const Uniforms = extern struct {
     /// Various booleans, in a packed struct for space efficiency.
     bools: Bools align(4),
 
+    /// DirectWrite's grayscale enhanced contrast and gamma alpha
+    /// correction constants, for `use_dwrite_blending`.
+    text_contrast: f32 align(4) = 0,
+    text_gamma_ratios: [4]f32 align(16) = .{ 0, 0, 0, 0 },
+
     const Bools = packed struct(u32) {
         /// Whether the cursor is 2 cells wide.
         cursor_wide: bool,
@@ -424,7 +429,12 @@ pub const Uniforms = extern struct {
         /// (thickness) to gamma-incorrect blending.
         use_linear_correction: bool = false,
 
-        _padding: u28 = 0,
+        /// Blends text like DirectWrite: the mask gets the enhanced
+        /// contrast and gamma alpha correction in `text_contrast` and
+        /// `text_gamma_ratios` (`alpha-blending = directwrite`).
+        use_dwrite_blending: bool = false,
+
+        _padding: u27 = 0,
     };
 
     const PaddingExtend = packed struct(u32) {
@@ -448,6 +458,8 @@ pub const Uniforms = extern struct {
         std.debug.assert(@offsetOf(Uniforms, "cursor_color") == 124);
         std.debug.assert(@offsetOf(Uniforms, "bg_color") == 128);
         std.debug.assert(@offsetOf(Uniforms, "bools") == 132);
+        std.debug.assert(@offsetOf(Uniforms, "text_contrast") == 136);
+        std.debug.assert(@offsetOf(Uniforms, "text_gamma_ratios") == 144);
     }
 };
 

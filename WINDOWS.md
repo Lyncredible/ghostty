@@ -1212,16 +1212,27 @@ Notes:
         Tests: placement of several glyphs within a pixel of FreeType's,
         and synthetic italic. Checked in the app: about 6% of the pixels
         of cmd's banner differ from FreeType's rendering.
-  - [ ] DirectWrite's enhanced contrast and gamma (from the system's
+  - [x] DirectWrite's enhanced contrast and gamma (from the system's
         rendering parameters), which Windows applies when blending text;
         the mask alone is raw coverage. Windows Terminal does this in its pixel
         shader: the grayscale enhanced contrast is scaled by
         `saturate(3 - 4 * luminance)` of the text color, so it's about
         zero for light text on a dark background and only the gamma
         correction applies there; dark text on light gets the full boost.
-        That would be a new blending mode in the renderer's shaders, for
-        both rasterizers. Low priority: the comparison above shows little
-        difference for light on dark.
+        Done as `alpha-blending = directwrite`, for either rasterizer:
+        `native` blending, with the text mask corrected in the D3D11 and
+        GLSL text shaders (`dwrite_alpha`) by the system's grayscale
+        enhanced contrast and gamma (read once from
+        `IDWriteFactory::CreateRenderingParams`, in
+        `src/renderer/text_blend.zig`, with DirectWrite's gamma ratio
+        table as in WT's `dwrite_helpers`; tests check the 1.8 constants
+        WT documents). Metal ignores it (same as `native`). Measured
+        (MesloLGS NF 13, One Half Dark, mean ink over the text): WT 25.4,
+        `native` 22.3, `directwrite` 23.7, so it closes about half the
+        gap to WT. Dark text on white changes little overall (the boost
+        and the gamma correction nearly cancel). The OpenGL shader isn't
+        run here (Windows uses D3D11). Not done: WT's extra +0.5 contrast
+        for "thin" fonts (Courier New and a few others).
   - [x] Side by side with Windows Terminal 1.25 (2026-11-05, captured
         with `PrintWindow`, which works with the desktop locked; a new WT
         window opened with `wt -w new` and closed with `WM_CLOSE`).
