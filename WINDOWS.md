@@ -1798,10 +1798,12 @@ Notes:
         the core, which picks `theme = light:...,dark:...`. Test:
         `test/windows/window-theme.ps1` (both directions, after a reload,
         and back to `config`).
-  - [ ] The other actions Win32 doesn't handle (found 2026-11-06):
-        `show_child_exited` (the core prints its own message in the
-        terminal when the apprt doesn't handle it), `secure_input`
-        (macOS's secure keyboard entry), `show_gtk_inspector` (GTK only).
+  - [x] The other actions Win32 doesn't handle (found 2026-11-06), left
+        unhandled on purpose: `show_child_exited` (unhandled, the core
+        prints "Process exited. Press any key to close the terminal." in
+        the terminal, which says the same as GTK's banner),
+        `secure_input` (macOS's secure keyboard entry, which has no
+        Windows counterpart) and `show_gtk_inspector` (GTK only).
 - [x] Config options the Win32 apprt ignored (found 2026-10-25)
   - [x] `focus-follows-mouse`: hovering a split focuses it when the
         cursor really moves, the window is in front, no button is held,
