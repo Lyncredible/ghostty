@@ -1207,6 +1207,9 @@ Notes:
         UI tests on the runner and the UI clean-up (no menu button,
         drag handles on hover, the shorter context menu); `windows-tip`
         moved to it.
+  - [x] Run 42339834650 (7c125fa08, the macOS-style menus): every job
+        passed, with the translucent and high-contrast tests finding
+        their window menu items by label.
 - [ ] Keep the branch on top of upstream: fetch
       `git@github.com:ghostty-org/ghostty.git` from time to time, rebase,
       and check that the build, unit tests and the fork's CI still pass.
