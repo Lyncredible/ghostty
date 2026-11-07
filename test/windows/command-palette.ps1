@@ -95,12 +95,16 @@ try {
     Write-Host "Typing new_split:right narrows $all entries to $narrowed."
 
     $W::Key($p.Edit, 0x0D, 0x1C)   # Enter
-    $split = WaitFor { $t = Terminals; if ($t.Count -eq 2) { $t } } 'the split'
+    # Wait for the layout too: the new terminal can show before the two are
+    # placed side by side (on a runner, both had the old one's rectangle).
+    $split = WaitFor {
+        $t = Terminals
+        if ($t.Count -ne 2) { return }
+        $rects = @($t | ForEach-Object { $r = New-Object GhosttyPalette.Win32+RECT; [void]$W::GetWindowRect($_, [ref]$r); $r } | Sort-Object l)
+        $script:note = "($($rects[0].l),$($rects[0].t)-$($rects[0].r),$($rects[0].b)) and ($($rects[1].l),$($rects[1].t)-$($rects[1].r),$($rects[1].b))"
+        if ($rects[0].r -le $rects[1].l -and $rects[0].t -eq $rects[1].t) { $t }
+    } 'the split, left and right'
     [void](WaitFor { $script:note = 'still shown'; -not $W::IsWindowVisible($p.Palette) } 'the palette to close')
-    $rects = @($split | ForEach-Object { $r = New-Object GhosttyPalette.Win32+RECT; [void]$W::GetWindowRect($_, [ref]$r); $r } | Sort-Object l)
-    if ($rects[0].r -gt $rects[1].l -or $rects[0].t -ne $rects[1].t) {
-        Fail "the split isn't left and right: ($($rects[0].l),$($rects[0].t)-$($rects[0].r),$($rects[0].b)) and ($($rects[1].l),$($rects[1].t)-$($rects[1].r),$($rects[1].b))"
-    }
     Write-Host 'Enter ran it: the terminal split left and right, and the palette closed.'
 
     # Escape closes it and runs nothing.
