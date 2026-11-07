@@ -1290,6 +1290,14 @@ Notes:
         4,266 passed, 64 skipped (other platforms), 0 failed.
   - [x] 2026-11-07: a sixth sync (1 commit, the VOUCHED list). No
         conflicts; dates kept. The app and libghostty-vt build.
+  - [x] 2026-11-07: a seventh sync (7 commits: dangling pins after a
+        column-growth resize, faster C enum validation, a multi-word
+        terminfo description, and `+ssh` running its remote terminfo
+        install under `sh -c` for non-POSIX login shells). No conflicts;
+        dates kept. Our WSL `ghostty +ssh` had the same bug, so it now
+        runs the install under `sh -c` too, and `test/windows/wsl-ssh.sh`
+        checks that (all checks pass). The app and libghostty-vt build,
+        and the resize tests pass.
 - [x] Tip builds, like upstream's `release-tip.yml` (the discussion's
       release workflow item): a rolling prerelease of the latest
       `windows` commit, so people can try it without building. Approved
