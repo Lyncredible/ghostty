@@ -399,3 +399,11 @@ cmd's `title` (the shell integration's titles are off), is dragged onto the
 first with posted mouse messages, and UI Automation then lists it first,
 still shown. The tabs' positions come from UI Automation, so the test
 follows the tab bar's layout.
+
+## compact-tabs.ps1
+
+Checks compact tabs: with 12 tabs in a narrow window, each tab shows only
+its number and has no close button, so a click where the close button
+would be selects the tab and closes nothing; a middle click still closes
+it. Positions come from UI Automation and clicks are posted messages, so
+it runs on a locked desktop.
