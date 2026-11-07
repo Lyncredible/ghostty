@@ -1743,8 +1743,10 @@ Notes:
         output into a new window (`test/windows/tabs.ps1`, in CI). Not
         checked: that the new window is in front (a locked desktop has
         no foreground window).
-  - [ ] New windows: `maximize`, `fullscreen` and `window-position-x/y`,
-        including the clamp for a position off every monitor.
+  - [x] New windows: `window-position-x/y` (100,50 at 192 DPI put the
+        visible frame at 200,100), a position off every monitor falling
+        back to the work area's corner, `maximize` and `fullscreen`
+        (`test/windows/window-options.ps1`, in CI).
   - [ ] `prompt_surface_title`: the dialog sets the title override, and an
         empty title clears it.
   - [ ] `export_terminal_io`: the inspector's Save As dialog, driven with

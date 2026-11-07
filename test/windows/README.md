@@ -364,3 +364,11 @@ terminal, and `move_tab_to_new_window` moves the current tab, with its
 output, into a second window while the other tab stays. A closed tab is
 kept hidden for `undo-timeout`, so the checks follow which terminal is
 shown rather than counting windows.
+
+## window-options.ps1
+
+Checks the options for new windows, starting Ghostty once for each:
+`window-position-x/y` of 100,50 puts the visible frame (DWM's extended
+frame bounds) that many points from the primary monitor's work area at its
+DPI, a position off every monitor falls back to the work area's corner,
+`maximize` maximizes the window, and `fullscreen` covers its monitor.
