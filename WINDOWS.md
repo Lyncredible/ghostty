@@ -1781,6 +1781,26 @@ Notes:
     result); two monitors, Windows 10, a real driver restart and a real
     IME (no runner has them); memory and leak checks (too slow and noisy
     for every push).
+- [ ] Match the macOS menus (requested 2026-11-06). Windows has no menu
+      bar, so the title bar's menu (right click or Alt+Space) would get
+      macOS's menus as submenus, which also shortens its long flat list:
+  - File: New Window, New Tab, Split Right/Left/Down/Up, Close, Close
+    Tab, Close Window, Close All Windows.
+  - Edit: Undo, Redo, Copy, Paste, Paste Selection, Select All, and Find
+    (Find…, Find Next, Find Previous, Hide Find Bar, Use Selection for
+    Find, Jump to Selection).
+  - View: Reset, Increase and Decrease Font Size, Command Palette,
+    Change Tab Title…, Change Terminal Title…, Terminal Read-only, Quick
+    Terminal, Terminal Inspector.
+  - Window: Minimize, Zoom (maximize), Toggle Full Screen, Show/Hide All
+    Terminals, Zoom Split, Select Previous/Next Split and by direction,
+    Resize Split, Equalize Splits, Return To Default Size, Float on Top.
+  - Ghostty (macOS's app menu): About, Check for Updates (not on this
+    fork), Settings (open the config), Reload Configuration, Make Ghostty
+    the Default Terminal (Windows has its own setting), Quit.
+  - Help: Ghostty Help (the docs).
+  - Each item shows its keybinding, as the menus do now. Keep the
+    terminal's context menu to terminal actions (see the UI clean-up).
 - [ ] Packaging and release builds
   - [x] Portable zip (`dist/windows/package.ps1`)
   - [x] Per-user install script in the zip (`dist/windows/install.ps1`):
