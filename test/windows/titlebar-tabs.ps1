@@ -22,6 +22,7 @@ trap {
     break
 }
 
+Add-Type -AssemblyName UIAutomationClient, UIAutomationTypes
 Add-Type -Namespace GhosttyTitleBarTabs -Name Win32 -MemberDefinition @'
 [StructLayout(LayoutKind.Sequential)] public struct RECT { public int l, t, r, b; }
 [StructLayout(LayoutKind.Sequential)] public struct POINT { public int x, y; }
@@ -153,6 +154,25 @@ try {
     [void]$W::PostMessageW($window, 0x001F, [IntPtr]::Zero, [IntPtr]::Zero)   # WM_CANCELMODE closes it
     [void](WaitFor { $script:note = 'still open'; $W::TopLevel([uint32]$process.Id, '#32768') -eq [IntPtr]::Zero } 'the window menu to close')
     Write-Host 'A right click on the empty space opens the window menu.'
+
+    # Screen readers see the caption buttons (Windows doesn't, once we draw
+    # them): the tab bar lists them after the tabs, and Invoke presses them.
+    $AE = [System.Windows.Automation.AutomationElement]
+    $barElement = $AE::FromHandle($bar)
+    $names = @{}
+    foreach ($name in 'Minimize', 'Maximize', 'Close') {
+        $condition = New-Object System.Windows.Automation.AndCondition(
+            (New-Object System.Windows.Automation.PropertyCondition($AE::ControlTypeProperty, [System.Windows.Automation.ControlType]::Button)),
+            (New-Object System.Windows.Automation.PropertyCondition($AE::NameProperty, $name)))
+        $found = $barElement.FindFirst([System.Windows.Automation.TreeScope]::Children, $condition)
+        if (-not $found) { Fail "UI Automation has no '$name' button in the tab bar" }
+        $names[$name] = $found
+    }
+    $names['Minimize'].GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern).Invoke()
+    [void](WaitFor { $script:note = 'not minimized'; $W::IsIconic($window) } 'Invoke on Minimize to minimize')
+    [void]$W::ShowWindow($window, 9)   # SW_RESTORE
+    [void](WaitFor { $script:note = 'still minimized'; -not $W::IsIconic($window) } 'the window to restore')
+    Write-Host 'UI Automation lists Minimize, Maximize and Close, and Invoke on Minimize minimizes.'
 
     # Minimize, then restore; maximize with a click on the maximize button
     # (WM_NCLBUTTONUP with HTMAXBUTTON, as Windows sends it).

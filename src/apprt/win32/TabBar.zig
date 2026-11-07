@@ -317,14 +317,27 @@ pub fn hitAtScreen(self: *const TabBar, pt: c.POINT) ?Hit {
 }
 
 /// The buttons at the end of the tab bar.
-pub const Button = enum { new_tab, shell_menu };
+/// The buttons UI Automation exposes after the tabs: the new tab and
+/// shell buttons, and with the tabs in the title bar (the only time we draw
+/// them) the caption buttons, which Windows no longer exposes then.
+pub const Button = enum { new_tab, shell_menu, minimize, maximize, close_window };
+
+/// How many of the buttons are there now: the caption buttons only with
+/// the tabs in the title bar.
+pub fn buttonCount(self: *const TabBar) usize {
+    return if (self.layout().caption != null) 5 else 2;
+}
 
 /// The rectangle of a button, on the screen.
 pub fn buttonScreenRect(self: *const TabBar, button: Button) c.RECT {
     const l = self.layout();
+    const none: c.RECT = .{ .left = 0, .top = 0, .right = 0, .bottom = 0 };
     const rect = switch (button) {
         .new_tab => l.new_tab,
         .shell_menu => l.shell_menu,
+        .minimize => if (l.caption) |caption| caption.minimize else none,
+        .maximize => if (l.caption) |caption| caption.maximize else none,
+        .close_window => if (l.caption) |caption| caption.close else none,
     };
     var top_left: c.POINT = .{ .x = rect.left, .y = rect.top };
     var bottom_right: c.POINT = .{ .x = rect.right, .y = rect.bottom };
@@ -338,6 +351,9 @@ pub fn buttonName(self: *TabBar, button: Button) []const u8 {
     return self.tooltipText(switch (button) {
         .new_tab => .new_tab,
         .shell_menu => .shell_menu,
+        .minimize => .minimize,
+        .maximize => .maximize,
+        .close_window => .close_window,
     });
 }
 
@@ -839,6 +855,9 @@ pub fn wndProc(
             switch (std.enums.fromInt(Button, wparam) orelse return 0) {
                 .new_tab => _ = self.window.newTab(),
                 .shell_menu => self.showShellMenu(),
+                .minimize => _ = c.ShowWindow(self.window.hwnd, c.SW_MINIMIZE),
+                .maximize => _ = c.ShowWindow(self.window.hwnd, if (c.IsZoomed(self.window.hwnd) != 0) c.SW_RESTORE else c.SW_MAXIMIZE),
+                .close_window => _ = c.PostMessageW(self.window.hwnd, c.WM_CLOSE, 0, 0),
             }
             return 0;
         },

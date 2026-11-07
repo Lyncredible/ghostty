@@ -1874,9 +1874,12 @@ Notes:
       window menu (`#32768`) and `window-show-tab-bar = never`. The
       tabs, session restore, window options, search, command palette,
       window theme and overlays tests pass.
-  - [ ] Expose the caption buttons to UI Automation (screen readers):
-        Windows no longer does once we draw them. Alt+Space and Alt+F4
-        still work from the keyboard.
+  - [x] Expose the caption buttons to UI Automation (screen readers):
+        Windows no longer does once we draw them. The tab bar now lists
+        Minimize, Maximize (Restore Down when maximized) and Close after
+        its own buttons while the tabs are in the title bar, with Invoke.
+        The title bar tabs test finds all three and minimizes with
+        Invoke; `uia-events.ps1` still passes.
   - [ ] Check by hand with a real mouse (not on a locked desktop): hover
         colors, the snap layouts flyout over maximize, dragging and
         double clicking empty space, and resizing from the top edge.
