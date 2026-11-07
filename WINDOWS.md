@@ -1239,6 +1239,15 @@ Notes:
   - [x] 2026-11-06: a fourth sync (3 commits: style runs found in one
         scan in `RowBuilder.scan`). No conflicts; the build and the
         `RowBuilder` tests passed.
+  - [x] 2026-11-07: a fifth sync (36 commits: libghostty-vt 1.0 C ABI
+        cleanups, an ABI baseline, rewritten Doxygen docs, RefCountedSet
+        reusing dead IDs). No conflicts; dates kept. Upstream's new test
+        that every terminal mode has a `GHOSTTY_MODE_*` macro failed for
+        our `win32_input` (9001), so `modes.h` has
+        `GHOSTTY_MODE_WIN32_INPUT`, documented as recognized only by the
+        Windows app (a macro, so not part of the ABI baseline). The app
+        and libghostty-vt build, and the modes (both), `ghostty/vt.h`,
+        RefCountedSet and title bar tabs tests pass.
         The rebased branch went to `windows-rebased` first (the force-push
         was blocked by the permission check) and then to `windows` with
         the owner's go-ahead. The full unit test suite on the synced tree:
