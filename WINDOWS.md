@@ -1714,6 +1714,34 @@ Notes:
         first, then scans the font folders as before. Scanning picked
         whichever file came first: Arial Unicode MS for Japanese here. Now
         Japanese gets Yu Gothic UI and Korean gets Malgun Gothic.
+- [ ] Automate the UI checks that were only done by hand (2026-11-06).
+      Like the other `test/windows` scripts: keys bound to actions are
+      posted to the terminal, state is read with UI Automation and
+      `PrintWindow` (so they run on a locked desktop and in CI), each
+      check waits on state rather than time, and failures put their
+      diagnostics in the error annotation. Grouped into a few scripts to
+      keep `build-windows` from growing much.
+  - [ ] Session save and restore: a split and a second tab survive closing
+        and starting again (`window-save-state = always`), in a temporary
+        config and state directory.
+  - [ ] Search: `start_search` with a needle shows the match count, and
+        next and previous move the selection.
+  - [ ] Command palette: typing filters the list, and Enter on
+        `new_split:right` splits the terminal.
+  - [ ] Tabs: "Close Other Tabs", `move_tab_to_new_window` (the output
+        stays, the new window is in front) and `undo` reopening a closed
+        tab.
+  - [ ] New windows: `maximize`, `fullscreen` and `window-position-x/y`,
+        including the clamp for a position off every monitor.
+  - [ ] `prompt_surface_title`: the dialog sets the title override, and an
+        empty title clears it.
+  - [ ] `export_terminal_io`: the inspector's Save As dialog, driven with
+        UI Automation, writes the file.
+  - Not automated, on purpose: toasts, bell audio and Narrator speech
+    (another process shows or plays them, so only a person can check the
+    result); two monitors, Windows 10, a real driver restart and a real
+    IME (no runner has them); memory and leak checks (too slow and noisy
+    for every push).
 - [ ] Packaging and release builds
   - [x] Portable zip (`dist/windows/package.ps1`)
   - [x] Per-user install script in the zip (`dist/windows/install.ps1`):
