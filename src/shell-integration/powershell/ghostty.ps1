@@ -81,7 +81,9 @@ function global:prompt {
         [void]$out.Append((__GhosttyOsc "2;$location"))
     }
 
-    [void]$out.Append((__GhosttyOsc "133;A"))
+    # PowerShell doesn't redraw its prompt when the terminal resizes, so
+    # Ghostty must keep it (as newer ConPTYs don't repaint on resize).
+    [void]$out.Append((__GhosttyOsc "133;A;redraw=0"))
 
     # Run the original prompt with the previous command's exit code.
     $global:LASTEXITCODE = $exitCode

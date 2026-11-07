@@ -327,6 +327,11 @@ fn freeArgs(alloc: Allocator, command: config.Command, args: []const [:0]const u
 /// We also report the working directory with OSC 7 and, depending on the
 /// features, set the title and a bar cursor.
 ///
+/// The prompt mark says cmd doesn't redraw its prompt (`redraw=0`), so
+/// Ghostty keeps it when resizing. Newer ConPTYs (the ConPTY package's)
+/// don't repaint their screen on resize as the inbox one does, so without
+/// it the prompt disappeared at the first resize.
+///
 /// The command isn't changed. If PROMPT already has semantic prompt
 /// marks (for example from Clink or the user), it's left alone.
 fn setupCmd(
@@ -345,7 +350,7 @@ fn setupCmd(
 
         try env.put("PROMPT", try std.fmt.allocPrint(
             alloc,
-            "{s}$e]7;kitty-shell-cwd://localhost/$P$e\\$e]133;A$e\\{s}{s}$e]133;I$e\\",
+            "{s}$e]7;kitty-shell-cwd://localhost/$P$e\\$e]133;A;redraw=0$e\\{s}{s}$e]133;I$e\\",
             .{ if (title) "$e]2;$P$e\\" else "", prompt, cursor },
         ));
     }
@@ -383,7 +388,7 @@ test "cmd" {
     const command = try setupCmd(alloc, .{ .shell = "cmd.exe" }, &env);
     try testing.expectEqualStrings("cmd.exe", command.?.shell);
     try testing.expectEqualStrings(
-        "$e]7;kitty-shell-cwd://localhost/$P$e\\$e]133;A$e\\$P$G$e]133;I$e\\",
+        "$e]7;kitty-shell-cwd://localhost/$P$e\\$e]133;A;redraw=0$e\\$P$G$e]133;I$e\\",
         env.get("PROMPT").?,
     );
 }
@@ -401,7 +406,7 @@ test "cmd: features and existing prompt" {
 
     _ = try setupCmd(alloc, .{ .shell = "cmd" }, &env);
     try testing.expectEqualStrings(
-        "$e]2;$P$e\\$e]7;kitty-shell-cwd://localhost/$P$e\\$e]133;A$e\\$T $P$G$e[6 q$e]133;I$e\\",
+        "$e]2;$P$e\\$e]7;kitty-shell-cwd://localhost/$P$e\\$e]133;A;redraw=0$e\\$T $P$G$e[6 q$e]133;I$e\\",
         env.get("PROMPT").?,
     );
 
