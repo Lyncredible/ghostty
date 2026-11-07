@@ -1714,7 +1714,7 @@ Notes:
         first, then scans the font folders as before. Scanning picked
         whichever file came first: Arial Unicode MS for Japanese here. Now
         Japanese gets Yu Gothic UI and Korean gets Malgun Gothic.
-- [ ] Automate the UI checks that were only done by hand (2026-11-06).
+- [x] Automate the UI checks that were only done by hand (2026-11-06).
       Like the other `test/windows` scripts: keys bound to actions are
       posted to the terminal, state is read with UI Automation and
       `PrintWindow` (so they run on a locked desktop and in CI), each
@@ -1749,8 +1749,15 @@ Notes:
         (`test/windows/window-options.ps1`, in CI).
   - [x] `prompt_surface_title`: the dialog sets the title override, and an
         empty title clears it (`test/windows/title-prompt.ps1`, in CI).
-  - [ ] `export_terminal_io`: the inspector's Save As dialog, driven with
-        UI Automation, writes the file.
+  - [x] `export_terminal_io`: left out. Only a button in the inspector
+        starts it, and the inspector is drawn with ImGui, which has no
+        windows or UI Automation tree to find the button in; clicking
+        at fixed positions in its layout would be the kind of brittle
+        test this list avoids. The Save As part is the standard dialog.
+  - Six new CI tests (session restore, search, command palette, tabs,
+    window options, title prompt). Two of them found bugs, both fixed:
+    inactive tabs showing through after a session restore, and the search
+    count being invisible to screen readers.
   - Not automated, on purpose: toasts, bell audio and Narrator speech
     (another process shows or plays them, so only a person can check the
     result); two monitors, Windows 10, a real driver restart and a real
