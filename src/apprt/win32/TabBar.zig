@@ -24,6 +24,11 @@ hwnd: c.HWND,
 /// The font used for tab titles, scaled for our DPI.
 font: ?c.HFONT = null,
 
+/// The system's icon font for the caption buttons' glyphs, like Windows
+/// Terminal's: Segoe Fluent Icons (Windows 11) or Segoe MDL2 Assets
+/// (Windows 10). Null if neither is there; then we draw them with lines.
+icon_font: ?c.HFONT = null,
+
 /// The element under the mouse, if any.
 hover: ?Hit = null,
 
@@ -153,6 +158,7 @@ pub fn deinit(self: *TabBar) void {
     if (self.tooltip) |tooltip| _ = c.DestroyWindow(tooltip);
     _ = c.SetWindowLongPtrW(self.hwnd, util.GWLP_USERDATA, 0);
     if (self.font) |f| _ = c.DeleteObject(f);
+    if (self.icon_font) |f| _ = c.DeleteObject(f);
 }
 
 /// Redraw the tab bar, e.g. after tabs or titles changed.
@@ -211,7 +217,36 @@ pub fn updateFont(self: *TabBar) void {
     const font = c.CreateFontIndirectW(&metrics.lfMessageFont) orelse return;
     if (self.font) |old| _ = c.DeleteObject(old);
     self.font = font;
+
+    if (self.icon_font) |old| _ = c.DeleteObject(old);
+    self.icon_font = iconFont(@intCast(dpi));
     self.invalidate();
+}
+
+/// The first of the system's icon fonts that's installed, at 10 points
+/// (the caption glyphs are 10 by 10, as in Windows Terminal).
+fn iconFont(dpi: c_int) ?c.HFONT {
+    const faces = [_][:0]const u16{
+        std.unicode.utf8ToUtf16LeStringLiteral("Segoe Fluent Icons"),
+        std.unicode.utf8ToUtf16LeStringLiteral("Segoe MDL2 Assets"),
+    };
+    const dc = c.GetDC(null) orelse return null;
+    defer _ = c.ReleaseDC(null, dc);
+    for (faces) |face| {
+        var lf = std.mem.zeroes(c.LOGFONTW);
+        lf.lfHeight = -@divTrunc(10 * dpi, util.USER_DEFAULT_SCREEN_DPI);
+        lf.lfCharSet = c.DEFAULT_CHARSET;
+        @memcpy(lf.lfFaceName[0..face.len], face);
+        const font = c.CreateFontIndirectW(&lf) orelse continue;
+        // Windows substitutes another font for one that isn't installed.
+        const old = c.SelectObject(dc, font);
+        var got: [c.LF_FACESIZE]u16 = undefined;
+        const n = c.GetTextFaceW(dc, got.len, &got);
+        _ = c.SelectObject(dc, old);
+        if (n > 0 and std.mem.eql(u16, got[0..@intCast(n - 1)], face)) return font;
+        _ = c.DeleteObject(font);
+    }
+    return null;
 }
 
 //----------------------------------------------------------------------------
@@ -566,7 +601,8 @@ fn paint(self: *TabBar, hdc: c.HDC, client: c.RECT) void {
             if (Hit.eql(self.hover, .{ .close = i })) {
                 fill(hdc, &close, blend(if (active) col.active else col.hover, col.text, 0.15));
             }
-            self.drawCross(hdc, close, if (active) col.text else col.text_inactive);
+            const color = if (active) col.text else col.text_inactive;
+            if (!self.drawGlyph(hdc, close, 0xE8BB, color)) self.drawCross(hdc, close, color);
         }
     }
 
@@ -587,8 +623,8 @@ fn paint(self: *TabBar, hdc: c.HDC, client: c.RECT) void {
         const rect: c.RECT = .{ .left = b[1].left, .top = button_top, .right = b[1].right, .bottom = button_top + self.scale(tab_button_height) };
         if (Hit.eql(self.hover, b[0])) self.drawRounded(hdc, rect, col.caption_hover, self.scale(4));
         switch (b[0]) {
-            .new_tab => self.drawPlus(hdc, rect, col.text_inactive),
-            else => self.drawChevron(hdc, rect, col.text_inactive),
+            .new_tab => if (!self.drawGlyph(hdc, rect, 0xE710, col.text_inactive)) self.drawPlus(hdc, rect, col.text_inactive),
+            else => if (!self.drawGlyph(hdc, rect, 0xE70D, col.text_inactive)) self.drawChevron(hdc, rect, col.text_inactive),
         }
     }
 
@@ -625,6 +661,19 @@ fn drawTabShape(self: *const TabBar, hdc: c.HDC, rect: c.RECT, color: Rgb, borde
     _ = c.RoundRect(hdc, rect.left, rect.top, rect.right + extra, rect.bottom + r * 2, r * 2, r * 2);
 }
 
+/// A glyph of the system's icon font, centered in a rectangle. Returns
+/// false if there's no icon font, for the caller to draw it with lines.
+fn drawGlyph(self: *const TabBar, hdc: c.HDC, rect: c.RECT, codepoint: u16, color: Rgb) bool {
+    const font = self.icon_font orelse return false;
+    const old_font = c.SelectObject(hdc, font);
+    defer _ = c.SelectObject(hdc, old_font);
+    var r = rect;
+    var text = [_]u16{codepoint};
+    _ = c.SetTextColor(hdc, colorref(color));
+    _ = c.DrawTextW(hdc, &text, 1, &r, c.DT_SINGLELINE | c.DT_CENTER | c.DT_VCENTER | c.DT_NOPREFIX);
+    return true;
+}
+
 /// The minimize, maximize (or restore) and close buttons, like the system's:
 /// hovering fills them, the close button in red; dimmer when the window
 /// isn't active.
@@ -635,6 +684,15 @@ fn paintCaptionButtons(self: *const TabBar, hdc: c.HDC, minimize: c.RECT, maximi
     if (self.maximize_hovered) fill(hdc, &maximize, col.caption_hover);
     const close_hovered = Hit.eql(self.hover, .close_window);
     if (close_hovered) fill(hdc, &close, .{ .r = 0xC4, .g = 0x2B, .b = 0x1C });
+
+    // The system's glyphs: minimize, maximize or restore, and close.
+    if (self.icon_font != null) {
+        const maximized = c.IsZoomed(self.window.hwnd) != 0;
+        _ = self.drawGlyph(hdc, minimize, 0xE921, glyph);
+        _ = self.drawGlyph(hdc, maximize, if (maximized) 0xE923 else 0xE922, glyph);
+        _ = self.drawGlyph(hdc, close, 0xE8BB, if (close_hovered) .{ .r = 255, .g = 255, .b = 255 } else glyph);
+        return;
+    }
 
     const size = self.scale(10);
     const pen = c.CreatePen(c.PS_SOLID, @max(1, self.scale(1)), colorref(glyph));

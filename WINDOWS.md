@@ -1876,6 +1876,14 @@ Notes:
       window menu (`#32768`) and `window-show-tab-bar = never`. The
       tabs, session restore, window options, search, command palette,
       window theme and overlays tests pass.
+  - [x] Glyphs from the system's icon font, like Windows Terminal: Segoe
+        Fluent Icons (Windows 11) or Segoe MDL2 Assets (Windows 10), at
+        10 points, for minimize (E921), maximize (E922) or restore
+        (E923), close (E8BB), new tab (E710), the shell menu (E70D) and
+        the tabs' close buttons. The face is checked after creating the
+        font (Windows substitutes a missing one); without either, they're
+        still drawn with lines. Checked with captures, restored and
+        maximized.
   - [x] Expose the caption buttons to UI Automation (screen readers):
         Windows no longer does once we draw them. The tab bar now lists
         Minimize, Maximize (Restore Down when maximized) and Close after
