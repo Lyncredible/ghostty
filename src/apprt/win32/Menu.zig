@@ -115,30 +115,91 @@ pub const tab = [_]Item{
     .act("Close Tabs to the &Right", .{ .close_tab = .right }),
 };
 
-/// The window's main menu.
+/// The window's main menu: the title bar's (right click, or Alt+Space) and
+/// the tab bar's empty space. Windows has no menu bar, so it has macOS's
+/// menus as submenus, with the same items where Windows has them, except
+/// those the system menu above already has (Maximize, Close Window).
 pub const main = [_]Item{
-    .act("&New Window", .new_window),
+    .sub("&Ghostty", &app_items),
+    .sub("&File", &file_items),
+    .sub("&Edit", &edit_items),
+    .sub("&View", &view_items),
+    .sub("&Window", &window_items),
+};
+
+const app_items = [_]Item{
+    .act("&Open Configuration", .{ .open_config = .os_open }),
+    .act("&Reload Configuration", .reload_config),
+    .separator,
+    .act("&Quit Ghostty", .quit),
+};
+
+const file_items = [_]Item{
+    .act("New &Window", .new_window),
     .act("New &Tab", .new_tab),
-    .shellsIn("New Window &With Shell", .window),
-    .shellsIn("New Tab With S&hell", .tab),
-    .sub("&Split", &split_items),
+    .shellsIn("New Window With S&hell", .window),
+    .shellsIn("New Tab With Sh&ell", .tab),
+    .separator,
+    .act("Split &Right", .{ .new_split = .right }),
+    .act("Split &Left", .{ .new_split = .left }),
+    .act("Split &Down", .{ .new_split = .down }),
+    .act("Split &Up", .{ .new_split = .up }),
+    .separator,
+    .act("&Close", .close_surface),
+    .act("Close T&ab", .{ .close_tab = .this }),
+    .act("Close All Windo&ws", .close_all_windows),
+};
+
+const edit_items = [_]Item{
+    .act("&Undo", .undo),
+    .act("&Redo", .redo),
     .separator,
     .act("&Copy", .{ .copy_to_clipboard = .mixed }),
     .act("&Paste", .paste_from_clipboard),
-    .act("&Find…", .start_search),
+    .act("Paste &Selection", .paste_from_selection),
+    .act("Select &All", .select_all),
     .separator,
-    .act("Change Window &Title…", .prompt_window_title),
-    .act("Change Tab Title…", .prompt_tab_title),
+    .act("&Find…", .start_search),
+    .act("Find &Next", .{ .navigate_search = .next }),
+    .act("Find Pre&vious", .{ .navigate_search = .previous }),
+    .act("&Hide Find Bar", .end_search),
+    .act("Use Selection for Fin&d", .search_selection),
+    .act("&Jump to Selection", .scroll_to_selection),
+};
+
+const view_items = [_]Item{
+    .act("&Reset Font Size", .reset_font_size),
+    .act("&Increase Font Size", .{ .increase_font_size = 1 }),
+    .act("&Decrease Font Size", .{ .decrease_font_size = 1 }),
+    .separator,
+    .act("Command &Palette", .toggle_command_palette),
+    .separator,
+    .act("Change Tab &Title…", .prompt_tab_title),
+    .act("Change Terminal T&itle…", .prompt_surface_title),
+    .act("Change &Window Title…", .prompt_window_title),
+    .separator,
+    .act("Terminal Read-&only", .toggle_readonly),
+    .act("&Quick Terminal", .toggle_quick_terminal),
+    .act("Terminal I&nspector", .{ .inspector = .toggle }),
     .separator,
     .act("Cl&ear", .clear_screen),
-    .act("&Reset", .reset),
-    .act("F&ull Screen", .toggle_fullscreen),
+    .act("Re&set", .reset),
+};
+
+const window_items = [_]Item{
+    .act("&Full Screen", .toggle_fullscreen),
+    .act("&Show/Hide All Terminals", .toggle_visibility),
+    .act("Float on &Top", .toggle_window_float_on_top),
+    .act("Return to &Default Size", .reset_window_size),
     .separator,
-    .act("Command Pa&lette", .toggle_command_palette),
-    .act("Terminal &Inspector", .{ .inspector = .toggle }),
-    .sub("C&onfig", &config_items),
-    .separator,
-    .act("&Quit", .quit),
+    .act("&Zoom Split", .toggle_split_zoom),
+    .act("Select &Previous Split", .{ .goto_split = .previous }),
+    .act("Select &Next Split", .{ .goto_split = .next }),
+    .act("Select Split &Above", .{ .goto_split = .up }),
+    .act("Select Split &Below", .{ .goto_split = .down }),
+    .act("Select Split &Left", .{ .goto_split = .left }),
+    .act("Select Split &Right", .{ .goto_split = .right }),
+    .act("&Equalize Splits", .equalize_splits),
 };
 
 /// The ID of the first item in the system menu. Windows uses the low four
@@ -254,6 +315,20 @@ pub fn systemCommand(items: []const Item, wparam: c.WPARAM) ?Choice {
     return choiceAt(items, id >> sys_id_shift);
 }
 
+/// The shortcut to show for an action. The reverse map leaves out
+/// performable bindings (like ctrl+shift+f for Find and ctrl+shift+c for
+/// Copy) so that toolkits don't register them as shortcuts that would take
+/// the key; our menus only show the text, so they can show those too.
+pub fn shortcut(set: *const Binding.Set, action: Binding.Action) ?Binding.Trigger {
+    if (set.getTrigger(action)) |t| return t;
+    var it = set.bindings.iterator();
+    while (it.next()) |entry| switch (entry.value_ptr.*) {
+        .leaf => |leaf| if (leaf.action.hash() == action.hash()) return entry.key_ptr.*,
+        else => {},
+    };
+    return null;
+}
+
 /// Append items to a menu. Actions get consecutive IDs (shifted left by
 /// `shift`) in depth-first order, which actionAt follows. Items are
 /// disabled if they don't apply to the surface.
@@ -272,7 +347,7 @@ fn build(
             const id = next_id.* << shift;
             next_id.* += 1;
             const label = if (surface) |s| label: {
-                const trigger = s.app.config.keybind.set.getTrigger(a.action) orelse
+                const trigger = shortcut(&s.app.config.keybind.set, a.action) orelse
                     break :label a.label;
                 var buf: [64]u8 = undefined;
                 const text = triggerText(&buf, trigger) catch break :label a.label;
@@ -451,7 +526,7 @@ test actionAt {
 
 test systemCommand {
     const testing = std.testing;
-    try testing.expectEqual(Choice{ .action = .new_window }, systemCommand(&main, 1 << sys_id_shift).?);
+    try testing.expectEqual(Choice{ .action = .{ .open_config = .os_open } }, systemCommand(&main, 1 << sys_id_shift).?);
     try testing.expect(systemCommand(&main, 0xF060) == null);
     try testing.expect(systemCommand(&main, 0) == null);
 
