@@ -1210,6 +1210,11 @@ Notes:
   - [x] Run 42339834650 (7c125fa08, the macOS-style menus): every job
         passed, with the translucent and high-contrast tests finding
         their window menu items by label.
+  - [x] Run 42354866951 (ab3d3f027, after the fifth upstream sync, the
+        noctty-style title bar and the Command/PowerShell titles): every
+        job passed and `windows-tip` moved to it. On the way, the high
+        contrast test expected the old tab bar color and the PowerShell
+        integration test the old prompt title (the folder); both updated.
 - [ ] Keep the branch on top of upstream: fetch
       `git@github.com:ghostty-org/ghostty.git` from time to time, rebase,
       and check that the build, unit tests and the fork's CI still pass.
