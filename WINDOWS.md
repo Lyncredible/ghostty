@@ -1215,6 +1215,8 @@ Notes:
         job passed and `windows-tip` moved to it. On the way, the high
         contrast test expected the old tab bar color and the PowerShell
         integration test the old prompt title (the folder); both updated.
+  - [x] Run 42360505212 (bbce57b5a, the caption buttons for UI
+        Automation): every job passed; `windows-tip` moved to it.
 - [ ] Keep the branch on top of upstream: fetch
       `git@github.com:ghostty-org/ghostty.git` from time to time, rebase,
       and check that the build, unit tests and the fork's CI still pass.
