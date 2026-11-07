@@ -1203,6 +1203,10 @@ Notes:
         command palette test measured the split as soon as a second
         terminal showed, before the two were laid out (both had the old
         terminal's rectangle); it now waits for them to be side by side.
+  - [x] Run 42334957588 (54327c2ee): every job passed, with all six new
+        UI tests on the runner and the UI clean-up (no menu button,
+        drag handles on hover, the shorter context menu); `windows-tip`
+        moved to it.
 - [ ] Keep the branch on top of upstream: fetch
       `git@github.com:ghostty-org/ghostty.git` from time to time, rebase,
       and check that the build, unit tests and the fork's CI still pass.
