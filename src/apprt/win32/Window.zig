@@ -1316,9 +1316,22 @@ fn updateWindowTitle(self: *Window) void {
 fn showTabBar(self: *const Window) bool {
     return switch (self.app.config.@"window-show-tab-bar") {
         .always => true,
-        .auto => self.tabs.items.len > 1,
+        // With the tabs in the title bar, the bar is the title bar, so it
+        // shows with one tab too.
+        .auto => self.tabs.items.len > 1 or self.titleBarTabsAllowed(),
         .never => false,
     };
+}
+
+/// Whether the window can have its tabs in the title bar: it has a title
+/// bar (fullscreen and the quick terminal don't), the tab bar isn't turned
+/// off, and no high contrast theme is on (which keeps the system's title
+/// bar, in the theme's colors).
+fn titleBarTabsAllowed(self: *const Window) bool {
+    if (self.quick or self.fullscreen != null or util.highContrast()) return false;
+    if (self.app.config.@"window-show-tab-bar" == .never) return false;
+    return self.decorated_override orelse
+        (self.app.config.@"window-decoration" != .none);
 }
 
 /// Whether the tabs should be in the title bar, like Windows Terminal:
@@ -1326,15 +1339,16 @@ fn showTabBar(self: *const Window) bool {
 /// the quick terminal have no title bar; high contrast themes keep the
 /// system's, which follows the theme's colors.
 fn tabsInTitleBar(self: *const Window) bool {
-    if (self.quick or self.fullscreen != null or util.highContrast()) return false;
-    const decorated = self.decorated_override orelse
-        (self.app.config.@"window-decoration" != .none);
-    return decorated and self.showTabBar();
+    return self.titleBarTabsAllowed();
 }
 
 /// Switch between the system's title bar and the tabs in it when that
 /// changes (more tabs, decorations, fullscreen), recalculating the frame.
 fn updateTitleBarTabs(self: *Window) void {
+    // Not until our window procedure can see us (the end of init): the
+    // frame change's WM_NCCALCSIZE would go to DefWindowProc, and we'd
+    // think it had happened.
+    if (c.GetWindowLongPtrW(self.hwnd, util.GWLP_USERDATA) == 0) return;
     const want = self.tabsInTitleBar();
     if (want == self.titlebar_tabs) return;
     self.titlebar_tabs = want;
@@ -1354,6 +1368,15 @@ fn updateTitleBarTabs(self: *Window) void {
 pub fn resizeBorderHeight(self: *const Window) c_int {
     const dpi = c.GetDpiForWindow(self.hwnd);
     return c.GetSystemMetricsForDpi(c.SM_CYFRAME, dpi) + c.GetSystemMetricsForDpi(c.SM_CXPADDEDBORDER, dpi);
+}
+
+/// Show the window menu at a point on the screen, as a title bar's right
+/// click or icon does. We build our part of it on WM_INITMENUPOPUP and run
+/// the command from WM_SYSCOMMAND, as for the system's.
+pub fn showSystemMenu(self: *Window, pt: c.POINT) void {
+    const menu = c.GetSystemMenu(self.hwnd, c.FALSE) orelse return;
+    const cmd = c.TrackPopupMenu(menu, c.TPM_RETURNCMD | c.TPM_RIGHTBUTTON, pt.x, pt.y, 0, self.hwnd, null);
+    if (cmd != 0) _ = c.PostMessageW(self.hwnd, c.WM_SYSCOMMAND, @intCast(cmd), 0);
 }
 
 /// Whether the tabs are in the title bar right now.
@@ -2207,6 +2230,13 @@ pub fn wndProc(
             self.tab_bar.setMaximizeHovered(false);
         },
         c.WM_NCLBUTTONDOWN, c.WM_NCLBUTTONDBLCLK => if (self.titlebar_tabs and wparam == c.HTMAXBUTTON) {
+            return 0;
+        },
+        c.WM_NCRBUTTONDOWN => if (self.titlebar_tabs and wparam == c.HTCAPTION) {
+            return 0;
+        },
+        c.WM_NCRBUTTONUP => if (self.titlebar_tabs and wparam == c.HTCAPTION) {
+            self.showSystemMenu(.{ .x = util.loword(lparam), .y = util.hiword(lparam) });
             return 0;
         },
         c.WM_NCLBUTTONUP => if (self.titlebar_tabs and wparam == c.HTMAXBUTTON) {
