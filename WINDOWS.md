@@ -1217,6 +1217,11 @@ Notes:
         integration test the old prompt title (the folder); both updated.
   - [x] Run 42360505212 (bbce57b5a, the caption buttons for UI
         Automation): every job passed; `windows-tip` moved to it.
+  - [x] Runs 42364925647 (475f011eb, icon font glyphs) and 42372742551
+        (fdd5f7ca0, the tab reorder test): every job passed. In between,
+        the tab reorder test failed once because an elevated console (as
+        on the runners) names tabs "Administrator: SECOND"; it now
+        matches the end of the name.
 - [ ] Keep the branch on top of upstream: fetch
       `git@github.com:ghostty-org/ghostty.git` from time to time, rebase,
       and check that the build, unit tests and the fork's CI still pass.
