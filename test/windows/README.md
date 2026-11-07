@@ -330,3 +330,12 @@ script is there. It needs no sshd and changes nothing outside the
 temporary directory. Pass the resources directory as a Linux path:
 
     wsl.exe -e sh test/windows/wsl-ssh.sh /mnt/c/.../zig-out/share/ghostty
+
+## session-restore.ps1
+
+Checks `window-save-state = always` with its own `--class` (so its own state
+file and instance): a split and a second tab are saved when Ghostty quits
+(the JSON has one window, a split tab and a plain tab), and starting again
+restores three terminals with only the active tab's showing, and the first
+tab's split left and right. Inactive tabs' terminals once showed through
+after a restore. Keys bound to the actions are posted to the terminal.
