@@ -1903,16 +1903,12 @@ Notes:
         colors, the snap layouts flyout over maximize, dragging and
         double clicking empty space, and resizing from the top edge.
 - [x] Default tab titles "Command" and "PowerShell" (requested
-      2026-11-06): a console starts with the program's path as its title,
-      which cmd and PowerShell keep ("C:\Windows\system32\cmd.exe").
-      Ghostty now starts them with `lpTitle` set to "Command" or
-      "PowerShell" (5.1 and 7), which works with or without the shell
-      integration's `title` feature; with it, their prompt sets the same
-      name rather than the folder (PowerShell still shows a running
-      command's line). A PowerShell profile that sets a title (oh-my-posh)
-      still wins. Checked: cmd, and `powershell -NoProfile` with
-      `no-title`, showed "Command" and "PowerShell". Unit test:
-      `consoleTitle`.
+      2026-11-06, reverted 2026-11-07 at the user's request): the paths
+      in the tabs came from `shell-integration-features = no-title` in
+      the user's config, not from Ghostty. With the shell integration's
+      `title` feature, cmd's and PowerShell's prompts set the title to the
+      folder again, and Ghostty no longer passes a console title
+      (`lpTitle`) when it starts a shell.
 - [ ] Ctrl+F for Find by default (requested 2026-11-06). Today Find is
       `ctrl+shift+f` (as on Linux; macOS has Cmd+F), which the menus
       show. Plain Ctrl+F is a terminal key, though: readline, zsh and
