@@ -1935,6 +1935,29 @@ Notes:
       `title` feature, cmd's and PowerShell's prompts set the title to the
       folder again, and Ghostty no longer passes a console title
       (`lpTitle`) when it starts a shell.
+- [ ] OSC 10/11 color queries get no reply (reported 2026-11-07: Codex
+      in tmux over SSH from WSL drew its input box without a background,
+      since it couldn't learn the terminal's colors). Reproduced locally
+      without SSH or tmux: a probe in WSL (raw `/dev/tty`, one second
+      per query) got nothing for OSC 10, 11, 12 and 4 (BEL or ST), while
+      DA1 and CPR were answered by the console host
+      (`?61;6;7;21;22;23;24;28;32;42c`, conhost's) and only XTVERSION
+      reached Ghostty. Ghostty's log shows no color query at all: the
+      inbox ConPTY (conhost 10.0.26100.1) swallows them. With
+      `conpty.dll` and `OpenConsole.exe` from the ConPTY package
+      (1.25.260930003) next to `ghostty.exe`, every query reached Ghostty
+      and its replies reached WSL (OSC 11 `rgb:2828/2c2c/3434`, our
+      default background; OSC 4;1 our red; DA1 ours, `?62;22;52c`).
+      `osc-color-report-format` is the default (16 bit) and not involved.
+      The tip and release packages don't bundle `conpty.dll` (no
+      `-BundleConpty` in the workflows), so they use the inbox ConPTY.
+  - [ ] Bundle `conpty.dll` by default in the tip and release packages
+        (awaiting the owner's go-ahead: it changes the console host for
+        every session), and run the UI tests with it.
+  - Workaround now: put `conpty.dll` (`runtimes\win-x64\native`) and
+    `OpenConsole.exe` (`build\native\runtimes\x64`) from the
+    Microsoft.Windows.Console.ConPTY 1.25.260930003 package next to
+    `ghostty.exe`, or build with `package.ps1 -BundleConpty`.
 - [ ] Ctrl+F for Find by default (requested 2026-11-06). Today Find is
       `ctrl+shift+f` (as on Linux; macOS has Cmd+F), which the menus
       show. Plain Ctrl+F is a terminal key, though: readline, zsh and
