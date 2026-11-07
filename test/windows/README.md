@@ -391,3 +391,11 @@ sent to the tab bar and the window: empty space is the caption
 the window (`HTTRANSPARENT`) while keeping tabs and its other buttons. A
 click on minimize minimizes, maximize (`WM_NCLBUTTONUP`) maximizes, and
 with one tab again the system's title bar comes back.
+
+## tab-reorder.ps1
+
+Checks reordering tabs by dragging: the second tab, named `SECOND` with
+cmd's `title` (the shell integration's titles are off), is dragged onto the
+first with posted mouse messages, and UI Automation then lists it first,
+still shown. The tabs' positions come from UI Automation, so the test
+follows the tab bar's layout.

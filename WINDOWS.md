@@ -1876,6 +1876,10 @@ Notes:
       window menu (`#32768`) and `window-show-tab-bar = never`. The
       tabs, session restore, window options, search, command palette,
       window theme and overlays tests pass.
+  - [x] Reordering tabs by dragging, with the new layout's margin and
+        gaps (`Layout.indexAt`): `test/windows/tab-reorder.ps1` drags a
+        tab named with cmd's `title` onto the first and checks UI
+        Automation's order (in CI).
   - [x] Glyphs from the system's icon font, like Windows Terminal: Segoe
         Fluent Icons (Windows 11) or Segoe MDL2 Assets (Windows 10), at
         10 points, for minimize (E921), maximize (E922) or restore
