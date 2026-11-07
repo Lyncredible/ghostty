@@ -372,3 +372,11 @@ Checks the options for new windows, starting Ghostty once for each:
 frame bounds) that many points from the primary monitor's work area at its
 DPI, a position off every monitor falls back to the work area's corner,
 `maximize` maximizes the window, and `fullscreen` covers its monitor.
+
+## title-prompt.ps1
+
+Checks `prompt_surface_title`: the "Change Terminal Title" dialog sets the
+title (the window's title follows), and an empty title clears the override,
+bringing back the shell's title. The field is set with `WM_SETTEXT` and OK
+pressed with `BM_CLICK`. It shows a dialog, so it only runs in CI (set
+`CI=true` to run it elsewhere).

@@ -1747,8 +1747,8 @@ Notes:
         visible frame at 200,100), a position off every monitor falling
         back to the work area's corner, `maximize` and `fullscreen`
         (`test/windows/window-options.ps1`, in CI).
-  - [ ] `prompt_surface_title`: the dialog sets the title override, and an
-        empty title clears it.
+  - [x] `prompt_surface_title`: the dialog sets the title override, and an
+        empty title clears it (`test/windows/title-prompt.ps1`, in CI).
   - [ ] `export_terminal_io`: the inspector's Save As dialog, driven with
         UI Automation, writes the file.
   - Not automated, on purpose: toasts, bell audio and Narrator speech
