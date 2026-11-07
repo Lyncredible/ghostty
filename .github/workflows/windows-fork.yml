@@ -23,8 +23,13 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
+      # Without the saved Zig cache, like the ARM64 job: a build that failed
+      # to fetch a dependency saved a cache that made every later build
+      # fail to unpack it ("unable to unpack tarball ... ReadFailed").
       - name: Setup Zig
         uses: mlugg/setup-zig@d1434d08867e3ee9daa34448df10607b98908d29 # v2.2.1
+        with:
+          use-cache: false
 
       # Zig's downloads sometimes fail on the runners ("unable to unpack
       # tarball ... ReadFailed", three runs in a row on windows-latest), so
@@ -346,8 +351,13 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
+      # Without the saved Zig cache, like the ARM64 job: a build that failed
+      # to fetch a dependency saved a cache that made every later build
+      # fail to unpack it ("unable to unpack tarball ... ReadFailed").
       - name: Setup Zig
         uses: mlugg/setup-zig@d1434d08867e3ee9daa34448df10607b98908d29 # v2.2.1
+        with:
+          use-cache: false
 
       # Zig's downloads sometimes fail on the runners ("unable to unpack
       # tarball ... ReadFailed", three runs in a row on windows-latest), so

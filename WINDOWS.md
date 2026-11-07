@@ -1193,6 +1193,11 @@ Notes:
         failing, as it does here (see the curl workaround above). The
         three build jobs now fetch the dependencies first in their own
         step (`zig build --fetch`, up to four tries).
+  - [x] Run 42331955236: the fetch failed four times in a row in the
+        same job, so it wasn't the network. Like the ARM64 job before
+        (9bcfa2bb9), a failed fetch had saved a broken Zig cache that
+        every later run restored. The x64 jobs no longer restore the Zig
+        cache either.
 - [ ] Keep the branch on top of upstream: fetch
       `git@github.com:ghostty-org/ghostty.git` from time to time, rebase,
       and check that the build, unit tests and the fork's CI still pass.
