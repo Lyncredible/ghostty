@@ -2056,7 +2056,10 @@ Notes:
         Alt+Space), which a right click on the tab bar's empty space shows
         too, and it was missing whenever the tab bar was hidden.
   - [x] A terminal context menu for `right-click-action = context-menu`,
-        shown on button release like other Windows apps
+        shown on button release like other Windows apps. Since 2026-11-06
+        it only has what applies to the terminal (Copy, Paste, Select All,
+        Find…, the Split submenu, Clear, Reset): its Tab, Window and
+        Config submenus repeated the tab menu and the title bar's menu.
   - Items run keybind actions and show their shortcuts ("Ctrl+Shift+T").
     Copy shows Ctrl+Ins because ctrl+shift+c is a performable binding,
     which the reverse map skips (same as GTK).
