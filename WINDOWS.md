@@ -1229,6 +1229,11 @@ Notes:
         such a window, as it already did a terminal. Run 42389933396
         (04edfd329, with that and the sixth upstream sync): every job
         passed.
+  - [x] The runs' "Node.js 20 is deprecated" annotation is about
+        `mlugg/setup-zig` v2.2.1, which declares `node20`; GitHub runs it
+        on Node 24 and it works. It's the latest release (checked
+        2026-11-07) and upstream pins the same commit, so there's nothing
+        to bump yet.
 - [ ] Keep the branch on top of upstream: fetch
       `git@github.com:ghostty-org/ghostty.git` from time to time, rebase,
       and check that the build, unit tests and the fork's CI still pass.
