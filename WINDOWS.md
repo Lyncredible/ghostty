@@ -1181,6 +1181,11 @@ Notes:
         `+ssh`), plus 42268017280 on `windows-rebased` (028b77a03, whose
         run on `windows` was cancelled by the next push). Five green
         runs in a row.
+  - [x] Run 42326858247 (dc0a56f4c, the six new UI tests): `build-windows`
+        failed in its Build step after 1m39s, too early for a compile
+        error (the same tree built on Windows 2022, ARM64 and here), so
+        likely the dependency download; every other job passed. Pushed
+        again to rerun it, since rerunning a job needs a token.
 - [ ] Keep the branch on top of upstream: fetch
       `git@github.com:ghostty-org/ghostty.git` from time to time, rebase,
       and check that the build, unit tests and the fork's CI still pass.
