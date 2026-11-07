@@ -1788,6 +1788,17 @@ Notes:
       so it can still be found with the mouse. Checked: a capture with a
       split no longer shows them, and the overlays test still drags one.
       Hovering itself needs a real mouse (not on a locked desktop).
+- [ ] Tabs in the title bar, like Windows Terminal, Edge and File
+      Explorer (2026-11-06): today the title bar and the tab bar are two
+      rows, and the title bar repeats the active tab's title. Extend the
+      frame into the client area (`DwmExtendFrameIntoClientArea` with a
+      top margin), answer `WM_NCHITTEST` with `HTCAPTION` for the tab
+      bar's empty space and `HTMINBUTTON`/`HTMAXBUTTON`/`HTCLOSE` for
+      caption buttons drawn at the right (Windows 11 snap layouts need
+      `HTMAXBUTTON`), keep the system menu on a right click and
+      Alt+Space, and keep the window title for the taskbar. With one tab
+      and `window-show-tab-bar=auto`, the plain title bar stays.
+      Respect `window-decoration` (none, server) and high contrast.
 - [ ] Match the macOS menus (requested 2026-11-06). Windows has no menu
       bar, so the title bar's menu (right click or Alt+Space) would get
       macOS's menus as submenus, which also shortens its long flat list:
