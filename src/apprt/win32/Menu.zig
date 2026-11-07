@@ -79,38 +79,25 @@ const split_items = [_]Item{
     .act("&Close Split", .close_surface),
 };
 
-const tab_items = [_]Item{
-    .act("Change Tab &Title…", .prompt_tab_title),
-    .act("&New Tab", .new_tab),
-    .shellsIn("New Tab With S&hell", .tab),
-    .act("&Close Tab", .{ .close_tab = .this }),
-};
-
-const window_items = [_]Item{
-    .act("Change Window &Title…", .prompt_window_title),
-    .act("&New Window", .new_window),
-    .act("&Close Window", .close_window),
-};
-
 const config_items = [_]Item{
     .act("&Open Configuration", .{ .open_config = .os_open }),
     .act("&Reload Configuration", .reload_config),
 };
 
-/// The menu for right clicks in a terminal.
+/// The menu for right clicks in a terminal: what applies to the terminal.
+/// Tabs have their own menu (right click a tab), and windows and the
+/// config are in the title bar's menu, so they aren't repeated here.
 pub const context = [_]Item{
     .act("&Copy", .{ .copy_to_clipboard = .mixed }),
     .act("&Paste", .paste_from_clipboard),
     .act("Select &All", .select_all),
     .separator,
-    .act("Cl&ear", .clear_screen),
-    .act("&Reset", .reset),
+    .act("&Find…", .start_search),
     .separator,
     .sub("&Split", &split_items),
-    .sub("&Tab", &tab_items),
-    .sub("&Window", &window_items),
     .separator,
-    .sub("C&onfig", &config_items),
+    .act("Cl&ear", .clear_screen),
+    .act("&Reset", .reset),
 };
 
 /// The menu for right clicks on a tab, like GTK's. It runs on the tab's
