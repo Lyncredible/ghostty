@@ -16,7 +16,7 @@ if (-not $path.StartsWith('/')) { $path = "/$path" }
 $expected = @(
     "$esc]7;kitty-shell-cwd://$([Environment]::MachineName)$path$bel",
     "$esc]2;$(Get-Location)$bel",
-    "$esc]133;A$bel",
+    "$esc]133;A;redraw=0$bel",
     "$esc[5 q",
     "$esc]133;B$bel"
 )

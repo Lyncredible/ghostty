@@ -1986,6 +1986,18 @@ Notes:
         mouse capture, context menu) now run on the bundled ConPTY, and
         `color-query.ps1 -Zip` checks that the package answers OSC 10/11.
         The tests on `zig-out/bin` still use the inbox ConPTY.
+  - [x] cmd's prompt vanished with the bundled ConPTY (run 42406031418,
+        the MSIX start menu test: the banner, then nothing). The bytes
+        reached Ghostty intact; the cause is ours. Ghostty assumes a shell
+        redraws its prompt after a resize (zsh and fish do) and clears the
+        prompt's lines when the window resizes. The inbox ConPTY hid this
+        by repainting its whole screen on resize; the package's doesn't,
+        so the prompt stayed cleared. cmd and PowerShell never redraw, so
+        their integrations now mark the prompt with `133;A;redraw=0`.
+        Checked with the package's ConPTY: the cmd smoke test passes
+        (it timed out before), and PowerShell without a profile shows its
+        prompt; with the inbox one too. The PowerShell integration test
+        expects the new mark.
   - Workaround now: put `conpty.dll` (`runtimes\win-x64\native`) and
     `OpenConsole.exe` (`build\native\runtimes\x64`) from the
     Microsoft.Windows.Console.ConPTY 1.25.260930003 package next to
