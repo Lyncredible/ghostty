@@ -87,7 +87,7 @@ fn childAt(self: *Root, pos: usize) ?*Item {
     const tabs = bar.window.tabs.items;
     const kind: Item.Kind = if (pos < tabs.len)
         .{ .tab = tabs[pos] }
-    else if (pos - tabs.len < buttons.len)
+    else if (pos - tabs.len < bar.buttonCount())
         .{ .button = buttons[pos - tabs.len] }
     else
         return null;
@@ -96,7 +96,7 @@ fn childAt(self: *Root, pos: usize) ?*Item {
 
 fn childCount(self: *const Root) usize {
     const bar = self.bar orelse return 0;
-    return bar.window.tabs.items.len + buttons.len;
+    return bar.window.tabs.items.len + bar.buttonCount();
 }
 
 const buttons = std.enums.values(TabBar.Button);
@@ -250,9 +250,9 @@ const root_fragment_root_vtbl = FragmentRootVtbl{
                 .tab, .close => |idx| .{ .tab = bar.window.tabs.items[idx] },
                 .new_tab => .{ .button = .new_tab },
                 .shell_menu => .{ .button = .shell_menu },
-                // The caption buttons aren't exposed yet (Alt+Space and
-                // Alt+F4 still reach them from the keyboard).
-                .minimize, .maximize, .close_window => null,
+                .minimize => .{ .button = .minimize },
+                .maximize => .{ .button = .maximize },
+                .close_window => .{ .button = .close_window },
             } else null;
             if (kind) |k| if (Item.create(self, k)) |item| {
                 out.* = &item.fragment;
