@@ -171,20 +171,23 @@ pub fn height(self: *const TabBar) c_int {
     return self.scale(40);
 }
 
-/// Tab geometry at 96 DPI, like noctty's: a 40 point bar whose tabs,
-/// buttons and caption buttons share one center line. Tabs are inset by
-/// a margin at the top and bottom (the active one runs down into its
-/// terminal), have rounded top corners and sit apart by a gap. The new
-/// tab and shell buttons are 31 by 24, as in Windows Terminal.
-const tab_margin = 4;
-const tab_left = 6;
-const tab_gap = 2;
-const tab_radius = 6;
+/// Tab geometry at 96 DPI, like Chrome's and Windows Terminal's: in a 40
+/// point bar, tabs start `tab_top` from the top and run to the bottom.
+/// The active tab is filled with its terminal's background, with rounded
+/// top corners and, at the bottom, outward curves (`tab_radius`) that join
+/// it to the terminal below. Other tabs aren't filled: thin separators
+/// part them, and hovering shows a rounded highlight. The new tab and
+/// shell buttons (31 by 24, as in Windows Terminal) follow the last tab.
+const tab_top = 6;
+const tab_left = 8;
+const tab_gap = 0;
+const tab_radius = 8;
+const tab_padding = 12;
 const tab_button_width = 31;
 const tab_button_height = 24;
 
-/// Narrower tabs are compact: the 28 points of padding on each side (room
-/// for the close button) would leave less than 32 for the title.
+/// Narrower tabs are compact: with the title's padding and the close
+/// button, less than about 40 points would be left for the title.
 const compact_tab_width = 88;
 
 /// Scale a size in DPI-independent pixels to physical pixels.
@@ -302,22 +305,25 @@ fn layout(self: *const TabBar) Layout {
     const caption_button = self.scale(46);
     const caption_width = if (self.window.hasTitleBarTabs()) caption_button * 3 else 0;
 
-    // The new tab and shell buttons go at the right, before the caption
-    // buttons. Tabs share the width left of them up to a maximum.
+    // The new tab and shell buttons follow the last tab, as in browsers.
+    // Tabs share the width up to a maximum, leaving room for the buttons
+    // and, with the caption buttons, some empty space to drag the window.
     const button = self.scale(tab_button_width);
-    const buttons_right = client.right - (if (caption_width == 0) 0 else caption_button * 3);
-    const new_left = buttons_right - button * 2;
+    const button_gap = self.scale(4);
     const left = self.scale(tab_left);
     const gap = self.scale(tab_gap);
     const drag_space = if (caption_width == 0) 0 else self.scale(48);
-    const available = @max(0, new_left - left - drag_space - gap * (n - 1));
+    const right_limit = client.right - caption_width - drag_space - button_gap - button * 2;
+    const available = @max(0, right_limit - left - gap * (n - 1));
     const tab_width = @min(self.scale(240), @divTrunc(available, n));
+    const tabs_end = left + n * tab_width + gap * (n - 1);
+    const new_left = tabs_end + button_gap;
 
     return .{
         .tab_width = tab_width,
         .compact = tab_width < self.scale(compact_tab_width),
         .left = left,
-        .top = self.scale(tab_margin),
+        .top = self.scale(tab_top),
         .gap = gap,
         .new_tab = .{ .left = new_left, .top = 0, .right = new_left + button, .bottom = h },
         .shell_menu = .{ .left = new_left + button, .top = 0, .right = new_left + button * 2, .bottom = h },
@@ -421,9 +427,8 @@ pub fn tabSelected(self: *TabBar, tab: *Tab) void {
 fn closeRect(self: *const TabBar, tab: c.RECT) c.RECT {
     const size = self.scale(16);
     const margin = self.scale(8);
-    // Centered on the tab's title, above the bottom margin (which the
-    // active tab fills down to its terminal).
-    const top = tab.top + @divTrunc(tab.bottom - self.scale(tab_margin) - tab.top - size, 2);
+    // Centered on the tab's title.
+    const top = tab.top + @divTrunc(tab.bottom - tab.top - size, 2);
     return .{
         .left = tab.right - margin - size,
         .top = top,
@@ -486,7 +491,11 @@ fn colors(self: *const TabBar) Colors {
     const bg: Rgb = .{ .r = bg_color.r, .g = bg_color.g, .b = bg_color.b };
     const fg: Rgb = .{ .r = fg_color.r, .g = fg_color.g, .b = fg_color.b };
     const black: Rgb = .{ .r = 0, .g = 0, .b = 0 };
-    const bar = blend(bg, black, 0.3);
+    // Darker than the terminal, so the active tab stands out from the
+    // bar: by 30% for dark backgrounds, and 12% for light ones, as in
+    // browsers, where 30% would turn a white page's bar a dull gray.
+    const luma = 0.2126 * @as(f32, @floatFromInt(bg.r)) + 0.7152 * @as(f32, @floatFromInt(bg.g)) + 0.0722 * @as(f32, @floatFromInt(bg.b));
+    const bar = blend(bg, black, if (luma > 128) 0.12 else 0.3);
     return .{
         .bar = bar,
         .active = bg,
@@ -568,26 +577,48 @@ fn paint(self: *TabBar, hdc: c.HDC, client: c.RECT) void {
     };
 
     const alloc = window.app.core_app.alloc;
+    const n = window.tabs.items.len;
+    const r = self.scale(tab_radius);
+
+    // Separators between tabs that aren't active or hovered.
+    for (0..n -| 1) |i| {
+        if (self.tabHighlighted(i) or self.tabHighlighted(i + 1)) continue;
+        const rect = l.tabRect(i, client.bottom);
+        const x = rect.right + @divTrunc(l.gap, 2) - @divTrunc(@max(1, self.scale(1)), 2);
+        const sep: c.RECT = .{ .left = x, .top = rect.top + self.scale(8), .right = x + @max(1, self.scale(1)), .bottom = client.bottom - self.scale(8) };
+        fill(hdc, &sep, col.tab_border);
+    }
+
     for (window.tabs.items, 0..) |tab, i| {
         const rect = l.tabRect(i, client.bottom);
         const active = i == window.active;
         const hovered = Hit.eql(self.hover, .{ .tab = i }) or Hit.eql(self.hover, .{ .close = i });
 
-        // A rounded top: the bottom corners fall below the bar, which
-        // clips them, so the tab meets the terminal under it.
-        const shape: c.RECT = if (active) rect else .{ .left = rect.left, .top = rect.top, .right = rect.right, .bottom = rect.bottom - self.scale(tab_margin) };
-        self.drawTabShape(hdc, shape, if (active) col.active else if (hovered) col.tab_hover else col.tab, if (active) null else col.tab_border);
+        if (active) {
+            // Rounded at the top, and curving out at the bottom into the
+            // terminal, whose background it has.
+            fillRounded(hdc, rect, r, .top, col.active);
+            fillFlare(hdc, rect.left, client.bottom, r, .left, col.active);
+            fillFlare(hdc, rect.right, client.bottom, r, .right, col.active);
+        } else if (hovered) {
+            const pill: c.RECT = .{ .left = rect.left + self.scale(2), .top = rect.top, .right = rect.right - self.scale(2), .bottom = client.bottom - self.scale(4) };
+            fillRounded(hdc, pill, self.scale(6), .all, col.tab_hover);
+        }
 
-        // Title, centered, with the tab's number and, for splits, how many
-        // terminals it has, like "2: api (3)". Compact tabs have only the
-        // number, and no close button to leave room for.
+        // Title, with the tab's number and, for splits, how many terminals
+        // it has, like "2: api (3)", at the left as in browsers. Compact
+        // tabs have only the number, centered, and no close button.
         const close = self.closeRect(rect);
-        const padding = self.scale(if (l.compact) 4 else 28);
-        var text_rect: c.RECT = .{
-            .left = rect.left + padding,
+        var text_rect: c.RECT = if (l.compact) .{
+            .left = rect.left + self.scale(4),
             .top = rect.top,
-            .right = rect.right - padding,
-            .bottom = rect.bottom - self.scale(tab_margin),
+            .right = rect.right - self.scale(4),
+            .bottom = rect.bottom,
+        } else .{
+            .left = rect.left + self.scale(tab_padding),
+            .top = rect.top,
+            .right = close.left - self.scale(4),
+            .bottom = rect.bottom,
         };
         var count: usize = 0;
         var it = tab.tree.iterator();
@@ -609,35 +640,24 @@ fn paint(self: *TabBar, hdc: c.HDC, client: c.RECT) void {
             title16.ptr,
             @intCast(title16.len),
             &text_rect,
-            c.DT_SINGLELINE | c.DT_VCENTER | c.DT_CENTER | c.DT_END_ELLIPSIS | c.DT_NOPREFIX,
+            @as(c.UINT, @intCast(c.DT_SINGLELINE | c.DT_VCENTER | (if (l.compact) c.DT_CENTER else c.DT_LEFT) | c.DT_END_ELLIPSIS | c.DT_NOPREFIX)),
         );
 
-        // Close button, shown on the active and hovered tabs.
-        if (!l.compact and (active or hovered)) {
+        // A close button on every tab that has room, as in browsers.
+        if (!l.compact) {
             if (Hit.eql(self.hover, .{ .close = i })) {
-                fill(hdc, &close, blend(if (active) col.active else col.hover, col.text, 0.15));
+                fillRounded(hdc, close, self.scale(4), .all, blend(if (active) col.active else col.tab_hover, col.text, 0.15));
             }
             const color = if (active) col.text else col.text_inactive;
             if (!self.drawGlyph(hdc, close, 0xE8BB, color)) self.drawCross(hdc, close, color);
         }
     }
 
-    // A line under the strip, which the active tab breaks to join the
-    // terminal under it.
-    {
-        const line_top = client.bottom - @max(1, self.scale(1));
-        const active_rect = if (window.tabs.items.len > 0) l.tabRect(window.active, client.bottom) else c.RECT{ .left = 0, .top = 0, .right = 0, .bottom = 0 };
-        const before: c.RECT = .{ .left = 0, .top = line_top, .right = active_rect.left, .bottom = client.bottom };
-        const after: c.RECT = .{ .left = active_rect.right, .top = line_top, .right = client.right, .bottom = client.bottom };
-        fill(hdc, &before, col.tab_border);
-        fill(hdc, &after, col.tab_border);
-    }
-
-    // The new tab and shell buttons, centered in the tab row.
-    const button_top = @divTrunc(client.bottom - self.scale(tab_button_height), 2);
+    // The new tab and shell buttons, after the tabs, centered on them.
+    const button_top = l.top + @divTrunc(client.bottom - l.top - self.scale(tab_button_height), 2);
     for ([_]struct { Hit, c.RECT }{ .{ .new_tab, l.new_tab }, .{ .shell_menu, l.shell_menu } }) |b| {
         const rect: c.RECT = .{ .left = b[1].left, .top = button_top, .right = b[1].right, .bottom = button_top + self.scale(tab_button_height) };
-        if (Hit.eql(self.hover, b[0])) self.drawRounded(hdc, rect, col.caption_hover, self.scale(4));
+        if (Hit.eql(self.hover, b[0])) fillRounded(hdc, rect, self.scale(4), .all, col.caption_hover);
         switch (b[0]) {
             .new_tab => if (!self.drawGlyph(hdc, rect, 0xE710, col.text_inactive)) self.drawPlus(hdc, rect, col.text_inactive),
             else => if (!self.drawGlyph(hdc, rect, 0xE70D, col.text_inactive)) self.drawChevron(hdc, rect, col.text_inactive),
@@ -647,34 +667,84 @@ fn paint(self: *TabBar, hdc: c.HDC, client: c.RECT) void {
     if (l.caption) |caption| self.paintCaptionButtons(hdc, caption.minimize, caption.maximize, caption.close, col);
 }
 
-/// A filled rectangle with rounded corners.
-fn drawRounded(self: *const TabBar, hdc: c.HDC, rect: c.RECT, color: Rgb, radius: c_int) void {
-    _ = self;
-    const brush = c.CreateSolidBrush(colorref(color));
-    defer _ = c.DeleteObject(brush);
-    const old_brush = c.SelectObject(hdc, brush);
-    defer _ = c.SelectObject(hdc, old_brush);
-    const old_pen = c.SelectObject(hdc, c.GetStockObject(c.NULL_PEN));
-    defer _ = c.SelectObject(hdc, old_pen);
-    _ = c.RoundRect(hdc, rect.left, rect.top, rect.right + 1, rect.bottom + 1, radius * 2, radius * 2);
+/// Whether a tab is drawn highlighted (active or hovered), which hides the
+/// separators beside it.
+fn tabHighlighted(self: *const TabBar, i: usize) bool {
+    return i == self.window.active or
+        Hit.eql(self.hover, .{ .tab = i }) or
+        Hit.eql(self.hover, .{ .close = i });
 }
 
-/// A tab: filled, with rounded top corners and an optional border.
-fn drawTabShape(self: *const TabBar, hdc: c.HDC, rect: c.RECT, color: Rgb, border: ?Rgb) void {
-    const r = self.scale(tab_radius);
-    const brush = c.CreateSolidBrush(colorref(color));
-    defer _ = c.DeleteObject(brush);
-    const pen = if (border) |b| c.CreatePen(c.PS_SOLID, @max(1, self.scale(1)), colorref(b)) else null;
-    defer if (pen != null) {
-        _ = c.DeleteObject(pen);
-    };
-    const old_brush = c.SelectObject(hdc, brush);
-    defer _ = c.SelectObject(hdc, old_brush);
-    const old_pen = c.SelectObject(hdc, if (pen != null) pen else c.GetStockObject(c.NULL_PEN));
-    defer _ = c.SelectObject(hdc, old_pen);
-    // A null pen draws one pixel less on the right and bottom.
-    const extra: c_int = if (pen == null) 1 else 0;
-    _ = c.RoundRect(hdc, rect.left, rect.top, rect.right + extra, rect.bottom + r * 2, r * 2, r * 2);
+const Corners = enum { all, top };
+
+/// A filled rectangle with rounded corners (all, or only the top ones),
+/// antialiased: GDI's RoundRect isn't, which shows on curves this large.
+fn fillRounded(hdc: c.HDC, rect: c.RECT, radius: c_int, corners: Corners, color: Rgb) void {
+    const w = rect.right - rect.left;
+    const h = rect.bottom - rect.top;
+    const rad = @max(0, @min(radius, @divTrunc(w, 2), @divTrunc(h, 2)));
+    const bottom_rad = if (corners == .all) rad else 0;
+    // The middle, and the sides between the corners.
+    fill(hdc, &.{ .left = rect.left + rad, .top = rect.top, .right = rect.right - rad, .bottom = rect.bottom }, color);
+    fill(hdc, &.{ .left = rect.left, .top = rect.top + rad, .right = rect.left + rad, .bottom = rect.bottom - bottom_rad }, color);
+    fill(hdc, &.{ .left = rect.right - rad, .top = rect.top + rad, .right = rect.right, .bottom = rect.bottom - bottom_rad }, color);
+    // The corners: quarter discs centered `rad` in from each corner.
+    const r: f32 = @floatFromInt(rad);
+    const left: f32 = @floatFromInt(rect.left);
+    const top: f32 = @floatFromInt(rect.top);
+    const right: f32 = @floatFromInt(rect.right);
+    const bottom: f32 = @floatFromInt(rect.bottom);
+    fillCorner(hdc, rect.left, rect.top, rad, left + r, top + r, false, color);
+    fillCorner(hdc, rect.right - rad, rect.top, rad, right - r, top + r, false, color);
+    if (corners == .all) {
+        fillCorner(hdc, rect.left, rect.bottom - rad, rad, left + r, bottom - r, false, color);
+        fillCorner(hdc, rect.right - rad, rect.bottom - rad, rad, right - r, bottom - r, false, color);
+    }
+}
+
+/// The outward curve at a bottom corner of the active tab, which joins it
+/// to the terminal below: the square of side `radius` beside the tab's
+/// edge at `x`, filled outside a disc centered `radius` above the bottom
+/// and `radius` away from the tab.
+fn fillFlare(hdc: c.HDC, x: c_int, bottom: c_int, radius: c_int, side: enum { left, right }, color: Rgb) void {
+    if (radius <= 0) return;
+    const r: f32 = @floatFromInt(radius);
+    const top = bottom - radius;
+    switch (side) {
+        .left => fillCorner(hdc, x - radius, top, radius, @as(f32, @floatFromInt(x)) - r, @floatFromInt(top), true, color),
+        .right => fillCorner(hdc, x, top, radius, @as(f32, @floatFromInt(x)) + r, @floatFromInt(top), true, color),
+    }
+}
+
+/// Fill the pixels of the square at (`x`, `y`) of side `size` that are
+/// inside (or, if `outside`, outside) the disc of radius `size` centered
+/// at (`cx`, `cy`), blending edge pixels by coverage (4 by 4 samples)
+/// over what's there. For the few pixels at a corner, GetPixel and
+/// SetPixelV on the memory bitmap we paint into are fast enough.
+fn fillCorner(hdc: c.HDC, x: c_int, y: c_int, size: c_int, cx: f32, cy: f32, outside: bool, color: Rgb) void {
+    const r: f32 = @floatFromInt(size);
+    const r2 = r * r;
+    var py: c_int = y;
+    while (py < y + size) : (py += 1) {
+        var px: c_int = x;
+        while (px < x + size) : (px += 1) {
+            var inside: u8 = 0;
+            for (0..4) |sy| for (0..4) |sx| {
+                const fx = @as(f32, @floatFromInt(px)) + (@as(f32, @floatFromInt(sx)) + 0.5) / 4 - cx;
+                const fy = @as(f32, @floatFromInt(py)) + (@as(f32, @floatFromInt(sy)) + 0.5) / 4 - cy;
+                if (fx * fx + fy * fy <= r2) inside += 1;
+            };
+            const covered: u8 = if (outside) 16 - inside else inside;
+            if (covered == 0) continue;
+            if (covered == 16) {
+                _ = c.SetPixelV(hdc, px, py, colorref(color));
+                continue;
+            }
+            const under = c.GetPixel(hdc, px, py);
+            const below: Rgb = .{ .r = @truncate(under), .g = @truncate(under >> 8), .b = @truncate(under >> 16) };
+            _ = c.SetPixelV(hdc, px, py, colorref(blend(below, color, @as(f32, @floatFromInt(covered)) / 16)));
+        }
+    }
 }
 
 /// A glyph of the system's icon font, centered in a rectangle. Returns
