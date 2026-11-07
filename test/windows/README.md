@@ -348,3 +348,10 @@ field counts six matches, `navigate_search:next` selects a match and then
 another, `:previous` goes back, and `end_search` closes it. The count is
 read from the bar's window text ("Match 2 of 6"), which is also what screen
 readers see.
+
+## command-palette.ps1
+
+Checks the command palette: `toggle_command_palette` opens it with many
+entries, typing `new_split:right` narrows the list, Enter runs it (the
+terminal splits left and right) and closes the palette, and Escape closes
+it without running anything.
