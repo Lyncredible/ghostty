@@ -410,9 +410,11 @@ it runs on a locked desktop.
 
 ## color-query.ps1
 
-Checks OSC 10 and 11 color queries (which Codex, Neovim and tmux use): a
+Checks OSC 10 and 11 color queries (which Codex, Neovim and tmux use) and
+a Kitty graphics query (an APC): a
 PowerShell inside Ghostty, started with distinctive colors, sends them and
 reads the replies as VT input. With `conpty.dll` next to `ghostty.exe`
-(`dist/windows/conpty.ps1`) the replies must be Ghostty's colors. The
+(`dist/windows/conpty.ps1`) the replies must be Ghostty's colors and
+its `OK` for the Kitty query. The
 ConPTY built into Windows swallows these queries, so without it the test
 only reports what came back.

@@ -1,8 +1,10 @@
 # Checks that programs can ask for the terminal's colors (OSC 10 and 11,
 # which Codex, Neovim and tmux use to pick colors that suit the
-# background): a PowerShell inside Ghostty sends the queries and reads the
-# replies as VT input. Ghostty runs with distinctive colors, so a reply
-# with them comes from Ghostty and not from the console host.
+# background), and that the Kitty graphics protocol gets through (a query
+# APC, as programs send to detect it): a PowerShell inside Ghostty sends
+# the queries and reads the replies as VT input. Ghostty runs with
+# distinctive colors, so a reply with them comes from Ghostty and not
+# from the console host.
 #
 # The ConPTY built into Windows (build 26100) swallows these queries, so
 # they only get through with the ConPTY package's conpty.dll next to
@@ -53,7 +55,8 @@ $mode = 0; [void]$K::GetConsoleMode($stdout, [ref]$mode)
 [void]$K::SetConsoleMode($stdin, 0x200)           # ENABLE_VIRTUAL_TERMINAL_INPUT only (raw)
 $e = [char]27
 $replies = [ordered]@{}
-foreach ($q in @(@('OSC 10', "$e]10;?$e\"), @('OSC 11', "$e]11;?`a"), @('DA1', "$e[c"))) {
+foreach ($q in @(@('OSC 10', "$e]10;?$e\"), @('OSC 11', "$e]11;?`a"), @('DA1', "$e[c"),
+        @('Kitty graphics', "${e}_Gi=31,s=1,v=1,a=q,t=d,f=24;AAAA$e\"))) {
     [Console]::Out.Write($q[1]); [Console]::Out.Flush()
     $got = ''
     $deadline = (Get-Date).AddSeconds(2)
@@ -91,7 +94,7 @@ try {
     if ($text.StartsWith('error:')) { Fail "the script in Ghostty failed: $text" }
     $replies = $text | ConvertFrom-Json
     Write-Host "ConPTY: $(if ($bundled) { "conpty.dll next to $Exe" } else { 'the one built into Windows' })"
-    foreach ($name in 'OSC 10', 'OSC 11', 'DA1') { Write-Host "  $name -> '$($replies.$name)'" }
+    foreach ($name in 'OSC 10', 'OSC 11', 'DA1', 'Kitty graphics') { Write-Host "  $name -> '$($replies.$name)'" }
 
     $fg = '\e]10;rgb:abab/cdcd/efef\e\'
     $bg = '\e]11;rgb:1212/3434/5656\a'
@@ -100,6 +103,9 @@ try {
         if ($replies.'OSC 10' -ne $fg) { Fail "OSC 10 got '$($replies.'OSC 10')', not Ghostty's foreground '$fg'" }
         if ($replies.'OSC 11' -ne $bg) { Fail "OSC 11 got '$($replies.'OSC 11')', not Ghostty's background '$bg'" }
         Write-Host 'Ghostty answered OSC 10 and 11 with its colors.'
+        $kitty = '\e_Gi=31;OK\e\'
+        if ($replies.'Kitty graphics' -ne $kitty) { Fail "the Kitty graphics query got '$($replies.'Kitty graphics')', not '$kitty'" }
+        Write-Host 'The Kitty graphics query reached Ghostty, which answered OK.'
     } elseif ($replies.'OSC 11' -eq $bg) {
         Write-Host "The inbox ConPTY passed the queries through, and Ghostty answered."
     } else {
