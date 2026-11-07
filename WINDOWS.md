@@ -1280,6 +1280,26 @@ Notes:
 - [x] Verify IME with Microsoft Pinyin, Japanese IME, and others
 - [x] Fix tab-header close crashing the window when there are multiple
       tabs (active index and split focus must be valid during teardown)
+- [ ] `ssh-terminfo` (and `ssh-env`) in WSL (reported 2026-11-06): with
+      `shell-integration-features = ssh-terminfo`, `ssh` in a WSL shell
+      fails with `ssh:4: no such file or directory: /ghostty`. `WSLENV`
+      passes `GHOSTTY_SHELL_FEATURES` into WSL, so the integration wraps
+      `ssh` with `"$GHOSTTY_BIN_DIR/ghostty" +ssh`, but `GHOSTTY_BIN_DIR`
+      isn't passed (and the Windows `ghostty.exe +ssh` would use Windows'
+      ssh and environment, not the distro's). Make it work inside WSL:
+      - [ ] Stop the broken wrapper first: only define the `ssh` function
+            when `GHOSTTY_BIN_DIR/ghostty` is runnable, in each shell's
+            integration (bash, zsh, fish, elvish), so `ssh` keeps working.
+      - [ ] Support the features from WSL itself: the WSL launcher
+            (`shell-integration/wsl/ghostty.sh`) defines its own `ssh`
+            wrapper that uses the distro's `ssh`: install `xterm-ghostty`
+            on the remote (`infocmp -x` from the resources' terminfo,
+            piped to `tic -x -` over ssh, cached like `+ssh` does), fall
+            back to `TERM=xterm-256color`, and forward `COLORTERM`,
+            `TERM_PROGRAM` and `TERM_PROGRAM_VERSION` for `ssh-env`.
+      - [ ] Test in a WSL distro: `ssh localhost` (or a container) with
+            each feature, and that a missing `infocmp` or `tic` falls
+            back cleanly.
 - [x] Shell integration for wsl
   - [x] Map WSL Linux paths (`/home/...`) to `\\wsl$\<distro>\...`
         so new tabs can start there
