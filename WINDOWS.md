@@ -1781,6 +1781,13 @@ Notes:
     result); two monitors, Windows 10, a real driver restart and a real
     IME (no runner has them); memory and leak checks (too slow and noisy
     for every push).
+- [x] Split drag handles only show when the mouse is over them (or while
+      dragging), like GTK's (opacity 0 until hovered) and macOS's: they
+      were always drawn at the top of each split, over the first line of
+      text (2026-11-06). The window stays in place, almost transparent,
+      so it can still be found with the mouse. Checked: a capture with a
+      split no longer shows them, and the overlays test still drags one.
+      Hovering itself needs a real mouse (not on a locked desktop).
 - [ ] Match the macOS menus (requested 2026-11-06). Windows has no menu
       bar, so the title bar's menu (right click or Alt+Space) would get
       macOS's menus as submenus, which also shortens its long flat list:
