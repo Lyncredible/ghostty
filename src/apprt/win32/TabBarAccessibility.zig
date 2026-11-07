@@ -250,7 +250,6 @@ const root_fragment_root_vtbl = FragmentRootVtbl{
                 .tab, .close => |idx| .{ .tab = bar.window.tabs.items[idx] },
                 .new_tab => .{ .button = .new_tab },
                 .shell_menu => .{ .button = .shell_menu },
-                .main_menu => .{ .button = .main_menu },
             } else null;
             if (kind) |k| if (Item.create(self, k)) |item| {
                 out.* = &item.fragment;
