@@ -1721,9 +1721,14 @@ Notes:
       check waits on state rather than time, and failures put their
       diagnostics in the error annotation. Grouped into a few scripts to
       keep `build-windows` from growing much.
-  - [ ] Session save and restore: a split and a second tab survive closing
-        and starting again (`window-save-state = always`), in a temporary
-        config and state directory.
+  - [x] Session save and restore: a split and a second tab survive closing
+        and starting again (`window-save-state = always`), with the
+        test's own `--class`, so its own state file and instance
+        (`test/windows/session-restore.ps1`, in CI). It found a bug: after
+        a restore, the inactive tabs' terminals showed through, because
+        `Tab.setVisible` skipped hiding windows whose `IsWindowVisible` was
+        already false, which it is for every child while the window is
+        still hidden. It now checks the window's own `WS_VISIBLE`.
   - [ ] Search: `start_search` with a needle shows the match count, and
         next and previous move the selection.
   - [ ] Command palette: typing filters the list, and Enter on
