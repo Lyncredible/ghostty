@@ -77,8 +77,10 @@ function global:prompt {
         [void]$out.Append((__GhosttyOsc "7;kitty-shell-cwd://$([Environment]::MachineName)$path"))
     }
 
+    # At the prompt the title is the shell's name (the command line, while
+    # one runs, below), like cmd's "Command".
     if (__GhosttyHasFeature 'title') {
-        [void]$out.Append((__GhosttyOsc "2;$location"))
+        [void]$out.Append((__GhosttyOsc "2;PowerShell"))
     }
 
     [void]$out.Append((__GhosttyOsc "133;A"))
