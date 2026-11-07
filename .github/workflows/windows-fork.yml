@@ -27,9 +27,17 @@ jobs:
         uses: mlugg/setup-zig@d1434d08867e3ee9daa34448df10607b98908d29 # v2.2.1
 
       # The app targets the GNU ABI (MinGW), as documented in WINDOWS.md;
-      # the runner's native target would be MSVC.
+      # the runner's native target would be MSVC. A failure's last lines
+      # go in an annotation, which can be read without signing in.
       - name: Build
-        run: zig build -Dtarget=x86_64-windows-gnu
+        shell: pwsh
+        run: |
+          zig build -Dtarget=x86_64-windows-gnu 2>&1 | Tee-Object -FilePath build.log
+          if ($LASTEXITCODE -ne 0) {
+            $tail = (Get-Content build.log | Where-Object { $_.Trim() } | Select-Object -Last 15) -join ' | '
+            Write-Host "::error title=build::$tail"
+            exit 1
+          }
 
       # Failures are repeated as an annotation, which needs no sign-in.
       - name: Test
