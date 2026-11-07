@@ -10,13 +10,25 @@
 # Ghostty's; without it, the test reports what came back and passes.
 #
 #     ./color-query.ps1 -Exe zig-out/bin/ghostty.exe
+#     ./color-query.ps1 -Zip zig-out/dist/ghostty-windows-unofficial-....zip
+#
+# With -Zip (a package, which bundles the ConPTY package), the replies must
+# be Ghostty's.
 
 param(
-    [Parameter(Mandatory)] [string]$Exe,
+    [string]$Exe,
+    [string]$Zip,
     [int]$TimeoutSeconds = 60
 )
 
 $ErrorActionPreference = 'Stop'
+
+if ($Zip) {
+    $unzipped = Join-Path ([IO.Path]::GetTempPath()) "ghostty-color-query-zip-$PID"
+    Expand-Archive -Force $Zip $unzipped
+    $Exe = (Get-ChildItem -Recurse $unzipped -Filter ghostty.exe | Select-Object -First 1).FullName
+}
+if (-not $Exe) { throw "give -Exe or -Zip" }
 
 $work = Join-Path ([IO.Path]::GetTempPath()) "ghostty-color-query-$PID"
 New-Item -ItemType Directory -Force $work | Out-Null
@@ -55,6 +67,7 @@ $replies | ConvertTo-Json | Set-Content -Encoding utf8 $Result
 '@
 
 $bundled = Test-Path (Join-Path (Split-Path $Exe) 'conpty.dll')
+if ($Zip -and -not $bundled) { throw "the package has no conpty.dll next to ghostty.exe" }
 $process = Start-Process -FilePath $Exe -PassThru -RedirectStandardError $log -ArgumentList '--window-save-state=never',
     '--background=#123456', '--foreground=#abcdef', '-e',
     'powershell.exe', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $inner, $result
@@ -96,5 +109,6 @@ try {
     if (-not $process.HasExited) { Stop-Process -Id $process.Id -Force }
     Start-Sleep -Milliseconds 500
     Remove-Item -Recurse -Force $work -ErrorAction SilentlyContinue
+    if ($unzipped) { Remove-Item -Recurse -Force $unzipped -ErrorAction SilentlyContinue }
 }
 exit 0

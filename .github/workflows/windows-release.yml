@@ -51,7 +51,7 @@ jobs:
 
       - name: Package
         shell: pwsh
-        run: ./dist/windows/package.ps1 -Target ${{ matrix.target }} -OutDir zig-out/dist -Msix
+        run: ./dist/windows/package.ps1 -Target ${{ matrix.target }} -OutDir zig-out/dist -Msix -BundleConpty
 
       # The packaged app must start and print its version.
       - name: Check the package
