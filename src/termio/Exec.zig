@@ -1265,10 +1265,6 @@ const Subprocess = struct {
             .args = self.args,
             .env = if (self.env) |*env| env else null,
             .cwd = cwd,
-            .title = if (comptime builtin.target.os.tag == .windows)
-                shell_integration.consoleTitle(self.args[0])
-            else
-                null,
             .stdin = if (builtin.target.os.tag == .windows) null else .{
                 .handle = pty.slave,
                 .flags = .{ .nonblocking = false },
