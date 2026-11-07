@@ -1827,10 +1827,8 @@ Notes:
     pass with it; a maximized capture shows the tabs and the restore
     glyph unclipped.
   - [x] Restyled like noctty (https://github.com/amanthanvi/noctty,
-        requested 2026-11-06), keeping Ghostty's icon: the icon at the
-        left (a click opens the window menu, a double click closes, like
-        a title bar's icon), then the tabs, then + and ▾ at the right next
-        to the caption buttons. Windows Terminal's metrics, as noctty's
+        requested 2026-11-06): the tabs, then + and ▾ at the right next to
+        the caption buttons. Windows Terminal's metrics, as noctty's
         `docs/wt-chrome-reference.md` records them: a 40 point row (32
         when maximized, so the tabs reach the top of the screen) with 32
         point tabs at its bottom, 8 point rounded top corners, 46 by 40
@@ -1841,6 +1839,27 @@ Notes:
         numbered and count splits ("2: api (3)"), with the bell first.
         Checked with captures, restored and maximized; the title bar tabs
         test checks the icon's hit test too.
+  - [x] Follow-ups from using it (2026-11-06):
+    - A right click on the empty space showed nothing: DefWindowProc
+      looks for a caption the window no longer has. The window now shows
+      its menu itself on `WM_NCRBUTTONUP` (and takes the button down).
+    - The tabs are in the title bar with one tab too (under
+      `window-show-tab-bar = auto`); `never` keeps the system's title bar.
+      Starting with one tab showed both the system's title bar and the
+      tabs: the first frame change happened before the window procedure
+      could see the window, so it went to DefWindowProc. The switch now
+      waits for that.
+    - Alignment: the tabs were at the bottom of the bar (Windows
+      Terminal's layout), below the buttons' center line. Now, like
+      noctty, everything is centered in the 40 point bar: tabs inset 4
+      points at the top and bottom (6 point corners), the active one
+      running down into its terminal, and the tab close buttons on the
+      titles' line.
+    - No icon at the left, like the macOS app (it was briefly there).
+    - Test: `titlebar-tabs.ps1` now checks one tab, the right click's
+      window menu (`#32768`) and `window-show-tab-bar = never`. The
+      tabs, session restore, window options, search, command palette,
+      window theme and overlays tests pass.
   - [ ] Expose the caption buttons to UI Automation (screen readers):
         Windows no longer does once we draw them. Alt+Space and Alt+F4
         still work from the keyboard.

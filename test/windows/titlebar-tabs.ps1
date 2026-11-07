@@ -1,11 +1,13 @@
-# Checks the tabs in the title bar: with two tabs the client area covers the
-# caption (no title bar row above the tabs), the tab bar's empty space is
-# the caption (HTCAPTION), its top edge resizes (HTTOP), its maximize button
-# is HTMAXBUTTON (for Windows 11's snap layouts) and the tab bar passes all
-# of them to the window (HTTRANSPARENT), while tabs stay the tab bar's. The
-# minimize and maximize buttons work, and with one tab again the system's
-# title bar comes back. It sends hit tests and posts clicks to Ghostty's
-# windows, so it runs on a locked desktop.
+# Checks the tabs in the title bar: with one tab and with two, the client
+# area covers the caption (no title bar row above the tabs). The tab bar's
+# empty space is the caption (HTCAPTION), its top edge resizes (HTTOP), its
+# maximize button is HTMAXBUTTON (for Windows 11's snap layouts) and the tab
+# bar passes all of them to the window (HTTRANSPARENT), while tabs and the
+# other buttons stay the tab bar's. A right click on the empty space
+# opens the window menu, and the minimize and maximize buttons work. With
+# `window-show-tab-bar = never` the window has the system's title bar. It
+# sends hit tests and posts clicks to Ghostty's windows, so it runs on a
+# locked desktop.
 #
 #     ./titlebar-tabs.ps1 -Exe zig-out/bin/ghostty.exe
 
@@ -35,6 +37,16 @@ Add-Type -Namespace GhosttyTitleBarTabs -Name Win32 -MemberDefinition @'
 [DllImport("user32.dll")] public static extern System.IntPtr SetThreadDpiAwarenessContext(System.IntPtr context);
 [DllImport("user32.dll")] public static extern uint GetDpiForWindow(System.IntPtr h);
 [DllImport("user32.dll", CharSet = CharSet.Unicode)] public static extern System.IntPtr FindWindowExW(System.IntPtr parent, System.IntPtr after, string cls, string title);
+[DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(System.IntPtr h, out uint pid);
+// The process's visible top-level window of a class, or zero.
+public static System.IntPtr TopLevel(uint pid, string cls) {
+  var h = System.IntPtr.Zero;
+  while ((h = FindWindowExW(System.IntPtr.Zero, h, cls, null)) != System.IntPtr.Zero) {
+    uint owner; GetWindowThreadProcessId(h, out owner);
+    if (owner == pid && IsWindowVisible(h)) return h;
+  }
+  return System.IntPtr.Zero;
+}
 // The hit test result for a point on the screen, from a window.
 public static int Hit(System.IntPtr h, int x, int y) {
   return (int)(long)SendMessageW(h, 0x0084, System.IntPtr.Zero, (System.IntPtr)((y << 16) | (x & 0xFFFF)));   // WM_NCHITTEST
@@ -96,14 +108,14 @@ function Shown { $h = [IntPtr]::Zero; while (($h = $W::FindWindowExW($window, $h
 try {
     $window = WaitFor { $process.Refresh(); if ($process.MainWindowHandle -ne 0) { $process.MainWindowHandle } } 'the window'
     [void](WaitFor { Shown } 'the terminal')
-    $single = CaptionGap
-    if ($single -le 10) { Fail "with one tab the window has no title bar ($note)" }
-    Write-Host "One tab: the system's title bar ($note)."
+    $bar = WaitFor { $h = $W::FindWindowExW($window, [IntPtr]::Zero, 'GhosttyTabBar', $null); if ($h -ne [IntPtr]::Zero -and (Visible $h)) { $h } } 'the tab bar'
+    [void](WaitFor { (CaptionGap) -le 0 } 'the tab to take the title bar')
+    Write-Host "One tab: the tab is in the title bar ($note)."
 
     $W::Key((Shown), 0x74, 0x3F)   # F5: new_tab
-    $bar = WaitFor { $h = $W::FindWindowExW($window, [IntPtr]::Zero, 'GhosttyTabBar', $null); if ($h -ne [IntPtr]::Zero -and (Visible $h)) { $h } } 'the tab bar'
-    [void](WaitFor { (CaptionGap) -le 0 } 'the tabs to take the title bar')
-    Write-Host "Two tabs: the tabs are in the title bar ($note)."
+    Start-Sleep -Seconds 1
+    [void](WaitFor { (CaptionGap) -le 0 } 'the second tab')
+    Write-Host "Two tabs: still in the title bar ($note)."
 
     $br = New-Object GhosttyTitleBarTabs.Win32+RECT; [void]$W::GetWindowRect($bar, [ref]$br)
     $h = $br.b - $br.t
@@ -119,8 +131,7 @@ try {
         @{ What = 'the top edge'; X = $empty; Y = $br.t + 1; Bar = $HTTRANSPARENT; Window = $HTTOP },
         @{ What = 'the minimize button'; X = $br.r - [int](2.5 * $button); Y = $cy; Bar = $HTCLIENT },
         @{ What = 'the close button'; X = $br.r - [int](0.5 * $button); Y = $cy; Bar = $HTCLIENT },
-        @{ What = 'the first tab'; X = $br.l + 3 * $button; Y = $cy; Bar = $HTCLIENT },
-        @{ What = 'the icon'; X = $br.l + [int]($button / 3); Y = $cy; Bar = $HTCLIENT }
+        @{ What = 'the first tab'; X = $br.l + 3 * $button; Y = $cy; Bar = $HTCLIENT }
     )
     foreach ($p in $points) {
         $got = $W::Hit($bar, $p.X, $p.Y)
@@ -131,6 +142,17 @@ try {
         }
     }
     Write-Host 'Hit tests: empty space is the caption, the top edge resizes, maximize is HTMAXBUTTON, and the tabs and other buttons are the tab bar''s.'
+
+    # A right click on the empty space opens the window menu (Windows's own
+    # handling looks for a caption the window no longer has).
+    if ($W::TopLevel([uint32]$process.Id, '#32768') -ne [IntPtr]::Zero) { Fail 'a menu was open before the right click' }
+    $lp = [IntPtr](($cy -shl 16) -bor ($empty -band 0xFFFF))
+    [void]$W::PostMessageW($window, 0x00A4, [IntPtr]$HTCAPTION, $lp)   # WM_NCRBUTTONDOWN
+    [void]$W::PostMessageW($window, 0x00A5, [IntPtr]$HTCAPTION, $lp)   # WM_NCRBUTTONUP
+    $menu = WaitFor { $script:note = 'no menu'; $m = $W::TopLevel([uint32]$process.Id, '#32768'); if ($m -ne [IntPtr]::Zero) { $m } } 'the window menu'
+    [void]$W::PostMessageW($window, 0x001F, [IntPtr]::Zero, [IntPtr]::Zero)   # WM_CANCELMODE closes it
+    [void](WaitFor { $script:note = 'still open'; $W::TopLevel([uint32]$process.Id, '#32768') -eq [IntPtr]::Zero } 'the window menu to close')
+    Write-Host 'A right click on the empty space opens the window menu.'
 
     # Minimize, then restore; maximize with a click on the maximize button
     # (WM_NCLBUTTONUP with HTMAXBUTTON, as Windows sends it).
@@ -144,10 +166,14 @@ try {
     Write-Host 'The minimize and maximize buttons work.'
     [void]$W::ShowWindow($window, 9)
 
-    # One tab again: the system's title bar comes back.
-    $W::Key((Shown), 0x76, 0x41)   # F7: close_tab:this
-    [void](WaitFor { (CaptionGap) -eq $single } "the system's title bar to come back")
-    Write-Host "One tab again: the system's title bar is back ($note)."
+    # With the tab bar turned off, the system's title bar.
+    Stop-Process -Id $process.Id -Force
+    $process = Start-Process -FilePath $Exe -PassThru -RedirectStandardError $log -ArgumentList '--command=cmd.exe',
+        '--window-save-state=never', '--window-show-tab-bar=never'
+    $window = WaitFor { $process.Refresh(); if ($process.MainWindowHandle -ne 0) { $process.MainWindowHandle } } 'the window without a tab bar'
+    [void](WaitFor { Shown } 'the terminal')
+    [void](WaitFor { (CaptionGap) -gt 10 } "the system's title bar")
+    Write-Host "window-show-tab-bar = never: the system's title bar ($note)."
 } finally {
     if (-not $process.HasExited) { Stop-Process -Id $process.Id -Force }
     Remove-Item -LiteralPath $log -Force -ErrorAction SilentlyContinue

@@ -30,11 +30,6 @@ hover: ?Hit = null,
 /// Whether we're tracking the mouse to get WM_MOUSELEAVE.
 tracking_mouse: bool = false,
 
-/// Ghostty's icon at the left, with the tabs in the title bar, loaded at
-/// the size it's drawn at (which changes with the DPI).
-app_icon: c.HICON = null,
-app_icon_size: c_int = 0,
-
 /// Whether the mouse is over the maximize button, which the window tells us
 /// (the button is non-client, see Window's WM_NCHITTEST).
 maximize_hovered: bool = false,
@@ -64,10 +59,6 @@ pub const Hit = union(enum) {
     minimize,
     maximize,
     close_window,
-
-    /// Ghostty's icon, with the tabs in the title bar: like a title bar's
-    /// icon, a click opens the window menu and a double click closes.
-    app_icon,
 
     fn eql(a: ?Hit, b: ?Hit) bool {
         const x = a orelse return b == null;
@@ -153,7 +144,6 @@ fn tooltipText(self: *TabBar, hit: Hit) []const u8 {
         .minimize => "Minimize",
         .maximize => if (c.IsZoomed(self.window.hwnd) != 0) "Restore Down" else "Maximize",
         .close_window => "Close",
-        .app_icon => "Ghostty",
     };
 }
 
@@ -163,7 +153,6 @@ pub fn deinit(self: *TabBar) void {
     if (self.tooltip) |tooltip| _ = c.DestroyWindow(tooltip);
     _ = c.SetWindowLongPtrW(self.hwnd, util.GWLP_USERDATA, 0);
     if (self.font) |f| _ = c.DeleteObject(f);
-    if (self.app_icon != null) _ = c.DestroyIcon(self.app_icon);
 }
 
 /// Redraw the tab bar, e.g. after tabs or titles changed.
@@ -173,20 +162,18 @@ pub fn invalidate(self: *TabBar) void {
 
 /// The height of the tab bar for our current font and DPI.
 pub fn height(self: *const TabBar) c_int {
-    // Like Windows Terminal (and noctty): a 40 point row with 32 point tabs
-    // at its bottom, so there's room above them to grab the window, and no
-    // room when maximized, where the tabs reach the top of the screen.
-    const maximized = self.window.hasTitleBarTabs() and c.IsZoomed(self.window.hwnd) != 0;
-    return self.scale(if (maximized) tab_height else 40);
+    return self.scale(40);
 }
 
-/// Tab geometry at 96 DPI, as in Windows Terminal's tab view: 32 point
-/// tabs with 8 point rounded top corners, starting a little in from the
-/// left, apart by a gap. The new tab and shell buttons are 31 by 24.
-const tab_height = 32;
+/// Tab geometry at 96 DPI, like noctty's: a 40 point bar whose tabs,
+/// buttons and caption buttons share one center line. Tabs are inset by
+/// a margin at the top and bottom (the active one runs down into its
+/// terminal), have rounded top corners and sit apart by a gap. The new
+/// tab and shell buttons are 31 by 24, as in Windows Terminal.
+const tab_margin = 4;
 const tab_left = 6;
 const tab_gap = 2;
-const tab_radius = 8;
+const tab_radius = 6;
 const tab_button_width = 31;
 const tab_button_height = 24;
 
@@ -244,9 +231,6 @@ const Layout = struct {
     /// The caption buttons, with the tabs in the title bar.
     caption: ?struct { minimize: c.RECT, maximize: c.RECT, close: c.RECT },
 
-    /// Ghostty's icon at the left, with the tabs in the title bar.
-    app_icon: ?c.RECT,
-
     fn tabRect(self: Layout, idx: usize, h: c_int) c.RECT {
         const left = self.left + @as(c_int, @intCast(idx)) * (self.tab_width + self.gap);
         return .{ .left = left, .top = self.top, .right = left + self.tab_width, .bottom = h };
@@ -277,8 +261,7 @@ fn layout(self: *const TabBar) Layout {
     const button = self.scale(tab_button_width);
     const buttons_right = client.right - (if (caption_width == 0) 0 else caption_button * 3);
     const new_left = buttons_right - button * 2;
-    const icon_width = if (caption_width == 0) 0 else self.scale(40);
-    const left = icon_width + self.scale(tab_left);
+    const left = self.scale(tab_left);
     const gap = self.scale(tab_gap);
     const drag_space = if (caption_width == 0) 0 else self.scale(48);
     const available = @max(0, new_left - left - drag_space - gap * (n - 1));
@@ -287,11 +270,10 @@ fn layout(self: *const TabBar) Layout {
     return .{
         .tab_width = tab_width,
         .left = left,
-        .top = h - self.scale(tab_height),
+        .top = self.scale(tab_margin),
         .gap = gap,
         .new_tab = .{ .left = new_left, .top = 0, .right = new_left + button, .bottom = h },
         .shell_menu = .{ .left = new_left + button, .top = 0, .right = new_left + button * 2, .bottom = h },
-        .app_icon = if (icon_width == 0) null else .{ .left = 0, .top = 0, .right = icon_width, .bottom = h },
         .caption = if (caption_width == 0) null else .{
             .minimize = .{ .left = client.right - caption_button * 3, .top = 0, .right = client.right - caption_button * 2, .bottom = h },
             .maximize = .{ .left = client.right - caption_button * 2, .top = 0, .right = client.right - caption_button, .bottom = h },
@@ -376,7 +358,9 @@ pub fn tabSelected(self: *TabBar, tab: *Tab) void {
 fn closeRect(self: *const TabBar, tab: c.RECT) c.RECT {
     const size = self.scale(16);
     const margin = self.scale(8);
-    const top = tab.top + @divTrunc(tab.bottom - tab.top - size, 2);
+    // Centered on the tab's title, above the bottom margin (which the
+    // active tab fills down to its terminal).
+    const top = tab.top + @divTrunc(tab.bottom - self.scale(tab_margin) - tab.top - size, 2);
     return .{
         .left = tab.right - margin - size,
         .top = top,
@@ -391,7 +375,6 @@ fn hitTest(self: *const TabBar, x: c_int, y: c_int) ?Hit {
     _ = c.GetClientRect(self.hwnd, &client);
     const pt: c.POINT = .{ .x = x, .y = y };
 
-    if (l.app_icon) |icon| if (c.PtInRect(&icon, pt) != 0) return .app_icon;
     if (l.caption) |caption| {
         if (c.PtInRect(&caption.minimize, pt) != 0) return .minimize;
         if (c.PtInRect(&caption.maximize, pt) != 0) return .maximize;
@@ -529,7 +512,8 @@ fn paint(self: *TabBar, hdc: c.HDC, client: c.RECT) void {
 
         // A rounded top: the bottom corners fall below the bar, which
         // clips them, so the tab meets the terminal under it.
-        self.drawTabShape(hdc, rect, if (active) col.active else if (hovered) col.tab_hover else col.tab, if (active) null else col.tab_border);
+        const shape: c.RECT = if (active) rect else .{ .left = rect.left, .top = rect.top, .right = rect.right, .bottom = rect.bottom - self.scale(tab_margin) };
+        self.drawTabShape(hdc, shape, if (active) col.active else if (hovered) col.tab_hover else col.tab, if (active) null else col.tab_border);
 
         // Title, centered, with the tab's number and, for splits, how many
         // terminals it has, like "2: api (3)".
@@ -538,7 +522,7 @@ fn paint(self: *TabBar, hdc: c.HDC, client: c.RECT) void {
             .left = rect.left + self.scale(28),
             .top = rect.top,
             .right = rect.right - self.scale(28),
-            .bottom = rect.bottom,
+            .bottom = rect.bottom - self.scale(tab_margin),
         };
         var count: usize = 0;
         var it = tab.tree.iterator();
@@ -582,8 +566,7 @@ fn paint(self: *TabBar, hdc: c.HDC, client: c.RECT) void {
     }
 
     // The new tab and shell buttons, centered in the tab row.
-    const row_top = client.bottom - self.scale(tab_height);
-    const button_top = row_top + @divTrunc(self.scale(tab_height) - self.scale(tab_button_height), 2);
+    const button_top = @divTrunc(client.bottom - self.scale(tab_button_height), 2);
     for ([_]struct { Hit, c.RECT }{ .{ .new_tab, l.new_tab }, .{ .shell_menu, l.shell_menu } }) |b| {
         const rect: c.RECT = .{ .left = b[1].left, .top = button_top, .right = b[1].right, .bottom = button_top + self.scale(tab_button_height) };
         if (Hit.eql(self.hover, b[0])) self.drawRounded(hdc, rect, col.caption_hover, self.scale(4));
@@ -594,37 +577,6 @@ fn paint(self: *TabBar, hdc: c.HDC, client: c.RECT) void {
     }
 
     if (l.caption) |caption| self.paintCaptionButtons(hdc, caption.minimize, caption.maximize, caption.close, col);
-    if (l.app_icon) |rect| self.paintAppIcon(hdc, rect);
-}
-
-/// Ghostty's icon, 16 points square, centered in its place and on the tab
-/// row (the bottom of the bar), in line with the tab titles.
-fn paintAppIcon(self: *TabBar, hdc: c.HDC, rect: c.RECT) void {
-    const size = self.scale(16);
-    if (self.app_icon == null or self.app_icon_size != size) {
-        if (self.app_icon != null) _ = c.DestroyIcon(self.app_icon);
-        // The icon ID is from dist/windows/ghostty.rc.
-        self.app_icon = util.loadIconSized(self.window.app.hinstance, 1, size);
-        self.app_icon_size = size;
-    }
-    if (self.app_icon == null) return;
-    const x = rect.left + @divTrunc(rect.right - rect.left - size, 2);
-    const row = self.scale(tab_height);
-    const y = rect.bottom - row + @divTrunc(row - size, 2);
-    _ = c.DrawIconEx(hdc, x, y, self.app_icon, size, size, 0, null, c.DI_NORMAL);
-}
-
-/// The window menu, below Ghostty's icon, like a title bar's icon opens it.
-fn showWindowMenu(self: *TabBar, rect: c.RECT) void {
-    const hwnd = self.window.hwnd;
-    const menu = c.GetSystemMenu(hwnd, c.FALSE) orelse return;
-    var pt: c.POINT = .{ .x = rect.left, .y = rect.bottom };
-    _ = c.ClientToScreen(self.hwnd, &pt);
-    self.setHover(null);
-    // The window builds our part of the menu on WM_INITMENUPOPUP, and runs
-    // the command from WM_SYSCOMMAND, as for the title bar's menu.
-    const cmd = c.TrackPopupMenu(menu, c.TPM_RETURNCMD | c.TPM_LEFTBUTTON, pt.x, pt.y, 0, hwnd, null);
-    if (cmd != 0) _ = c.PostMessageW(hwnd, c.WM_SYSCOMMAND, @intCast(cmd), 0);
 }
 
 /// A filled rectangle with rounded corners.
@@ -984,13 +936,6 @@ pub fn wndProc(
                 .minimize => _ = c.ShowWindow(self.window.hwnd, c.SW_MINIMIZE),
                 .maximize => _ = c.ShowWindow(self.window.hwnd, if (c.IsZoomed(self.window.hwnd) != 0) c.SW_RESTORE else c.SW_MAXIMIZE),
                 .close_window => _ = c.PostMessageW(self.window.hwnd, c.WM_CLOSE, 0, 0),
-                .app_icon => {
-                    if (msg == c.WM_LBUTTONDBLCLK) {
-                        _ = c.PostMessageW(self.window.hwnd, c.WM_SYSCOMMAND, c.SC_CLOSE, 0);
-                    } else if (self.layout().app_icon) |rect| {
-                        self.showWindowMenu(rect);
-                    }
-                },
             }
             return 0;
         },
@@ -1033,7 +978,7 @@ pub fn wndProc(
             const hit = self.hitTest(util.loword(lparam), util.hiword(lparam)) orelse return 0;
             switch (hit) {
                 .tab, .close => |i| self.window.closeTabAt(i),
-                .new_tab, .shell_menu, .minimize, .maximize, .close_window, .app_icon => {},
+                .new_tab, .shell_menu, .minimize, .maximize, .close_window => {},
             }
             return 0;
         },
