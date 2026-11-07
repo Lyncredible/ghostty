@@ -1800,17 +1800,38 @@ Notes:
       so it can still be found with the mouse. Checked: a capture with a
       split no longer shows them, and the overlays test still drags one.
       Hovering itself needs a real mouse (not on a locked desktop).
-- [ ] Tabs in the title bar, like Windows Terminal, Edge and File
-      Explorer (2026-11-06): today the title bar and the tab bar are two
-      rows, and the title bar repeats the active tab's title. Extend the
-      frame into the client area (`DwmExtendFrameIntoClientArea` with a
-      top margin), answer `WM_NCHITTEST` with `HTCAPTION` for the tab
-      bar's empty space and `HTMINBUTTON`/`HTMAXBUTTON`/`HTCLOSE` for
-      caption buttons drawn at the right (Windows 11 snap layouts need
-      `HTMAXBUTTON`), keep the system menu on a right click and
-      Alt+Space, and keep the window title for the taskbar. With one tab
-      and `window-show-tab-bar=auto`, the plain title bar stays.
-      Respect `window-decoration` (none, server) and high contrast.
+- [x] Tabs in the title bar, like Windows Terminal, Edge and File
+      Explorer (2026-11-06): the title bar and the tab bar were two rows,
+      and the title bar repeated the active tab's title. Whenever the tab
+      bar shows in a window with a title bar (not fullscreen, the quick
+      terminal or a high contrast theme, which keeps the system's colors),
+      `WM_NCCALCSIZE` gives the caption to the client area (the sides and
+      bottom of the frame stay, and a maximized window's top moves in by
+      its overhang), and the tab bar draws minimize, maximize/restore and
+      close (46 by 32, close red on hover, dimmer when inactive) after
+      some empty space that always drags the window. `WM_NCHITTEST`: the
+      tab bar answers `HTTRANSPARENT` for its empty space, top edge and
+      maximize button, and the window answers `HTCAPTION` (drag, double
+      click maximizes, right click is the system menu), `HTTOP` and
+      `HTMAXBUTTON` (Windows 11's snap layouts; we draw it, track its hover
+      with `WM_NCMOUSEMOVE`/`WM_NCMOUSELEAVE` and press it on
+      `WM_NCLBUTTONUP`). With one tab under `window-show-tab-bar=auto`,
+      the system's title bar comes back (`SWP_FRAMECHANGED`), and the
+      window size for a terminal size counts no caption.
+  - Changed: a double click on the tab bar's empty space maximizes, like
+    a title bar, rather than opening a tab (the + button and Ctrl+Shift+T
+    do), and a right click there is the system menu (which has the same
+    menu as before).
+  - Test: `test/windows/titlebar-tabs.ps1` (in CI). The tabs, session
+    restore, window options, search, command palette and overlays tests
+    pass with it; a maximized capture shows the tabs and the restore
+    glyph unclipped.
+  - [ ] Expose the caption buttons to UI Automation (screen readers):
+        Windows no longer does once we draw them. Alt+Space and Alt+F4
+        still work from the keyboard.
+  - [ ] Check by hand with a real mouse (not on a locked desktop): hover
+        colors, the snap layouts flyout over maximize, dragging and
+        double clicking empty space, and resizing from the top edge.
 - [ ] Ctrl+F for Find by default (requested 2026-11-06). Today Find is
       `ctrl+shift+f` (as on Linux; macOS has Cmd+F), which the menus
       show. Plain Ctrl+F is a terminal key, though: readline, zsh and

@@ -118,6 +118,10 @@ default_size: ?struct { width: u32, height: u32 } = null,
 /// Overrides `window-decoration` after toggle_window_decorations.
 decorated_override: ?bool = null,
 
+/// Whether the tabs are in the title bar: the client area covers the
+/// caption, and the tab bar draws the caption buttons. See tabsInTitleBar.
+titlebar_tabs: bool = false,
+
 /// The minimum terminal size in pixels, from the size_limit action.
 min_size: ?struct { width: u32, height: u32 } = null,
 
@@ -1317,6 +1321,46 @@ fn showTabBar(self: *const Window) bool {
     };
 }
 
+/// Whether the tabs should be in the title bar, like Windows Terminal:
+/// whenever the tab bar shows in a window with a title bar. Fullscreen and
+/// the quick terminal have no title bar; high contrast themes keep the
+/// system's, which follows the theme's colors.
+fn tabsInTitleBar(self: *const Window) bool {
+    if (self.quick or self.fullscreen != null or util.highContrast()) return false;
+    const decorated = self.decorated_override orelse
+        (self.app.config.@"window-decoration" != .none);
+    return decorated and self.showTabBar();
+}
+
+/// Switch between the system's title bar and the tabs in it when that
+/// changes (more tabs, decorations, fullscreen), recalculating the frame.
+fn updateTitleBarTabs(self: *Window) void {
+    const want = self.tabsInTitleBar();
+    if (want == self.titlebar_tabs) return;
+    self.titlebar_tabs = want;
+    _ = c.SetWindowPos(
+        self.hwnd,
+        null,
+        0,
+        0,
+        0,
+        0,
+        c.SWP_FRAMECHANGED | c.SWP_NOMOVE | c.SWP_NOSIZE | c.SWP_NOZORDER | c.SWP_NOACTIVATE,
+    );
+}
+
+/// The height of the resize border at the top of the window, which the tabs
+/// cover when they're in the title bar.
+pub fn resizeBorderHeight(self: *const Window) c_int {
+    const dpi = c.GetDpiForWindow(self.hwnd);
+    return c.GetSystemMetricsForDpi(c.SM_CYFRAME, dpi) + c.GetSystemMetricsForDpi(c.SM_CXPADDEDBORDER, dpi);
+}
+
+/// Whether the tabs are in the title bar right now.
+pub fn hasTitleBarTabs(self: *const Window) bool {
+    return self.titlebar_tabs;
+}
+
 /// The area of our client area that the active tab's surfaces fill.
 pub fn surfaceArea(self: *const Window) c.RECT {
     var client: c.RECT = undefined;
@@ -1328,6 +1372,7 @@ pub fn surfaceArea(self: *const Window) c.RECT {
 /// Position the tab bar and the active tab's surfaces within our
 /// client area.
 pub fn layout(self: *Window) void {
+    self.updateTitleBarTabs();
     const area = self.surfaceArea();
     if (self.showTabBar()) {
         _ = c.MoveWindow(self.tab_bar.hwnd, 0, 0, area.right, area.top, c.TRUE);
@@ -1701,6 +1746,10 @@ fn windowSizeFor(self: *const Window, width: u32, height: u32) struct { c_int, c
         .bottom = @as(c_int, @intCast(height)) + if (self.showTabBar()) self.tab_bar.height() else 0,
     };
     _ = c.AdjustWindowRectExForDpi(&rect, style, c.FALSE, ex_style, c.GetDpiForWindow(self.hwnd));
+    // With the tabs in the title bar, the client area starts at the top of
+    // the window: only the sides and bottom of the frame remain, so the
+    // height is the client's plus the bottom (rect.bottom, from a top of 0).
+    if (self.titlebar_tabs) return .{ rect.right - rect.left, rect.bottom };
     return .{ rect.right - rect.left, rect.bottom - rect.top };
 }
 
@@ -2113,8 +2162,61 @@ pub fn wndProc(
             return 0;
         },
 
+        // With the tabs in the title bar, the client area covers the
+        // caption: keep the frame's sides and bottom only. A maximized
+        // window hangs over the screen's edges by its frame, so move the
+        // top back in by as much.
+        c.WM_NCCALCSIZE => if (wparam != 0 and self.titlebar_tabs) {
+            const params: *c.NCCALCSIZE_PARAMS = @ptrFromInt(@as(usize, @bitCast(lparam)));
+            const top = params.rgrc[0].top;
+            const result = c.DefWindowProcW(hwnd, msg, wparam, lparam);
+            if (result != 0) return result;
+            params.rgrc[0].top = top;
+            if (c.IsZoomed(hwnd) != 0) params.rgrc[0].top += self.resizeBorderHeight();
+            return 0;
+        },
+
+        // What's under the mouse in the title bar: the tab bar passes us
+        // its empty space and its maximize button (HTTRANSPARENT).
+        c.WM_NCHITTEST => if (self.titlebar_tabs) {
+            const hit = c.DefWindowProcW(hwnd, msg, wparam, lparam);
+            if (hit != c.HTCLIENT) return hit;
+            var pt: c.POINT = .{ .x = util.loword(lparam), .y = util.hiword(lparam) };
+            _ = c.ScreenToClient(hwnd, &pt);
+            if (pt.y >= self.tab_bar.height()) return c.HTCLIENT;
+            if (c.IsZoomed(hwnd) == 0 and pt.y < self.resizeBorderHeight()) return c.HTTOP;
+            if (self.tab_bar.isMaximizeButton(pt)) return c.HTMAXBUTTON;
+            return c.HTCAPTION;
+        },
+
+        // The maximize button is ours to draw and press, but it's
+        // HTMAXBUTTON so that Windows 11 shows its snap layouts over it.
+        c.WM_NCMOUSEMOVE => if (self.titlebar_tabs) {
+            self.tab_bar.setMaximizeHovered(wparam == c.HTMAXBUTTON);
+            if (wparam == c.HTMAXBUTTON) {
+                var track: c.TRACKMOUSEEVENT = .{
+                    .cbSize = @sizeOf(c.TRACKMOUSEEVENT),
+                    .dwFlags = c.TME_LEAVE | c.TME_NONCLIENT,
+                    .hwndTrack = hwnd,
+                    .dwHoverTime = 0,
+                };
+                _ = c.TrackMouseEvent(&track);
+            }
+        },
+        c.WM_NCMOUSELEAVE => if (self.titlebar_tabs) {
+            self.tab_bar.setMaximizeHovered(false);
+        },
+        c.WM_NCLBUTTONDOWN, c.WM_NCLBUTTONDBLCLK => if (self.titlebar_tabs and wparam == c.HTMAXBUTTON) {
+            return 0;
+        },
+        c.WM_NCLBUTTONUP => if (self.titlebar_tabs and wparam == c.HTMAXBUTTON) {
+            _ = c.ShowWindow(hwnd, if (c.IsZoomed(hwnd) != 0) c.SW_RESTORE else c.SW_MAXIMIZE);
+            return 0;
+        },
+
         c.WM_ACTIVATE => {
             const active = (wparam & 0xFFFF) != c.WA_INACTIVE;
+            self.tab_bar.invalidate();
             self.app.core_app.focusEvent(active);
             if (!active and self.quick and self.app.config.@"quick-terminal-autohide") {
                 self.hideQuick();

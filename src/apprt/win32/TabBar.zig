@@ -30,6 +30,10 @@ hover: ?Hit = null,
 /// Whether we're tracking the mouse to get WM_MOUSELEAVE.
 tracking_mouse: bool = false,
 
+/// Whether the mouse is over the maximize button, which the window tells us
+/// (the button is non-client, see Window's WM_NCHITTEST).
+maximize_hovered: bool = false,
+
 /// UI Automation for the tabs, created when a client first asks.
 accessibility: ?*TabBarAccessibility = null,
 
@@ -50,6 +54,11 @@ pub const Hit = union(enum) {
     close: usize,
     new_tab,
     shell_menu,
+
+    /// The caption buttons, with the tabs in the title bar.
+    minimize,
+    maximize,
+    close_window,
 
     fn eql(a: ?Hit, b: ?Hit) bool {
         const x = a orelse return b == null;
@@ -132,6 +141,9 @@ fn tooltipText(self: *TabBar, hit: Hit) []const u8 {
         .close => "Close Tab",
         .new_tab => "New Tab",
         .shell_menu => "New Tab With a Shell",
+        .minimize => "Minimize",
+        .maximize => if (c.IsZoomed(self.window.hwnd) != 0) "Restore Down" else "Maximize",
+        .close_window => "Close",
     };
 }
 
@@ -201,6 +213,9 @@ const Layout = struct {
     new_tab: c.RECT,
     shell_menu: c.RECT,
 
+    /// The caption buttons, with the tabs in the title bar.
+    caption: ?struct { minimize: c.RECT, maximize: c.RECT, close: c.RECT },
+
     fn tabRect(self: Layout, idx: usize, h: c_int) c.RECT {
         const left = @as(c_int, @intCast(idx)) * self.tab_width;
         return .{ .left = left, .top = 0, .right = left + self.tab_width, .bottom = h };
@@ -213,9 +228,15 @@ fn layout(self: *const TabBar) Layout {
     const h = client.bottom;
     const n: c_int = @intCast(@max(1, self.window.tabs.items.len));
 
+    // With the tabs in the title bar, the caption buttons (46 by 32, as
+    // Windows 11 draws them) go at the right, after some empty space that
+    // drags the window, even when there are many tabs.
+    const caption_button = self.scale(46);
+    const caption_width = if (self.window.hasTitleBarTabs()) caption_button * 3 + self.scale(48) else 0;
+
     // Tabs share the width (less the buttons) up to a maximum.
     const button = h;
-    const available = @max(0, client.right - button * 2);
+    const available = @max(0, client.right - button * 2 - caption_width);
     const tab_width = @min(self.scale(240), @divTrunc(available, n));
 
     const new_left = tab_width * n;
@@ -223,7 +244,26 @@ fn layout(self: *const TabBar) Layout {
         .tab_width = tab_width,
         .new_tab = .{ .left = new_left, .top = 0, .right = new_left + button, .bottom = h },
         .shell_menu = .{ .left = new_left + button, .top = 0, .right = new_left + button * 2, .bottom = h },
+        .caption = if (caption_width == 0) null else .{
+            .minimize = .{ .left = client.right - caption_button * 3, .top = 0, .right = client.right - caption_button * 2, .bottom = h },
+            .maximize = .{ .left = client.right - caption_button * 2, .top = 0, .right = client.right - caption_button, .bottom = h },
+            .close = .{ .left = client.right - caption_button, .top = 0, .right = client.right, .bottom = h },
+        },
     };
+}
+
+/// Whether a point in the window's client area (which the tab bar starts
+/// at the top of) is on the maximize button.
+pub fn isMaximizeButton(self: *const TabBar, pt: c.POINT) bool {
+    const caption = self.layout().caption orelse return false;
+    return c.PtInRect(&caption.maximize, pt) != 0;
+}
+
+/// The window tells us when the mouse is over the maximize button.
+pub fn setMaximizeHovered(self: *TabBar, hovered: bool) void {
+    if (self.maximize_hovered == hovered) return;
+    self.maximize_hovered = hovered;
+    self.invalidate();
 }
 
 /// The rectangle of the close button of a tab.
@@ -303,6 +343,11 @@ fn hitTest(self: *const TabBar, x: c_int, y: c_int) ?Hit {
     _ = c.GetClientRect(self.hwnd, &client);
     const pt: c.POINT = .{ .x = x, .y = y };
 
+    if (l.caption) |caption| {
+        if (c.PtInRect(&caption.minimize, pt) != 0) return .minimize;
+        if (c.PtInRect(&caption.maximize, pt) != 0) return .maximize;
+        if (c.PtInRect(&caption.close, pt) != 0) return .close_window;
+    }
     if (c.PtInRect(&l.new_tab, pt) != 0) return .new_tab;
     if (c.PtInRect(&l.shell_menu, pt) != 0) return .shell_menu;
     for (0..self.window.tabs.items.len) |i| {
@@ -475,6 +520,63 @@ fn paint(self: *TabBar, hdc: c.HDC, client: c.RECT) void {
     self.drawPlus(hdc, l.new_tab, col.text_inactive);
     if (Hit.eql(self.hover, .shell_menu)) fill(hdc, &l.shell_menu, col.hover);
     self.drawChevron(hdc, l.shell_menu, col.text_inactive);
+
+    if (l.caption) |caption| self.paintCaptionButtons(hdc, caption.minimize, caption.maximize, caption.close, col);
+}
+
+/// The minimize, maximize (or restore) and close buttons, like the system's:
+/// hovering fills them, the close button in red; dimmer when the window
+/// isn't active.
+fn paintCaptionButtons(self: *const TabBar, hdc: c.HDC, minimize: c.RECT, maximize: c.RECT, close: c.RECT, col: Colors) void {
+    const active = c.GetForegroundWindow() == self.window.hwnd;
+    const glyph = if (active) col.text else col.text_inactive;
+    if (Hit.eql(self.hover, .minimize)) fill(hdc, &minimize, col.hover);
+    if (self.maximize_hovered) fill(hdc, &maximize, col.hover);
+    const close_hovered = Hit.eql(self.hover, .close_window);
+    if (close_hovered) fill(hdc, &close, .{ .r = 0xC4, .g = 0x2B, .b = 0x1C });
+
+    const size = self.scale(10);
+    const pen = c.CreatePen(c.PS_SOLID, @max(1, self.scale(1)), colorref(glyph));
+    defer _ = c.DeleteObject(pen);
+    const old_pen = c.SelectObject(hdc, pen);
+    defer _ = c.SelectObject(hdc, old_pen);
+    const old_brush = c.SelectObject(hdc, c.GetStockObject(c.NULL_BRUSH));
+    defer _ = c.SelectObject(hdc, old_brush);
+
+    // Minimize: a line.
+    {
+        const cx = @divTrunc(minimize.left + minimize.right, 2);
+        const cy = @divTrunc(minimize.top + minimize.bottom, 2);
+        _ = c.MoveToEx(hdc, cx - @divTrunc(size, 2), cy, null);
+        _ = c.LineTo(hdc, cx + @divTrunc(size, 2) + 1, cy);
+    }
+
+    // Maximize: a square; restore: two overlapping squares.
+    {
+        const cx = @divTrunc(maximize.left + maximize.right, 2);
+        const cy = @divTrunc(maximize.top + maximize.bottom, 2);
+        const half = @divTrunc(size, 2);
+        if (c.IsZoomed(self.window.hwnd) != 0) {
+            const off = self.scale(2);
+            _ = c.Rectangle(hdc, cx - half, cy - half + off, cx + half - off + 1, cy + half + 1);
+            _ = c.MoveToEx(hdc, cx - half + off, cy - half + off, null);
+            _ = c.LineTo(hdc, cx - half + off, cy - half);
+            _ = c.LineTo(hdc, cx + half, cy - half);
+            _ = c.LineTo(hdc, cx + half, cy + half - off + 1);
+            _ = c.LineTo(hdc, cx + half - off, cy + half - off + 1);
+        } else {
+            _ = c.Rectangle(hdc, cx - half, cy - half, cx + half + 1, cy + half + 1);
+        }
+    }
+
+    // Close: a cross, white on the red hover.
+    {
+        const color: Rgb = if (close_hovered) .{ .r = 255, .g = 255, .b = 255 } else glyph;
+        const cx = @divTrunc(close.left + close.right, 2);
+        const cy = @divTrunc(close.top + close.bottom, 2);
+        const half = @divTrunc(size, 2);
+        self.drawCross(hdc, .{ .left = cx - half - self.scale(4), .top = cy - half - self.scale(4), .right = cx + half + self.scale(4) + 1, .bottom = cy + half + self.scale(4) + 1 }, color);
+    }
 }
 
 fn drawChevron(self: *const TabBar, hdc: c.HDC, rect: c.RECT, color: Rgb) void {
@@ -659,6 +761,18 @@ pub fn wndProc(
             return 0;
         },
 
+        // With the tabs in the title bar, the window handles our empty
+        // space (the caption), the top resize border and the maximize
+        // button (for snap layouts); see its WM_NCHITTEST.
+        c.WM_NCHITTEST => if (self.window.hasTitleBarTabs()) {
+            var pt: c.POINT = .{ .x = util.loword(lparam), .y = util.hiword(lparam) };
+            _ = c.ScreenToClient(hwnd, &pt);
+            if (c.IsZoomed(self.window.hwnd) == 0 and pt.y < self.window.resizeBorderHeight()) return c.HTTRANSPARENT;
+            const hit = self.hitTest(pt.x, pt.y) orelse return c.HTTRANSPARENT;
+            if (hit == .maximize) return c.HTTRANSPARENT;
+            return c.HTCLIENT;
+        },
+
         c.WM_GETOBJECT => {
             if (self.accessibility == null) {
                 self.accessibility = TabBarAccessibility.create(self.window.app.core_app.alloc, self) catch null;
@@ -737,6 +851,9 @@ pub fn wndProc(
                 .close => |i| self.window.closeTabAt(i),
                 .new_tab => _ = self.window.newTab(),
                 .shell_menu => self.showShellMenu(),
+                .minimize => _ = c.ShowWindow(self.window.hwnd, c.SW_MINIMIZE),
+                .maximize => _ = c.ShowWindow(self.window.hwnd, if (c.IsZoomed(self.window.hwnd) != 0) c.SW_RESTORE else c.SW_MAXIMIZE),
+                .close_window => _ = c.PostMessageW(self.window.hwnd, c.WM_CLOSE, 0, 0),
             }
             return 0;
         },
@@ -779,7 +896,7 @@ pub fn wndProc(
             const hit = self.hitTest(util.loword(lparam), util.hiword(lparam)) orelse return 0;
             switch (hit) {
                 .tab, .close => |i| self.window.closeTabAt(i),
-                .new_tab, .shell_menu => {},
+                .new_tab, .shell_menu, .minimize, .maximize, .close_window => {},
             }
             return 0;
         },
