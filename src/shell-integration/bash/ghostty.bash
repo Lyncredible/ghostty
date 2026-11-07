@@ -117,8 +117,10 @@ fi
 # SSH Integration
 #
 # Wrap `ssh` with `ghostty +ssh` and translate the shell-integration
-# feature flags into command options.
-if [[ "$GHOSTTY_SHELL_FEATURES" == *ssh-* ]]; then
+# feature flags into command options, only when ghostty is there (GHOSTTY_BIN_DIR isn't always set,
+# e.g. in WSL without Ghostty's launcher), so plain ssh keeps working.
+if [[ "$GHOSTTY_SHELL_FEATURES" == *ssh-* ]] &&
+  [[ -x "$GHOSTTY_BIN_DIR/ghostty" || -x "$GHOSTTY_BIN_DIR/ghostty.exe" ]]; then
   function ssh() {
     builtin local -a flags
     flags=()

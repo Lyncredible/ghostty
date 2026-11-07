@@ -1,0 +1,194 @@
+#!/bin/sh
+# Ghostty's `+ssh` for WSL shells.
+#
+# Ghostty on Windows passes the shell-integration features into WSL, so with
+# `ssh-env` or `ssh-terminfo` each shell's integration wraps `ssh` with
+# `"$GHOSTTY_BIN_DIR/ghostty" +ssh`. The Windows ghostty.exe can't do that
+# for a Linux shell (it would run Windows's ssh with Windows's environment),
+# so the WSL launcher points GHOSTTY_BIN_DIR here instead. This implements
+# `ghostty +ssh` with the distribution's own ssh, like the native command:
+#
+#   * `--forward-env`: send COLORTERM, TERM_PROGRAM and TERM_PROGRAM_VERSION
+#     with `SendEnv` (the server must `AcceptEnv` them).
+#   * `--terminfo`: on the first connection to a host, compile Ghostty's
+#     terminfo there with `tic` (from the source in Ghostty's resources) and
+#     use TERM=xterm-ghostty; otherwise, or if that fails, xterm-256color.
+#     Installs are cached in the same file as the native command.
+#
+# This must stay POSIX sh compatible.
+
+usage() {
+  cat <<'EOF'
+Usage: ghostty +ssh [flags] [--] <ssh args...>
+
+Flags:
+  --forward-env[=bool]  Send Ghostty env vars to the remote. Default: true.
+  --terminfo[=bool]     Install Ghostty terminfo on first connect. Default: true.
+  --cache[=bool]        Use the terminfo install cache. Default: true.
+  --ssh=<path>          Path to the ssh binary. Default: first `ssh` on PATH.
+  --verbose             Print +ssh status lines to stderr.
+  --help                Show this help.
+
+ssh flags and the destination go after +ssh's own flags (or after `--`).
+This is Ghostty's WSL version of `+ssh`; other commands need ghostty.exe.
+EOF
+}
+
+case "${1-}" in
++ssh) shift ;;
++help | --help | -h | "")
+  usage
+  exit 0
+  ;;
+*)
+  printf 'ghostty: only +ssh is available inside WSL; run ghostty.exe for %s\n' "$1" >&2
+  exit 1
+  ;;
+esac
+
+forward_env=true
+terminfo=true
+cache=true
+ssh=ssh
+verbose=false
+
+# A flag's boolean value: no value or "true" is true, "false" is false.
+bool() {
+  case "$2" in
+  "" | true) printf true ;;
+  false) printf false ;;
+  *)
+    printf 'Error: invalid value for --%s: %s\n\n' "$1" "$2" >&2
+    usage >&2
+    exit 2
+    ;;
+  esac
+}
+
+while [ $# -gt 0 ]; do
+  case "$1" in
+  --)
+    shift
+    break
+    ;;
+  --forward-env) forward_env=true ;;
+  --forward-env=*) forward_env=$(bool forward-env "${1#*=}") || exit 2 ;;
+  --terminfo) terminfo=true ;;
+  --terminfo=*) terminfo=$(bool terminfo "${1#*=}") || exit 2 ;;
+  --cache) cache=true ;;
+  --cache=*) cache=$(bool cache "${1#*=}") || exit 2 ;;
+  --ssh=*) ssh=${1#*=} ;;
+  --verbose) verbose=true ;;
+  --help)
+    usage
+    exit 0
+    ;;
+  --*)
+    printf 'Error: unknown flag `%s`.\n\n' "$1" >&2
+    usage >&2
+    exit 2
+    ;;
+  *) break ;;
+  esac
+  shift
+done
+
+if [ $# -eq 0 ]; then
+  printf 'Error: no ssh arguments provided.\n\n' >&2
+  usage >&2
+  exit 2
+fi
+
+warn() { printf 'Warning: %s\n' "$*" >&2; }
+note() { [ "$verbose" = false ] || printf '%s\n' "$*" >&2; }
+
+# The destination as the native command keys its cache: user@host, with
+# :port unless it's 22 (and the host in brackets if it's an IPv6 address).
+destination() {
+  "$ssh" -G "$@" 2>/dev/null | awk '
+    $1 == "user" && user == "" { user = $2 }
+    $1 == "hostname" && host == "" { host = $2 }
+    $1 == "port" && port == "" { port = $2 }
+    END {
+      if (user == "" || host == "") exit 1
+      if (port == "" || port == "22") print user "@" host
+      else if (index(host, ":")) print user "@[" host "]:" port
+      else print user "@" host ":" port
+    }'
+}
+
+# Whether the cache has `dest` with this terminfo version.
+cached() {
+  [ -r "$cache_file" ] || return 1
+  awk -F'|' -v dest="$1" -v version="$2" '
+    $1 == dest && $3 == version { found = 1 }
+    END { exit !found }' "$cache_file"
+}
+
+# Record `dest` in the cache, replacing an older entry for it.
+remember() {
+  mkdir -p "${cache_file%/*}" 2>/dev/null || return 1
+  tmp="$cache_file.$$"
+  (
+    umask 077
+    if [ -r "$cache_file" ]; then
+      awk -F'|' -v dest="$1" '$1 != dest' "$cache_file"
+    fi
+    printf '%s|%s|%s\n' "$1" "$(date +%s)" "$2"
+  ) >"$tmp" && mv -f "$tmp" "$cache_file"
+}
+
+term=xterm-256color
+if [ "$terminfo" = true ]; then
+  source_file="${GHOSTTY_RESOURCES_DIR-}/../terminfo/ghostty.terminfo"
+  if [ -z "${GHOSTTY_RESOURCES_DIR-}" ] || [ ! -r "$source_file" ]; then
+    warn "Ghostty's terminfo isn't available; skipping terminfo install"
+  elif ! dest=$(destination "$@") || [ -z "$dest" ]; then
+    warn "could not resolve ssh destination; skipping terminfo install"
+  else
+    version="wsl-$(cksum <"$source_file" | cut -d' ' -f1)"
+    cache_file="${XDG_STATE_HOME:-$HOME/.local/state}/ghostty/ssh_cache"
+    if [ "$cache" = true ] && cached "$dest" "$version"; then
+      note "dest: $dest (cached, skipping install)"
+      term=xterm-ghostty
+    else
+      if [ "$cache" = true ]; then
+        note "dest: $dest (not cached, will install)"
+      else
+        note "dest: $dest (cache disabled, will install)"
+      fi
+      printf 'Setting up xterm-ghostty terminfo on %s...\n' "$dest" >&2
+      # Like the native command: authentication prompts stay visible, the
+      # remote installer's errors only with --verbose.
+      if [ "$verbose" = true ]; then
+        script='command -v tic >/dev/null 2>&1 || exit 1
+tic -x -o ~/.terminfo - && infocmp -x xterm-ghostty >/dev/null && exit 0
+exit 1'
+      else
+        script='command -v tic >/dev/null 2>&1 || exit 1
+tic -x -o ~/.terminfo - 2>/dev/null && infocmp -x xterm-ghostty >/dev/null 2>&1 && exit 0
+exit 1'
+      fi
+      if "$ssh" "$@" "$script" <"$source_file"; then
+        term=xterm-ghostty
+        if [ "$cache" = true ]; then
+          remember "$dest" "$version" || warn "unable to write the cache '$cache_file'"
+        fi
+      else
+        warn "failed to install terminfo"
+      fi
+    fi
+  fi
+fi
+
+# TERM goes in ssh's environment (ssh always sends it for a terminal), not
+# `-o SetEnv`, which would replace the SetEnv lines in the user's config.
+if [ "$forward_env" = true ] || [ "$terminfo" = true ]; then
+  export TERM="$term"
+fi
+
+if [ "$forward_env" = true ]; then
+  exec "$ssh" -o SendEnv=COLORTERM -o SendEnv=TERM_PROGRAM \
+    -o SendEnv=TERM_PROGRAM_VERSION "$@"
+fi
+exec "$ssh" "$@"

@@ -13,7 +13,20 @@ export module ghostty {
       return
     }
 
-    let ghostty = ($env.GHOSTTY_BIN_DIR? | default "") | path join "ghostty"
+    # Plain ssh when ghostty isn't there (GHOSTTY_BIN_DIR isn't always set,
+    # e.g. in WSL without Ghostty's launcher).
+    let bin_dir = ($env.GHOSTTY_BIN_DIR? | default "")
+    let ghostty = if ($bin_dir != "") and ($bin_dir | path join "ghostty" | path exists) {
+      $bin_dir | path join "ghostty"
+    } else if ($bin_dir != "") and ($bin_dir | path join "ghostty.exe" | path exists) {
+      $bin_dir | path join "ghostty.exe"
+    } else {
+      ""
+    }
+    if $ghostty == "" {
+      ^ssh ...$args
+      return
+    }
     mut flags = []
     if not (has_feature "ssh-env") {
       $flags = ($flags ++ ["--forward-env=false"])

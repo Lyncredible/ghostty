@@ -119,7 +119,10 @@
   if (and (has-value $features sudo) (not-eq "" $E:TERMINFO) (has-external sudo)) {
     edit:add-var sudo~ $sudo-with-terminfo~
   }
-  if (and (str:contains $E:GHOSTTY_SHELL_FEATURES ssh-) (has-external ssh)) {
+  # Only when ghostty is there (GHOSTTY_BIN_DIR isn't always set, e.g. in
+  # WSL without Ghostty's launcher), so plain ssh keeps working.
+  if (and (str:contains $E:GHOSTTY_SHELL_FEATURES ssh-) (has-external ssh) ^
+          (or (has-external $E:GHOSTTY_BIN_DIR/ghostty) (has-external $E:GHOSTTY_BIN_DIR/ghostty.exe))) {
     edit:add-var ssh~ $ssh-integration~
   }
 
