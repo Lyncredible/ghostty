@@ -15,6 +15,7 @@
 #                with the GNU ABI in Zig 0.17, see WINDOWS.md)
 #     -OutDir    Where to put the zip (default zig-out\dist)
 #     -BundleConpty
+#                (The fork's tip and release packages use this.)
 #                Include conpty.dll and OpenConsole.exe from Microsoft's
 #                Microsoft.Windows.Console.ConPTY NuGet package (MIT), which
 #                ghostty.exe uses instead of the ConPTY built into Windows

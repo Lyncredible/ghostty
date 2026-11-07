@@ -308,7 +308,7 @@ jobs:
 
       - name: Package
         shell: pwsh
-        run: ./dist/windows/package.ps1 -OutDir zig-out/dist -Msix
+        run: ./dist/windows/package.ps1 -OutDir zig-out/dist -Msix -BundleConpty
 
       # Install the unsigned MSIX on the runner (which is thrown away), and
       # run the app through its execution alias.
@@ -338,6 +338,13 @@ jobs:
       - name: Install zip
         shell: powershell
         run: ./test/windows/start-menu.ps1 -Zip (Get-ChildItem zig-out/dist/*.zip | Select-Object -First 1).FullName
+
+      # The package bundles the ConPTY package's conpty.dll, so programs'
+      # OSC 10/11 color queries reach Ghostty and get its colors.
+      - name: Color query test (package)
+        timeout-minutes: 5
+        shell: pwsh
+        run: ./test/windows/color-query.ps1 -Zip (Get-ChildItem zig-out/dist/*.zip | Select-Object -First 1).FullName
 
       # The window keeps responding while output floods in, on the
       # package's release build (the debug build was too slow to show it).
@@ -480,7 +487,7 @@ jobs:
         shell: pwsh
         run: |
           try {
-            ./dist/windows/package.ps1 -Target aarch64-windows-gnu -OutDir zig-out/dist -Msix *>&1 | Tee-Object -FilePath package.log
+            ./dist/windows/package.ps1 -Target aarch64-windows-gnu -OutDir zig-out/dist -Msix -BundleConpty *>&1 | Tee-Object -FilePath package.log
           } catch {
             $tail = (Get-Content package.log -Tail 8) -join ' / '
             Write-Host "::error title=arm64 package::$($_.Exception.Message) / $tail"

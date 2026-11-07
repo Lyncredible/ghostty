@@ -1963,9 +1963,13 @@ Notes:
         ways: inbox as a notice, and with the package (fetched by the new
         `dist/windows/conpty.ps1`, which `package.ps1 -BundleConpty` now
         uses too) where Ghostty must answer.
-  - [ ] Bundle `conpty.dll` by default in the tip and release packages
-        (awaiting the owner's go-ahead: it changes the console host for
-        every session), and run the UI tests with it.
+  - [x] Bundle `conpty.dll` in the tip and release packages (the
+        owner's go-ahead, 2026-11-07): the fork's and release workflows
+        package with `-BundleConpty` (x64 and ARM64, zip and MSIX). The
+        tests after packaging (install, flood, output frames, minimize,
+        mouse capture, context menu) now run on the bundled ConPTY, and
+        `color-query.ps1 -Zip` checks that the package answers OSC 10/11.
+        The tests on `zig-out/bin` still use the inbox ConPTY.
   - Workaround now: put `conpty.dll` (`runtimes\win-x64\native`) and
     `OpenConsole.exe` (`build\native\runtimes\x64`) from the
     Microsoft.Windows.Console.ConPTY 1.25.260930003 package next to
