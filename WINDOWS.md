@@ -1092,7 +1092,8 @@ Notes:
   the console mode of the programs attached to it, so the timer isn't
   started on Windows.
 - The inbox ConPTY drops APC sequences, so the Kitty graphics protocol
-  doesn't work. OSC 8 hyperlinks do pass through on build 26100 (checked:
+  doesn't work with it. The ConPTY package (bundled in the tip and
+  release packages since 2026-11-07) passes them: see below. OSC 8 hyperlinks do pass through on build 26100 (checked:
   a PowerShell `Write-Host` of an OSC 8 link reached `startHyperlink`).
   `PSEUDOCONSOLE_PASSTHROUGH_MODE` (0x8) is accepted by
   `CreatePseudoConsole` on 26100 but changes nothing: the APC still
@@ -1111,6 +1112,26 @@ Notes:
           the inbox ConPTY nor the 1.25 package passes APCs through, and
           the Kitty graphics protocol can't work through ConPTY for now.
           OSC 8 hyperlinks pass through both.
+      - Wrong (corrected 2026-11-07): that check's PowerShell string was
+        `"$e_G..."`, which PowerShell reads as a variable `$e_G`, so no
+        ESC was sent at all; "=31,a=q;" is what's left of the text. Done
+        right (`"${e}_G..."`), the package's ConPTY passes the APC: a
+        96 by 48 image drawn with `a=T` showed, from WSL (Python) and
+        from native PowerShell alike, and the query got Ghostty's
+        `ESC _ G i=31;OK ESC \`. The inbox ConPTY drops it. CI now
+        checks the query through the package (`color-query.ps1`).
+    - [x] What else the package's ConPTY passes that the inbox one
+          doesn't (2026-11-07, a probe in WSL, raw `/dev/tty`):
+          - Answered by Ghostty only with the package: OSC 10/11 colors,
+            XTGETTCAP (`TN` = `xterm-ghostty`), Kitty graphics, OSC 52
+            clipboard reads (with `clipboard-read = allow`; the reply
+            takes over a second, as the read is asynchronous), DA1 and
+            DA2 (the inbox one answers them itself, as a VT525 with
+            conhost's features), and DECRQM for synchronized output
+            (2026), which the inbox one reports as unknown.
+          - The same through both: XTVERSION, the Kitty keyboard query
+            (`CSI ? u`), DECRQM 2004, DECRQSS, the CSI 14/16/18 t size
+            reports and DSR 5.
     - [x] `package.ps1 -BundleConpty` downloads that package (version and
           SHA-256 pinned), and puts its `conpty.dll` and `OpenConsole.exe`
           for the target architecture in `bin`. Checked: the zip has both
@@ -3157,8 +3178,8 @@ Reviewed the branch against this file and discussion #2563.
   - Installing the MSIX (`Add-AppxPackage -AllowUnsigned`): done in the
     fork's CI, on a throwaway runner
   - Blur on Windows 10
-  - (Done: `conpty.dll` from the ConPTY package works, but doesn't pass
-    Kitty graphics APCs either)
+  - (Done: `conpty.dll` from the ConPTY package works, and passes Kitty
+    graphics APCs; an earlier check that said otherwise had a bug)
   - PowerShell 7: the fork's CI now runs
     `test/windows/powershell-integration.ps1` with both 5.1 and 7, which
     loads the integration and checks its prompt's escape sequences
