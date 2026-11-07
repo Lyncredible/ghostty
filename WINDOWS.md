@@ -1269,6 +1269,8 @@ Notes:
         was blocked by the permission check) and then to `windows` with
         the owner's go-ahead. The full unit test suite on the synced tree:
         4,266 passed, 64 skipped (other platforms), 0 failed.
+  - [x] 2026-11-07: a sixth sync (1 commit, the VOUCHED list). No
+        conflicts; dates kept. The app and libghostty-vt build.
 - [x] Tip builds, like upstream's `release-tip.yml` (the discussion's
       release workflow item): a rolling prerelease of the latest
       `windows` commit, so people can try it without building. Approved
