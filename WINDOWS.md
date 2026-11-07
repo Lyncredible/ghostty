@@ -1198,6 +1198,11 @@ Notes:
         (9bcfa2bb9), a failed fetch had saved a broken Zig cache that
         every later run restored. The x64 jobs no longer restore the Zig
         cache either.
+  - [x] Run 42332304583 (4479e72aa): the build got through, and the new
+        session restore and search tests passed on the runner. The
+        command palette test measured the split as soon as a second
+        terminal showed, before the two were laid out (both had the old
+        terminal's rectangle); it now waits for them to be side by side.
 - [ ] Keep the branch on top of upstream: fetch
       `git@github.com:ghostty-org/ghostty.git` from time to time, rebase,
       and check that the build, unit tests and the fork's CI still pass.
