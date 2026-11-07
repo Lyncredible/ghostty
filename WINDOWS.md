@@ -1297,7 +1297,8 @@ Notes:
         dates kept. Our WSL `ghostty +ssh` had the same bug, so it now
         runs the install under `sh -c` too, and `test/windows/wsl-ssh.sh`
         checks that (all checks pass). The app and libghostty-vt build,
-        and the resize tests pass.
+        and the resize tests pass. CI run 42420229730 (225fb5bb7) passed
+        every job, and `windows-tip` moved.
 - [x] Tip builds, like upstream's `release-tip.yml` (the discussion's
       release workflow item): a rolling prerelease of the latest
       `windows` commit, so people can try it without building. Approved
