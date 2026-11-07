@@ -33,6 +33,7 @@ Add-Type -Namespace GhosttyTitleBarTabs -Name Win32 -MemberDefinition @'
 [DllImport("user32.dll")] public static extern bool IsWindowVisible(System.IntPtr h);
 [DllImport("user32.dll")] public static extern bool ShowWindow(System.IntPtr h, int cmd);
 [DllImport("user32.dll")] public static extern System.IntPtr SetThreadDpiAwarenessContext(System.IntPtr context);
+[DllImport("user32.dll")] public static extern uint GetDpiForWindow(System.IntPtr h);
 [DllImport("user32.dll", CharSet = CharSet.Unicode)] public static extern System.IntPtr FindWindowExW(System.IntPtr parent, System.IntPtr after, string cls, string title);
 // The hit test result for a point on the screen, from a window.
 public static int Hit(System.IntPtr h, int x, int y) {
@@ -107,14 +108,19 @@ try {
     $br = New-Object GhosttyTitleBarTabs.Win32+RECT; [void]$W::GetWindowRect($bar, [ref]$br)
     $h = $br.b - $br.t
     $cy = $br.t + [int]($h / 2)
-    $button = [int]($h * 46 / 32)   # caption buttons are 46 by 32
+    $dpi = $W::GetDpiForWindow($window)
+    $button = [int](46 * $dpi / 96)   # caption buttons are 46 points wide
+    # Empty space: left of the new tab and shell buttons (31 points each),
+    # which come before the caption buttons.
+    $empty = $br.r - 3 * $button - [int](2 * 31 * $dpi / 96) - 10
     $points = @(
-        @{ What = 'empty space'; X = $br.r - 3 * $button - 10; Y = $cy; Bar = $HTTRANSPARENT; Window = $HTCAPTION },
+        @{ What = 'empty space'; X = $empty; Y = $cy; Bar = $HTTRANSPARENT; Window = $HTCAPTION },
         @{ What = 'the maximize button'; X = $br.r - [int](1.5 * $button); Y = $cy; Bar = $HTTRANSPARENT; Window = $HTMAXBUTTON },
-        @{ What = 'the top edge'; X = $br.r - 3 * $button - 10; Y = $br.t + 1; Bar = $HTTRANSPARENT; Window = $HTTOP },
+        @{ What = 'the top edge'; X = $empty; Y = $br.t + 1; Bar = $HTTRANSPARENT; Window = $HTTOP },
         @{ What = 'the minimize button'; X = $br.r - [int](2.5 * $button); Y = $cy; Bar = $HTCLIENT },
         @{ What = 'the close button'; X = $br.r - [int](0.5 * $button); Y = $cy; Bar = $HTCLIENT },
-        @{ What = 'the first tab'; X = $br.l + 40; Y = $cy; Bar = $HTCLIENT }
+        @{ What = 'the first tab'; X = $br.l + 3 * $button; Y = $cy; Bar = $HTCLIENT },
+        @{ What = 'the icon'; X = $br.l + [int]($button / 3); Y = $cy; Bar = $HTCLIENT }
     )
     foreach ($p in $points) {
         $got = $W::Hit($bar, $p.X, $p.Y)
