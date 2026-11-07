@@ -88,13 +88,15 @@ try {
     $bar = WaitFor { $h = $W::FindWindowExW($window, [IntPtr]::Zero, 'GhosttyTabBar', $null); if ($h -ne [IntPtr]::Zero -and $W::IsWindowVisible($h)) { $h } } 'the tab bar'
     [void](WaitFor { Shown } 'the first terminal')
 
-    # A second tab, named SECOND by cmd.
+    # A second tab, named SECOND by cmd. An elevated console (as on CI
+    # runners) prefixes titles with "Administrator: ", so names are matched
+    # at their end.
     $first = Shown
     $W::Key($first, 0x74, 0x3F)   # F5: new_tab
     $second = WaitFor { $s = Shown; if ($s -and $s -ne $first) { $s } } 'the second tab'
     Start-Sleep -Seconds 2
     $W::Type($second, "title SECOND`r")
-    [void](WaitFor { $t = Tabs; $t.Count -eq 2 -and $t[1].Current.Name -eq 'SECOND' } 'the second tab to be named SECOND')
+    [void](WaitFor { $t = Tabs; $t.Count -eq 2 -and $t[1].Current.Name -match 'SECOND$' } 'the second tab to be named SECOND')
     Write-Host "Before: $note."
 
     # Drag the second tab over the first, and let go there (in the bar).
@@ -104,7 +106,7 @@ try {
     $W::Mouse($bar, 0x0200, 1, $from.X - 20, $from.Y)            # WM_MOUSEMOVE, past the drag threshold
     $W::Mouse($bar, 0x0200, 1, $to.X, $to.Y)
     $W::Mouse($bar, 0x0202, 0, $to.X, $to.Y)                     # WM_LBUTTONUP
-    [void](WaitFor { $t = Tabs; $t.Count -eq 2 -and $t[0].Current.Name -eq 'SECOND' } 'SECOND to be the first tab')
+    [void](WaitFor { $t = Tabs; $t.Count -eq 2 -and $t[0].Current.Name -match 'SECOND$' } 'SECOND to be the first tab')
     if ((Shown) -ne $second) { Fail 'the dragged tab is no longer the one shown' }
     Write-Host "After dragging the second tab onto the first: $note, and it's still the one shown."
 } finally {
