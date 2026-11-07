@@ -97,9 +97,14 @@ function Surfaces {
         [System.Windows.Automation.AutomationElement]::ProcessIdProperty, $ghostty.Id)
     $root = [System.Windows.Automation.AutomationElement]::RootElement
     foreach ($window in $root.FindAll([System.Windows.Automation.TreeScope]::Children, $condition)) {
-        foreach ($surface in $window.FindAll([System.Windows.Automation.TreeScope]::Descendants,
+        # Likewise a window that's being made or closed: UI Automation can
+        # fail to list its children (E_UNEXPECTED), so skip it this poll.
+        try {
+            $surfaces = $window.FindAll([System.Windows.Automation.TreeScope]::Descendants,
                 (New-Object System.Windows.Automation.PropertyCondition(
-                    [System.Windows.Automation.AutomationElement]::ClassNameProperty, 'GhosttySurface')))) {
+                    [System.Windows.Automation.AutomationElement]::ClassNameProperty, 'GhosttySurface')))
+        } catch { continue }
+        foreach ($surface in $surfaces) {
             # A terminal that's being made or closed can have no handle or
             # text yet; the next poll sees it.
             try {
