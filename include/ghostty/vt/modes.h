@@ -92,6 +92,7 @@ extern "C" {
 #define GHOSTTY_MODE_REPORT_VISIBILITY (ghostty_mode_new(2033, false)) /**< Report terminal visibility */
 #define GHOSTTY_MODE_IN_BAND_SIZE_REPORTS (ghostty_mode_new(2048, false)) /**< In-band size reports */
 #define GHOSTTY_MODE_KITTY_PASTE_EVENTS (ghostty_mode_new(5522, false)) /**< Kitty clipboard protocol paste events */
+#define GHOSTTY_MODE_WIN32_INPUT      (ghostty_mode_new(9001, false)) /**< Win32 input mode (Windows Terminal's); only Ghostty's Windows app recognizes it, libghostty-vt reports it as not recognized */
 /** @} */
 
 /**
