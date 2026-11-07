@@ -1899,6 +1899,22 @@ Notes:
       window menu (`#32768`) and `window-show-tab-bar = never`. The
       tabs, session restore, window options, search, command palette,
       window theme and overlays tests pass.
+  - [x] Chrome-like tabs (requested 2026-11-07, like Chrome and Windows
+        Terminal): the active tab has its terminal's background, rounded
+        top corners and, at the bottom, outward curves that join it to
+        the terminal (no line under the bar any more). Other tabs aren't
+        filled: thin separators part them (hidden beside the active or a
+        hovered tab), and hovering shows a rounded highlight. Titles are
+        at the left, every tab that has room has a close button, and the
+        new tab and shell buttons follow the last tab instead of sitting
+        at the right. The curves are antialiased (GDI's RoundRect isn't):
+        corner pixels are blended by coverage, 4 by 4 samples. Light
+        backgrounds darken the bar by 12% instead of 30%. Checked with
+        captures (1, 3 and 4 tabs, dark and light, 200%) and zoomed
+        corners; the title bar tabs, tabs, tab reorder, compact tabs,
+        overlays, UI Automation events and window theme tests pass. The
+        hover highlight needs a real mouse to see (on a locked desktop
+        Windows reports the mouse leaving at once).
   - [x] Compact tabs (found 2026-11-07 with 20 tabs): tabs narrower
         than 88 points showed "1..." for tabs 10 and up (the title was
         cut before its number ended), and the active tab's close button
