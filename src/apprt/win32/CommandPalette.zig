@@ -282,7 +282,7 @@ fn buildEntries(
         if (!supported(command.action)) continue;
 
         var shortcut_buf: [64]u8 = undefined;
-        const shortcut = if (config.keybind.set.getTrigger(command.action)) |trigger|
+        const shortcut = if (Menu.shortcut(&config.keybind.set, command.action)) |trigger|
             Menu.triggerText(&shortcut_buf, trigger) catch ""
         else
             "";

@@ -1819,26 +1819,34 @@ Notes:
       terminal isn't in a mode that wants the key (alternate screen,
       application keypad), or leave it to users
       (`keybind = ctrl+f=start_search`).
-- [ ] Match the macOS menus (requested 2026-11-06). Windows has no menu
-      bar, so the title bar's menu (right click or Alt+Space) would get
-      macOS's menus as submenus, which also shortens its long flat list:
-  - File: New Window, New Tab, Split Right/Left/Down/Up, Close, Close
-    Tab, Close Window, Close All Windows.
-  - Edit: Undo, Redo, Copy, Paste, Paste Selection, Select All, and Find
-    (Find…, Find Next, Find Previous, Hide Find Bar, Use Selection for
-    Find, Jump to Selection).
-  - View: Reset, Increase and Decrease Font Size, Command Palette,
-    Change Tab Title…, Change Terminal Title…, Terminal Read-only, Quick
-    Terminal, Terminal Inspector.
-  - Window: Minimize, Zoom (maximize), Toggle Full Screen, Show/Hide All
-    Terminals, Zoom Split, Select Previous/Next Split and by direction,
-    Resize Split, Equalize Splits, Return To Default Size, Float on Top.
-  - Ghostty (macOS's app menu): About, Check for Updates (not on this
-    fork), Settings (open the config), Reload Configuration, Make Ghostty
-    the Default Terminal (Windows has its own setting), Quit.
-  - Help: Ghostty Help (the docs).
-  - Each item shows its keybinding, as the menus do now. Keep the
-    terminal's context menu to terminal actions (see the UI clean-up).
+- [x] Match the macOS menus (requested 2026-11-06). Windows has no menu
+      bar, so the title bar's menu (right click, Alt+Space, or a right
+      click on the tab bar's empty space) has macOS's menus as submenus
+      after Windows's own items, instead of a long flat list:
+  - Ghostty: Open Configuration, Reload Configuration, Quit Ghostty.
+  - File: New Window, New Tab, New Window/Tab With Shell, Split Right,
+    Left, Down and Up, Close, Close Tab, Close All Windows.
+  - Edit: Undo, Redo, Copy, Paste, Paste Selection, Select All, Find…,
+    Find Next, Find Previous, Hide Find Bar, Use Selection for Find, Jump
+    to Selection.
+  - View: Reset, Increase and Decrease Font Size, Command Palette, Change
+    Tab/Terminal/Window Title…, Terminal Read-only, Quick Terminal,
+    Terminal Inspector, Clear, Reset.
+  - Window: Full Screen, Show/Hide All Terminals, Float on Top, Return to
+    Default Size, Zoom Split, Select Previous/Next Split and by direction,
+    Equalize Splits.
+  - Left out: Maximize and Close Window (Windows's own items right above
+    have them), About and Help (no actions for them), Check for Updates
+    (this fork has none), Make Ghostty the Default Terminal (a Windows
+    setting), Resize Split (needs an amount; it's a keybinding).
+  - Shortcuts now include performable bindings, which the reverse map
+    leaves out so that toolkits don't register them (we only show the
+    text): Find shows Ctrl+Shift+F, Hide Find Bar Esc. The command
+    palette shows them too.
+  - Checked: the menu dumped with its shortcuts; the overlays,
+    translucent and high-contrast tests now find their window menu items
+    by label (they used fixed command numbers, which the new layout
+    changed), and the overlays and command palette tests pass.
 - [ ] Packaging and release builds
   - [x] Portable zip (`dist/windows/package.ps1`)
   - [x] Per-user install script in the zip (`dist/windows/install.ps1`):

@@ -27,6 +27,24 @@ Add-Type -Namespace GhosttyTranslucent -Name Win32 -MemberDefinition @'
 [DllImport("user32.dll")] public static extern bool GetWindowRect(System.IntPtr h, out RECT r);
 [DllImport("user32.dll")] public static extern bool SetForegroundWindow(System.IntPtr h);
 [DllImport("user32.dll")] public static extern bool SetProcessDPIAware();
+[DllImport("user32.dll")] public static extern int GetMenuItemCount(System.IntPtr m);
+[DllImport("user32.dll")] public static extern uint GetMenuItemID(System.IntPtr m, int pos);
+[DllImport("user32.dll")] public static extern System.IntPtr GetSubMenu(System.IntPtr m, int pos);
+[DllImport("user32.dll", CharSet = CharSet.Unicode)] public static extern int GetMenuStringW(System.IntPtr m, uint item, System.Text.StringBuilder s, int n, uint flags);
+// The command ID of the menu item with a label (without its &, its
+// shortcut and a trailing ellipsis), in the menu or its submenus, or 0.
+public static uint MenuCommand(System.IntPtr menu, string label) {
+  int n = GetMenuItemCount(menu);
+  for (int i = 0; i < n; i++) {
+    var sub = GetSubMenu(menu, i);
+    if (sub != System.IntPtr.Zero) { uint found = MenuCommand(sub, label); if (found != 0) return found; continue; }
+    var s = new System.Text.StringBuilder(256);
+    GetMenuStringW(menu, (uint)i, s, 256, 0x400);   // MF_BYPOSITION
+    string text = s.ToString().Split('\t')[0].Replace("&", "").TrimEnd('\u2026');
+    if (text == label) return GetMenuItemID(menu, i);
+  }
+  return 0;
+}
 [DllImport("user32.dll")] public static extern System.IntPtr GetSystemMenu(System.IntPtr h, bool revert);
 [DllImport("user32.dll")] public static extern System.IntPtr SendMessageW(System.IntPtr h, uint m, System.IntPtr w, System.IntPtr l);
 [DllImport("user32.dll")] public static extern bool PostMessageW(System.IntPtr h, uint m, System.IntPtr w, System.IntPtr l);
@@ -111,10 +129,10 @@ try {
     $front = Start-Process -FilePath $Exe -PassThru -ArgumentList $frontArgs
     $s = WaitFor { $s = Surfaces $front; if ($s -and ($s.Texts -match '300')) { $s } } 'the translucent window''s output'
 
-    # Split > Split Right from the window menu (the seventh command).
+    # Split Right from the window menu, found by label.
     $menu = $W::GetSystemMenu($s.Window, $false)
     [void]$W::SendMessageW($s.Window, 0x0117, $menu, [IntPtr]0)                # WM_INITMENUPOPUP
-    [void]$W::SendMessageW($s.Window, 0x0112, [IntPtr](7 -shl 4), [IntPtr]0)   # WM_SYSCOMMAND
+    [void]$W::SendMessageW($s.Window, 0x0112, [IntPtr]$W::MenuCommand($menu, 'Split Right'), [IntPtr]0)   # WM_SYSCOMMAND
     $s = WaitFor { $s = Surfaces $front; if ($s.Handles.Count -eq 2 -and ($s.Texts -match '>').Count -eq 2) { $s } } 'the split'
     [void]$W::SetForegroundWindow($s.Window)
     Start-Sleep -Milliseconds 500
@@ -146,11 +164,11 @@ try {
     } 'the scrollbar over the translucent background'
     Notice "scrollbar at $found"
 
-    # Overlays, from the window menu: Find… (the eleventh command) and
-    # Command Palette (the seventeenth). Each must hide the red behind it.
-    foreach ($overlay in @(@{ Class = 'GhosttySearchBar'; Command = 11 }, @{ Class = 'GhosttyCommandPalette'; Command = 17 })) {
+    # Overlays, from the window menu (found by label): Find and Command
+    # Palette. Each must hide the red behind it.
+    foreach ($overlay in @(@{ Class = 'GhosttySearchBar'; Label = 'Find' }, @{ Class = 'GhosttyCommandPalette'; Label = 'Command Palette' })) {
         [void]$W::SendMessageW($s.Window, 0x0117, $menu, [IntPtr]0)
-        [void]$W::SendMessageW($s.Window, 0x0112, [IntPtr]($overlay.Command -shl 4), [IntPtr]0)
+        [void]$W::SendMessageW($s.Window, 0x0112, [IntPtr]$W::MenuCommand($menu, $overlay.Label), [IntPtr]0)
         $handle = WaitFor { $h = $W::VisibleChild($s.Window, $overlay.Class); if ($h -ne [IntPtr]::Zero) { $h } } $overlay.Class
         Start-Sleep -Milliseconds 500
         $o = Rect $handle
