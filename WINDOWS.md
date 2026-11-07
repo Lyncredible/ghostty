@@ -1729,8 +1729,11 @@ Notes:
         `Tab.setVisible` skipped hiding windows whose `IsWindowVisible` was
         already false, which it is for every child while the window is
         still hidden. It now checks the window's own `WS_VISIBLE`.
-  - [ ] Search: `start_search` with a needle shows the match count, and
-        next and previous move the selection.
+  - [x] Search: `start_search`, a typed needle's match count, next and
+        previous, and `end_search` (`test/windows/search.ps1`, in CI). The
+        count was only drawn, so screen readers couldn't read it either;
+        the bar's window text (its accessible name) is now the count:
+        "6 matches", "Match 2 of 6" or "No matches".
   - [ ] Command palette: typing filters the list, and Enter on
         `new_split:right` splits the terminal.
   - [ ] Tabs: "Close Other Tabs", `move_tab_to_new_window` (the output
