@@ -1929,8 +1929,9 @@ Notes:
         captures (1, 3 and 4 tabs, dark and light, 200%) and zoomed
         corners; the title bar tabs, tabs, tab reorder, compact tabs,
         overlays, UI Automation events and window theme tests pass. The
-        hover highlight needs a real mouse to see (on a locked desktop
-        Windows reports the mouse leaving at once).
+        hover highlight can't be seen on a locked desktop (Windows reports
+        the mouse leaving at once); the owner checked it with a real
+        mouse, and it works.
   - [x] Compact tabs (found 2026-11-07 with 20 tabs): tabs narrower
         than 88 points showed "1..." for tabs 10 and up (the title was
         cut before its number ended), and the active tab's close button
@@ -1964,6 +1965,8 @@ Notes:
   - [ ] Check by hand with a real mouse (not on a locked desktop): hover
         colors, the snap layouts flyout over maximize, dragging and
         double clicking empty space, and resizing from the top edge.
+    - [x] Hover: the owner checked the Chrome-like tabs' hover highlight
+          on inactive tabs with a real mouse (2026-11-07); it works.
 - [x] Default tab titles "Command" and "PowerShell" (requested
       2026-11-06, reverted 2026-11-07 at the user's request): the paths
       in the tabs came from `shell-integration-features = no-title` in
@@ -2018,7 +2021,10 @@ Notes:
     `OpenConsole.exe` (`build\native\runtimes\x64`) from the
     Microsoft.Windows.Console.ConPTY 1.25.260930003 package next to
     `ghostty.exe`, or build with `package.ps1 -BundleConpty`.
-- [ ] Ctrl+F for Find by default (requested 2026-11-06). Today Find is
+- [x] Ctrl+F for Find by default (requested 2026-11-06; decided
+      2026-11-07: the owner keeps the default at Ctrl+Shift+F, as in
+      Windows Terminal, and users who want Ctrl+F can add
+      `keybind = ctrl+f=start_search`). Today Find is
       `ctrl+shift+f` (as on Linux; macOS has Cmd+F), which the menus
       show. Plain Ctrl+F is a terminal key, though: readline, zsh and
       PowerShell's emacs mode move forward a character with it, and
