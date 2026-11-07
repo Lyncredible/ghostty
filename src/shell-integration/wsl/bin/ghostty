@@ -171,15 +171,13 @@ if [ "$terminfo" = true ]; then
       fi
       printf 'Setting up xterm-ghostty terminfo on %s...\n' "$dest" >&2
       # Like the native command: authentication prompts stay visible, the
-      # remote installer's errors only with --verbose.
+      # remote installer's errors only with --verbose. The remote login
+      # shell may not be POSIX (tcsh, nushell, elvish), so the install runs
+      # under sh, on one line to avoid quoting and newline issues.
       if [ "$verbose" = true ]; then
-        script='command -v tic >/dev/null 2>&1 || exit 1
-tic -x -o ~/.terminfo - && infocmp -x xterm-ghostty >/dev/null && exit 0
-exit 1'
+        script="sh -c 'tic -x -o ~/.terminfo - && infocmp -x xterm-ghostty >/dev/null'"
       else
-        script='command -v tic >/dev/null 2>&1 || exit 1
-tic -x -o ~/.terminfo - 2>/dev/null && infocmp -x xterm-ghostty >/dev/null 2>&1 && exit 0
-exit 1'
+        script="sh -c 'tic -x -o ~/.terminfo - 2>/dev/null && infocmp -x xterm-ghostty >/dev/null 2>&1'"
       fi
       if "$ssh" "$@" "$script" <"$source_file"; then
         term=xterm-ghostty

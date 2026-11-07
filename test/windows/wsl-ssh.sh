@@ -58,6 +58,8 @@ cache="$XDG_STATE_HOME/ghostty/ssh_cache"
 run user@example.test
 [ "$(installs)" = 1 ] && pass "first connection installs terminfo" || fail "no install: $(cat "$FAKE_SSH_LOG")"
 [ -f "$HOME/.terminfo/x/xterm-ghostty" ] && pass "tic compiled xterm-ghostty" || fail "no compiled entry under $HOME/.terminfo"
+# The remote login shell may not be POSIX, so the installer runs under sh.
+grep -q "^ARGS .* sh -c 'tic -x" "$FAKE_SSH_LOG" && pass "the install runs under sh -c" || fail "install command: $(grep 'tic -x' "$FAKE_SSH_LOG")"
 [ "$(final_term)" = xterm-ghostty ] && pass "TERM=xterm-ghostty" || fail "TERM was $(final_term)"
 grep -q 'SendEnv=TERM_PROGRAM_VERSION' "$FAKE_SSH_LOG" && pass "forwards env with SendEnv" || fail "no SendEnv"
 grep -q '^tester@example.test|[0-9]*|wsl-' "$cache" 2>/dev/null && pass "cached tester@example.test" || fail "cache: $(cat "$cache" 2>/dev/null)"
