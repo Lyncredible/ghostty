@@ -247,6 +247,27 @@ jobs:
         shell: pwsh
         run: ./test/windows/compact-tabs.ps1 -Exe zig-out/bin/ghostty.exe
 
+      # OSC 10/11 color queries: the inbox ConPTY swallows them (a notice,
+      # not a failure); with the ConPTY package's conpty.dll next to
+      # ghostty.exe, Ghostty must answer. The package's files are removed
+      # afterwards so the other tests keep using the inbox ConPTY.
+      - name: Color query test
+        timeout-minutes: 5
+        shell: pwsh
+        run: ./test/windows/color-query.ps1 -Exe zig-out/bin/ghostty.exe
+
+      - name: Color query test (ConPTY package)
+        timeout-minutes: 5
+        shell: pwsh
+        run: |
+          ./dist/windows/conpty.ps1 -Destination zig-out/bin
+          try {
+            ./test/windows/color-query.ps1 -Exe zig-out/bin/ghostty.exe
+          } finally {
+            Start-Sleep -Seconds 2
+            Remove-Item zig-out/bin/conpty.dll, zig-out/bin/OpenConsole.exe -Force -ErrorAction SilentlyContinue
+          }
+
       - name: Dark mode test
         shell: pwsh
         run: ./test/windows/dark-mode.ps1 -Exe zig-out/bin/ghostty.exe
