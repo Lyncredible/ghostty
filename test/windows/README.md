@@ -339,3 +339,12 @@ file and instance): a split and a second tab are saved when Ghostty quits
 restores three terminals with only the active tab's showing, and the first
 tab's split left and right. Inactive tabs' terminals once showed through
 after a restore. Keys bound to the actions are posted to the terminal.
+
+## search.ps1
+
+Checks the search bar: cmd prints a marker three times (six matches with
+the command line), `start_search` opens the bar, typing the marker into its
+field counts six matches, `navigate_search:next` selects a match and then
+another, `:previous` goes back, and `end_search` closes it. The count is
+read from the bar's window text ("Match 2 of 6"), which is also what screen
+readers see.
