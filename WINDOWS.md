@@ -1280,26 +1280,44 @@ Notes:
 - [x] Verify IME with Microsoft Pinyin, Japanese IME, and others
 - [x] Fix tab-header close crashing the window when there are multiple
       tabs (active index and split focus must be valid during teardown)
-- [ ] `ssh-terminfo` (and `ssh-env`) in WSL (reported 2026-11-06): with
+- [x] `ssh-terminfo` (and `ssh-env`) in WSL (reported 2026-11-06): with
       `shell-integration-features = ssh-terminfo`, `ssh` in a WSL shell
       fails with `ssh:4: no such file or directory: /ghostty`. `WSLENV`
       passes `GHOSTTY_SHELL_FEATURES` into WSL, so the integration wraps
       `ssh` with `"$GHOSTTY_BIN_DIR/ghostty" +ssh`, but `GHOSTTY_BIN_DIR`
       isn't passed (and the Windows `ghostty.exe +ssh` would use Windows'
       ssh and environment, not the distro's). Make it work inside WSL:
-      - [ ] Stop the broken wrapper first: only define the `ssh` function
-            when `GHOSTTY_BIN_DIR/ghostty` is runnable, in each shell's
-            integration (bash, zsh, fish, elvish), so `ssh` keeps working.
-      - [ ] Support the features from WSL itself: the WSL launcher
-            (`shell-integration/wsl/ghostty.sh`) defines its own `ssh`
-            wrapper that uses the distro's `ssh`: install `xterm-ghostty`
-            on the remote (`infocmp -x` from the resources' terminfo,
-            piped to `tic -x -` over ssh, cached like `+ssh` does), fall
-            back to `TERM=xterm-256color`, and forward `COLORTERM`,
-            `TERM_PROGRAM` and `TERM_PROGRAM_VERSION` for `ssh-env`.
-      - [ ] Test in a WSL distro: `ssh localhost` (or a container) with
-            each feature, and that a missing `infocmp` or `tic` falls
-            back cleanly.
+      - [x] Stop the broken wrapper first: bash, zsh, fish, elvish and
+            nushell only wrap `ssh` when `ghostty` (or `ghostty.exe`) is
+            in `GHOSTTY_BIN_DIR`, so plain `ssh` keeps working wherever
+            it isn't set.
+      - [x] Support the features from WSL itself: for the ssh features
+            the WSL launcher sets `GHOSTTY_BIN_DIR` to
+            `shell-integration/wsl/bin`, whose `ghostty` is a POSIX
+            `+ssh` with the distro's `ssh` (same flags and behavior as the
+            native command): it pipes the resources' `ghostty.terminfo`
+            to `tic -x -o ~/.terminfo -` on the remote, uses
+            `TERM=xterm-ghostty` or falls back to `xterm-256color` with a
+            warning, sends `COLORTERM`, `TERM_PROGRAM` and
+            `TERM_PROGRAM_VERSION` with `SendEnv`, and caches installs in
+            the native cache file (`host|time|wsl-<cksum>`, mode 600).
+            Options that open no session (`-G`, `-V`, `-Q`, `-O`) go
+            straight to `ssh`. If the script isn't executable on the
+            Windows drive (`metadata` mount option), the launcher uses a
+            copy in `~/.cache/ghostty/wsl-bin`. Other `ghostty` commands
+            in WSL say to use `ghostty.exe`.
+      - [x] Tests: `test/windows/wsl-ssh.sh` (run in a distro, with a
+            fake `ssh` that answers `-G` and runs the installer locally,
+            in a temporary `HOME`): install and cache, the cache hit, a
+            separate port, `--terminfo=false`, `--forward-env=false`, a
+            failed install, the cache's mode, `-G` passing through, bad
+            flags, the launcher's `GHOSTTY_BIN_DIR`, and bash and zsh
+            wrapping `ssh` only with ghostty there. All passed on
+            Ubuntu 24.04. In the app (`--command=wsl.exe`,
+            `ssh-terminfo,ssh-env`): zsh's `ssh` is the wrapper and
+            `GHOSTTY_BIN_DIR` is the WSL script's directory. Not checked:
+            a real remote host (no sshd here), fish, elvish and nushell
+            (not installed in the distro).
 - [x] Shell integration for wsl
   - [x] Map WSL Linux paths (`/home/...`) to `\\wsl$\<distro>\...`
         so new tabs can start there

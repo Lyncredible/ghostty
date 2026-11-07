@@ -99,6 +99,15 @@ if [ $# -eq 0 ]; then
   exit 2
 fi
 
+# Options that don't open a session (print the config or version, query,
+# control a master) go straight to ssh: there's no terminal to set up, and
+# the terminfo install would "succeed" without installing anything.
+for arg; do
+  case "$arg" in
+  -G | -V | -Q | -O) exec "$ssh" "$@" ;;
+  esac
+done
+
 warn() { printf 'Warning: %s\n' "$*" >&2; }
 note() { [ "$verbose" = false ] || printf '%s\n' "$*" >&2; }
 
@@ -125,17 +134,20 @@ cached() {
     END { exit !found }' "$cache_file"
 }
 
-# Record `dest` in the cache, replacing an older entry for it.
+# Record `dest` in the cache (private to the user, like the native one),
+# replacing an older entry for it.
 remember() {
   mkdir -p "${cache_file%/*}" 2>/dev/null || return 1
-  tmp="$cache_file.$$"
   (
     umask 077
-    if [ -r "$cache_file" ]; then
-      awk -F'|' -v dest="$1" '$1 != dest' "$cache_file"
-    fi
-    printf '%s|%s|%s\n' "$1" "$(date +%s)" "$2"
-  ) >"$tmp" && mv -f "$tmp" "$cache_file"
+    tmp="$cache_file.$$"
+    {
+      if [ -r "$cache_file" ]; then
+        awk -F'|' -v dest="$1" '$1 != dest' "$cache_file"
+      fi
+      printf '%s|%s|%s\n' "$1" "$(date +%s)" "$2"
+    } >"$tmp" && mv -f "$tmp" "$cache_file"
+  )
 }
 
 term=xterm-256color

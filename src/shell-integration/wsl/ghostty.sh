@@ -4,7 +4,8 @@
 # `wsl.exe [options] --exec /bin/sh -c '. ".../wsl/ghostty.sh"'`, passing
 # GHOSTTY_RESOURCES_DIR (translated to a Linux path) and
 # GHOSTTY_SHELL_FEATURES through WSLENV. It starts the user's login shell
-# with the same automatic integration Ghostty uses for that shell natively.
+# with the same automatic integration Ghostty uses for that shell natively,
+# and for the ssh features, a WSL version of `ghostty +ssh` (wsl/bin).
 #
 # This must stay POSIX sh compatible since it runs before the user's shell.
 
@@ -13,6 +14,28 @@ __ghostty_shell=$(getent passwd "$(id -un)" 2>/dev/null | cut -d: -f7)
 export SHELL="$__ghostty_shell"
 
 __ghostty_dir="$GHOSTTY_RESOURCES_DIR/shell-integration"
+
+# The integrations' `ssh` wrapper (for the ssh-env and ssh-terminfo
+# features) runs "$GHOSTTY_BIN_DIR/ghostty" +ssh. Windows's ghostty.exe can't
+# do that for a Linux shell, so point it at our POSIX version, which uses the
+# distribution's ssh. Windows drives usually show every file as executable;
+# with the `metadata` mount option it may not be, so then use a copy.
+case "${GHOSTTY_SHELL_FEATURES-}" in
+*ssh-*)
+  __ghostty_bin="$__ghostty_dir/wsl/bin"
+  if [ -f "$__ghostty_bin/ghostty" ] && [ ! -x "$__ghostty_bin/ghostty" ]; then
+    __ghostty_copy="${XDG_CACHE_HOME:-$HOME/.cache}/ghostty/wsl-bin"
+    if mkdir -p "$__ghostty_copy" 2>/dev/null &&
+      cp "$__ghostty_bin/ghostty" "$__ghostty_copy/ghostty" 2>/dev/null &&
+      chmod +x "$__ghostty_copy/ghostty" 2>/dev/null; then
+      __ghostty_bin="$__ghostty_copy"
+    fi
+  fi
+  if [ -x "$__ghostty_bin/ghostty" ]; then
+    export GHOSTTY_BIN_DIR="$__ghostty_bin"
+  fi
+  ;;
+esac
 
 case "${__ghostty_shell##*/}" in
 bash)
