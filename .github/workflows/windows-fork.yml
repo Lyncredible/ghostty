@@ -26,6 +26,21 @@ jobs:
       - name: Setup Zig
         uses: mlugg/setup-zig@d1434d08867e3ee9daa34448df10607b98908d29 # v2.2.1
 
+      # Zig's downloads sometimes fail on the runners ("unable to unpack
+      # tarball ... ReadFailed", three runs in a row on windows-latest), so
+      # fetch the dependencies first, retrying, before the build.
+      - name: Fetch dependencies
+        shell: pwsh
+        run: |
+          foreach ($i in 1..4) {
+            zig build --fetch -Dtarget=x86_64-windows-gnu
+            if ($LASTEXITCODE -eq 0) { exit 0 }
+            Write-Host "Fetching the dependencies failed (attempt $i), retrying."
+            Start-Sleep -Seconds (15 * $i)
+          }
+          Write-Host "::error title=fetch::fetching the dependencies failed 4 times"
+          exit 1
+
       # The app targets the GNU ABI (MinGW), as documented in WINDOWS.md;
       # the runner's native target would be MSVC. A failure's last lines
       # go in an annotation, which can be read without signing in.
@@ -334,6 +349,21 @@ jobs:
       - name: Setup Zig
         uses: mlugg/setup-zig@d1434d08867e3ee9daa34448df10607b98908d29 # v2.2.1
 
+      # Zig's downloads sometimes fail on the runners ("unable to unpack
+      # tarball ... ReadFailed", three runs in a row on windows-latest), so
+      # fetch the dependencies first, retrying, before the build.
+      - name: Fetch dependencies
+        shell: pwsh
+        run: |
+          foreach ($i in 1..4) {
+            zig build --fetch -Dtarget=x86_64-windows-gnu
+            if ($LASTEXITCODE -eq 0) { exit 0 }
+            Write-Host "Fetching the dependencies failed (attempt $i), retrying."
+            Start-Sleep -Seconds (15 * $i)
+          }
+          Write-Host "::error title=fetch::fetching the dependencies failed 4 times"
+          exit 1
+
       - name: Build
         run: zig build -Dtarget=x86_64-windows-gnu
 
@@ -360,6 +390,21 @@ jobs:
         uses: mlugg/setup-zig@d1434d08867e3ee9daa34448df10607b98908d29 # v2.2.1
         with:
           use-cache: false
+
+      # Zig's downloads sometimes fail on the runners ("unable to unpack
+      # tarball ... ReadFailed", three runs in a row on windows-latest), so
+      # fetch the dependencies first, retrying, before the build.
+      - name: Fetch dependencies
+        shell: pwsh
+        run: |
+          foreach ($i in 1..4) {
+            zig build --fetch -Dtarget=aarch64-windows-gnu
+            if ($LASTEXITCODE -eq 0) { exit 0 }
+            Write-Host "Fetching the dependencies failed (attempt $i), retrying."
+            Start-Sleep -Seconds (15 * $i)
+          }
+          Write-Host "::error title=fetch::fetching the dependencies failed 4 times"
+          exit 1
 
       # On failure, put the end of the output on the run's page, since the
       # job log needs signing in.

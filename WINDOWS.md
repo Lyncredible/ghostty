@@ -1186,6 +1186,13 @@ Notes:
         error (the same tree built on Windows 2022, ARM64 and here), so
         likely the dependency download; every other job passed. Pushed
         again to rerun it, since rerunning a job needs a token.
+  - [x] It failed the same way in runs 42331519319 and 42331730301. The
+        Build step now puts the end of a failed build in an annotation,
+        which showed `pkg/dcimgui/build.zig.zon: error: unable to unpack
+        tarball to temporary directory: ReadFailed`: Zig's download
+        failing, as it does here (see the curl workaround above). The
+        three build jobs now fetch the dependencies first in their own
+        step (`zig build --fetch`, up to four tries).
 - [ ] Keep the branch on top of upstream: fetch
       `git@github.com:ghostty-org/ghostty.git` from time to time, rebase,
       and check that the build, unit tests and the fork's CI still pass.
