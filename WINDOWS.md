@@ -1127,7 +1127,7 @@ Notes:
       the capture was lost. `test/windows/context-menu.ps1` (in the
       fork's CI) posts a right-click and waits for the process's popup
       menu (`#32768`); it failed without the fix and passes with it.
-- [ ] Make GitHub CI pass reliably: in recent runs of the Windows (fork)
+- [x] Make GitHub CI pass reliably: in recent runs of the Windows (fork)
       workflow, `build-windows` failed while `build-windows-2022`,
       `build-windows-arm64` and `build-libghostty-vt-windows` passed.
       The latest failure (run 41980624453) was the console handoff
@@ -1175,6 +1175,12 @@ Notes:
         change on `windows-latest`, since `aba736b96` passed just before.
   - [x] Run 42224003628 (7606f8cf7, with the drag handle fix): all jobs
         passed and `windows-tip` moved to it.
+  - [x] Since then every run on `windows` passed: 42237363197
+        (d7cbffabf), 42247467303 (d6af086d4, with the new window theme
+        test), 42258918661 (5855f01fb) and 42317231582 (dfc88fb6a, WSL
+        `+ssh`), plus 42268017280 on `windows-rebased` (028b77a03, whose
+        run on `windows` was cancelled by the next push). Five green
+        runs in a row.
 - [ ] Keep the branch on top of upstream: fetch
       `git@github.com:ghostty-org/ghostty.git` from time to time, rebase,
       and check that the build, unit tests and the fork's CI still pass.
@@ -1204,6 +1210,10 @@ Notes:
   - [x] 2026-11-06: a fourth sync (3 commits: style runs found in one
         scan in `RowBuilder.scan`). No conflicts; the build and the
         `RowBuilder` tests passed.
+        The rebased branch went to `windows-rebased` first (the force-push
+        was blocked by the permission check) and then to `windows` with
+        the owner's go-ahead. The full unit test suite on the synced tree:
+        4,266 passed, 64 skipped (other platforms), 0 failed.
 - [x] Tip builds, like upstream's `release-tip.yml` (the discussion's
       release workflow item): a rolling prerelease of the latest
       `windows` commit, so people can try it without building. Approved
