@@ -316,3 +316,17 @@ other theme, it outlasts a config reload, forcing the other one and back
 works, and `config` follows the app mode again. Keys bound to the actions
 are posted to the terminal and the background is read with `PrintWindow`,
 so it runs on a locked desktop and changes no desktop settings.
+
+## wsl-ssh.sh
+
+Runs inside a WSL distribution and checks the WSL version of `ghostty +ssh`
+(`shell-integration/wsl/bin/ghostty`) with a fake `ssh` that answers
+`ssh -G` and runs the terminfo installer locally, in a temporary `HOME`:
+the first connection installs `xterm-ghostty` and caches the host, the next
+one uses the cache, `--terminfo=false` and `--forward-env=false` work, a
+failed install falls back to `xterm-256color`, `-G` goes straight to ssh,
+and the launcher and the bash and zsh integrations only wrap `ssh` when the
+script is there. It needs no sshd and changes nothing outside the
+temporary directory. Pass the resources directory as a Linux path:
+
+    wsl.exe -e sh test/windows/wsl-ssh.sh /mnt/c/.../zig-out/share/ghostty
