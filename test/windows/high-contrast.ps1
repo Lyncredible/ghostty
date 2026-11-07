@@ -45,6 +45,24 @@ public static string WindowAt(int x, int y) {
 }
 [DllImport("user32.dll", CharSet = CharSet.Unicode)] public static extern System.IntPtr FindWindowExW(System.IntPtr parent, System.IntPtr after, string cls, string title);
 [DllImport("user32.dll")] public static extern System.IntPtr SendMessageW(System.IntPtr h, uint m, System.IntPtr w, System.IntPtr l);
+[DllImport("user32.dll")] public static extern int GetMenuItemCount(System.IntPtr m);
+[DllImport("user32.dll")] public static extern uint GetMenuItemID(System.IntPtr m, int pos);
+[DllImport("user32.dll")] public static extern System.IntPtr GetSubMenu(System.IntPtr m, int pos);
+[DllImport("user32.dll", CharSet = CharSet.Unicode)] public static extern int GetMenuStringW(System.IntPtr m, uint item, System.Text.StringBuilder s, int n, uint flags);
+// The command ID of the menu item with a label (without its &, its
+// shortcut and a trailing ellipsis), in the menu or its submenus, or 0.
+public static uint MenuCommand(System.IntPtr menu, string label) {
+  int n = GetMenuItemCount(menu);
+  for (int i = 0; i < n; i++) {
+    var sub = GetSubMenu(menu, i);
+    if (sub != System.IntPtr.Zero) { uint found = MenuCommand(sub, label); if (found != 0) return found; continue; }
+    var s = new System.Text.StringBuilder(256);
+    GetMenuStringW(menu, (uint)i, s, 256, 0x400);   // MF_BYPOSITION
+    string text = s.ToString().Split('\t')[0].Replace("&", "").TrimEnd('\u2026');
+    if (text == label) return GetMenuItemID(menu, i);
+  }
+  return 0;
+}
 [DllImport("user32.dll")] public static extern System.IntPtr GetSystemMenu(System.IntPtr h, bool revert);
 [DllImport("user32.dll")] public static extern bool IsWindowVisible(System.IntPtr h);
 [DllImport("user32.dll", CharSet = CharSet.Unicode)] public static extern int GetClassNameW(System.IntPtr h, System.Text.StringBuilder s, int n);
@@ -165,7 +183,7 @@ try {
     # Split right from the window menu (its seventh command).
     $menu = [GhosttyContrast.Win32]::GetSystemMenu($window, $false)
     [void][GhosttyContrast.Win32]::SendMessageW($window, 0x0117, $menu, [IntPtr]0)   # WM_INITMENUPOPUP
-    [void][GhosttyContrast.Win32]::SendMessageW($window, 0x0112, [IntPtr](7 -shl 4), [IntPtr]0)   # WM_SYSCOMMAND
+    [void][GhosttyContrast.Win32]::SendMessageW($window, 0x0112, [IntPtr][GhosttyContrast.Win32]::MenuCommand($menu, 'Split Right'), [IntPtr]0)   # WM_SYSCOMMAND: Split Right
     [void](WaitFor { [GhosttyContrast.Win32]::VisibleChildren($window, 'GhosttySurface').Count -eq 2 } 'a second split')
     [void](WaitFor { $script:last = DividerColor; $last -eq $blend } "the divider to be $blend")
     Write-Host "Without high contrast, the divider is $last, a blend of the terminal's colors."
@@ -183,9 +201,9 @@ try {
     [void](WaitFor { $script:last = DividerColor; $last -eq '#FFCC00' } 'the divider to be the foreground #FFCC00')
     Write-Host "With high contrast, the divider is $last, the terminal's foreground."
 
-    # The search bar too: Find… from the window menu (its eleventh command).
+    # The search bar too: Find from the window menu (found by label).
     [void][GhosttyContrast.Win32]::SendMessageW($window, 0x0117, $menu, [IntPtr]0)   # WM_INITMENUPOPUP
-    [void][GhosttyContrast.Win32]::SendMessageW($window, 0x0112, [IntPtr](11 -shl 4), [IntPtr]0)   # WM_SYSCOMMAND
+    [void][GhosttyContrast.Win32]::SendMessageW($window, 0x0112, [IntPtr][GhosttyContrast.Win32]::MenuCommand($menu, 'Find'), [IntPtr]0)   # WM_SYSCOMMAND
     $search = WaitFor { $h = [GhosttyContrast.Win32]::VisibleChild($window, 'GhosttySearchBar'); if ($h -ne [IntPtr]::Zero) { $h } } 'the search bar'
     # Its position is read again each time, in case it's still moving.
     [void](WaitFor {

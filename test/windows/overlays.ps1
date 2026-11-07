@@ -33,6 +33,24 @@ Add-Type -Namespace GhosttyBadges -Name Win32 -MemberDefinition @'
 [StructLayout(LayoutKind.Sequential)] public struct RECT { public int l, t, r, b; }
 [DllImport("user32.dll")] public static extern bool PostMessageW(System.IntPtr h, uint m, System.IntPtr w, System.IntPtr l);
 [DllImport("user32.dll")] public static extern System.IntPtr SendMessageW(System.IntPtr h, uint m, System.IntPtr w, System.IntPtr l);
+[DllImport("user32.dll")] public static extern int GetMenuItemCount(System.IntPtr m);
+[DllImport("user32.dll")] public static extern uint GetMenuItemID(System.IntPtr m, int pos);
+[DllImport("user32.dll")] public static extern System.IntPtr GetSubMenu(System.IntPtr m, int pos);
+[DllImport("user32.dll", CharSet = CharSet.Unicode)] public static extern int GetMenuStringW(System.IntPtr m, uint item, System.Text.StringBuilder s, int n, uint flags);
+// The command ID of the menu item with a label (without its &, its
+// shortcut and a trailing ellipsis), in the menu or its submenus, or 0.
+public static uint MenuCommand(System.IntPtr menu, string label) {
+  int n = GetMenuItemCount(menu);
+  for (int i = 0; i < n; i++) {
+    var sub = GetSubMenu(menu, i);
+    if (sub != System.IntPtr.Zero) { uint found = MenuCommand(sub, label); if (found != 0) return found; continue; }
+    var s = new System.Text.StringBuilder(256);
+    GetMenuStringW(menu, (uint)i, s, 256, 0x400);   // MF_BYPOSITION
+    string text = s.ToString().Split('\t')[0].Replace("&", "").TrimEnd('\u2026');
+    if (text == label) return GetMenuItemID(menu, i);
+  }
+  return 0;
+}
 [DllImport("user32.dll")] public static extern System.IntPtr GetSystemMenu(System.IntPtr h, bool revert);
 [DllImport("user32.dll")] public static extern System.IntPtr GetWindow(System.IntPtr h, uint cmd);
 [DllImport("user32.dll")] public static extern bool IsWindowVisible(System.IntPtr h);
@@ -150,12 +168,14 @@ try {
     if ($bell -ne $scrollbar - 1) { Fail "the bell border isn't just above the scrollbar: $($children -join ', ')" }
     Write-Host "A bell shows the bell border, just above the scrollbar: $($children -join ', ')"
 
-    # The window menu's Find... (11) and Command Palette (17), after
-    # WM_INITMENUPOPUP, which builds it.
+    # The window menu's Find and Command Palette, found by label after
+    # WM_INITMENUPOPUP, which builds the menu.
     $menu = $W::GetSystemMenu($window, $false)
-    foreach ($overlay in @(@{ Class = 'GhosttySearchBar'; Command = 11 }, @{ Class = 'GhosttyCommandPalette'; Command = 17 })) {
+    foreach ($overlay in @(@{ Class = 'GhosttySearchBar'; Label = 'Find' }, @{ Class = 'GhosttyCommandPalette'; Label = 'Command Palette' })) {
         [void]$W::SendMessageW($window, 0x0117, $menu, [IntPtr]0)   # WM_INITMENUPOPUP
-        [void]$W::SendMessageW($window, 0x0112, [IntPtr]($overlay.Command -shl 4), [IntPtr]0)   # WM_SYSCOMMAND
+        $command = $W::MenuCommand($menu, $overlay.Label)
+        if ($command -eq 0) { Fail "the window menu has no '$($overlay.Label)'" }
+        [void]$W::SendMessageW($window, 0x0112, [IntPtr]$command, [IntPtr]0)   # WM_SYSCOMMAND
         [void](WaitFor { (Children) -contains "$($overlay.Class)*" } $overlay.Class)
         $children = @(Children)
         if ($children[0] -ne "$($overlay.Class)*") { Fail "$($overlay.Class) isn't on top: $($children -join ', ')" }
@@ -172,9 +192,9 @@ try {
         Write-Host "$($overlay.Class) opens on top$(if ($list -ne [IntPtr]::Zero) { " listing $entries entries" }) and closes: $($children -join ', ')"
     }
 
-    # Split Right (7) focuses the new terminal and dims this one.
+    # Split Right focuses the new terminal and dims this one.
     [void]$W::SendMessageW($window, 0x0117, $menu, [IntPtr]0)
-    [void]$W::SendMessageW($window, 0x0112, [IntPtr](7 -shl 4), [IntPtr]0)
+    [void]$W::SendMessageW($window, 0x0112, [IntPtr]$W::MenuCommand($menu, 'Split Right'), [IntPtr]0)
     [void](WaitFor { (Children) -contains 'GhosttyDimOverlay*' } 'the first terminal to dim')
     $children = @(Children)
     $names = @($children | ForEach-Object { $_.TrimEnd('*') })
