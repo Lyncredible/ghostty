@@ -407,3 +407,12 @@ its number and has no close button, so a click where the close button
 would be selects the tab and closes nothing; a middle click still closes
 it. Positions come from UI Automation and clicks are posted messages, so
 it runs on a locked desktop.
+
+## color-query.ps1
+
+Checks OSC 10 and 11 color queries (which Codex, Neovim and tmux use): a
+PowerShell inside Ghostty, started with distinctive colors, sends them and
+reads the replies as VT input. With `conpty.dll` next to `ghostty.exe`
+(`dist/windows/conpty.ps1`) the replies must be Ghostty's colors. The
+ConPTY built into Windows swallows these queries, so without it the test
+only reports what came back.

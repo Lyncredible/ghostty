@@ -1951,6 +1951,14 @@ Notes:
       `osc-color-report-format` is the default (16 bit) and not involved.
       The tip and release packages don't bundle `conpty.dll` (no
       `-BundleConpty` in the workflows), so they use the inbox ConPTY.
+  - [x] A test, `test/windows/color-query.ps1` (in CI, no WSL needed):
+        PowerShell in Ghostty (started with `#123456` on `#abcdef`) sends
+        OSC 10 and 11 and reads the replies as VT input. Locally, the
+        inbox ConPTY gave nothing (and conhost's DA1), the package's gave
+        `rgb:abab/cdcd/efef` and `rgb:1212/3434/5656`. CI runs it both
+        ways: inbox as a notice, and with the package (fetched by the new
+        `dist/windows/conpty.ps1`, which `package.ps1 -BundleConpty` now
+        uses too) where Ghostty must answer.
   - [ ] Bundle `conpty.dll` by default in the tip and release packages
         (awaiting the owner's go-ahead: it changes the console host for
         every session), and run the UI tests with it.
