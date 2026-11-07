@@ -1222,6 +1222,11 @@ Notes:
         the tab reorder test failed once because an elevated console (as
         on the runners) names tabs "Administrator: SECOND"; it now
         matches the end of the name.
+  - [ ] Run 42384896502 (9327700aa, reverting the Command and PowerShell
+        titles): everything passed except the console handoff test, where
+        UI Automation failed with E_UNEXPECTED listing the terminals of a
+        window that was being made or closed. The test's poll now skips
+        such a window, as it already did a terminal; it passes locally.
 - [ ] Keep the branch on top of upstream: fetch
       `git@github.com:ghostty-org/ghostty.git` from time to time, rebase,
       and check that the build, unit tests and the fork's CI still pass.
