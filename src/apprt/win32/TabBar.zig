@@ -183,6 +183,10 @@ const tab_radius = 6;
 const tab_button_width = 31;
 const tab_button_height = 24;
 
+/// Narrower tabs are compact: the 28 points of padding on each side (room
+/// for the close button) would leave less than 32 for the title.
+const compact_tab_width = 88;
+
 /// Scale a size in DPI-independent pixels to physical pixels.
 fn scale(self: *const TabBar, v: c_int) c_int {
     const dpi: c_int = @intCast(c.GetDpiForWindow(self.window.hwnd));
@@ -266,6 +270,13 @@ const Layout = struct {
     /// The caption buttons, with the tabs in the title bar.
     caption: ?struct { minimize: c.RECT, maximize: c.RECT, close: c.RECT },
 
+    /// Whether the tabs are too narrow for a title and a close button
+    /// (with many tabs): each shows only its number, as wide as it can, and
+    /// has no close button (a click there would close the tab when it was
+    /// meant to select or drag it). The tooltip still has the title, and a
+    /// middle click, the tab's menu or a keybinding closes it.
+    compact: bool,
+
     fn tabRect(self: Layout, idx: usize, h: c_int) c.RECT {
         const left = self.left + @as(c_int, @intCast(idx)) * (self.tab_width + self.gap);
         return .{ .left = left, .top = self.top, .right = left + self.tab_width, .bottom = h };
@@ -304,6 +315,7 @@ fn layout(self: *const TabBar) Layout {
 
     return .{
         .tab_width = tab_width,
+        .compact = tab_width < self.scale(compact_tab_width),
         .left = left,
         .top = self.scale(tab_margin),
         .gap = gap,
@@ -437,7 +449,7 @@ fn hitTest(self: *const TabBar, x: c_int, y: c_int) ?Hit {
         const rect = l.tabRect(i, client.bottom);
         if (c.PtInRect(&rect, pt) == 0) continue;
         const close = self.closeRect(rect);
-        if (c.PtInRect(&close, pt) != 0) return .{ .close = i };
+        if (!l.compact and c.PtInRect(&close, pt) != 0) return .{ .close = i };
         return .{ .tab = i };
     }
     return null;
@@ -567,12 +579,14 @@ fn paint(self: *TabBar, hdc: c.HDC, client: c.RECT) void {
         self.drawTabShape(hdc, shape, if (active) col.active else if (hovered) col.tab_hover else col.tab, if (active) null else col.tab_border);
 
         // Title, centered, with the tab's number and, for splits, how many
-        // terminals it has, like "2: api (3)".
+        // terminals it has, like "2: api (3)". Compact tabs have only the
+        // number, and no close button to leave room for.
         const close = self.closeRect(rect);
+        const padding = self.scale(if (l.compact) 4 else 28);
         var text_rect: c.RECT = .{
-            .left = rect.left + self.scale(28),
+            .left = rect.left + padding,
             .top = rect.top,
-            .right = rect.right - self.scale(28),
+            .right = rect.right - padding,
             .bottom = rect.bottom - self.scale(tab_margin),
         };
         var count: usize = 0;
@@ -580,7 +594,9 @@ fn paint(self: *TabBar, hdc: c.HDC, client: c.RECT) void {
         while (it.next()) |_| count += 1;
         const title = tab.title();
         const bell = if (tab.hasBell()) "🔔 " else "";
-        const title8 = (if (count > 1)
+        const title8 = (if (l.compact)
+            std.fmt.allocPrint(alloc, "{s}{d}", .{ bell, i + 1 })
+        else if (count > 1)
             std.fmt.allocPrint(alloc, "{s}{d}: {s} ({d})", .{ bell, i + 1, title, count })
         else
             std.fmt.allocPrint(alloc, "{s}{d}: {s}", .{ bell, i + 1, title })) catch continue;
@@ -597,7 +613,7 @@ fn paint(self: *TabBar, hdc: c.HDC, client: c.RECT) void {
         );
 
         // Close button, shown on the active and hovered tabs.
-        if (active or hovered) {
+        if (!l.compact and (active or hovered)) {
             if (Hit.eql(self.hover, .{ .close = i })) {
                 fill(hdc, &close, blend(if (active) col.active else col.hover, col.text, 0.15));
             }

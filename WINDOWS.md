@@ -1895,6 +1895,18 @@ Notes:
       window menu (`#32768`) and `window-show-tab-bar = never`. The
       tabs, session restore, window options, search, command palette,
       window theme and overlays tests pass.
+  - [x] Compact tabs (found 2026-11-07 with 20 tabs): tabs narrower
+        than 88 points showed "1..." for tabs 10 and up (the title was
+        cut before its number ended), and the active tab's close button
+        covered its label. Now such tabs show only their number, across
+        the whole tab, and have no close button, like Windows Terminal's
+        narrow tabs (a click there would close a tab meant to be selected
+        or dragged, since closing happens on the button press). The
+        tooltip still has the title; a middle click, the tab's menu or a
+        keybinding closes them. Checked with captures of 5, 8 and 20 tabs
+        at 200%; `test/windows/compact-tabs.ps1` (in CI) clicks where the
+        close button would be and checks that the tab is selected and
+        none closed (it failed on the previous build, which closed it).
   - [x] Reordering tabs by dragging, with the new layout's margin and
         gaps (`Layout.indexAt`): `test/windows/tab-reorder.ps1` drags a
         tab named with cmd's `title` onto the first and checks UI
