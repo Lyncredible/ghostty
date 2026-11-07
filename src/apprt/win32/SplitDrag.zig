@@ -5,7 +5,8 @@
 //!
 //! The handle and highlight are layered child windows of the surface, like
 //! our other overlays, since the surface's swap chain covers regular child
-//! windows.
+//! windows. Like GTK's, the handle only shows when the mouse is over it
+//! (or while dragging), so it doesn't cover the terminal's first line.
 const std = @import("std");
 const Config = @import("../../config.zig").Config;
 const util = @import("util.zig");
@@ -22,6 +23,12 @@ const handle_width = 48;
 const handle_height = 6;
 const handle_margin = 4;
 
+/// The handle's opacity when the mouse is over it, and otherwise: almost
+/// transparent, since a layered window with no opacity at all gets no
+/// mouse input, and the handle has to be found to be shown.
+const shown_alpha = 140;
+const hidden_alpha = 1;
+
 /// The drag handle of a surface.
 pub const Handle = struct {
     pub const class_name = std.unicode.utf8ToUtf16LeStringLiteral("GhosttyDragHandle");
@@ -32,6 +39,7 @@ pub const Handle = struct {
     brush: c.HBRUSH = null,
     shown: bool = false,
     dragging: bool = false,
+    hovered: bool = false,
 
     /// The window is made the first time the handle shows (in a split).
     /// It goes on top whenever it shows, so when it's made doesn't matter.
@@ -57,7 +65,7 @@ pub const Handle = struct {
             null,
         ) orelse return error.CreateWindowFailed;
         errdefer _ = c.DestroyWindow(hwnd);
-        if (c.SetLayeredWindowAttributes(hwnd, 0, 140, c.LWA_ALPHA) == 0) return error.SetOpacityFailed;
+        if (c.SetLayeredWindowAttributes(hwnd, 0, hidden_alpha, c.LWA_ALPHA) == 0) return error.SetOpacityFailed;
         _ = c.SetWindowLongPtrW(hwnd, util.GWLP_USERDATA, @bitCast(@intFromPtr(self)));
         self.hwnd = hwnd;
     }
@@ -110,6 +118,13 @@ pub const Handle = struct {
         if (self.shown) self.setShown(true);
     }
 
+    /// Show the handle while the mouse is over it or it's being dragged.
+    fn updateOpacity(self: *const Handle) void {
+        if (self.hwnd == null) return;
+        const alpha: u8 = if (self.hovered or self.dragging) shown_alpha else hidden_alpha;
+        _ = c.SetLayeredWindowAttributes(self.hwnd, 0, alpha, c.LWA_ALPHA);
+    }
+
     fn screenPoint(self: *const Handle, lparam: c.LPARAM) c.POINT {
         var pt: c.POINT = .{ .x = util.loword(lparam), .y = util.hiword(lparam) };
         _ = c.ClientToScreen(self.hwnd, &pt);
@@ -135,10 +150,27 @@ pub const Handle = struct {
             },
             c.WM_LBUTTONDOWN => {
                 self.dragging = true;
+                self.updateOpacity();
                 _ = c.SetCapture(hwnd);
                 return 0;
             },
+            c.WM_MOUSELEAVE => {
+                self.hovered = false;
+                self.updateOpacity();
+                return 0;
+            },
             c.WM_MOUSEMOVE => {
+                if (!self.hovered and !self.dragging) {
+                    self.hovered = true;
+                    self.updateOpacity();
+                    var track: c.TRACKMOUSEEVENT = .{
+                        .cbSize = @sizeOf(c.TRACKMOUSEEVENT),
+                        .dwFlags = c.TME_LEAVE,
+                        .hwndTrack = hwnd,
+                        .dwHoverTime = 0,
+                    };
+                    _ = c.TrackMouseEvent(&track);
+                }
                 // Only moves with the left button down: while we have the
                 // capture, Windows also sends moves of its own (e.g. when
                 // the drop zone shows) at the real cursor with the real
@@ -150,6 +182,10 @@ pub const Handle = struct {
             c.WM_LBUTTONUP => {
                 if (self.dragging) {
                     self.dragging = false;
+                    // The mouse may be anywhere now; the next move over
+                    // the handle shows it again.
+                    self.hovered = false;
+                    self.updateOpacity();
                     const pt = self.screenPoint(lparam);
                     _ = c.ReleaseCapture();
                     self.surface.window.splitDragEnd(self.surface, pt);
@@ -159,6 +195,8 @@ pub const Handle = struct {
             c.WM_CAPTURECHANGED => {
                 if (self.dragging) {
                     self.dragging = false;
+                    self.hovered = false;
+                    self.updateOpacity();
                     self.surface.window.splitDragCancel();
                 }
                 return 0;
