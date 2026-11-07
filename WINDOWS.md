@@ -1234,6 +1234,10 @@ Notes:
         on Node 24 and it works. It's the latest release (checked
         2026-11-07) and upstream pins the same commit, so there's nothing
         to bump yet.
+  - [x] Run 42400147972 (e01b70340, compact tabs and the
+        OSC findings; 542903412's own run was cancelled by that push):
+        every job passed, including the compact tabs test, and
+        `windows-tip` moved.
 - [ ] Keep the branch on top of upstream: fetch
       `git@github.com:ghostty-org/ghostty.git` from time to time, rebase,
       and check that the build, unit tests and the fork's CI still pass.
