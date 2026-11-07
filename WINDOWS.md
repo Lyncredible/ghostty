@@ -1799,6 +1799,17 @@ Notes:
       Alt+Space, and keep the window title for the taskbar. With one tab
       and `window-show-tab-bar=auto`, the plain title bar stays.
       Respect `window-decoration` (none, server) and high contrast.
+- [ ] Ctrl+F for Find by default (requested 2026-11-06). Today Find is
+      `ctrl+shift+f` (as on Linux; macOS has Cmd+F), which the menus
+      show. Plain Ctrl+F is a terminal key, though: readline, zsh and
+      PowerShell's emacs mode move forward a character with it, and
+      `less`, `vim` and `man` page forward. A binding would always take it,
+      since `start_search` can always be performed. To decide: bind
+      Ctrl+F in addition to Ctrl+Shift+F on Windows (Windows Terminal
+      binds only Ctrl+Shift+F for this reason), or only when the
+      terminal isn't in a mode that wants the key (alternate screen,
+      application keypad), or leave it to users
+      (`keybind = ctrl+f=start_search`).
 - [ ] Match the macOS menus (requested 2026-11-06). Windows has no menu
       bar, so the title bar's menu (right click or Alt+Space) would get
       macOS's menus as submenus, which also shortens its long flat list:
