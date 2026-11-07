@@ -216,7 +216,12 @@ pub fn setVisible(self: *Tab, visible: bool) void {
     var it = self.tree.iterator();
     while (it.next()) |entry| {
         const shown = visible and self.isShown(entry.handle);
-        if ((c.IsWindowVisible(entry.view.hwnd) != 0) == shown) continue;
+        // The window's own WS_VISIBLE, not IsWindowVisible: that's false
+        // for every child while the window is hidden (as when restoring a
+        // session), which skipped hiding the other tabs, and they all
+        // showed up with the window.
+        const has_visible = c.GetWindowLongPtrW(entry.view.hwnd, c.GWL_STYLE) & c.WS_VISIBLE != 0;
+        if (has_visible == shown) continue;
         _ = c.ShowWindow(entry.view.hwnd, if (shown) c.SW_SHOWNA else c.SW_HIDE);
         entry.view.setVisible(shown);
     }
