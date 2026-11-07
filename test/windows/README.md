@@ -355,3 +355,12 @@ Checks the command palette: `toggle_command_palette` opens it with many
 entries, typing `new_split:right` narrows the list, Enter runs it (the
 terminal splits left and right) and closes the palette, and Escape closes
 it without running anything.
+
+## tabs.ps1
+
+Checks tab operations, one terminal per tab: `close_tab:other` keeps only
+the current tab, `close_tab:this` and then `undo` brings back the same
+terminal, and `move_tab_to_new_window` moves the current tab, with its
+output, into a second window while the other tab stays. A closed tab is
+kept hidden for `undo-timeout`, so the checks follow which terminal is
+shown rather than counting windows.

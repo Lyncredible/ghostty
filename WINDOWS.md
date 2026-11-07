@@ -1738,9 +1738,11 @@ Notes:
         1, Enter splits the terminal left and right and closes the
         palette, and Escape closes it without running anything
         (`test/windows/command-palette.ps1`, in CI).
-  - [ ] Tabs: "Close Other Tabs", `move_tab_to_new_window` (the output
-        stays, the new window is in front) and `undo` reopening a closed
-        tab.
+  - [x] Tabs: `close_tab:other`, `close_tab:this` and `undo` reopening the
+        same terminal, and `move_tab_to_new_window` moving a tab with its
+        output into a new window (`test/windows/tabs.ps1`, in CI). Not
+        checked: that the new window is in front (a locked desktop has
+        no foreground window).
   - [ ] New windows: `maximize`, `fullscreen` and `window-position-x/y`,
         including the clamp for a position off every monitor.
   - [ ] `prompt_surface_title`: the dialog sets the title override, and an
