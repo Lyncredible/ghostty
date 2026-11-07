@@ -189,7 +189,22 @@ pub fn setCount(self: *SearchBar, selected: ?usize, total: ?usize) void {
     else
         "";
     self.count_len = std.unicode.utf8ToUtf16Le(&self.count, text) catch 0;
-    if (self.hwnd != null) _ = c.InvalidateRect(self.hwnd, null, c.FALSE);
+    if (self.hwnd == null) return;
+    _ = c.InvalidateRect(self.hwnd, null, c.FALSE);
+
+    // The count is only drawn, so also make it the window's text, which
+    // screen readers (and tests, through UI Automation) see as its name.
+    var name_buf: [64]u8 = undefined;
+    const name = if (total) |t| (if (t == 0)
+        "No matches"
+    else if (selected) |s|
+        std.fmt.bufPrint(&name_buf, "Match {d} of {d}", .{ s + 1, t }) catch ""
+    else
+        std.fmt.bufPrint(&name_buf, "{d} matches", .{t}) catch "") else "Search";
+    var name_w: [64:0]u16 = undefined;
+    const n = std.unicode.utf8ToUtf16Le(&name_w, name) catch 0;
+    name_w[n] = 0;
+    _ = c.SetWindowTextW(self.hwnd, &name_w);
 }
 
 /// Called when the parent surface is resized.
