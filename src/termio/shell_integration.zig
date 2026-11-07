@@ -264,6 +264,25 @@ fn isCmd(arg0: []const u8) bool {
         std.ascii.eqlIgnoreCase(exe, "cmd.exe");
 }
 
+/// The console title to start a shell with on Windows: "Command" for cmd
+/// and "PowerShell" for PowerShell (both 5.1 and 7), rather than the path
+/// to their executable, which a console otherwise starts with and these
+/// shells keep. Null for other programs.
+pub fn consoleTitle(arg0: []const u8) ?[]const u8 {
+    if (isCmd(arg0)) return "Command";
+    if (isPowerShell(arg0)) return "PowerShell";
+    return null;
+}
+
+test consoleTitle {
+    const testing = std.testing;
+    try testing.expectEqualStrings("Command", consoleTitle("C:\\Windows\\system32\\cmd.exe").?);
+    try testing.expectEqualStrings("Command", consoleTitle("cmd").?);
+    try testing.expectEqualStrings("PowerShell", consoleTitle("C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe").?);
+    try testing.expectEqualStrings("PowerShell", consoleTitle("pwsh.exe").?);
+    try testing.expect(consoleTitle("wsl.exe") == null);
+}
+
 /// Whether the executable is PowerShell: pwsh (7+) or powershell (5.1).
 fn isPowerShell(arg0: []const u8) bool {
     var exe = std.fs.path.basename(arg0);
@@ -325,7 +344,8 @@ fn freeArgs(alloc: Allocator, command: config.Command, args: []const [:0]const u
 /// no way to mark when a command starts. This is enough to know whether
 /// the shell is at a prompt, for example to close it without asking.
 /// We also report the working directory with OSC 7 and, depending on the
-/// features, set the title and a bar cursor.
+/// features, set the title ("Command" at the prompt, like PowerShell's
+/// "PowerShell") and a bar cursor.
 ///
 /// The command isn't changed. If PROMPT already has semantic prompt
 /// marks (for example from Clink or the user), it's left alone.
@@ -346,7 +366,7 @@ fn setupCmd(
         try env.put("PROMPT", try std.fmt.allocPrint(
             alloc,
             "{s}$e]7;kitty-shell-cwd://localhost/$P$e\\$e]133;A$e\\{s}{s}$e]133;I$e\\",
-            .{ if (title) "$e]2;$P$e\\" else "", prompt, cursor },
+            .{ if (title) "$e]2;Command$e\\" else "", prompt, cursor },
         ));
     }
 
@@ -401,7 +421,7 @@ test "cmd: features and existing prompt" {
 
     _ = try setupCmd(alloc, .{ .shell = "cmd" }, &env);
     try testing.expectEqualStrings(
-        "$e]2;$P$e\\$e]7;kitty-shell-cwd://localhost/$P$e\\$e]133;A$e\\$T $P$G$e[6 q$e]133;I$e\\",
+        "$e]2;Command$e\\$e]7;kitty-shell-cwd://localhost/$P$e\\$e]133;A$e\\$T $P$G$e[6 q$e]133;I$e\\",
         env.get("PROMPT").?,
     );
 

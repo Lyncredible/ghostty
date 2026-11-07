@@ -70,6 +70,11 @@ env: ?*const EnvMap = null,
 /// working directory of the calling process is preserved.
 cwd: ?[:0]const u8 = null,
 
+/// Windows only: the console's title when the process starts (lpTitle),
+/// instead of the program's path, which a console otherwise starts with
+/// and shells like cmd and PowerShell keep showing.
+title: ?[]const u8 = null,
+
 /// The file handle to set for stdin/out/err. If this isn't set, we do
 /// nothing explicitly so it is up to the behavior of the operating system.
 stdin: ?File = null,
@@ -400,7 +405,7 @@ fn startWindows(self: *Command, arena: Allocator) !void {
             .dwFlags = windows.STARTF_USESTDHANDLES,
             .lpReserved = null,
             .lpDesktop = null,
-            .lpTitle = null,
+            .lpTitle = if (self.title) |t| (try std.unicode.utf8ToUtf16LeAllocZ(arena, t)).ptr else null,
             .dwX = 0,
             .dwY = 0,
             .dwXSize = 0,

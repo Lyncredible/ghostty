@@ -147,9 +147,9 @@ function SysColor([int]$index) {
     '#{0:X2}{1:X2}{2:X2}' -f ($v -band 0xFF), (($v -shr 8) -band 0xFF), (($v -shr 16) -band 0xFF)
 }
 
-# The bar is the terminal's background darkened by a quarter.
+# The bar is the terminal's background darkened by 30%
 # (rounding halves away from zero, as the tab bar does).
-function Darken([int]$v) { [int][Math]::Round($v * 0.75, [MidpointRounding]::AwayFromZero) }
+function Darken([int]$v) { [int][Math]::Round($v * 0.7, [MidpointRounding]::AwayFromZero) }
 $terminal = '#{0:X2}{1:X2}{2:X2}' -f (Darken 0x33), (Darken 0x66), (Darken 0x99)
 
 # The divider is the background mixed a quarter of the way to the
