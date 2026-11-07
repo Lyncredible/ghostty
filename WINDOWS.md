@@ -1734,8 +1734,10 @@ Notes:
         count was only drawn, so screen readers couldn't read it either;
         the bar's window text (its accessible name) is now the count:
         "6 matches", "Match 2 of 6" or "No matches".
-  - [ ] Command palette: typing filters the list, and Enter on
-        `new_split:right` splits the terminal.
+  - [x] Command palette: typing `new_split:right` narrows 92 entries to
+        1, Enter splits the terminal left and right and closes the
+        palette, and Escape closes it without running anything
+        (`test/windows/command-palette.ps1`, in CI).
   - [ ] Tabs: "Close Other Tabs", `move_tab_to_new_window` (the output
         stays, the new window is in front) and `undo` reopening a closed
         tab.
