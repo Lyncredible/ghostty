@@ -19,11 +19,21 @@ pub fn loadIcon(hinstance: c.HINSTANCE, id: u16) c.HICON {
     return LoadIconW(hinstance, id);
 }
 
+/// An icon resource at a size in pixels, scaled down from the closest
+/// image in the resource. The caller destroys it with DestroyIcon.
+pub fn loadIconSized(hinstance: c.HINSTANCE, id: u16, size: c_int) c.HICON {
+    const IMAGE_ICON = 1;
+    return LoadImageW(hinstance, id, IMAGE_ICON, size, size, 0);
+}
+
 // These take MAKEINTRESOURCE values, which are small integers smuggled in
 // a string pointer. Those aren't valid (aligned) pointers in Zig, so we
 // declare these with the integer type instead.
 extern "user32" fn LoadCursorW(hinstance: c.HINSTANCE, id: usize) callconv(.winapi) c.HCURSOR;
 extern "user32" fn LoadIconW(hinstance: c.HINSTANCE, id: usize) callconv(.winapi) c.HICON;
+// Declared returning an icon (the only kind we load) since handles aren't
+// aligned pointers and can't be cast to one.
+extern "user32" fn LoadImageW(hinstance: c.HINSTANCE, id: usize, kind: c.UINT, cx: c_int, cy: c_int, flags: c.UINT) callconv(.winapi) c.HICON;
 
 /// SetWindowPos with an integer insert-after handle, so we can pass the
 /// special values HWND_TOPMOST (-1) and HWND_NOTOPMOST (-2), which aren't
