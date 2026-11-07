@@ -380,3 +380,14 @@ title (the window's title follows), and an empty title clears the override,
 bringing back the shell's title. The field is set with `WM_SETTEXT` and OK
 pressed with `BM_CLICK`. It shows a dialog, so it only runs in CI (set
 `CI=true` to run it elsewhere).
+
+## titlebar-tabs.ps1
+
+Checks the tabs in the title bar: with one tab the window has the system's
+title bar; with two the client area starts at the window's top. Hit tests
+sent to the tab bar and the window: empty space is the caption
+(`HTCAPTION`), the top edge resizes (`HTTOP`), the maximize button is
+`HTMAXBUTTON` (Windows 11's snap layouts), and the tab bar passes those to
+the window (`HTTRANSPARENT`) while keeping tabs and its other buttons. A
+click on minimize minimizes, maximize (`WM_NCLBUTTONUP`) maximizes, and
+with one tab again the system's title bar comes back.

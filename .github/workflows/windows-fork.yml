@@ -232,6 +232,11 @@ jobs:
         shell: pwsh
         run: ./test/windows/title-prompt.ps1 -Exe zig-out/bin/ghostty.exe
 
+      - name: Title bar tabs test
+        timeout-minutes: 5
+        shell: pwsh
+        run: ./test/windows/titlebar-tabs.ps1 -Exe zig-out/bin/ghostty.exe
+
       - name: Dark mode test
         shell: pwsh
         run: ./test/windows/dark-mode.ps1 -Exe zig-out/bin/ghostty.exe
