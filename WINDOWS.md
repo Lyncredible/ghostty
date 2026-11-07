@@ -1373,7 +1373,8 @@ Notes:
       default binding uses Ctrl+Alt with a character key, which would
       collide with AltGr (Windows reports AltGr as Ctrl+Alt).
 - [x] Tab bar tooltips: a tab's full title (useful when it's cut off),
-      "Close Tab", "New Tab", "New Tab With a Shell", and "Menu", from one
+      "Close Tab", "New Tab" and "New Tab With a Shell" (and "Menu",
+      until that button was removed), from one
       common controls tooltip over the tab bar that asks for its text
       (`TTN_GETDISPINFOW`) based on what's under the mouse. Checked that
       the tooltip is created; it follows the real cursor, so showing it
@@ -1471,7 +1472,7 @@ Notes:
         rectangles, the second selected; selecting the first made it the
         active tab.
     - [x] The buttons come after the tabs, as Buttons named like their
-          tooltips ("New Tab", "New Tab With a Shell", "Menu") with the
+          tooltips ("New Tab", "New Tab With a Shell") with the
           Invoke pattern, which presses them from a posted message (the
           menus run a modal loop). Checked: invoking "New Tab" opened a
           second tab.
@@ -2023,8 +2024,10 @@ Notes:
   - [x] The window's system menu (window icon, right-click on the title
         bar, Alt+Space), rebuilt on each open so that shortcuts and
         disabled items are current
-  - [x] A ☰ button at the right end of the tab bar (the tab bar is hidden
-        with one tab under `window-show-tab-bar=auto`)
+  - [x] ~~A ☰ button at the right end of the tab bar~~, removed
+        (2026-11-06): it repeated the title bar's menu (right click or
+        Alt+Space), which a right click on the tab bar's empty space shows
+        too, and it was missing whenever the tab bar was hidden.
   - [x] A terminal context menu for `right-click-action = context-menu`,
         shown on button release like other Windows apps
   - Items run keybind actions and show their shortcuts ("Ctrl+Shift+T").
