@@ -1826,6 +1826,21 @@ Notes:
     restore, window options, search, command palette and overlays tests
     pass with it; a maximized capture shows the tabs and the restore
     glyph unclipped.
+  - [x] Restyled like noctty (https://github.com/amanthanvi/noctty,
+        requested 2026-11-06), keeping Ghostty's icon: the icon at the
+        left (a click opens the window menu, a double click closes, like
+        a title bar's icon), then the tabs, then + and ▾ at the right next
+        to the caption buttons. Windows Terminal's metrics, as noctty's
+        `docs/wt-chrome-reference.md` records them: a 40 point row (32
+        when maximized, so the tabs reach the top of the screen) with 32
+        point tabs at its bottom, 8 point rounded top corners, 46 by 40
+        caption buttons, 31 by 24 new tab and shell buttons, and a line
+        under the strip that the active tab breaks to join its terminal
+        (which it takes its background from; no accent color). Inactive
+        tabs are raised a little with a thin border. Labels are centered,
+        numbered and count splits ("2: api (3)"), with the bell first.
+        Checked with captures, restored and maximized; the title bar tabs
+        test checks the icon's hit test too.
   - [ ] Expose the caption buttons to UI Automation (screen readers):
         Windows no longer does once we draw them. Alt+Space and Alt+F4
         still work from the keyboard.

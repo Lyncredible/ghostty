@@ -252,7 +252,7 @@ const root_fragment_root_vtbl = FragmentRootVtbl{
                 .shell_menu => .{ .button = .shell_menu },
                 // The caption buttons aren't exposed yet (Alt+Space and
                 // Alt+F4 still reach them from the keyboard).
-                .minimize, .maximize, .close_window => null,
+                .minimize, .maximize, .close_window, .app_icon => null,
             } else null;
             if (kind) |k| if (Item.create(self, k)) |item| {
                 out.* = &item.fragment;
