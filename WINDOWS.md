@@ -1238,6 +1238,14 @@ Notes:
         OSC findings; 542903412's own run was cancelled by that push):
         every job passed, including the compact tabs test, and
         `windows-tip` moved.
+  - [x] Run 42406031418 (40db76dd7, Chrome-like tabs and the bundled
+        ConPTY) failed in the MSIX start menu test: cmd's prompt vanished
+        (fixed by `redraw=0`, see the OSC 10/11 item). Run 42413296400
+        (9b49d1c1b) passed every job: the color query tests (inbox as a
+        notice, the ConPTY package, and the packaged zip, which answered
+        `rgb:abab/cdcd/efef` and `rgb:1212/3434/5656`), the MSIX and zip
+        installs and the package's tests on the bundled ConPTY.
+        `windows-tip` moved, so the tip now ships the ConPTY package.
 - [ ] Keep the branch on top of upstream: fetch
       `git@github.com:ghostty-org/ghostty.git` from time to time, rebase,
       and check that the build, unit tests and the fork's CI still pass.
