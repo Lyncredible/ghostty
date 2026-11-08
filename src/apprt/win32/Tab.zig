@@ -121,6 +121,8 @@ fn restoreNode(
     const split_layout = node.layout orelse {
         const surface = try Surface.create(window, .{
             .context = context.*,
+            // The shell chosen for it, or the configured command.
+            .shell = if (node.command) |command| try command.command(arena) else null,
             .overrides = .{
                 .working_directory = if (node.pwd) |pwd| try arena.dupeSentinel(u8, pwd, 0) else null,
             },

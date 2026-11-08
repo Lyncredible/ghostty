@@ -339,6 +339,11 @@ file and instance): a split and a second tab are saved when Ghostty quits
 restores three terminals with only the active tab's showing, and the first
 tab's split left and right. Inactive tabs' terminals once showed through
 after a restore. Keys bound to the actions are posted to the terminal.
+Then a saved session with a PowerShell tab (its command saved, as for a
+shell chosen from the new tab menu) in `C:\Windows` and a cmd tab in the
+temporary directory comes back with those shells and directories (read from
+the prompts with UI Automation), and quitting saves the PowerShell tab's
+command again.
 
 ## search.ps1
 
