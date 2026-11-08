@@ -2433,7 +2433,8 @@ Notes:
           like `auto`" on Windows and is "only supported on Linux
           builds"; they now say what it does here, and that with the
           tabs in the title bar Ghostty draws it in the terminal's
-          colors. Checked in `+show-config --docs --default`.
+          colors. Checked in `+show-config --docs --default`; CI run
+          42466390091 (37805abd8) passed every job.
   - [x] `resize-overlay`, `resize-overlay-position`, and
         `resize-overlay-duration`: "columns x rows" when the grid changes,
         like GTK; with `after-first`, not while a new window is being
