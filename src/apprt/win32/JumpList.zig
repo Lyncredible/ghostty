@@ -3,10 +3,13 @@
 //!
 //! "New Window" starts ghostty.exe again (with our class, if it's custom),
 //! which opens a window in the running instance (see Ipc.claim) or starts
-//! one.
+//! one. After it, a task per shell (as in the new tab menu: Command Prompt,
+//! PowerShell, each WSL distribution) opens a window with that shell, with
+//! the shell's icon, like Windows Terminal's profiles.
 const std = @import("std");
 const c = @import("util.zig").c;
 const util = @import("util.zig");
+const shells = @import("shells.zig");
 
 const log = std.log.scoped(.win32);
 
@@ -77,9 +80,12 @@ fn updateInner(class: ?[]const u8) !void {
         args_buf[n] = 0;
         break :args args_buf[0..n :0];
     };
-    const link = try shellLink(exe, args, std.unicode.utf8ToUtf16LeStringLiteral("New Window"));
+    const link = try shellLink(exe, args, std.unicode.utf8ToUtf16LeStringLiteral("New Window"), exe);
     defer _ = link.lpVtbl.*.Release.?(link);
     try check(tasks.?.lpVtbl.*.AddObject.?(tasks, @ptrCast(link)));
+
+    // A window with each shell. Missing shells only cost their tasks.
+    addShellTasks(exe, class, tasks.?) catch |err| log.warn("error adding the shells to the jump list err={}", .{err});
 
     var array: ?*c.IObjectArray = null;
     try check(tasks.?.lpVtbl.*.QueryInterface.?(tasks, &c.IID_IObjectArray, @ptrCast(&array)));
@@ -88,14 +94,102 @@ fn updateInner(class: ?[]const u8) !void {
     try check(list.?.lpVtbl.*.CommitList.?(list));
 }
 
-/// A shell link that runs `exe` with `args`, titled `title`.
-fn shellLink(exe: [*:0]const u16, args: [*:0]const u16, title: [*:0]const u16) !*c.IShellLinkW {
+/// Add a task per shell (but the configured one, which is "New Window")
+/// that opens a window running it: `ghostty.exe -e <shell>`, titled with
+/// the shell's name and showing its program's icon.
+fn addShellTasks(exe: [*:0]const u16, class: ?[]const u8, tasks: *c.IObjectCollection) !void {
+    var arena: std.heap.ArenaAllocator = .init(std.heap.page_allocator);
+    defer arena.deinit();
+    const alloc = arena.allocator();
+    for (try shells.list(alloc)) |shell| {
+        const command = shell.command orelse continue;
+        const argv = switch (command) {
+            .direct => |v| v,
+            .shell => continue,
+        };
+        if (argv.len == 0) continue;
+
+        const args = try taskArguments(alloc, class, argv);
+        const link = try shellLink(
+            exe,
+            try std.unicode.utf8ToUtf16LeAllocZ(alloc, args),
+            try std.unicode.utf8ToUtf16LeAllocZ(alloc, shell.label),
+            try std.unicode.utf8ToUtf16LeAllocZ(alloc, argv[0]),
+        );
+        defer _ = link.lpVtbl.*.Release.?(link);
+        try check(tasks.lpVtbl.*.AddObject.?(tasks, @ptrCast(link)));
+    }
+}
+
+/// The arguments of a shell's task: our class, if custom, and `-e` with
+/// the shell's program and arguments, quoted for the command line.
+fn taskArguments(alloc: std.mem.Allocator, class: ?[]const u8, argv: []const [:0]const u8) ![]const u8 {
+    var out: std.Io.Writer.Allocating = .init(alloc);
+    if (class) |v| try out.writer.print("\"--class={s}\" ", .{v});
+    try out.writer.writeAll("-e");
+    for (argv) |arg| {
+        try out.writer.writeByte(' ');
+        try writeQuoted(&out.writer, arg);
+    }
+    return out.written();
+}
+
+/// An argument as CommandLineToArgvW reads it: quoted if it's empty or has
+/// spaces, tabs or quotes, with backslashes before quotes doubled.
+fn writeQuoted(w: *std.Io.Writer, arg: []const u8) !void {
+    if (arg.len > 0 and std.mem.indexOfAny(u8, arg, " \t\"") == null) return w.writeAll(arg);
+    try w.writeByte('"');
+    var backslashes: usize = 0;
+    for (arg) |ch| {
+        switch (ch) {
+            '\\' => backslashes += 1,
+            '"' => {
+                try w.splatByteAll('\\', backslashes * 2 + 1);
+                try w.writeByte('"');
+                backslashes = 0;
+                continue;
+            },
+            else => {},
+        }
+        if (ch != '\\') {
+            try w.splatByteAll('\\', backslashes);
+            backslashes = 0;
+            try w.writeByte(ch);
+        }
+    }
+    try w.splatByteAll('\\', backslashes * 2);
+    try w.writeByte('"');
+}
+
+test taskArguments {
+    const testing = std.testing;
+    var arena: std.heap.ArenaAllocator = .init(testing.allocator);
+    defer arena.deinit();
+    const alloc = arena.allocator();
+
+    try testing.expectEqualStrings(
+        "-e C:\\Windows\\system32\\cmd.exe",
+        try taskArguments(alloc, null, &.{"C:\\Windows\\system32\\cmd.exe"}),
+    );
+    try testing.expectEqualStrings(
+        "\"--class=com.example.work\" -e \"C:\\Program Files\\PowerShell\\7\\pwsh.exe\"",
+        try taskArguments(alloc, "com.example.work", &.{"C:\\Program Files\\PowerShell\\7\\pwsh.exe"}),
+    );
+    try testing.expectEqualStrings(
+        "-e wsl.exe -d \"Ubuntu 24.04\" \"\" \"a\\\"b\" \"c d\\\\\"",
+        try taskArguments(alloc, null, &.{ "wsl.exe", "-d", "Ubuntu 24.04", "", "a\"b", "c d\\" }),
+    );
+}
+
+/// A shell link that runs `exe` with `args`, titled `title`, with the icon
+/// of the program `icon`.
+fn shellLink(exe: [*:0]const u16, args: [*:0]const u16, title: [*:0]const u16, icon: [*:0]const u16) !*c.IShellLinkW {
     var link: ?*c.IShellLinkW = null;
     try check(c.CoCreateInstance(&c.CLSID_ShellLink, null, c.CLSCTX_INPROC_SERVER, &c.IID_IShellLinkW, @ptrCast(&link)));
     errdefer _ = link.?.lpVtbl.*.Release.?(link);
     try check(link.?.lpVtbl.*.SetPath.?(link, exe));
     try check(link.?.lpVtbl.*.SetArguments.?(link, args));
-    try check(link.?.lpVtbl.*.SetIconLocation.?(link, exe, 0));
+    try check(link.?.lpVtbl.*.SetIconLocation.?(link, icon, 0));
 
     // Tasks show their title property.
     var store: ?*c.IPropertyStore = null;

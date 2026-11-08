@@ -1806,6 +1806,18 @@ Notes:
       `ghostty.exe` again (single instance opens the window in the running
       app). Checked: the shell wrote the custom destinations file with the
       task and the executable's path.
+  - [x] A task per shell after it (2026-11-07), like Windows Terminal's
+        profiles: the new tab menu's shells (Command Prompt, Windows
+        PowerShell, PowerShell 7, WSL and each distribution), each
+        running `ghostty.exe -e <shell>` (which opens a window in the
+        running instance) with the shell's program as its icon. Arguments
+        are quoted as CommandLineToArgvW reads them (unit tested:
+        spaces, empty, quotes, trailing backslashes). Checked: `-e
+        powershell.exe` from a second launch opened a PowerShell window in
+        the first instance, and the custom destinations file of a test
+        class had the four tasks here (cmd, Windows PowerShell, WSL,
+        `wsl.exe -d Ubuntu-24.04`) after "New Window". Seeing the menu
+        needs an unlocked desktop.
 - [x] Terminal inspector (`inspector` toggle/show/hide,
       `render_inspector`): a window per terminal, like GTK's, drawn by
       Dear ImGui through its Win32 and Direct3D 11 backends (now built by
