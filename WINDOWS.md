@@ -1119,7 +1119,10 @@ Notes:
         96 by 48 image drawn with `a=T` showed, from WSL (Python) and
         from native PowerShell alike, and the query got Ghostty's
         `ESC _ G i=31;OK ESC \`. The inbox ConPTY drops it. CI now
-        checks the query through the package (`color-query.ps1`).
+        checks the query through the package (`color-query.ps1`); run
+        42425252674 (aa5ea3033) passed every job, the query getting
+        Ghostty's OK through the ConPTY package and from the packaged
+        zip, and nothing through the inbox ConPTY.
     - [x] What else the package's ConPTY passes that the inbox one
           doesn't (2026-11-07, a probe in WSL, raw `/dev/tty`):
           - Answered by Ghostty only with the package: OSC 10/11 colors,
