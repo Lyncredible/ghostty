@@ -629,31 +629,9 @@ fn windowsCreateCommandLine(allocator: mem.Allocator, argv: []const []const u8) 
 
     for (argv, 0..) |arg, arg_i| {
         if (arg_i != 0) try writer.writeByte(' ');
-        // Empty arguments need quotes too, otherwise they disappear
+        // Empty arguments are quoted too, otherwise they disappear
         // when the child process parses its command line.
-        if (arg.len > 0 and mem.indexOfAny(u8, arg, " \t\n\"") == null) {
-            try writer.writeAll(arg);
-            continue;
-        }
-        try writer.writeByte('"');
-        var backslash_count: usize = 0;
-        for (arg) |byte| {
-            switch (byte) {
-                '\\' => backslash_count += 1,
-                '"' => {
-                    try writer.splatByteAll('\\', backslash_count * 2 + 1);
-                    try writer.writeByte('"');
-                    backslash_count = 0;
-                },
-                else => {
-                    try writer.splatByteAll('\\', backslash_count);
-                    try writer.writeByte(byte);
-                    backslash_count = 0;
-                },
-            }
-        }
-        try writer.splatByteAll('\\', backslash_count * 2);
-        try writer.writeByte('"');
+        try internal_os.windows.writeCommandLineArg(writer, arg);
     }
 
     return buf.toOwnedSliceSentinel(0);
