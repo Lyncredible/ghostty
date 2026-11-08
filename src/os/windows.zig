@@ -462,6 +462,45 @@ pub fn writeCommandLineArg(writer: *std.Io.Writer, arg: []const u8) std.Io.Write
     try writer.writeByte('"');
 }
 
+test writeCommandLineArg {
+    const testing = std.testing;
+    const alloc = testing.allocator;
+
+    // Plain arguments stay as they are.
+    var buf: [64]u8 = undefined;
+    var w: std.Io.Writer = .fixed(&buf);
+    try writeCommandLineArg(&w, "C:\\Windows\\system32\\cmd.exe");
+    try testing.expectEqualStrings("C:\\Windows\\system32\\cmd.exe", w.buffered());
+
+    // Each argument comes back unchanged after Windows' own parsing, as
+    // the program's first argument is the program.
+    const cases = [_][]const u8{
+        "",
+        "two words",
+        "tab\there",
+        "new\nline",
+        "say \"hi\"",
+        "C:\\trailing dir\\",
+        "\\\\server\\share",
+        "a\\\\\"b",
+        "\\",
+        "日本語 😀",
+    };
+    for (cases) |arg| {
+        var out: std.Io.Writer.Allocating = .init(alloc);
+        defer out.deinit();
+        try out.writer.writeAll("prog.exe ");
+        try writeCommandLineArg(&out.writer, arg);
+        const wide = try std.unicode.wtf8ToWtf16LeAllocZ(alloc, out.written());
+        defer alloc.free(wide);
+        var it = try std.process.Args.Iterator.Windows.init(alloc, wide);
+        defer it.deinit();
+        try testing.expectEqualStrings("prog.exe", it.next().?);
+        try testing.expectEqualStrings(arg, it.next() orelse return error.MissingArgument);
+        try testing.expect(it.next() == null);
+    }
+}
+
 /// Whether `attachParentConsole` attached to the parent's console. The
 /// parent (a shell) doesn't wait for a GUI program and keeps reading the
 /// console's input, so we can write to it but not read keys from it.
