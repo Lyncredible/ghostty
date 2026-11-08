@@ -25,4 +25,6 @@ test {
     _ = @import("win32/TextRange.zig");
     _ = @import("win32/link.zig");
     _ = @import("win32/Handoff.zig");
+    _ = @import("win32/JumpList.zig");
+    _ = @import("win32/util.zig");
 }

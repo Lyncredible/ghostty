@@ -1386,6 +1386,14 @@ Notes:
   - [x] 2026-11-08: an eleventh sync (1 commit, the VOUCHED list). No
         conflicts; dates kept; nothing for Windows to check. CI run
         42519756218 (75130d112) passed every job.
+  - [x] 2026-11-08: a twelfth sync (4 commits). No conflicts; dates
+        kept. Upstream now defaults `-Demit-themes` to false on Windows
+        (the themes package that can't be unpacked there broke its
+        libghostty-vt Windows job, and upstream has no Windows app). This
+        branch's app loads themes, from the older release it pins, so the
+        default is true again when building the Win32 app (not with
+        `-Demit-lib-vt`). Checked: the app build installs the 861 themes,
+        and the libghostty-vt build works.
 - [x] Tip builds, like upstream's `release-tip.yml` (the discussion's
       release workflow item): a rolling prerelease of the latest
       `windows` commit, so people can try it without building. Approved
@@ -2274,6 +2282,26 @@ Notes:
     translucent and high-contrast tests now find their window menu items
     by label (they used fixed command numbers, which the new layout
     changed), and the overlays and command palette tests pass.
+- [x] Review (2026-11-08) of the latest tab changes found that
+      `std.unicode.utf8ToUtf16Le` doesn't check the size of the buffer it
+      writes to: text too long for a fixed buffer panics in safe builds
+      (the tip and release packages are ReleaseSafe) and corrupts the
+      stack in ReleaseFast, while several callers thought it truncates.
+  - Hovering a tab whose title is over 255 UTF-16 units (programs set
+    titles with OSC 2, of any length) overflowed the tooltip's buffer.
+    The tab bar's UI Automation names cut titles at 512 bytes, which
+    could split a character and then gave no name at all.
+  - In win32 input mode (every program behind ConPTY), text without a
+    key, such as an IME's result or dictation, went through a 64 unit
+    buffer, and a key's text through an 8 unit one: a longer IME
+    conversion would panic. `key_encode.zig` now walks the text one unit
+    at a time (`win32 input: long text` tests 100 kana and an emoji).
+  - `util.utf16Truncate` (as much as fits, never splitting a surrogate
+    pair, invalid UTF-8 as U+FFFD) is used for titles, tooltips and
+    dialog text; `util.utf16Exact` (fails if it doesn't fit) for the
+    app class in the instance mutex, the IPC window title, the jump list
+    and restart arguments, where a long `class` could overflow too.
+    Both unit tested; `util.zig` and `JumpList.zig` tests now run.
 - [ ] Packaging and release builds
   - [x] Portable zip (`dist/windows/package.ps1`)
   - [x] Per-user install script in the zip (`dist/windows/install.ps1`):

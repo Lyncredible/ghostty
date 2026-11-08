@@ -1921,8 +1921,8 @@ test configuredPosition {
 pub fn confirm(window: ?*Window, title: []const u8, message: []const u8) bool {
     var title_buf: [256]u16 = undefined;
     var message_buf: [1024]u16 = undefined;
-    const title16 = utf16Buf(&title_buf, title);
-    const message16 = utf16Buf(&message_buf, message);
+    const title16 = util.utf16TruncateZ(&title_buf, title).ptr;
+    const message16 = util.utf16TruncateZ(&message_buf, message).ptr;
     const result = c.MessageBoxW(
         if (window) |w| w.hwnd else null,
         message16,
@@ -1952,7 +1952,7 @@ pub fn confirmText(
     const result = c.MessageBoxW(
         if (window) |w| w.hwnd else null,
         body16,
-        utf16Buf(&title_buf, title),
+        util.utf16TruncateZ(&title_buf, title).ptr,
         c.MB_OKCANCEL | c.MB_ICONWARNING,
     );
     return result == c.IDOK;
@@ -1997,14 +1997,6 @@ test writePreview {
     out.clearRetainingCapacity();
     try writePreview(&out.writer, "M", "1\n2\n3\n4\n5\n6\n7\n8\n9\n10\n11\n12\n13\n14");
     try testing.expectEqualStrings("M\n\n1\n2\n3\n4\n5\n6\n7\n8\n9\n10\n11\n12\n\u{2026}", out.written());
-}
-
-/// Convert a short ASCII/UTF-8 string into a stack buffer as UTF-16,
-/// truncating if needed.
-fn utf16Buf(buf: []u16, s: []const u8) [*:0]const u16 {
-    const n = std.unicode.utf8ToUtf16Le(buf[0 .. buf.len - 1], s) catch 0;
-    buf[n] = 0;
-    return buf[0..n :0].ptr;
 }
 
 //----------------------------------------------------------------------------

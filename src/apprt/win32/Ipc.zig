@@ -99,9 +99,7 @@ test "encode and decode" {
 
 /// The window title of an instance's message window.
 pub fn windowTitle(buf: []u16, class: []const u8) ?[:0]const u16 {
-    const n = std.unicode.utf8ToUtf16Le(buf[0 .. buf.len - 1], class) catch return null;
-    buf[n] = 0;
-    return buf[0..n :0];
+    return util.utf16Exact(buf, class) catch null;
 }
 
 /// Send a request to a running instance. Returns false if there's no
@@ -164,7 +162,7 @@ pub fn claim(class: []const u8) Claim {
     const prefix = "Local\\ghostty-instance-";
     var buf: [prefix.len + 256 + 1]u16 = undefined;
     const n = std.unicode.utf8ToUtf16Le(&buf, prefix) catch unreachable;
-    const len = n + (std.unicode.utf8ToUtf16Le(buf[n .. buf.len - 1], class) catch return .failed);
+    const len = n + (util.utf16Exact(buf[n..], class) catch return .failed).len;
     // Backslashes are reserved in object names, except for the namespace.
     for (buf[n..len]) |*ch| {
         if (ch.* == '\\') ch.* = '_';
