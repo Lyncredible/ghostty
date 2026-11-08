@@ -1358,6 +1358,8 @@ Notes:
         the themes avoid characters Windows forbids (`<>:"/\|?*`). CI
         run 42448875784 (5449e46b6) passed every job, and `windows-tip`
         moved.
+  - [x] 2026-11-07: a ninth sync (3 commits: macOS NSColor tests only).
+        No conflicts; dates kept; nothing for Windows to check.
     - [ ] Upstream fix needed (in the themes release, which names files
           after the schemes): replace or drop those characters. Until
           then, each themes bump needs this check and maybe a revert.
