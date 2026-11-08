@@ -354,6 +354,14 @@ another, `:previous` goes back, and `end_search` closes it. The count is
 read from the bar's window text ("Match 2 of 6"), which is also what screen
 readers see.
 
+## scrollbar.ps1
+
+Checks the scrollbar: cmd prints 301 numbered lines (`L1000` to `L1300`),
+and clicks posted to the scrollbar's track scroll the terminal, as the
+thumb jumps to the click: the top shows cmd's banner, the middle lines from
+the middle of the output, and the bottom `L1300` again. What's in view is
+the surface's UI Automation value.
+
 ## command-palette.ps1
 
 Checks the command palette: `toggle_command_palette` opens it with many
