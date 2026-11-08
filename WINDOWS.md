@@ -1355,7 +1355,9 @@ Notes:
         with "unable to create file 'Neon Raincheck': PathAlreadyExists"
         and no Windows app build works. The fork reverts that bump
         (keeping `ghostty-themes-release-20261026-153024-27cbbb5`) until
-        the themes avoid characters Windows forbids (`<>:"/\|?*`).
+        the themes avoid characters Windows forbids (`<>:"/\|?*`). CI
+        run 42448875784 (5449e46b6) passed every job, and `windows-tip`
+        moved.
     - [ ] Upstream fix needed (in the themes release, which names files
           after the schemes): replace or drop those characters. Until
           then, each themes bump needs this check and maybe a revert.
