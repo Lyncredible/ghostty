@@ -2061,6 +2061,35 @@ Notes:
     `OpenConsole.exe` (`build\native\runtimes\x64`) from the
     Microsoft.Windows.Console.ConPTY 1.25.260930003 package next to
     `ghostty.exe`, or build with `package.ps1 -BundleConpty`.
+- [ ] Remember and restore tabs after a restart (requested 2026-11-07):
+      the list of tabs (and their splits), which terminal each one runs
+      (cmd, PowerShell, a WSL distribution, a shell from the new tab
+      menu, a custom command), and each terminal's working directory.
+  - Today: `window-save-state = always` saves windows (placement,
+    maximized), tabs, title overrides, split layouts, the focused
+    terminal and working directories (`SaveState.zig`, in
+    `%LOCALAPPDATA%\ghostty\window-state.json`) and restores them at
+    startup. With the default (`default`), Windows only restores after a
+    system restart or update (`RegisterApplicationRestart`), not after
+    quitting.
+  - [ ] Save which terminal each one runs: restored terminals all start
+        the configured `command`, so a WSL or PowerShell tab opened from
+        the new tab menu comes back as the default shell. Save the
+        command (the menu's shell entry, or the `-e` arguments) per
+        terminal in `NodeState`, and start it on restore.
+  - [ ] WSL working directories: a WSL shell reports a Linux path with
+        OSC 7 (or `/mnt/c/...`). Check what `pwd()` gives for those, and
+        restore them inside the distribution (`wsl.exe -d <distro> --cd
+        <path>`) instead of as a Windows directory, which `/home/...`
+        isn't.
+  - [ ] Decide when to restore: after every quit (like macOS, whose
+        default follows the system's "close windows when quitting"
+        setting), or keep it to `window-save-state = always` and system
+        restarts. Maybe make `default` mean "always" on Windows, since
+        Windows has no such setting.
+  - [ ] Test: extend `test/windows/session-restore.ps1` with a cmd tab, a
+        PowerShell tab and a WSL tab in different directories, quit, start
+        again, and check each tab's shell and directory.
 - [x] Ctrl+F for Find by default (requested 2026-11-06; decided
       2026-11-07: the owner keeps the default at Ctrl+Shift+F, as in
       Windows Terminal, and users who want Ctrl+F can add
