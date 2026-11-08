@@ -56,6 +56,10 @@ Copy-Item (Join-Path $prefix "bin\ghostty.exe") (Join-Path $package "bin")
 # The console launcher that shells run for `ghostty` (see
 # src/main_windows_launcher.zig).
 Copy-Item (Join-Path $prefix "bin\ghostty.com") (Join-Path $package "bin")
+# Package managers and packaged apps only run .exe files as commands, so the
+# console launcher is also bin\ghostty-cli.exe (the MSIX's `ghostty-cli`
+# alias, and the Scoop and winget manifests' `ghostty-cli` command).
+Copy-Item (Join-Path $prefix "bin\ghostty.com") (Join-Path $package "bin\ghostty-cli.exe")
 Copy-Item -Recurse (Join-Path $prefix "share") $package
 Copy-Item (Join-Path $PSScriptRoot "install.ps1") $package
 
@@ -91,9 +95,8 @@ if ($Msix) {
     $layout = Join-Path $staging "msix"
     New-Item -ItemType Directory -Force $layout | Out-Null
     Copy-Item -Recurse (Join-Path $package "bin"), (Join-Path $package "share"), (Join-Path $package "README.txt") $layout
-    # Packaged applications and their aliases must be .exe files, so the
-    # console launcher (ghostty.com) is also bin\ghostty-cli.exe here.
-    Copy-Item (Join-Path $package "bin\ghostty.com") (Join-Path $layout "bin\ghostty-cli.exe")
+    # Packaged applications and their aliases must be .exe files: the
+    # console launcher is bin\ghostty-cli.exe, copied with bin above.
 
     # The app extensions' public folder (for the default terminal
     # application), which they must name. Empty folders aren't packed.
