@@ -3284,6 +3284,16 @@ Reviewed the branch against this file and discussion #2563.
   key press: 4,089 passed, 61 skipped, 0 failed, exit 0.
 - Forty-first full native test run, after compiling the terminfo entry:
   4,091 passed, 61 skipped, 0 failed, exit 0.
+- A local pass of the UI tests (2026-11-08, at 994c08031 plus the screen
+  reader tab work, debug build, locked desktop): the 25 that run outside
+  CI all passed (cli-ipc, color-query, command-palette, compact-tabs,
+  context-menu, device-lost, handoff, minimize, mouse-capture,
+  output-frames, overlays, search, flood, session-restore, tab-close-uia,
+  tab-reorder, tabs, titlebar-tabs, uia-events, window-options,
+  window-theme, smoke with cmd, and the PowerShell integration) except
+  translucent, which captures the screen (`CopyFromScreen`: "The handle is
+  invalid" on a locked desktop) and passes in CI. The other 18 only run in
+  CI, where they passed (run 42489816690).
 - Fork CI run 41232795840 (2026-10-31), after the exit message and Git
   Bash path fixes: the x64 and ARM64 test suites, the MSIX install, and
   libghostty-vt with MSVC all passed.
