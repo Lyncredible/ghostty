@@ -1383,6 +1383,8 @@ Notes:
   - [x] 2026-11-08: a tenth sync (1 commit, the VOUCHED list). No
         conflicts; dates kept; nothing for Windows to check. CI run
         42507220031 (903a43c3c) passed every job.
+  - [x] 2026-11-08: an eleventh sync (1 commit, the VOUCHED list). No
+        conflicts; dates kept; nothing for Windows to check.
 - [x] Tip builds, like upstream's `release-tip.yml` (the discussion's
       release workflow item): a rolling prerelease of the latest
       `windows` commit, so people can try it without building. Approved
