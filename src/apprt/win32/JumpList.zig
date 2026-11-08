@@ -10,6 +10,7 @@ const std = @import("std");
 const c = @import("util.zig").c;
 const util = @import("util.zig");
 const shells = @import("shells.zig");
+const internal_os = @import("../../os/main.zig");
 
 const log = std.log.scoped(.win32);
 
@@ -129,36 +130,9 @@ fn taskArguments(alloc: std.mem.Allocator, class: ?[]const u8, argv: []const [:0
     try out.writer.writeAll("-e");
     for (argv) |arg| {
         try out.writer.writeByte(' ');
-        try writeQuoted(&out.writer, arg);
+        try internal_os.windows.writeCommandLineArg(&out.writer, arg);
     }
     return out.written();
-}
-
-/// An argument as CommandLineToArgvW reads it: quoted if it's empty or has
-/// spaces, tabs or quotes, with backslashes before quotes doubled.
-fn writeQuoted(w: *std.Io.Writer, arg: []const u8) !void {
-    if (arg.len > 0 and std.mem.indexOfAny(u8, arg, " \t\"") == null) return w.writeAll(arg);
-    try w.writeByte('"');
-    var backslashes: usize = 0;
-    for (arg) |ch| {
-        switch (ch) {
-            '\\' => backslashes += 1,
-            '"' => {
-                try w.splatByteAll('\\', backslashes * 2 + 1);
-                try w.writeByte('"');
-                backslashes = 0;
-                continue;
-            },
-            else => {},
-        }
-        if (ch != '\\') {
-            try w.splatByteAll('\\', backslashes);
-            backslashes = 0;
-            try w.writeByte(ch);
-        }
-    }
-    try w.splatByteAll('\\', backslashes * 2);
-    try w.writeByte('"');
 }
 
 test taskArguments {

@@ -433,6 +433,35 @@ pub fn ProcThreadAttributeValue(
         (if (additive) PROC_THREAD_ATTRIBUTE_ADDITIVE else 0);
 }
 
+/// Write one argument of a command line so that CommandLineToArgvW (and
+/// the C runtime) read it back unchanged: as is, or quoted when it's empty
+/// or has whitespace or quotes, with the backslashes before a quote (or
+/// the closing quote) doubled.
+pub fn writeCommandLineArg(writer: *std.Io.Writer, arg: []const u8) std.Io.Writer.Error!void {
+    if (arg.len > 0 and std.mem.indexOfAny(u8, arg, " \t\n\"") == null) {
+        return writer.writeAll(arg);
+    }
+    try writer.writeByte('"');
+    var backslash_count: usize = 0;
+    for (arg) |byte| {
+        switch (byte) {
+            '\\' => backslash_count += 1,
+            '"' => {
+                try writer.splatByteAll('\\', backslash_count * 2 + 1);
+                try writer.writeByte('"');
+                backslash_count = 0;
+            },
+            else => {
+                try writer.splatByteAll('\\', backslash_count);
+                try writer.writeByte(byte);
+                backslash_count = 0;
+            },
+        }
+    }
+    try writer.splatByteAll('\\', backslash_count * 2);
+    try writer.writeByte('"');
+}
+
 /// Whether `attachParentConsole` attached to the parent's console. The
 /// parent (a shell) doesn't wait for a GUI program and keeps reading the
 /// console's input, so we can write to it but not read keys from it.
