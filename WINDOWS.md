@@ -1087,6 +1087,21 @@ Notes:
   `/mnt/c`, and SSH from WSL to hosts without the entry would break. Git
   Bash and other MSYS2 programs do get `xterm-ghostty` (see the compiled
   terminfo above).
+  - [x] With the ssh-env or ssh-terminfo features (2026-11-07), whose
+        `ssh` wrapper keeps SSH working with hosts that lack the entry,
+        WSL shells get `TERM=xterm-ghostty`, as on Linux.
+        `wsl/terminfo.sh` (sourced by the WSL launcher) compiles the entry
+        from its source with the distribution's `tic`, once per Ghostty
+        version, into `~/.cache/ghostty/terminfo`, and sets `TERMINFO`
+        there: the entry compiled for Windows can't be used, as Windows
+        lays it out by hex directory (`78/`) where Linux's ncurses looks
+        in `x/`. Without those features, or without `tic`, TERM stays
+        `xterm-256color`. Checked: `test/windows/wsl-ssh.sh` (compiles,
+        `infocmp` finds it, `tput Smulx` works, a second start reuses it,
+        no change without the features), and in Ghostty with
+        `command = wsl.exe`: `TERM=xterm-ghostty`, `tput Smulx` gives
+        the undercurl sequence; with `cursor,title` only, TERM stayed
+        `xterm-256color`.
 - No password input indicator: on Unix the IO thread polls the pty's
   termios for echo being off (`termiosTimer`), but ConPTY doesn't expose
   the console mode of the programs attached to it, so the timer isn't
