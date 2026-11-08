@@ -2036,6 +2036,15 @@ Notes:
         hover highlight can't be seen on a locked desktop (Windows reports
         the mouse leaving at once); the owner checked it with a real
         mouse, and it works.
+  - [x] Double clicking a tab renames it (2026-11-08), as in Windows
+        Terminal: it opens "Change Tab Title" (`prompt_tab_title`) for
+        that tab, from a posted message since the dialog is modal. Before,
+        a double click was just a second click. A double click on empty
+        space still opens a new tab (or maximizes, with the tabs in the
+        title bar). `test/windows/tab-rename.ps1` (in CI; passed here
+        with `CI=true`) double clicks the second tab, renames it and
+        checks both names; the tab reorder, compact tabs and tabs tests
+        still pass.
   - [x] Screen readers can close tabs (2026-11-08): with a close button
         on every tab, UI Automation listed tabs only as selectable
         TabItems, with no way to close one. Each TabItem now has a "Close

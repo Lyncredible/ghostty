@@ -276,6 +276,12 @@ jobs:
         shell: pwsh
         run: ./test/windows/tab-reorder.ps1 -Exe zig-out/bin/ghostty.exe
 
+      # Double clicking a tab opens Change Tab Title for it.
+      - name: Tab rename test
+        timeout-minutes: 5
+        shell: pwsh
+        run: ./test/windows/tab-rename.ps1 -Exe zig-out/bin/ghostty.exe
+
       - name: Tab close button for screen readers test
         timeout-minutes: 5
         shell: pwsh
