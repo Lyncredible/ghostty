@@ -2044,7 +2044,7 @@ Notes:
         title bar). `test/windows/tab-rename.ps1` (in CI; passed here
         with `CI=true`) double clicks the second tab, renames it and
         checks both names; the tab reorder, compact tabs and tabs tests
-        still pass.
+        still pass. CI run 42514236481 (f1d32ca45) passed every job.
   - [x] Screen readers can close tabs (2026-11-08): with a close button
         on every tab, UI Automation listed tabs only as selectable
         TabItems, with no way to close one. Each TabItem now has a "Close
