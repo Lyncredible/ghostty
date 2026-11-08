@@ -22,6 +22,22 @@ $title = if ($Blur) { 'translucent (blur)' } else { 'translucent' }
 function Notice([string]$message) { Write-Host "::notice title=$title::$message" }
 
 Add-Type -AssemblyName UIAutomationClient, UIAutomationTypes, System.Drawing
+
+# Reading the screen fails on a locked desktop ("The handle is invalid").
+# Locally that only means the test can't run; in CI it's a failure.
+if ($env:CI -ne 'true') {
+    $probe = New-Object System.Drawing.Bitmap 1, 1
+    $probeGraphics = [System.Drawing.Graphics]::FromImage($probe)
+    try {
+        $probeGraphics.CopyFromScreen(0, 0, 0, 0, (New-Object System.Drawing.Size 1, 1))
+    } catch {
+        Notice "the screen can't be read (a locked desktop?), so this was skipped: $($_.Exception.InnerException.Message)"
+        exit 0
+    } finally {
+        $probeGraphics.Dispose(); $probe.Dispose()
+    }
+}
+
 Add-Type -Namespace GhosttyTranslucent -Name Win32 -MemberDefinition @'
 [StructLayout(LayoutKind.Sequential)] public struct RECT { public int l, t, r, b; }
 [DllImport("user32.dll")] public static extern bool GetWindowRect(System.IntPtr h, out RECT r);

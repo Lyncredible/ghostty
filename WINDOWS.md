@@ -3294,7 +3294,9 @@ Reviewed the branch against this file and discussion #2563.
   window-theme, smoke with cmd, and the PowerShell integration), and
   translucent failed only because it captures the screen (`CopyFromScreen`: "The handle is
   invalid" on a locked desktop) and passes in CI. The other 18 only run in
-  CI, where they passed (run 42489816690).
+  CI, where they passed (run 42489816690). translucent now checks first
+  whether the screen can be read and, outside CI, skips with a notice
+  instead of failing.
 - Fork CI run 41232795840 (2026-10-31), after the exit message and Git
   Bash path fixes: the x64 and ARM64 test suites, the MSIX install, and
   libghostty-vt with MSVC all passed.
