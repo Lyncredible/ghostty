@@ -450,6 +450,11 @@ const item_simple_vtbl = SimpleVtbl{
                 UIA_SizeOfSetPropertyId => if (self.kind == .tab) {
                     setInt(out, @intCast(bar.window.tabs.items.len));
                 },
+                // Compact tabs don't draw their close button, but it can
+                // still be invoked.
+                UIA_IsOffscreenPropertyId => if (self.kind == .close) {
+                    setBool(out, bar.compact());
+                },
                 else => {},
             }
             return S_OK;
@@ -667,6 +672,11 @@ fn setInt(out: *VARIANT, value: i32) void {
     out.value = .{ .int = value };
 }
 
+fn setBool(out: *VARIANT, value: bool) void {
+    out.vt = VT_BOOL;
+    out.value = .{ .boolean = if (value) -1 else 0 };
+}
+
 fn setString(out: *VARIANT, utf8: []const u8) void {
     var buf: [512]u16 = undefined;
     const n = std.unicode.utf8ToUtf16Le(&buf, utf8[0..@min(utf8.len, buf.len)]) catch return;
@@ -704,11 +714,14 @@ const VARIANT = extern struct {
     reserved: [3]u16 = .{ 0, 0, 0 },
     value: extern union {
         int: i32,
+        /// VARIANT_BOOL: -1 for true, 0 for false.
+        boolean: i16,
         bstr: ?[*:0]u16,
         padding: [2]u64,
     } = .{ .padding = .{ 0, 0 } },
 };
 const VT_I4 = 3;
+const VT_BOOL = 11;
 const VT_BSTR = 8;
 const VT_UNKNOWN = 13;
 
@@ -736,6 +749,7 @@ const UIA_SelectionPatternId = 10001;
 const UIA_SelectionItemPatternId = 10010;
 const UIA_ControlTypePropertyId = 30003;
 const UIA_NamePropertyId = 30005;
+const UIA_IsOffscreenPropertyId = 30022;
 const UIA_PositionInSetPropertyId = 30152;
 const UIA_SizeOfSetPropertyId = 30153;
 const UIA_TabControlTypeId = 50018;
