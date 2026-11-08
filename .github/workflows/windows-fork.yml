@@ -246,6 +246,11 @@ jobs:
         shell: pwsh
         run: ./test/windows/search.ps1 -Exe zig-out/bin/ghostty.exe
 
+      - name: Scrollbar test
+        timeout-minutes: 5
+        shell: pwsh
+        run: ./test/windows/scrollbar.ps1 -Exe zig-out/bin/ghostty.exe
+
       - name: Command palette test
         timeout-minutes: 5
         shell: pwsh

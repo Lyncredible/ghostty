@@ -29,4 +29,5 @@ test {
     _ = @import("win32/util.zig");
     _ = @import("win32/TabBar.zig");
     _ = @import("win32/Tab.zig");
+    _ = @import("win32/Scrollbar.zig");
 }

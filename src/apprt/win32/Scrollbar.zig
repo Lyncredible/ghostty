@@ -201,27 +201,70 @@ fn layout(self: *Scrollbar) void {
 }
 
 /// The thumb's top and bottom within a track of the given height.
-fn thumb(self: *const Scrollbar, track: c_int) struct { c_int, c_int } {
-    const total: f64 = @floatFromInt(@max(self.state.total, 1));
-    const h: f64 = @floatFromInt(track);
-    const len = @max(
-        @as(c_int, @intFromFloat(h * @as(f64, @floatFromInt(self.state.len)) / total)),
-        @min(self.scale(min_thumb), track),
-    );
-    const top: c_int = @intFromFloat(h * @as(f64, @floatFromInt(self.state.offset)) / total);
-    const clamped = std.math.clamp(top, 0, track - len);
-    return .{ clamped, clamped + len };
+fn thumb(self: *const Scrollbar, track: c_int) [2]c_int {
+    return thumbSpan(self.state, track, self.scale(min_thumb));
 }
 
 /// The row to scroll to so the thumb's top is at y.
 fn rowAt(self: *const Scrollbar, y: c_int, track: c_int) usize {
-    if (track <= 0) return 0;
-    const top, const bottom = self.thumb(track);
+    return rowFor(self.state, y, track, self.scale(min_thumb));
+}
+
+/// The thumb's top and bottom within a track of the given height: as long
+/// as the share of the screen that's visible, but at least `min_len`, and
+/// as far down as the view is. A track with no room (a terminal shorter
+/// than the margins) has an empty thumb.
+fn thumbSpan(state: terminal.Scrollbar, track: c_int, min_len: c_int) [2]c_int {
+    if (track <= 0) return .{ 0, 0 };
+    const total: f64 = @floatFromInt(@max(state.total, 1));
+    const h: f64 = @floatFromInt(track);
+    const share: c_int = @intFromFloat(@min(h, h * @as(f64, @floatFromInt(state.len)) / total));
+    const len = std.math.clamp(share, @min(min_len, track), track);
+    const top: c_int = @intFromFloat(@min(h, h * @as(f64, @floatFromInt(state.offset)) / total));
+    const clamped = std.math.clamp(top, 0, track - len);
+    return .{ clamped, clamped + len };
+}
+
+/// The row to scroll to so the thumb's top is at y in the track.
+fn rowFor(state: terminal.Scrollbar, y: c_int, track: c_int, min_len: c_int) usize {
+    if (state.total <= state.len) return 0;
+    const top, const bottom = thumbSpan(state, track, min_len);
     const free = track - (bottom - top);
     if (free <= 0) return 0;
     const clamped: f64 = @floatFromInt(std.math.clamp(y, 0, free));
-    const max_row: f64 = @floatFromInt(self.state.total - self.state.len);
+    const max_row: f64 = @floatFromInt(state.total - state.len);
     return @intFromFloat(@round(clamped / @as(f64, @floatFromInt(free)) * max_row));
+}
+
+test thumbSpan {
+    const testing = std.testing;
+    // A screen of 25 rows in 100: a quarter of the track, at the offset.
+    try testing.expectEqual([2]c_int{ 0, 100 }, thumbSpan(.{ .total = 100, .offset = 0, .len = 25 }, 400, 24));
+    try testing.expectEqual([2]c_int{ 300, 400 }, thumbSpan(.{ .total = 100, .offset = 75, .len = 25 }, 400, 24));
+    // Long scrollback: the thumb keeps its minimum and stays in the track.
+    try testing.expectEqual([2]c_int{ 0, 24 }, thumbSpan(.{ .total = 100000, .offset = 0, .len = 25 }, 400, 24));
+    try testing.expectEqual([2]c_int{ 376, 400 }, thumbSpan(.{ .total = 100000, .offset = 99975, .len = 25 }, 400, 24));
+    // A track shorter than the minimum is filled.
+    try testing.expectEqual([2]c_int{ 0, 10 }, thumbSpan(.{ .total = 1000, .offset = 500, .len = 25 }, 10, 24));
+    // No room at all, as in a terminal a few pixels tall: this used to
+    // assert in std.math.clamp.
+    try testing.expectEqual([2]c_int{ 0, 0 }, thumbSpan(.{ .total = 100, .offset = 50, .len = 25 }, -4, 24));
+    try testing.expectEqual([2]c_int{ 0, 0 }, thumbSpan(.{ .total = 100, .offset = 50, .len = 25 }, 0, 24));
+    // Nothing to scroll: the whole track.
+    try testing.expectEqual([2]c_int{ 0, 400 }, thumbSpan(.{ .total = 25, .offset = 0, .len = 25 }, 400, 24));
+}
+
+test rowFor {
+    const testing = std.testing;
+    const state: terminal.Scrollbar = .{ .total = 100, .offset = 0, .len = 25 };
+    // The thumb is 100 of 400, so its top moves over 300 for 75 rows.
+    try testing.expectEqual(@as(usize, 0), rowFor(state, -20, 400, 24));
+    try testing.expectEqual(@as(usize, 38), rowFor(state, 150, 400, 24));
+    try testing.expectEqual(@as(usize, 75), rowFor(state, 300, 400, 24));
+    try testing.expectEqual(@as(usize, 75), rowFor(state, 9999, 400, 24));
+    // No room, or nothing to scroll.
+    try testing.expectEqual(@as(usize, 0), rowFor(state, 10, -4, 24));
+    try testing.expectEqual(@as(usize, 0), rowFor(.{ .total = 25, .offset = 0, .len = 25 }, 10, 400, 24));
 }
 
 fn trackHeight(self: *const Scrollbar) c_int {

@@ -2323,6 +2323,15 @@ Notes:
     (`SplitRects`, at two divider widths and with no room) and the ratio
     from dragging a divider (`dragRatio`, kept to 5-95%) are now pure and
     tested. `command-palette`, `overlays` and `session-restore` pass.
+  - The scrollbar's thumb (`thumbSpan`) asserted in `std.math.clamp`
+    (a panic in safe builds) when the terminal was shorter than its two
+    2 pt margins, as a squashed split can be: the track's height was
+    negative, so the clamp's upper bound fell below zero. It's now empty
+    then, and the thumb and the row for a click (`rowFor`) are tested.
+    No UI test clicked the scrollbar, so the new `scrollbar.ps1` (in CI)
+    has cmd print 301 numbered lines and clicks the track at the top
+    (cmd's banner in view), the middle (L1133 to L1165 here) and the
+    bottom (L1300).
 - [ ] Packaging and release builds
   - [x] Portable zip (`dist/windows/package.ps1`)
   - [x] Per-user install script in the zip (`dist/windows/install.ps1`):
