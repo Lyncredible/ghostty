@@ -435,4 +435,5 @@ counted with UI Automation.
 
 Checks that screen readers can close tabs: each tab (a TabItem) has a
 "Close Tab" button as its only child, inside the tab, and invoking it closes
-that tab and leaves the other.
+that tab and leaves the other. The tabs also report their position ("1 of
+2"), from which screen readers say where a tab is.

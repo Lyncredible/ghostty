@@ -78,6 +78,21 @@ try {
     }
     Write-Host 'Both tabs have a Close Tab button inside them.'
 
+    # Screen readers say "2 of 3" from PositionInSet and SizeOfSet, which
+    # the managed API predates, so they're looked up by ID.
+    $positionProperty = [System.Windows.Automation.AutomationProperty]::LookupById(30152)
+    $sizeProperty = [System.Windows.Automation.AutomationProperty]::LookupById(30153)
+    if ($positionProperty -and $sizeProperty) {
+        for ($i = 0; $i -lt $tabs.Count; $i++) {
+            $position = $tabs[$i].GetCurrentPropertyValue($positionProperty)
+            $size = $tabs[$i].GetCurrentPropertyValue($sizeProperty)
+            if ($position -ne $i + 1 -or $size -ne $tabs.Count) { Fail "tab $($i + 1) reports $position of $size, not $($i + 1) of $($tabs.Count)" }
+        }
+        Write-Host "The tabs report their positions: 1 of 2 and 2 of 2."
+    } else {
+        Write-Host '::notice title=tab-close-uia::this UI Automation client has no PositionInSet or SizeOfSet, so they weren''t checked'
+    }
+
     # Invoking the second tab's closes it, leaving the first.
     $firstName = $tabs[0].Current.Name
     $buttons[1].GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern).Invoke()

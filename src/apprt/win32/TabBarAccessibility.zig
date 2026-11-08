@@ -442,6 +442,14 @@ const item_simple_vtbl = SimpleVtbl{
                     .button => |button| bar.buttonName(button),
                     .close => "Close Tab",
                 }),
+                // "2 of 3" for screen readers, which custom providers must
+                // give themselves. Counted from one.
+                UIA_PositionInSetPropertyId => if (self.kind == .tab) {
+                    setInt(out, @intCast((self.position() orelse 0) + 1));
+                },
+                UIA_SizeOfSetPropertyId => if (self.kind == .tab) {
+                    setInt(out, @intCast(bar.window.tabs.items.len));
+                },
                 else => {},
             }
             return S_OK;
@@ -728,6 +736,8 @@ const UIA_SelectionPatternId = 10001;
 const UIA_SelectionItemPatternId = 10010;
 const UIA_ControlTypePropertyId = 30003;
 const UIA_NamePropertyId = 30005;
+const UIA_PositionInSetPropertyId = 30152;
+const UIA_SizeOfSetPropertyId = 30153;
 const UIA_TabControlTypeId = 50018;
 const UIA_TabItemControlTypeId = 50019;
 const UIA_ButtonControlTypeId = 50000;
