@@ -2358,6 +2358,9 @@ Notes:
     `session-restore`, `tab-close-uia`, `tab-reorder`, `tabs`,
     `titlebar-tabs`, `uia-events`, `window-options`, `window-theme`).
     `flood.ps1` was skipped: it presses a real Ctrl+C.
+  - CI run 42528498930 (32b573df4, with the sync, the UTF-16 fixes and
+    the tab bar tests) passed every job, including `tab-tooltips.ps1`
+    hovering the long title, and `windows-tip` moved.
 - [ ] Packaging and release builds
   - [x] Portable zip (`dist/windows/package.ps1`)
   - [x] Per-user install script in the zip (`dist/windows/install.ps1`):
