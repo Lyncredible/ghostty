@@ -2332,6 +2332,15 @@ Notes:
     has cmd print 301 numbered lines and clicks the track at the top
     (cmd's banner in view), the middle (L1133 to L1165 here) and the
     bottom (L1300).
+  - Local runs on this build (e729d7e3d): the full unit test suite
+    passed (built at ce51eed3e; the later tests ran filtered), and so
+    did the 21 UI tests that don't need CI or real input (`cli-ipc`,
+    `color-query`, `command-palette`, `compact-tabs`, `context-menu`,
+    `device-lost`, `handoff`, `minimize`, `mouse-capture`,
+    `output-frames`, `overlays`, `scrollbar`, `search`,
+    `session-restore`, `tab-close-uia`, `tab-reorder`, `tabs`,
+    `titlebar-tabs`, `uia-events`, `window-options`, `window-theme`).
+    `flood.ps1` was skipped: it presses a real Ctrl+C.
 - [ ] Packaging and release builds
   - [x] Portable zip (`dist/windows/package.ps1`)
   - [x] Per-user install script in the zip (`dist/windows/install.ps1`):
