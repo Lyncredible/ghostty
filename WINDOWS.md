@@ -2158,6 +2158,16 @@ Notes:
     `OpenConsole.exe` (`build\native\runtimes\x64`) from the
     Microsoft.Windows.Console.ConPTY 1.25.260930003 package next to
     `ghostty.exe`, or build with `package.ps1 -BundleConpty`.
+- [ ] Default split keys that use the Windows key (found 2026-11-08 in
+      `+list-keybinds --default`): Windows gets Linux's defaults,
+      `super+ctrl+[` and `super+ctrl+]` (`goto_split:previous/next`) and
+      `super+ctrl+shift+arrow` (`resize_split`). Windows reserves many
+      Win-key combinations for the shell (Win+Ctrl+Left/Right switch
+      virtual desktops), so these may never reach Ghostty. To check with
+      a real keyboard (a locked desktop can't send the Win key): do they
+      work? If not, add Windows-only defaults next to the ctrl+c/ctrl+v
+      ones in `Config.zig`, such as Windows Terminal's `alt+shift+arrow`
+      for resizing panes, keeping the documented ones.
 - [x] Bug (reported 2026-11-07): from a WSL tab, opening a new Command
       Prompt tab (the new tab menu) opened WSL instead. The new terminal
       inherited the WSL tab's directory (a `\\wsl.localhost\...` share
