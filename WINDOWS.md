@@ -2168,6 +2168,14 @@ Notes:
       work? If not, add Windows-only defaults next to the ctrl+c/ctrl+v
       ones in `Config.zig`, such as Windows Terminal's `alt+shift+arrow`
       for resizing panes, keeping the documented ones.
+  - Known so far (winaero.com's Windows 11 shortcut list): Windows
+    reserves Win+Ctrl+Left/Right (virtual desktops), Win+Ctrl+F4, D,
+    Enter, Space, C, Q, F, O, S, N, M, the numbers, and
+    Win+Ctrl+Shift+B and the numbers, but nothing with `[`, `]` or
+    Win+Ctrl+Shift+arrows. So `goto_split` should work; the question is
+    whether Win+Ctrl+Shift+Left/Right still switch desktops (the Shift
+    may not matter to the shell), which would take `resize_split`'s left
+    and right.
 - [x] Bug (reported 2026-11-07): from a WSL tab, opening a new Command
       Prompt tab (the new tab menu) opened WSL instead. The new terminal
       inherited the WSL tab's directory (a `\\wsl.localhost\...` share
