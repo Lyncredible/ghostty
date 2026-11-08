@@ -104,6 +104,29 @@ dir=$(GHOSTTY_SHELL_FEATURES=ssh-terminfo sh -c '
   printf %s "${GHOSTTY_BIN_DIR-}"' "$tmp/launcher")
 [ -x "$dir/ghostty" ] && pass "the launcher sets GHOSTTY_BIN_DIR ($dir)" || fail "launcher GHOSTTY_BIN_DIR='$dir'"
 
+# TERM=xterm-ghostty in WSL, with the ssh features: the entry is compiled
+# into a cache once, and programs find it through TERMINFO.
+terminfo_sh="$resources/shell-integration/wsl/terminfo.sh"
+if command -v tic >/dev/null && command -v infocmp >/dev/null; then
+  got=$(GHOSTTY_SHELL_FEATURES=ssh-terminfo TERM=xterm-256color sh -c '. "$0"; printf "%s|%s" "$TERM" "${TERMINFO-}"' "$terminfo_sh")
+  term=${got%%|*} terminfo=${got#*|}
+  [ "$term" = xterm-ghostty ] && [ "$terminfo" = "$XDG_CACHE_HOME/ghostty/terminfo" ] &&
+    pass "the ssh features give TERM=xterm-ghostty ($terminfo)" || fail "terminfo: '$got'"
+  TERMINFO="$terminfo" infocmp -x xterm-ghostty >/dev/null 2>&1 &&
+    pass "infocmp finds xterm-ghostty there" || fail "infocmp can't read $terminfo"
+  [ "$(TERMINFO="$terminfo" TERM=xterm-ghostty tput Smulx 2>/dev/null | wc -c)" -gt 0 ] &&
+    pass "programs see its capabilities (Smulx)" || fail "no Smulx"
+  stamp=$(stat -c %Y "$terminfo/x/xterm-ghostty")
+  sleep 1
+  GHOSTTY_SHELL_FEATURES=ssh-env sh -c '. "$0"' "$terminfo_sh"
+  [ "$(stat -c %Y "$terminfo/x/xterm-ghostty")" = "$stamp" ] &&
+    pass "a second start reuses the compiled entry" || fail "recompiled it"
+  got=$(GHOSTTY_SHELL_FEATURES=cursor,title TERM=xterm-256color sh -c '. "$0"; printf "%s|%s" "$TERM" "${TERMINFO-}"' "$terminfo_sh")
+  [ "$got" = "xterm-256color|" ] && pass "without the ssh features TERM stays xterm-256color" || fail "no ssh features: '$got'"
+else
+  printf 'skip: no tic or infocmp in this distribution\n'
+fi
+
 # The bash and zsh integrations only wrap ssh when ghostty is there.
 for shell in bash zsh; do
   command -v "$shell" >/dev/null || continue

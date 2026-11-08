@@ -37,6 +37,9 @@ case "${GHOSTTY_SHELL_FEATURES-}" in
   ;;
 esac
 
+# TERM=xterm-ghostty, compiled into a cache, with the ssh features.
+[ -r "$__ghostty_dir/wsl/terminfo.sh" ] && . "$__ghostty_dir/wsl/terminfo.sh"
+
 case "${__ghostty_shell##*/}" in
 bash)
   if [ -r "$__ghostty_dir/bash/ghostty.bash" ]; then
