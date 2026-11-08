@@ -1363,7 +1363,8 @@ Notes:
           then, each themes bump needs this check and maybe a revert.
           Ghostty couldn't load such a theme by name on Windows anyway.
   - [x] 2026-11-07: a ninth sync (3 commits: macOS NSColor tests only).
-        No conflicts; dates kept; nothing for Windows to check.
+        No conflicts; dates kept; nothing for Windows to check. CI run
+        42457195698 (1720f1a16) passed every job.
 - [x] Tip builds, like upstream's `release-tip.yml` (the discussion's
       release workflow item): a rolling prerelease of the latest
       `windows` commit, so people can try it without building. Approved
