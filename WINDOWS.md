@@ -2042,7 +2042,8 @@ Notes:
         may ask first. `test/windows/tab-close-uia.ps1` (in CI) checks
         both tabs' buttons and that invoking the second's closes it; the
         title bar tabs, tab reorder, compact tabs, tabs and UI Automation
-        events tests still pass.
+        events tests still pass. CI run 42483292356 (e7fd49a75) passed
+        every job.
   - [x] Compact tabs (found 2026-11-07 with 20 tabs): tabs narrower
         than 88 points showed "1..." for tabs 10 and up (the title was
         cut before its number ended), and the active tab's close button
