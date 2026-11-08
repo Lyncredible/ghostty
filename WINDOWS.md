@@ -2319,6 +2319,10 @@ Notes:
       space), compact tabs' missing close button, and dragging's tab
       index. The tab UI tests (`tabs`, `tab-close-uia`, `compact-tabs`,
       `titlebar-tabs`, `tab-reorder`) pass locally on the change.
+  - `Tab.zig` had none either: a split's sides and divider
+    (`SplitRects`, at two divider widths and with no room) and the ratio
+    from dragging a divider (`dragRatio`, kept to 5-95%) are now pure and
+    tested. `command-palette`, `overlays` and `session-restore` pass.
 - [ ] Packaging and release builds
   - [x] Portable zip (`dist/windows/package.ps1`)
   - [x] Per-user install script in the zip (`dist/windows/install.ps1`):
