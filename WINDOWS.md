@@ -954,7 +954,8 @@ Notes:
         `+ssh-cache`, `+crash-report`), each needing exit 0 and what
         it's for in its output. Passed here. `+edit-config` runs with
         `EDITOR=cmd.exe /c echo`, which prints the quoted config path it's
-        given. Not included: `+boo` (a TUI). The ones that talk to a running
+        given (run 42477878738, 99b6fe4d1, passed every job). Not
+        included: `+boo` (a TUI). The ones that talk to a running
         instance have their own tests: `+toggle-quick-terminal` in
         `quick-terminal.ps1`, and now `+new-tab` and `+new-window` in
         `test/windows/cli-ipc.ps1` (in CI: a tab, then a second window,
