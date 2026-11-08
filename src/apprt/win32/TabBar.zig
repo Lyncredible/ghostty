@@ -428,8 +428,15 @@ pub fn closeTabLater(self: *TabBar, tab: *Tab) void {
 
 const WM_GHOSTTY_CLOSE_TAB = c.WM_APP + 2;
 
-/// A tab's close button, in screen coordinates.
+/// Whether the tabs are compact, without close buttons drawn.
+pub fn compact(self: *const TabBar) bool {
+    return self.layout().compact;
+}
+
+/// A tab's close button, in screen coordinates; empty when the tabs are
+/// compact and don't draw one.
 pub fn closeScreenRect(self: *const TabBar, idx: usize) c.RECT {
+    if (self.compact()) return .{ .left = 0, .top = 0, .right = 0, .bottom = 0 };
     var client: c.RECT = undefined;
     _ = c.GetClientRect(self.hwnd, &client);
     const rect = self.closeRect(self.layout().tabRect(idx, client.bottom));

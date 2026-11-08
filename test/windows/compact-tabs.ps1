@@ -93,6 +93,13 @@ try {
     if ($width -ge 88) { Fail "the tabs are $([int]$width) points wide, not compact (under 88); make the window narrower or add tabs" }
     Write-Host "$Tabs tabs, $([int]$width) points wide each."
 
+    # Screen readers still find each tab's Close Tab button, but offscreen,
+    # since compact tabs don't draw one.
+    $close = $t[2].FindFirst([System.Windows.Automation.TreeScope]::Children, [System.Windows.Automation.Condition]::TrueCondition)
+    if (-not $close -or $close.Current.Name -ne 'Close Tab') { Fail 'a compact tab has no Close Tab button for screen readers' }
+    if (-not $close.Current.IsOffscreen) { Fail "a compact tab's Close Tab button isn't offscreen, though it isn't drawn" }
+    Write-Host "A compact tab's Close Tab button is there for screen readers, offscreen."
+
     # Where a normal tab's close button is: 16 points from the right edge,
     # centered. On a compact tab, a click there selects the tab.
     $target = $t[2]

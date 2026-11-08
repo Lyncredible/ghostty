@@ -76,6 +76,7 @@ try {
         if (-not $outer.Contains($inner) -or $inner.Width -le 0) { Fail "the close button ($inner) isn't inside its tab ($outer)" }
         $button
     }
+    if (@($buttons | Where-Object { $_.Current.IsOffscreen }).Count -gt 0) { Fail 'a drawn close button says it is offscreen' }
     Write-Host 'Both tabs have a Close Tab button inside them.'
 
     # Screen readers say "2 of 3" from PositionInSet and SizeOfSet, which
