@@ -1345,6 +1345,21 @@ Notes:
         checks that (all checks pass). The app and libghostty-vt build,
         and the resize tests pass. CI run 42420229730 (225fb5bb7) passed
         every job, and `windows-tip` moved.
+  - [x] 2026-11-07: an eighth sync (5 commits: retrying dirty rows after
+        a failed render update, and new iTerm2 color schemes). No
+        conflicts; dates kept. But the new theme release can't be
+        unpacked on Windows: it has themes named `Neon Raincheck: After
+        Hours` and `Analog Heartbeat: Phosphor`, and `:` isn't allowed in
+        Windows file names (NTFS takes it for an alternate data stream of
+        `Neon Raincheck`, which already exists), so `zig fetch` fails
+        with "unable to create file 'Neon Raincheck': PathAlreadyExists"
+        and no Windows app build works. The fork reverts that bump
+        (keeping `ghostty-themes-release-20261026-153024-27cbbb5`) until
+        the themes avoid characters Windows forbids (`<>:"/\|?*`).
+    - [ ] Upstream fix needed (in the themes release, which names files
+          after the schemes): replace or drop those characters. Until
+          then, each themes bump needs this check and maybe a revert.
+          Ghostty couldn't load such a theme by name on Windows anyway.
 - [x] Tip builds, like upstream's `release-tip.yml` (the discussion's
       release workflow item): a rolling prerelease of the latest
       `windows` commit, so people can try it without building. Approved
