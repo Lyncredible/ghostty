@@ -1285,6 +1285,11 @@ Notes:
         `rgb:abab/cdcd/efef` and `rgb:1212/3434/5656`), the MSIX and zip
         installs and the package's tests on the bundled ConPTY.
         `windows-tip` moved, so the tip now ships the ConPTY package.
+  - [x] Runs 42434682817 (65987bcfe: restoring each terminal's shell,
+        with the extended session restore test, and WSL's
+        `TERM=xterm-ghostty`) and 42439780470 (a108ca837: a chosen shell
+        doesn't inherit a WSL directory): every job passed, and
+        `windows-tip` moved.
 - [ ] Keep the branch on top of upstream: fetch
       `git@github.com:ghostty-org/ghostty.git` from time to time, rebase,
       and check that the build, unit tests and the fork's CI still pass.
