@@ -2254,7 +2254,9 @@ Notes:
         unquoted `:` in the description and the `.com` command), and the
         unzipped `ghostty-cli.exe +version` ran. Not tried: installing
         with Scoop (not installed here) or winget from a published
-        release (none yet).
+        release (none yet). CI run 42461695045 (98a2ef323) passed every
+        job; its runner has winget, which validated the manifest made
+        from the tested zip under PowerShell 7.
   - [ ] Release builds from CI (the discussion's "GitHub Actions for
         release"): `.github/workflows/windows-release.yml`, run by
         pushing a `windows-unofficial-*` tag (or by hand, once the file is
