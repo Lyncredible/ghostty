@@ -131,9 +131,19 @@ const Utf16Buf = struct {
     len: usize = 0,
     overflowed: bool = false,
 
+    /// Invalid UTF-8, or a character cut off at the end (the message is
+    /// cut to fit), becomes the replacement character: a panic message
+    /// can hold anything, and failing here would lose the dialog.
     fn append(self: *Utf16Buf, utf8: []const u8) void {
-        var it = std.unicode.Utf8View.initUnchecked(utf8).iterator();
-        while (it.nextCodepoint()) |cp| {
+        var i: usize = 0;
+        while (i < utf8.len) {
+            const cp: u21, const len: usize = decode: {
+                const len = std.unicode.utf8ByteSequenceLength(utf8[i]) catch break :decode .{ 0xFFFD, 1 };
+                if (i + len > utf8.len) break :decode .{ 0xFFFD, 1 };
+                const cp = std.unicode.utf8Decode(utf8[i..][0..len]) catch break :decode .{ 0xFFFD, 1 };
+                break :decode .{ cp, len };
+            };
+            i += len;
             var units: [2]u16 = undefined;
             const count: usize = if (cp < 0x10000) one: {
                 units[0] = @intCast(cp);
@@ -175,6 +185,15 @@ test Utf16Buf {
     s.append("cdefg");
     try testing.expect(s.overflowed);
     try testing.expectEqual(@as(usize, 7), s.slice().len);
+
+    // Invalid bytes and a character cut off at the end (as the message is
+    // cut to 300 bytes) are replaced, not trusted.
+    var buf2: [16]u16 = undefined;
+    var t: Utf16Buf = .{ .buf = &buf2 };
+    t.append("a\xffb");
+    t.append("\xe3\x81");
+    t.append("\xe3\x81\x82");
+    try testing.expectEqualSlices(u16, &.{ 'a', 0xFFFD, 'b', 0xFFFD, 0xFFFD, 0x3042 }, t.slice());
 }
 
 const MB_OK: u32 = 0x0;

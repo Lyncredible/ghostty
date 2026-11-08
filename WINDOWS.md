@@ -796,6 +796,18 @@ Notes:
         saved. Not rechecked: the dialog without a standard error (from
         Explorer), which would show on this desktop; that path is
         unchanged.
+  - [x] Review (2026-11-08): the dialog's text decoded the panic message
+        with `Utf8View.initUnchecked` after cutting it to 300 bytes, so a
+        character cut in two, or invalid UTF-8 in the message, hit
+        `unreachable` or read past the end inside the panic handler: a
+        second panic, which skips our handler, so the dialog never
+        showed. It now decodes lossily (U+FFFD), unit tested. And the
+        handler had no automated test: `test/windows/crash-report.ps1`
+        (in CI) crashes Ghostty with a posted F12 bound to `crash:main`,
+        with standard error in a file, and checks it exits by itself
+        (code 3), saves a report with the version, message and return
+        addresses, prints the panic, and that `+crash-report` lists it.
+        Passes locally.
 - [x] Config, cache, and state directories: with `XDG_CONFIG_HOME` (and
       the others) set but empty, the empty value won over `LOCALAPPDATA`,
       so the config went under `%USERPROFILE%\.config`. Empty now counts
