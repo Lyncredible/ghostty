@@ -24,14 +24,18 @@ pub fn expand(
     var it = std.mem.tokenizeScalar(u8, PATH, std.fs.path.delimiter);
     var seen_eacces = false;
     while (it.next()) |search_path| {
+        // A directory may end with a separator already, as Windows' PATH
+        // entries often do (C:\Windows\System32\WindowsPowerShell\v1.0\).
+        const sep_len: usize = if (std.fs.path.isSep(search_path[search_path.len - 1])) 0 else 1;
+
         // We need enough space in our path buffer to store this
-        const path_len = search_path.len + cmd.len + 1;
+        const path_len = search_path.len + sep_len + cmd.len;
         if (path_buf.len <= path_len) return error.PathTooLong;
 
         // Copy in the full path
         @memcpy(path_buf[0..search_path.len], search_path);
-        path_buf[search_path.len] = std.fs.path.sep;
-        @memcpy(path_buf[search_path.len + 1 ..][0..cmd.len], cmd);
+        if (sep_len == 1) path_buf[search_path.len] = std.fs.path.sep;
+        @memcpy(path_buf[search_path.len + sep_len ..][0..cmd.len], cmd);
         path_buf[path_len] = 0;
         const full_path = path_buf[0..path_len :0];
 
@@ -82,6 +86,27 @@ test "expand: hostname" {
     const path = (try expand(testing.io, testing.allocator, &environ_map, executable)).?;
     defer testing.allocator.free(path);
     try testing.expect(path.len > executable.len);
+}
+
+test "expand: directory ending with a separator" {
+    const alloc = testing.allocator;
+    var environ_map = try testing.environ.createMap(alloc);
+    defer environ_map.deinit();
+    const executable = if (builtin.target.os.tag == .windows) "hostname.exe" else "uname";
+    const found = (try expand(testing.io, alloc, &environ_map, executable)).?;
+    defer alloc.free(found);
+
+    // Search only its directory, with a separator at the end.
+    const dir = std.fs.path.dirname(found).?;
+    const search = try std.mem.concat(alloc, u8, &.{ dir, &.{std.fs.path.sep} });
+    defer alloc.free(search);
+    var only: std.process.Environ.Map = .init(alloc);
+    defer only.deinit();
+    try only.put("PATH", search);
+
+    const path = (try expand(testing.io, alloc, &only, executable)).?;
+    defer alloc.free(path);
+    try testing.expectEqualStrings(found, path);
 }
 
 test "expand: does not exist" {

@@ -1837,6 +1837,12 @@ Notes:
         class had the four tasks here (cmd, Windows PowerShell, WSL,
         `wsl.exe -d Ubuntu-24.04`) after "New Window". Seeing the menu
         needs an unlocked desktop.
+    - [x] That file showed Windows PowerShell as
+          `...\v1.0\\powershell.exe`: Windows' PATH entries often end
+          with a backslash, and `os/path.zig`'s `expand` always added
+          another. It now adds one only when the directory doesn't end
+          with a separator (on every platform; unit tested with a
+          directory ending in one).
 - [x] Terminal inspector (`inspector` toggle/show/hide,
       `render_inspector`): a window per terminal, like GTK's, drawn by
       Dear ImGui through its Win32 and Direct3D 11 backends (now built by
