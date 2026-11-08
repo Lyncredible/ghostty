@@ -946,6 +946,18 @@ Notes:
       `+list-keybinds`, `+list-colors`, `+list-actions`, `+show-config`,
       `+validate-config`, `+help`, `+show-face`, `+explain-config`, and
       `+boo` all ran and exited 0.
+  - [x] In CI (2026-11-08): the "Test CLI actions" step only ran
+        `+version` and `+validate-config`; it now also runs every action
+        that prints and exits (`+list-themes`, `+list-fonts`,
+        `+list-keybinds`, `+list-colors`, `+list-actions`, `+show-config
+        --default`, `+show-face`, `+explain-config`, `+help`,
+        `+ssh-cache`, `+crash-report`), each needing exit 0 and what
+        it's for in its output. Passed here. Not included: the TUIs and
+        editor (`+boo`, `+edit-config`). The ones that talk to a running
+        instance have their own tests: `+toggle-quick-terminal` in
+        `quick-terminal.ps1`, and now `+new-tab` and `+new-window` in
+        `test/windows/cli-ipc.ps1` (in CI: a tab, then a second window,
+        counted with UI Automation; passed here).
   - [x] `+list-fonts` printed family names as raw UTF-16BE (a NUL before
         each letter): FreeType faces took the first family name in the
         name table, and only decoded Microsoft BMP names, while Windows

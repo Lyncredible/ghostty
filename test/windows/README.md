@@ -423,3 +423,10 @@ reads the replies as VT input. With `conpty.dll` next to `ghostty.exe`
 its `OK` for the Kitty query. The
 ConPTY built into Windows swallows these queries, so without it the test
 only reports what came back.
+
+## cli-ipc.ps1
+
+Checks the CLI actions that talk to a running Ghostty: `+new-tab` adds a tab
+to its window and `+new-window` opens another window, through the console
+launcher (`ghostty.com`) with the instance's `--class`. Tabs and windows are
+counted with UI Automation.
