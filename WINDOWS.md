@@ -1842,7 +1842,8 @@ Notes:
           with a backslash, and `os/path.zig`'s `expand` always added
           another. It now adds one only when the directory doesn't end
           with a separator (on every platform; unit tested with a
-          directory ending in one).
+          directory ending in one). CI run 42453039745 (2d391cbd7)
+          passed every job.
 - [x] Terminal inspector (`inspector` toggle/show/hide,
       `render_inspector`): a window per terminal, like GTK's, drawn by
       Dear ImGui through its Win32 and Direct3D 11 backends (now built by
