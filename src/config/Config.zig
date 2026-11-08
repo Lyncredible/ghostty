@@ -2232,7 +2232,7 @@ keybind: Keybinds = .{},
 ///   * `ghostty` - Use the background and foreground colors specified in the
 ///     Ghostty configuration. If the "theme" configuration has separate light
 ///     and dark themes, light or dark mode follows the system theme. This is
-///     only supported on Linux builds.
+///     only supported on Linux and Windows builds.
 ///
 /// On macOS, if `macos-titlebar-style` is `tabs` or `transparent`, the window theme will be
 /// automatically set based on the luminosity of the terminal background color.
@@ -2240,8 +2240,11 @@ keybind: Keybinds = .{},
 /// non-terminal windows within Ghostty.
 ///
 /// This is currently only supported on macOS, Linux and Windows. On Windows,
-/// this only selects a light or dark title bar, and `ghostty` behaves like
-/// `auto`.
+/// this selects a light or dark title bar (and menus), and `ghostty` also
+/// colors the title bar with `window-titlebar-background` and
+/// `window-titlebar-foreground` or the terminal's colors (Windows 11). With
+/// the tabs in the title bar, Ghostty draws the title bar itself, in the
+/// terminal's colors.
 @"window-theme": WindowTheme = .auto,
 
 /// The color space to use when interpreting terminal colors. "Terminal colors"
