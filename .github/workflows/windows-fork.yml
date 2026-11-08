@@ -99,6 +99,13 @@ jobs:
             if ($check[2] -and $out -notmatch $check[2]) { throw "$($check[0]) didn't print /$($check[2])/: $out" }
             Write-Host "$($check[0]): ok ($(($out -split "`n").Count) lines)"
           }
+          # +edit-config runs $EDITOR on the config file (creating it if
+          # needed) and waits: an editor that echoes shows the path.
+          $env:EDITOR = 'cmd.exe /c echo'
+          $out = ./zig-out/bin/ghostty.com +edit-config 2>&1 | Out-String
+          if ($LASTEXITCODE -ne 0 -or $out -notmatch 'ghostty\\config') { throw "+edit-config didn't open the config: $out" }
+          Write-Host "+edit-config: ok ($($out.Trim()))"
+          Remove-Item Env:EDITOR
 
       # The actions that talk to a running instance.
       - name: Test CLI actions with a running instance
