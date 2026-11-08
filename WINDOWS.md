@@ -1380,6 +1380,8 @@ Notes:
   - [x] 2026-11-07: a ninth sync (3 commits: macOS NSColor tests only).
         No conflicts; dates kept; nothing for Windows to check. CI run
         42457195698 (1720f1a16) passed every job.
+  - [x] 2026-11-08: a tenth sync (1 commit, the VOUCHED list). No
+        conflicts; dates kept; nothing for Windows to check.
 - [x] Tip builds, like upstream's `release-tip.yml` (the discussion's
       release workflow item): a rolling prerelease of the latest
       `windows` commit, so people can try it without building. Approved
