@@ -3296,7 +3296,8 @@ Reviewed the branch against this file and discussion #2563.
   invalid" on a locked desktop) and passes in CI. The other 18 only run in
   CI, where they passed (run 42489816690). translucent now checks first
   whether the screen can be read and, outside CI, skips with a notice
-  instead of failing.
+  instead of failing; in CI run 42495363973 (6ca1a28be) it still ran in
+  full and every job passed.
 - Fork CI run 41232795840 (2026-10-31), after the exit message and Git
   Bash path fixes: the x64 and ARM64 test suites, the MSIX install, and
   libghostty-vt with MSVC all passed.
