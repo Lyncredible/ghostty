@@ -251,6 +251,11 @@ jobs:
         shell: pwsh
         run: ./test/windows/scrollbar.ps1 -Exe zig-out/bin/ghostty.exe
 
+      - name: Crash report test
+        timeout-minutes: 3
+        shell: pwsh
+        run: ./test/windows/crash-report.ps1 -Exe zig-out/bin/ghostty.exe
+
       - name: Windows key defaults report
         timeout-minutes: 2
         shell: pwsh

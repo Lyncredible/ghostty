@@ -362,6 +362,15 @@ thumb jumps to the click: the top shows cmd's banner, the middle lines from
 the middle of the output, and the bottom `L1300` again. What's in view is
 the surface's UI Automation value.
 
+## crash-report.ps1
+
+Checks the crash handler: Ghostty, with F12 bound to `crash:main` and its
+standard error in a file, panics on a posted F12, exits by itself (with a
+standard error there's no dialog), saves a report in
+`%LOCALAPPDATA%\ghostty\crash` with the version, the panic message and the
+return addresses, prints the panic to standard error, and `+crash-report`
+lists the report. The report is deleted afterwards.
+
 ## win-key-defaults.ps1
 
 Reports (as a notice, never failing) which of the default keybindings with
