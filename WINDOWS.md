@@ -2429,6 +2429,11 @@ Notes:
         background and foreground, or `window-titlebar-background` and
         `-foreground` (`DWMWA_CAPTION_COLOR`/`DWMWA_TEXT_COLOR`, Windows
         11). Checked: the caption pixel matched the background.
+    - [x] The option's docs (2026-11-08) still said `ghostty` "behaves
+          like `auto`" on Windows and is "only supported on Linux
+          builds"; they now say what it does here, and that with the
+          tabs in the title bar Ghostty draws it in the terminal's
+          colors. Checked in `+show-config --docs --default`.
   - [x] `resize-overlay`, `resize-overlay-position`, and
         `resize-overlay-duration`: "columns x rows" when the grid changes,
         like GTK; with `after-first`, not while a new window is being
