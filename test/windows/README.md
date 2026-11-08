@@ -430,3 +430,9 @@ Checks the CLI actions that talk to a running Ghostty: `+new-tab` adds a tab
 to its window and `+new-window` opens another window, through the console
 launcher (`ghostty.com`) with the instance's `--class`. Tabs and windows are
 counted with UI Automation.
+
+## tab-close-uia.ps1
+
+Checks that screen readers can close tabs: each tab (a TabItem) has a
+"Close Tab" button as its only child, inside the tab, and invoking it closes
+that tab and leaves the other.
