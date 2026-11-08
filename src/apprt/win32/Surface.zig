@@ -289,6 +289,14 @@ pub fn init(self: *Surface, app: *App, window: *Window, opts: Options) !void {
     if (self.shell) |shell| {
         config.command = shell;
         config.@"initial-command" = null;
+
+        // A Windows shell chosen from the menu (Command Prompt, say) can't
+        // start in a WSL directory inherited from a WSL terminal, and Exec
+        // would start WSL there instead, as it does for the configured
+        // command. So it starts where new windows do.
+        if (dropsWslDirectory(alloc, shell, config.@"working-directory")) {
+            config.@"working-directory" = app.config.@"working-directory";
+        }
     }
     opts.overrides.apply(&config);
     self.drop_shell = if (config.command) |command| dropShell(command) else .windows;
@@ -1929,6 +1937,47 @@ pub fn performMenuAction(self: *Surface, action: input.Binding.Action) void {
     _ = self.core_surface.performBindingAction(action) catch |err| {
         log.warn("error performing menu action action={} err={}", .{ action, err });
     };
+}
+
+/// Whether a chosen shell should not inherit its working directory: it
+/// doesn't run WSL, and the directory is in WSL (a \\wsl$ or
+/// \\wsl.localhost share path).
+fn dropsWslDirectory(
+    alloc: std.mem.Allocator,
+    shell: configpkg.Command,
+    working_directory: ?configpkg.Config.WorkingDirectory,
+) bool {
+    const wd = working_directory orelse return false;
+    const path = switch (wd) {
+        .path => |v| v,
+        .home, .inherit => return false,
+    };
+    const share = (internal_os.wsl.sharePath(alloc, path) catch return false) orelse return false;
+    alloc.free(share.linux);
+
+    var it = shell.argIterator(alloc) catch return false;
+    defer it.deinit();
+    const program = it.next() orelse return false;
+    return !internal_os.wsl.isWsl(program);
+}
+
+test dropsWslDirectory {
+    const testing = std.testing;
+    const alloc = testing.allocator;
+    const wsl_dir: configpkg.Config.WorkingDirectory = .{ .path = "\\\\wsl.localhost\\Ubuntu\\home\\me" };
+    const win_dir: configpkg.Config.WorkingDirectory = .{ .path = "C:\\Users\\me" };
+
+    // A Windows shell from a WSL terminal starts elsewhere.
+    try testing.expect(dropsWslDirectory(alloc, .{ .shell = "cmd.exe" }, wsl_dir));
+    try testing.expect(dropsWslDirectory(alloc, .{ .direct = &.{"powershell.exe"} }, wsl_dir));
+    try testing.expect(dropsWslDirectory(alloc, .{ .shell = "cmd.exe" }, .{ .path = "\\\\wsl$\\Debian\\tmp" }));
+
+    // WSL keeps it, and other directories are kept.
+    try testing.expect(!dropsWslDirectory(alloc, .{ .shell = "wsl.exe -d Ubuntu" }, wsl_dir));
+    try testing.expect(!dropsWslDirectory(alloc, .{ .direct = &.{ "C:\\Windows\\System32\\wsl.exe", "-d", "Ubuntu" } }, wsl_dir));
+    try testing.expect(!dropsWslDirectory(alloc, .{ .shell = "cmd.exe" }, win_dir));
+    try testing.expect(!dropsWslDirectory(alloc, .{ .shell = "cmd.exe" }, .home));
+    try testing.expect(!dropsWslDirectory(alloc, .{ .shell = "cmd.exe" }, null));
 }
 
 /// Open a new tab or window from this surface that runs the shell, or the

@@ -2061,6 +2061,21 @@ Notes:
     `OpenConsole.exe` (`build\native\runtimes\x64`) from the
     Microsoft.Windows.Console.ConPTY 1.25.260930003 package next to
     `ghostty.exe`, or build with `package.ps1 -BundleConpty`.
+- [x] Bug (reported 2026-11-07): from a WSL tab, opening a new Command
+      Prompt tab (the new tab menu) opened WSL instead. The new terminal
+      inherited the WSL tab's directory (a `\\wsl.localhost\...` share
+      path), and Exec starts WSL there when the command is cmd, since cmd
+      can't start in a UNC path (meant for the configured shell, see
+      "starting WSL for a WSL working directory" in `termio/Exec.zig`);
+      it can't tell a shell chosen from the menu from the configured one.
+      Now a chosen shell that isn't WSL doesn't inherit a WSL directory
+      (`dropsWslDirectory` in `Surface.zig`): it starts where new windows
+      do (`working-directory`). A WSL shell, or a Windows directory, is
+      inherited as before. Unit tested (cmd, PowerShell, `\\wsl$` and
+      `\\wsl.localhost` paths, WSL keeps it, Windows paths kept), and
+      checked by hand: with `command = wsl.exe`, `cd /tmp`, then Command
+      Prompt from the new tab menu (opened with UI Automation, chosen
+      with keys) gave cmd at `C:\Code\ghostty>`.
 - [x] Remember and restore tabs after a restart (requested 2026-11-07):
       the list of tabs (and their splits), which terminal each one runs
       (cmd, PowerShell, a WSL distribution, a shell from the new tab
