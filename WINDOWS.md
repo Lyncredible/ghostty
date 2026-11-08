@@ -2055,7 +2055,8 @@ Notes:
           Tab" over the tab's number (where a click selects the tab). It's
           now offscreen with an empty rectangle there, and can still be
           invoked (2026-11-08). `compact-tabs.ps1` checks it's offscreen,
-          `tab-close-uia.ps1` that drawn ones aren't.
+          `tab-close-uia.ps1` that drawn ones aren't. CI run 42501971816
+          (09102e5a4) passed every job.
   - [x] Compact tabs (found 2026-11-07 with 20 tabs): tabs narrower
         than 88 points showed "1..." for tabs 10 and up (the title was
         cut before its number ended), and the active tab's close button
