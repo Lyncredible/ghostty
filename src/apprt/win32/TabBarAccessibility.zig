@@ -1,7 +1,8 @@
 //! UI Automation for the tab bar, which we draw ourselves, so that screen
 //! readers can find and switch tabs: a Tab control whose children are
 //! TabItems named by the tabs' titles, which can be selected, and then
-//! the bar's buttons, which can be invoked.
+//! the bar's buttons, which can be invoked. Each TabItem has a "Close Tab"
+//! button, as in browsers and Windows Terminal.
 //!
 //! The tab bar returns the root from WM_GETOBJECT. We ask UI Automation to
 //! call us on the tab bar's thread (UseComThreading), so the tab bar and
@@ -247,7 +248,8 @@ const root_fragment_root_vtbl = FragmentRootVtbl{
             const bar = self.bar orelse return UIA_E_ELEMENTNOTAVAILABLE;
             const pt: c.POINT = .{ .x = @intFromFloat(x), .y = @intFromFloat(y) };
             const kind: ?Item.Kind = if (bar.hitAtScreen(pt)) |hit| switch (hit) {
-                .tab, .close => |idx| .{ .tab = bar.window.tabs.items[idx] },
+                .tab => |idx| .{ .tab = bar.window.tabs.items[idx] },
+                .close => |idx| .{ .close = bar.window.tabs.items[idx] },
                 .new_tab => .{ .button = .new_tab },
                 .shell_menu => .{ .button = .shell_menu },
                 .minimize => .{ .button = .minimize },
@@ -315,8 +317,9 @@ const root_selection_vtbl = SelectionVtbl{
     }.f,
 };
 
-/// A tab, as a TabItem element, or a button. A tab may have closed since,
-/// so it's looked up in the window each time.
+/// A tab, as a TabItem element, a tab's close button, or one of the bar's
+/// buttons. A tab may have closed since, so it's looked up in the window
+/// each time.
 const Item = struct {
     simple: Interface = .{ .vtbl = &item_simple_vtbl },
     fragment: Interface = .{ .vtbl = &item_fragment_vtbl },
@@ -329,6 +332,8 @@ const Item = struct {
     const Kind = union(enum) {
         tab: *Tab,
         button: TabBar.Button,
+        /// A tab's close button, its only child.
+        close: *Tab,
     };
 
     fn create(root: *Root, kind: Kind) !*Item {
@@ -359,7 +364,7 @@ const Item = struct {
             &self.fragment
         else if (self.kind == .tab and eqlGuid(iid, &IID_ISelectionItemProvider))
             &self.selection_item
-        else if (self.kind == .button and eqlGuid(iid, &IID_IInvokeProvider))
+        else if (self.kind != .tab and eqlGuid(iid, &IID_IInvokeProvider))
             &self.invoke
         else
             return E_NOINTERFACE;
@@ -367,12 +372,12 @@ const Item = struct {
         return S_OK;
     }
 
-    /// The position among the tab bar's children, if the element and the
-    /// tab bar still exist.
+    /// The position among the tab bar's children (for a close button, its
+    /// tab's), if the element and the tab bar still exist.
     fn position(self: *const Item) ?usize {
         const bar = self.root.bar orelse return null;
         return switch (self.kind) {
-            .tab => |tab| bar.window.tabIndex(tab),
+            .tab, .close => |tab| bar.window.tabIndex(tab),
             .button => |button| bar.window.tabs.items.len + @backingInt(button),
         };
     }
@@ -381,7 +386,7 @@ const Item = struct {
     fn tabIndex(self: *const Item) ?usize {
         return switch (self.kind) {
             .tab => self.position(),
-            .button => null,
+            .button, .close => null,
         };
     }
 
@@ -414,7 +419,7 @@ const item_simple_vtbl = SimpleVtbl{
             if (self.kind == .tab and pattern == UIA_SelectionItemPatternId) {
                 out.* = &self.selection_item;
                 _ = self.addRef();
-            } else if (self.kind == .button and pattern == UIA_InvokePatternId) {
+            } else if (self.kind != .tab and pattern == UIA_InvokePatternId) {
                 out.* = &self.invoke;
                 _ = self.addRef();
             }
@@ -430,11 +435,12 @@ const item_simple_vtbl = SimpleVtbl{
             switch (property) {
                 UIA_ControlTypePropertyId => setInt(out, switch (self.kind) {
                     .tab => UIA_TabItemControlTypeId,
-                    .button => UIA_ButtonControlTypeId,
+                    .button, .close => UIA_ButtonControlTypeId,
                 }),
                 UIA_NamePropertyId => setString(out, switch (self.kind) {
                     .tab => |tab| tab.title(),
                     .button => |button| bar.buttonName(button),
+                    .close => "Close Tab",
                 }),
                 else => {},
             }
@@ -470,10 +476,20 @@ const item_fragment_vtbl = FragmentVtbl{
             const self = Item.fromIface("fragment", i);
             out.* = null;
             const pos = self.position() orelse return UIA_E_ELEMENTNOTAVAILABLE;
+            // A close button's parent is its tab, and it has no siblings.
+            if (self.kind == .close) {
+                if (direction == NavigateDirection_Parent) {
+                    if (Item.create(self.root, .{ .tab = self.kind.close })) |tab| out.* = &tab.fragment else |_| {}
+                }
+                return S_OK;
+            }
             switch (direction) {
                 NavigateDirection_Parent => {
                     out.* = &self.root.fragment;
                     _ = self.root.addRef();
+                },
+                NavigateDirection_FirstChild, NavigateDirection_LastChild => if (self.kind == .tab) {
+                    if (Item.create(self.root, .{ .close = self.kind.tab })) |close| out.* = &close.fragment else |_| {}
                 },
                 NavigateDirection_NextSibling => if (self.root.childAt(pos + 1)) |v| {
                     out.* = &v.fragment;
@@ -495,6 +511,8 @@ const item_fragment_vtbl = FragmentVtbl{
             const id: i32 = switch (self.kind) {
                 .tab => |tab| @truncate(@as(isize, @bitCast(@intFromPtr(tab)))),
                 .button => |button| 1 + @as(i32, @backingInt(button)),
+                // Tabs are aligned, so their address plus one is free.
+                .close => |tab| @truncate(@as(isize, @bitCast(@intFromPtr(tab))) +% 1),
             };
             const ids = [_]i32{ UiaAppendRuntimeId, id };
             const array = SafeArrayCreateVector(VT_I4, 0, ids.len) orelse return E_OUTOFMEMORY;
@@ -515,6 +533,7 @@ const item_fragment_vtbl = FragmentVtbl{
             out.* = .fromRect(switch (self.kind) {
                 .tab => bar.tabScreenRect(pos),
                 .button => |button| bar.buttonScreenRect(button),
+                .close => bar.closeScreenRect(pos),
             });
             return S_OK;
         }
@@ -597,6 +616,10 @@ const item_invoke_vtbl = InvokeVtbl{
             const bar = self.root.bar orelse return UIA_E_ELEMENTNOTAVAILABLE;
             switch (self.kind) {
                 .button => |button| bar.pressButton(button),
+                .close => |tab| {
+                    if (bar.window.tabIndex(tab) == null) return UIA_E_ELEMENTNOTAVAILABLE;
+                    bar.closeTabLater(tab);
+                },
                 .tab => return UIA_E_INVALIDOPERATION,
             }
             return S_OK;

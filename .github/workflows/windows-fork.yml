@@ -276,6 +276,11 @@ jobs:
         shell: pwsh
         run: ./test/windows/tab-reorder.ps1 -Exe zig-out/bin/ghostty.exe
 
+      - name: Tab close button for screen readers test
+        timeout-minutes: 5
+        shell: pwsh
+        run: ./test/windows/tab-close-uia.ps1 -Exe zig-out/bin/ghostty.exe
+
       - name: Compact tabs test
         timeout-minutes: 5
         shell: pwsh

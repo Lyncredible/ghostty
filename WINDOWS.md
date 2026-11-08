@@ -2033,6 +2033,16 @@ Notes:
         hover highlight can't be seen on a locked desktop (Windows reports
         the mouse leaving at once); the owner checked it with a real
         mouse, and it works.
+  - [x] Screen readers can close tabs (2026-11-08): with a close button
+        on every tab, UI Automation listed tabs only as selectable
+        TabItems, with no way to close one. Each TabItem now has a "Close
+        Tab" button as its child (as Chrome and Windows Terminal expose),
+        at the close button's place (hit testing there finds it), and
+        invoking it closes the tab later, from a posted message, since it
+        may ask first. `test/windows/tab-close-uia.ps1` (in CI) checks
+        both tabs' buttons and that invoking the second's closes it; the
+        title bar tabs, tab reorder, compact tabs, tabs and UI Automation
+        events tests still pass.
   - [x] Compact tabs (found 2026-11-07 with 20 tabs): tabs narrower
         than 88 points showed "1..." for tabs 10 and up (the title was
         cut before its number ended), and the active tab's close button

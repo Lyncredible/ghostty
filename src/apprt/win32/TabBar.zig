@@ -419,6 +419,27 @@ pub fn pressButton(self: *TabBar, button: Button) void {
 
 const WM_GHOSTTY_PRESS_BUTTON = c.WM_APP + 1;
 
+/// Close a tab, as its close button does, for UI Automation. Like
+/// pressButton it happens later, from a posted message, since closing may
+/// ask first. The tab is looked up again then, in case it closed.
+pub fn closeTabLater(self: *TabBar, tab: *Tab) void {
+    _ = c.PostMessageW(self.hwnd, WM_GHOSTTY_CLOSE_TAB, @intFromPtr(tab), 0);
+}
+
+const WM_GHOSTTY_CLOSE_TAB = c.WM_APP + 2;
+
+/// A tab's close button, in screen coordinates.
+pub fn closeScreenRect(self: *const TabBar, idx: usize) c.RECT {
+    var client: c.RECT = undefined;
+    _ = c.GetClientRect(self.hwnd, &client);
+    const rect = self.closeRect(self.layout().tabRect(idx, client.bottom));
+    var top_left: c.POINT = .{ .x = rect.left, .y = rect.top };
+    var bottom_right: c.POINT = .{ .x = rect.right, .y = rect.bottom };
+    _ = c.ClientToScreen(self.hwnd, &top_left);
+    _ = c.ClientToScreen(self.hwnd, &bottom_right);
+    return .{ .left = top_left.x, .top = top_left.y, .right = bottom_right.x, .bottom = bottom_right.y };
+}
+
 /// Called when a tab is selected, to tell screen readers.
 pub fn tabSelected(self: *TabBar, tab: *Tab) void {
     if (self.accessibility) |a| a.tabSelected(tab);
@@ -994,6 +1015,13 @@ pub fn wndProc(
 
     switch (msg) {
         c.WM_ERASEBKGND => return 1,
+
+        WM_GHOSTTY_CLOSE_TAB => {
+            // Compared by address only: the tab may be gone.
+            const tab: *Tab = @ptrFromInt(wparam);
+            if (self.window.tabIndex(tab)) |idx| self.window.closeTabAt(idx);
+            return 0;
+        },
 
         WM_GHOSTTY_PRESS_BUTTON => {
             switch (std.enums.fromInt(Button, wparam) orelse return 0) {
