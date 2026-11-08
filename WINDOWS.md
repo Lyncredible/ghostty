@@ -2048,7 +2048,8 @@ Notes:
           SizeOfSet, from which screen readers say "2 of 3", and which
           custom providers must give themselves. The same test checks
           "1 of 2" and "2 of 2" (looked up by ID, since the managed UI
-          Automation API predates them).
+          Automation API predates them). CI run 42489816690 (97e41d531)
+          passed every job.
   - [x] Compact tabs (found 2026-11-07 with 20 tabs): tabs narrower
         than 88 points showed "1..." for tabs 10 and up (the title was
         cut before its number ended), and the active tab's close button
