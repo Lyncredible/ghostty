@@ -362,6 +362,15 @@ thumb jumps to the click: the top shows cmd's banner, the middle lines from
 the middle of the output, and the bottom `L1300` again. What's in view is
 the surface's UI Automation value.
 
+## win-key-defaults.ps1
+
+Reports (as a notice, never failing) which of the default keybindings with
+the Windows key another program has registered as a hotkey, which Windows
+then never passes to Ghostty: it tries to register each with
+`RegisterHotKey`, which fails with `ERROR_HOTKEY_ALREADY_REGISTERED` when
+the combination is taken. On a clean runner that's what Windows' shell
+takes; a free combination can still be caught by a keyboard hook.
+
 ## command-palette.ps1
 
 Checks the command palette: `toggle_command_palette` opens it with many

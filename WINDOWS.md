@@ -2187,6 +2187,23 @@ Notes:
     whether Win+Ctrl+Shift+Left/Right still switch desktops (the Shift
     may not matter to the shell), which would take `resize_split`'s left
     and right.
+  - Probed without a keyboard (2026-11-08): Windows' shell registers its
+    Win key shortcuts with `RegisterHotKey`, and registering a taken
+    combination fails with `ERROR_HOTKEY_ALREADY_REGISTERED`. On the
+    dev machine Win+Ctrl+Left and Win+Ctrl+D are taken (the shell's, as
+    expected), and so are exactly Win+Ctrl+[ and Win+Ctrl+]
+    (`goto_split:previous`/`next`), by something no tool here names (no
+    Ghostty, PowerToys or AutoHotkey running; Win+[, Win+Ctrl+Shift+[,
+    Win+Ctrl+; and others are free). The Win+Ctrl+Shift arrows
+    (`resize_split`) and Win+Ctrl+Shift+J are free, so the shell's
+    desktop switching wants the exact modifiers. A free combination can
+    still be caught by a keyboard hook, so only a real keyboard settles
+    those. `test/windows/win-key-defaults.ps1` reports the taken ones
+    from `+list-keybinds --default`, and runs in CI to show what a clean
+    Windows takes.
+    - [ ] Read the CI report. If a clean Windows takes Win+Ctrl+[ and ],
+          add Windows defaults for `goto_split:previous`/`next` (the
+          directional ones already have Ctrl+Alt+arrows).
 - [x] Bug (reported 2026-11-07): from a WSL tab, opening a new Command
       Prompt tab (the new tab menu) opened WSL instead. The new terminal
       inherited the WSL tab's directory (a `\\wsl.localhost\...` share
