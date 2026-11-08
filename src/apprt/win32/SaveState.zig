@@ -1,6 +1,7 @@
 //! Saving and restoring windows, tabs, and splits for `window-save-state`:
 //! their placement, tab titles set by the user, split layouts, and each
-//! terminal's working directory.
+//! terminal's working directory and the shell chosen for it (from the new
+//! tab menu, say WSL or PowerShell, rather than the configured command).
 //!
 //! The state is saved as JSON in %LOCALAPPDATA%\ghostty when the app quits
 //! or the user closes its last window, and restored when it starts. When
@@ -10,6 +11,7 @@ const std = @import("std");
 const Allocator = std.mem.Allocator;
 const global = @import("../../global.zig");
 
+const configpkg = @import("../../config.zig");
 const util = @import("util.zig");
 const c = util.c;
 const App = @import("App.zig");
@@ -50,12 +52,44 @@ pub const NodeState = struct {
     /// For a terminal, its working directory, if known.
     pwd: ?[]const u8 = null,
 
+    /// For a terminal, the shell chosen for it, if it doesn't run the
+    /// configured command: one from the new tab menu, or inherited by a
+    /// split from its terminal.
+    command: ?CommandState = null,
+
     /// For a split, its layout, ratio, and children. A node without a
     /// layout is a terminal.
     layout: ?Tab.Tree.Split.Layout = null,
     ratio: f32 = 0.5,
     left: u16 = 0,
     right: u16 = 0,
+};
+
+/// A command, as `configpkg.Command`: a command line for the shell, or a
+/// program and its arguments (kept apart, since they may have spaces).
+pub const CommandState = struct {
+    shell: ?[]const u8 = null,
+    direct: ?[]const []const u8 = null,
+
+    pub fn init(cmd: configpkg.Command) CommandState {
+        return switch (cmd) {
+            .shell => |v| .{ .shell = v },
+            .direct => |v| .{ .direct = @ptrCast(v) },
+        };
+    }
+
+    /// The command, allocated in the arena; null if the state has none.
+    pub fn command(self: CommandState, arena: Allocator) !?configpkg.Command {
+        if (self.direct) |args| {
+            if (args.len == 0) return null;
+            const copy = try arena.alloc([:0]const u8, args.len);
+            for (args, copy) |arg, *dest| dest.* = try arena.dupeSentinel(u8, arg, 0);
+            return .{ .direct = copy };
+        }
+        const line = self.shell orelse return null;
+        if (line.len == 0) return null;
+        return .{ .shell = try arena.dupeSentinel(u8, line, 0) };
+    }
 };
 
 /// Whether the config asks us to save and restore state on every launch.
@@ -190,6 +224,7 @@ fn captureTab(alloc: Allocator, tab: *const Tab) !TabState {
         .leaf => |surface| {
             state.* = .{
                 .pwd = if (surface.core_initialized) surface.core_surface.pwd(alloc) catch null else null,
+                .command = if (surface.shell) |shell| .init(shell) else null,
             };
         },
         .split => |s| state.* = .{
@@ -262,8 +297,8 @@ test "state round trip" {
             .{ .nodes = &.{.{ .pwd = "C:\\Users\\me" }} },
             .{ .title = "logs", .focused = 1, .nodes = &.{
                 .{ .layout = .horizontal, .ratio = 0.25, .left = 1, .right = 2 },
-                .{ .pwd = "C:\\src" },
-                .{},
+                .{ .pwd = "C:\\src", .command = .init(.{ .shell = "pwsh.exe -NoLogo" }) },
+                .{ .command = .init(.{ .direct = &.{ "wsl.exe", "-d", "Ubuntu 24.04" } }) },
             } },
         },
     }} };
@@ -274,4 +309,16 @@ test "state round trip" {
     try testing.expectEqual(Tab.Tree.Split.Layout.horizontal, parsed.windows[0].tabs[1].nodes[0].layout.?);
     try testing.expectEqualStrings("C:\\src", parsed.windows[0].tabs[1].nodes[1].pwd.?);
     try testing.expect(parsed.windows[0].tabs[1].nodes[2].pwd == null);
+    try testing.expect(parsed.windows[0].tabs[0].nodes[0].command == null);
+
+    // Commands come back as they were, arguments with spaces included.
+    const shell = (try parsed.windows[0].tabs[1].nodes[1].command.?.command(alloc)).?;
+    try testing.expectEqualStrings("pwsh.exe -NoLogo", shell.shell);
+    const direct = (try parsed.windows[0].tabs[1].nodes[2].command.?.command(alloc)).?;
+    try testing.expectEqual(@as(usize, 3), direct.direct.len);
+    try testing.expectEqualStrings("Ubuntu 24.04", direct.direct[2]);
+
+    // An empty command isn't one.
+    try testing.expect(try (CommandState{}).command(alloc) == null);
+    try testing.expect(try (CommandState{ .direct = &.{} }).command(alloc) == null);
 }

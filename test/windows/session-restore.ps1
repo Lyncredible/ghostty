@@ -6,6 +6,12 @@
 # to the actions are posted to the terminal and the windows are found with
 # EnumChildWindows, so it works on a locked desktop.
 #
+# Then each terminal's shell and directory: a saved session with a
+# PowerShell tab (a shell chosen from the new tab menu, saved as the
+# terminal's command) in C:\Windows and a cmd tab (the configured command)
+# in the temporary directory comes back with those shells and directories,
+# read from the prompts with UI Automation, and quitting saves them again.
+#
 #     ./session-restore.ps1 -Exe zig-out/bin/ghostty.exe
 
 param(
@@ -14,6 +20,7 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+Add-Type -AssemblyName UIAutomationClient, UIAutomationTypes
 trap {
     if (-not $script:reported) { Write-Host "::error title=session-restore::$($_.Exception.Message) (at line $($_.InvocationInfo.ScriptLineNumber))" }
     break
@@ -53,7 +60,7 @@ $log = Join-Path ([IO.Path]::GetTempPath()) "ghostty-session-$PID.log"
 $arguments = @('--command=cmd.exe', "--class=$class", '--window-save-state=always',
     '--confirm-close-surface=false', '--quit-after-last-window-closed=true',
     '--keybind=f9=new_split:right', '--keybind=f10=new_tab', '--keybind=f11=quit',
-    '--keybind=f12=goto_tab:1')
+    '--keybind=f12=goto_tab:1', '--keybind=f8=goto_tab:2')
 
 function Fail([string]$message) {
     Write-Host "::error title=session-restore::$message"
@@ -82,6 +89,14 @@ function Start-Ghostty {
 function Surfaces { @($W::Find($window, 'GhosttySurface')) }
 function Visible { @(Surfaces | Where-Object { $W::IsWindowVisible($_) }) }
 function Note { $script:note = "terminals: $(@(Surfaces).Count), visible: $(@(Visible).Count)" }
+
+# The text of a terminal, from UI Automation.
+function Text($surface) {
+    try {
+        $element = [System.Windows.Automation.AutomationElement]::FromHandle($surface)
+        $element.GetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern).Current.Value
+    } catch { '' }
+}
 
 function Quit {
     $W::Key((Visible)[0], 0x7A, 0x57)   # F11: quit
@@ -129,6 +144,37 @@ try {
     if ($rects[0].r -gt $rects[1].l -or $rects[0].t -ne $rects[1].t) { Fail "the restored split isn't left and right: $note" }
     Write-Host "The first tab's split is restored left and right: $note."
     Quit
+
+    # Each terminal's shell and directory.
+    $windows = $env:SystemRoot
+    $temp = (Get-Item ([IO.Path]::GetTempPath())).FullName.TrimEnd('\')
+    $session = @{ version = 1; windows = @(@{
+        left = 100; top = 100; right = 1100; bottom = 700; active_tab = 0
+        tabs = @(
+            @{ nodes = @(@{ pwd = $windows; command = @{ direct = @('powershell.exe', '-NoProfile') } }) },
+            @{ nodes = @(@{ pwd = $temp }) }
+        )
+    }) }
+    # Without a byte order mark, which Windows PowerShell's UTF-8 would add.
+    [IO.File]::WriteAllText($state, ($session | ConvertTo-Json -Depth 10), (New-Object System.Text.UTF8Encoding $false))
+    Start-Ghostty
+    [void](WaitFor { Note; @(Surfaces).Count -eq 2 -and @(Visible).Count -eq 1 } 'the two restored tabs')
+    $first = (Visible)[0]
+    [void](WaitFor { $script:note = "screen: $((Text $first) -replace '\s+', ' ')"; (Text $first) -match [regex]::Escape("PS $windows>") } "PowerShell in $windows in the first tab")
+    Write-Host "The first tab runs PowerShell in $windows, as saved."
+    $W::Key($first, 0x77, 0x42)   # F8: goto_tab:2
+    [void](WaitFor { Note; $v = @(Visible); $v.Count -eq 1 -and $v[0] -ne $first } 'the second tab')
+    $second = (Visible)[0]
+    [void](WaitFor { $script:note = "screen: $((Text $second) -replace '\s+', ' ')"; $t = Text $second; $t -match [regex]::Escape("$temp>") -and $t -notmatch 'PS ' } "cmd in $temp in the second tab")
+    Write-Host "The second tab runs the configured cmd in $temp."
+    Quit
+
+    $saved = Get-Content -Raw $state | ConvertFrom-Json
+    $tabs = @($saved.windows[0].tabs)
+    $command = $tabs[0].nodes[0].command
+    if (-not $command -or @($command.direct)[0] -ne 'powershell.exe') { Fail "the PowerShell tab's command wasn't saved again: $($tabs[0].nodes[0] | ConvertTo-Json -Compress)" }
+    if ($tabs[1].nodes[0].command) { Fail "the cmd tab saved a command, but it runs the configured one: $($tabs[1].nodes[0] | ConvertTo-Json -Compress)" }
+    Write-Host 'Quitting saved the PowerShell tab with its command and the cmd tab without one.'
 } finally {
     if ($process -and -not $process.HasExited) { Stop-Process -Id $process.Id -Force }
     Remove-Item -LiteralPath $state, $log -Force -ErrorAction SilentlyContinue

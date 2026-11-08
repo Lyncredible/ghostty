@@ -2061,7 +2061,7 @@ Notes:
     `OpenConsole.exe` (`build\native\runtimes\x64`) from the
     Microsoft.Windows.Console.ConPTY 1.25.260930003 package next to
     `ghostty.exe`, or build with `package.ps1 -BundleConpty`.
-- [ ] Remember and restore tabs after a restart (requested 2026-11-07):
+- [x] Remember and restore tabs after a restart (requested 2026-11-07):
       the list of tabs (and their splits), which terminal each one runs
       (cmd, PowerShell, a WSL distribution, a shell from the new tab
       menu, a custom command), and each terminal's working directory.
@@ -2072,24 +2072,33 @@ Notes:
     startup. With the default (`default`), Windows only restores after a
     system restart or update (`RegisterApplicationRestart`), not after
     quitting.
-  - [ ] Save which terminal each one runs: restored terminals all start
-        the configured `command`, so a WSL or PowerShell tab opened from
-        the new tab menu comes back as the default shell. Save the
-        command (the menu's shell entry, or the `-e` arguments) per
-        terminal in `NodeState`, and start it on restore.
-  - [ ] WSL working directories: a WSL shell reports a Linux path with
-        OSC 7 (or `/mnt/c/...`). Check what `pwd()` gives for those, and
-        restore them inside the distribution (`wsl.exe -d <distro> --cd
-        <path>`) instead of as a Windows directory, which `/home/...`
-        isn't.
-  - [ ] Decide when to restore: after every quit (like macOS, whose
-        default follows the system's "close windows when quitting"
-        setting), or keep it to `window-save-state = always` and system
-        restarts. Maybe make `default` mean "always" on Windows, since
-        Windows has no such setting.
-  - [ ] Test: extend `test/windows/session-restore.ps1` with a cmd tab, a
-        PowerShell tab and a WSL tab in different directories, quit, start
-        again, and check each tab's shell and directory.
+  - [x] Save which terminal each one runs: restored terminals all
+        started the configured `command`, so a WSL or PowerShell tab
+        opened from the new tab menu came back as the default shell. Each
+        terminal's chosen shell (`Surface.shell`: from the new tab menu,
+        or inherited by its splits) is now saved in `NodeState.command`
+        (a command line, or the program and its arguments kept apart, so
+        arguments with spaces survive) and started again on restore.
+        Terminals running the configured command save none, so they
+        follow the config. Unit tested (`state round trip`).
+  - [x] WSL working directories: already right. A WSL shell's OSC 7
+        path is kept as its `\\wsl.localhost\<distro>\...` share path,
+        which is what's saved. Restoring it with a `wsl.exe` command
+        starts the shell there, and with the configured cmd, Exec starts
+        WSL there instead (`wsl.exe -d <distro> --cd <path>`, as for new
+        terminals from a WSL one). Checked by hand: a saved WSL tab and a
+        cmd tab, both in `\\wsl.localhost\Ubuntu-24.04\tmp`, came back
+        as zsh in `/tmp`.
+  - [x] When to restore (the owner's decision, 2026-11-07): only with
+        `window-save-state = always` (and, with `default`, after Windows
+        restarts us after an update or a reboot), as today.
+  - [x] Test: `test/windows/session-restore.ps1` (in CI) now also
+        starts from a saved session with a PowerShell tab (its command
+        saved) in `C:\Windows` and a cmd tab (the configured command) in
+        the temporary directory, checks each prompt with UI Automation,
+        quits, and checks the PowerShell tab's command was saved again
+        and the cmd tab saved none. WSL isn't on the runners; it was
+        checked by hand (above).
 - [x] Ctrl+F for Find by default (requested 2026-11-06; decided
       2026-11-07: the owner keeps the default at Ctrl+Shift+F, as in
       Windows Terminal, and users who want Ctrl+F can add
