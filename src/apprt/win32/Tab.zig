@@ -594,45 +594,104 @@ fn layoutNode(
     switch (self.tree.nodes[handle.idx()]) {
         .leaf => self.layoutLeaf(handle, rect),
         .split => |s| {
-            const divider = self.dividerSize();
-            var left = rect;
-            var right = rect;
-            var div = rect;
-            switch (s.layout) {
-                .horizontal => {
-                    const total = rect.right - rect.left - divider;
-                    const pos = rect.left + splitPos(total, s.ratio);
-                    left.right = pos;
-                    div.left = pos;
-                    div.right = pos + divider;
-                    right.left = pos + divider;
-                },
-                .vertical => {
-                    const total = rect.bottom - rect.top - divider;
-                    const pos = rect.top + splitPos(total, s.ratio);
-                    left.bottom = pos;
-                    div.top = pos;
-                    div.bottom = pos + divider;
-                    right.top = pos + divider;
-                },
-            }
-
+            const parts: SplitRects = .init(rect, s.layout, s.ratio, self.dividerSize());
             self.dividers.append(alloc, .{
                 .handle = handle,
                 .layout = s.layout,
-                .rect = div,
+                .rect = parts.divider,
                 .split_rect = rect,
             }) catch {};
 
-            self.layoutNode(alloc, s.left, left);
-            self.layoutNode(alloc, s.right, right);
+            self.layoutNode(alloc, s.left, parts.left);
+            self.layoutNode(alloc, s.right, parts.right);
         },
     }
 }
 
+/// A split's two sides and the divider between them.
+const SplitRects = struct {
+    left: c.RECT,
+    divider: c.RECT,
+    right: c.RECT,
+
+    /// Split `rect` at `ratio` of the room left after the divider. The
+    /// left (or top) side gets the ratio, the right (or bottom) the rest.
+    fn init(rect: c.RECT, layout_: Tree.Split.Layout, ratio: f16, divider: c_int) SplitRects {
+        var parts: SplitRects = .{ .left = rect, .divider = rect, .right = rect };
+        switch (layout_) {
+            .horizontal => {
+                const pos = rect.left + splitPos(rect.right - rect.left - divider, ratio);
+                parts.left.right = pos;
+                parts.divider.left = pos;
+                parts.divider.right = pos + divider;
+                parts.right.left = pos + divider;
+            },
+            .vertical => {
+                const pos = rect.top + splitPos(rect.bottom - rect.top - divider, ratio);
+                parts.left.bottom = pos;
+                parts.divider.top = pos;
+                parts.divider.bottom = pos + divider;
+                parts.right.top = pos + divider;
+            },
+        }
+        return parts;
+    }
+};
+
 fn splitPos(total: c_int, ratio: f16) c_int {
     const pos: f32 = @as(f32, @floatFromInt(@max(0, total))) * @as(f32, ratio);
     return @intFromFloat(@round(pos));
+}
+
+test SplitRects {
+    const testing = std.testing;
+    const rect: c.RECT = .{ .left = 10, .top = 20, .right = 1011, .bottom = 621 };
+
+    // Side by side: the 1000 pixels left after the divider are shared.
+    const h: SplitRects = .init(rect, .horizontal, 0.5, 1);
+    try testing.expectEqual(c.RECT{ .left = 10, .top = 20, .right = 510, .bottom = 621 }, h.left);
+    try testing.expectEqual(c.RECT{ .left = 510, .top = 20, .right = 511, .bottom = 621 }, h.divider);
+    try testing.expectEqual(c.RECT{ .left = 511, .top = 20, .right = 1011, .bottom = 621 }, h.right);
+
+    // Stacked, a quarter on top, with a 2 pixel divider (192 DPI).
+    const v: SplitRects = .init(rect, .vertical, 0.25, 2);
+    try testing.expectEqual(@as(c_int, 20 + 150), v.left.bottom);
+    try testing.expectEqual(c.RECT{ .left = 10, .top = 170, .right = 1011, .bottom = 172 }, v.divider);
+    try testing.expectEqual(@as(c_int, 172), v.right.top);
+    try testing.expectEqual(rect.bottom, v.right.bottom);
+
+    // Too small for the divider: the left side is empty (the right is
+    // inverted, which layoutLeaf sizes as empty too).
+    const tiny: SplitRects = .init(.{ .left = 0, .top = 0, .right = 0, .bottom = 5 }, .horizontal, 0.5, 1);
+    try testing.expectEqual(@as(c_int, 0), tiny.left.right - tiny.left.left);
+    try testing.expectEqual(@as(c_int, 1), tiny.divider.right);
+}
+
+/// The ratio that puts a split's divider at a point, kept between 5% and
+/// 95% so neither side disappears; null if the split has no room.
+fn dragRatio(split_rect: c.RECT, layout_: Tree.Split.Layout, divider: c_int, x: c_int, y: c_int) ?f32 {
+    const start: c_int, const total: c_int, const pos: c_int = switch (layout_) {
+        .horizontal => .{ split_rect.left, split_rect.right - split_rect.left - divider, x },
+        .vertical => .{ split_rect.top, split_rect.bottom - split_rect.top - divider, y },
+    };
+    if (total <= 0) return null;
+    return std.math.clamp(
+        @as(f32, @floatFromInt(pos - start)) / @as(f32, @floatFromInt(total)),
+        0.05,
+        0.95,
+    );
+}
+
+test dragRatio {
+    const testing = std.testing;
+    const rect: c.RECT = .{ .left = 100, .top = 0, .right = 1101, .bottom = 501 };
+    try testing.expectApproxEqAbs(@as(f32, 0.3), dragRatio(rect, .horizontal, 1, 400, 0).?, 0.001);
+    try testing.expectApproxEqAbs(@as(f32, 0.5), dragRatio(rect, .vertical, 1, 0, 250).?, 0.001);
+    // Dragged past either end, a side keeps 5%.
+    try testing.expectEqual(@as(f32, 0.05), dragRatio(rect, .horizontal, 1, -500, 0).?);
+    try testing.expectEqual(@as(f32, 0.95), dragRatio(rect, .horizontal, 1, 5000, 0).?);
+    // No room to drag in.
+    try testing.expect(dragRatio(.{ .left = 0, .top = 0, .right = 1, .bottom = 1 }, .horizontal, 1, 0, 0) == null);
 }
 
 /// The thickness of the dividers between splits, in pixels.
@@ -658,18 +717,7 @@ pub fn dividerAt(self: *const Tab, x: c_int, y: c_int) ?Divider {
 
 /// Move a divider so that it's at the given point.
 pub fn dragDivider(self: *Tab, d: Divider, x: c_int, y: c_int) void {
-    const divider = self.dividerSize();
-    const start: c_int, const total: c_int, const pos: c_int = switch (d.layout) {
-        .horizontal => .{ d.split_rect.left, d.split_rect.right - d.split_rect.left - divider, x },
-        .vertical => .{ d.split_rect.top, d.split_rect.bottom - d.split_rect.top - divider, y },
-    };
-    if (total <= 0) return;
-
-    const ratio = std.math.clamp(
-        @as(f32, @floatFromInt(pos - start)) / @as(f32, @floatFromInt(total)),
-        0.05,
-        0.95,
-    );
+    const ratio = dragRatio(d.split_rect, d.layout, self.dividerSize(), x, y) orelse return;
     self.tree.resizeInPlace(d.handle, @floatCast(ratio));
     self.window.layout();
 }
