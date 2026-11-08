@@ -3285,13 +3285,14 @@ Reviewed the branch against this file and discussion #2563.
 - Forty-first full native test run, after compiling the terminfo entry:
   4,091 passed, 61 skipped, 0 failed, exit 0.
 - A local pass of the UI tests (2026-11-08, at 994c08031 plus the screen
-  reader tab work, debug build, locked desktop): the 25 that run outside
-  CI all passed (cli-ipc, color-query, command-palette, compact-tabs,
+  reader tab work, debug build, locked desktop): of the 24 that run
+  outside CI (not counting unit-tests.ps1, which builds the full unit test
+  suite), 23 passed (cli-ipc, color-query, command-palette, compact-tabs,
   context-menu, device-lost, handoff, minimize, mouse-capture,
   output-frames, overlays, search, flood, session-restore, tab-close-uia,
   tab-reorder, tabs, titlebar-tabs, uia-events, window-options,
-  window-theme, smoke with cmd, and the PowerShell integration) except
-  translucent, which captures the screen (`CopyFromScreen`: "The handle is
+  window-theme, smoke with cmd, and the PowerShell integration), and
+  translucent failed only because it captures the screen (`CopyFromScreen`: "The handle is
   invalid" on a locked desktop) and passes in CI. The other 18 only run in
   CI, where they passed (run 42489816690).
 - Fork CI run 41232795840 (2026-10-31), after the exit message and Git
