@@ -679,7 +679,7 @@ fn setBool(out: *VARIANT, value: bool) void {
 
 fn setString(out: *VARIANT, utf8: []const u8) void {
     var buf: [512]u16 = undefined;
-    const n = std.unicode.utf8ToUtf16Le(&buf, utf8[0..@min(utf8.len, buf.len)]) catch return;
+    const n = util.utf16Truncate(&buf, utf8);
     out.vt = VT_BSTR;
     out.value = .{ .bstr = SysAllocStringLen(&buf, @intCast(n)) };
 }

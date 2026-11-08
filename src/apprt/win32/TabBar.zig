@@ -1108,8 +1108,8 @@ pub fn wndProc(
             {
                 const info: *c.NMTTDISPINFOW = @ptrFromInt(@as(usize, @bitCast(lparam)));
                 const text = if (self.hover) |hit| self.tooltipText(hit) else "";
-                const n = std.unicode.utf8ToUtf16Le(self.tooltip_text[0 .. self.tooltip_text.len - 1], text) catch 0;
-                self.tooltip_text[n] = 0;
+                // A tab's title can be any length.
+                _ = util.utf16TruncateZ(&self.tooltip_text, text);
                 info.lpszText = &self.tooltip_text;
                 return 0;
             }

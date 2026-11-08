@@ -139,7 +139,7 @@ pub fn saveAs(
     contents: []const u8,
 ) bool {
     var path: [c.MAX_PATH * 4]u16 = @splat(0);
-    _ = std.unicode.utf8ToUtf16Le(path[0 .. path.len - 1], default_name) catch {};
+    _ = util.utf16TruncateZ(&path, default_name);
     const title16 = util.utf16Alloc(alloc, title) catch return false;
     defer alloc.free(title16);
 

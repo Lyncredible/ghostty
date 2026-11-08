@@ -138,14 +138,7 @@ pub fn utf16Alloc(alloc: Allocator, utf8: []const u8) Allocator.Error![:0]u16 {
             errdefer list.deinit(alloc);
             var i: usize = 0;
             while (i < utf8.len) {
-                const cp: u21, const len: usize = decode: {
-                    const len = std.unicode.utf8ByteSequenceLength(utf8[i]) catch
-                        break :decode .{ 0xFFFD, 1 };
-                    if (i + len > utf8.len) break :decode .{ 0xFFFD, 1 };
-                    const cp = std.unicode.utf8Decode(utf8[i..][0..len]) catch
-                        break :decode .{ 0xFFFD, 1 };
-                    break :decode .{ cp, len };
-                };
+                const cp, const len = decodeLossy(utf8[i..]);
                 i += len;
 
                 if (cp < 0x10000) {
@@ -159,6 +152,90 @@ pub fn utf16Alloc(alloc: Allocator, utf8: []const u8) Allocator.Error![:0]u16 {
             return try list.toOwnedSliceSentinel(alloc, 0);
         },
     };
+}
+
+/// The first code point of non-empty UTF-8 and its length in bytes, or
+/// the replacement character for one byte if it's invalid.
+fn decodeLossy(utf8: []const u8) struct { u21, usize } {
+    const len = std.unicode.utf8ByteSequenceLength(utf8[0]) catch return .{ 0xFFFD, 1 };
+    if (len > utf8.len) return .{ 0xFFFD, 1 };
+    const cp = std.unicode.utf8Decode(utf8[0..len]) catch return .{ 0xFFFD, 1 };
+    return .{ cp, len };
+}
+
+/// Convert UTF-8 into a fixed buffer as UTF-16, as much as fits, for text
+/// that can be any length (titles, names). Returns the units written. It
+/// stops before a character that doesn't fit, so a surrogate pair is never
+/// split, and invalid UTF-8 becomes the replacement character.
+///
+/// `std.unicode.utf8ToUtf16Le` doesn't truncate: it writes past the end of
+/// a buffer that's too small (a panic in safe builds).
+pub fn utf16Truncate(buf: []u16, utf8: []const u8) usize {
+    var n: usize = 0;
+    var i: usize = 0;
+    while (i < utf8.len) {
+        const cp, const len = decodeLossy(utf8[i..]);
+        if (cp < 0x10000) {
+            if (n + 1 > buf.len) break;
+            buf[n] = @intCast(cp);
+            n += 1;
+        } else {
+            if (n + 2 > buf.len) break;
+            const v = cp - 0x10000;
+            buf[n] = @intCast(0xD800 + (v >> 10));
+            buf[n + 1] = @intCast(0xDC00 + (v & 0x3FF));
+            n += 2;
+        }
+        i += len;
+    }
+    return n;
+}
+
+/// Like `utf16Truncate`, into a buffer with room for a NUL after the text.
+pub fn utf16TruncateZ(buf: []u16, utf8: []const u8) [:0]u16 {
+    const n = utf16Truncate(buf[0 .. buf.len - 1], utf8);
+    buf[n] = 0;
+    return buf[0..n :0];
+}
+
+/// Convert UTF-8 into a fixed buffer as UTF-16, NUL terminated, for text
+/// that must be whole (names of things). Fails if it doesn't fit or isn't
+/// valid UTF-8, where `std.unicode.utf8ToUtf16Le` would write past the end.
+pub fn utf16Exact(buf: []u16, utf8: []const u8) error{ InvalidUtf8, NoSpaceLeft }![:0]u16 {
+    const len = std.unicode.calcUtf16LeLen(utf8) catch return error.InvalidUtf8;
+    if (len >= buf.len) return error.NoSpaceLeft;
+    const n = std.unicode.utf8ToUtf16Le(buf[0..len], utf8) catch return error.InvalidUtf8;
+    buf[n] = 0;
+    return buf[0..n :0];
+}
+
+test utf16Truncate {
+    const testing = std.testing;
+    var buf: [4]u16 = undefined;
+
+    try testing.expectEqualSlices(u16, &.{ 'a', 'b' }, buf[0..utf16Truncate(&buf, "ab")]);
+    try testing.expectEqualSlices(u16, &.{ 'a', 'b', 'c', 'd' }, buf[0..utf16Truncate(&buf, "abcdefgh")]);
+    // A surrogate pair that doesn't fit is left out whole.
+    try testing.expectEqualSlices(u16, &.{ 'a', 'b', 'c' }, buf[0..utf16Truncate(&buf, "abc😀")]);
+    try testing.expectEqualSlices(u16, &.{ 'a', 'b', 0xD83D, 0xDE00 }, buf[0..utf16Truncate(&buf, "ab😀")]);
+    // Invalid or cut off UTF-8 becomes the replacement character.
+    try testing.expectEqualSlices(u16, &.{ 'a', 0xFFFD, 'b' }, buf[0..utf16Truncate(&buf, "a\xffb")]);
+    try testing.expectEqualSlices(u16, &.{ 'a', 0xFFFD, 0xFFFD }, buf[0..utf16Truncate(&buf, "a\xe3\x81")]);
+    try testing.expectEqual(@as(usize, 0), utf16Truncate(buf[0..0], "a"));
+
+    var zbuf: [3]u16 = undefined;
+    try testing.expectEqualSlices(u16, &.{ 'a', 'b' }, utf16TruncateZ(&zbuf, "abc"));
+    try testing.expectEqual(@as(u16, 0), zbuf[2]);
+}
+
+test utf16Exact {
+    const testing = std.testing;
+    var buf: [4]u16 = undefined;
+    try testing.expectEqualSlices(u16, &.{ 'a', 'b', 'c' }, try utf16Exact(&buf, "abc"));
+    try testing.expectEqual(@as(u16, 0), buf[3]);
+    try testing.expectError(error.NoSpaceLeft, utf16Exact(&buf, "abcd"));
+    try testing.expectError(error.NoSpaceLeft, utf16Exact(&buf, "ab😀"));
+    try testing.expectError(error.InvalidUtf8, utf16Exact(&buf, "a\xff"));
 }
 
 /// Convert a UTF-16 string to UTF-8. Unpaired surrogates are encoded

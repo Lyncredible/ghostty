@@ -129,10 +129,9 @@ pub fn registerRestart(app: *const App) void {
     else
         "--window-save-state=always";
     var buf: [300]u16 = undefined;
-    const n = std.unicode.utf8ToUtf16Le(buf[0 .. buf.len - 1], args) catch return;
-    buf[n] = 0;
+    const args16 = util.utf16Exact(&buf, args) catch return;
     const hr = RegisterApplicationRestart(
-        buf[0..n :0],
+        args16,
         RESTART_NO_CRASH | RESTART_NO_HANG,
     );
     if (hr < 0) log.warn("failed to register for restart hr={x}", .{hr});

@@ -77,9 +77,7 @@ fn updateInner(class: ?[]const u8) !void {
         const custom = class orelse break :args std.unicode.utf8ToUtf16LeStringLiteral("");
         var utf8_buf: [300]u8 = undefined;
         const utf8 = std.fmt.bufPrint(&utf8_buf, "\"--class={s}\"", .{custom}) catch return error.ClassTooLong;
-        const n = std.unicode.utf8ToUtf16Le(args_buf[0 .. args_buf.len - 1], utf8) catch return error.ClassTooLong;
-        args_buf[n] = 0;
-        break :args args_buf[0..n :0];
+        break :args util.utf16Exact(&args_buf, utf8) catch return error.ClassTooLong;
     };
     const link = try shellLink(exe, args, std.unicode.utf8ToUtf16LeStringLiteral("New Window"), exe);
     defer _ = link.lpVtbl.*.Release.?(link);
