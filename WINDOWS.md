@@ -2302,6 +2302,23 @@ Notes:
     app class in the instance mutex, the IPC window title, the jump list
     and restart arguments, where a long `class` could overflow too.
     Both unit tested; `util.zig` and `JumpList.zig` tests now run.
+    `tab-tooltips.ps1` (CI only, it moves the mouse) now also hovers a
+    tab titled with 254 `x`, an emoji and 100 `y`, and expects the
+    tooltip cut to the 254 `x` with Ghostty still running.
+  - The jump list quoted arguments with its own copy of `Command.zig`'s
+    loop (missing newlines); both now use
+    `internal_os.windows.writeCommandLineArg`.
+- [x] Test coverage (2026-11-08): `TabBar.zig` (1,200 lines) had no unit
+      tests, since its layout read the window. Layout, close buttons and
+      hit testing are now pure (`Layout.compute` from the bar's size, the
+      number of tabs, the DPI and whether the caption buttons show), with
+      tests for tab widths at 96 and 192 DPI, shrinking and compact tabs
+      never reaching the buttons (1 to 60 tabs, with and without caption
+      buttons, and a window too narrow for any), the caption buttons'
+      places, every kind of hit (and none above the tabs or in the drag
+      space), compact tabs' missing close button, and dragging's tab
+      index. The tab UI tests (`tabs`, `tab-close-uia`, `compact-tabs`,
+      `titlebar-tabs`, `tab-reorder`) pass locally on the change.
 - [ ] Packaging and release builds
   - [x] Portable zip (`dist/windows/package.ps1`)
   - [x] Per-user install script in the zip (`dist/windows/install.ps1`):

@@ -192,8 +192,15 @@ const compact_tab_width = 88;
 
 /// Scale a size in DPI-independent pixels to physical pixels.
 fn scale(self: *const TabBar, v: c_int) c_int {
-    const dpi: c_int = @intCast(c.GetDpiForWindow(self.window.hwnd));
-    return @divTrunc(v * dpi, util.USER_DEFAULT_SCREEN_DPI);
+    return scaleDpi(v, self.windowDpi());
+}
+
+fn windowDpi(self: *const TabBar) c_int {
+    return @intCast(c.GetDpiForWindow(self.window.hwnd));
+}
+
+fn scaleDpi(v: c_int, at: c_int) c_int {
+    return @divTrunc(v * at, util.USER_DEFAULT_SCREEN_DPI);
 }
 
 /// Set our font to the system UI font for our DPI, or the family of
@@ -280,9 +287,92 @@ const Layout = struct {
     /// middle click, the tab's menu or a keybinding closes it.
     compact: bool,
 
+    /// The number of tabs, the bar's height and the DPI it was laid out
+    /// for.
+    tabs: usize,
+    height: c_int,
+    dpi: c_int,
+
+    /// Lay out `tabs` tabs in a bar of the given size (its client area),
+    /// with the caption buttons if the tabs are in the title bar.
+    fn compute(width: c_int, h: c_int, tabs: usize, at: c_int, caption_buttons: bool) Layout {
+        const n: c_int = @intCast(@max(1, tabs));
+
+        // With the tabs in the title bar, the caption buttons (46 by 32, as
+        // Windows 11 draws them) go at the right, after some empty space
+        // that drags the window, even when there are many tabs.
+        const caption_button = scaleDpi(46, at);
+        const caption_width = if (caption_buttons) caption_button * 3 else 0;
+
+        // The new tab and shell buttons follow the last tab, as in
+        // browsers. Tabs share the width up to a maximum, leaving room for
+        // the buttons and, with the caption buttons, some empty space to
+        // drag the window.
+        const button = scaleDpi(tab_button_width, at);
+        const button_gap = scaleDpi(4, at);
+        const left = scaleDpi(tab_left, at);
+        const gap = scaleDpi(tab_gap, at);
+        const drag_space = if (caption_width == 0) 0 else scaleDpi(48, at);
+        const right_limit = width - caption_width - drag_space - button_gap - button * 2;
+        const available = @max(0, right_limit - left - gap * (n - 1));
+        const tab_width = @min(scaleDpi(240, at), @divTrunc(available, n));
+        const tabs_end = left + n * tab_width + gap * (n - 1);
+        const new_left = tabs_end + button_gap;
+
+        return .{
+            .tab_width = tab_width,
+            .compact = tab_width < scaleDpi(compact_tab_width, at),
+            .left = left,
+            .top = scaleDpi(tab_top, at),
+            .gap = gap,
+            .tabs = tabs,
+            .height = h,
+            .dpi = at,
+            .new_tab = .{ .left = new_left, .top = 0, .right = new_left + button, .bottom = h },
+            .shell_menu = .{ .left = new_left + button, .top = 0, .right = new_left + button * 2, .bottom = h },
+            .caption = if (caption_width == 0) null else .{
+                .minimize = .{ .left = width - caption_button * 3, .top = 0, .right = width - caption_button * 2, .bottom = h },
+                .maximize = .{ .left = width - caption_button * 2, .top = 0, .right = width - caption_button, .bottom = h },
+                .close = .{ .left = width - caption_button, .top = 0, .right = width, .bottom = h },
+            },
+        };
+    }
+
     fn tabRect(self: Layout, idx: usize, h: c_int) c.RECT {
         const left = self.left + @as(c_int, @intCast(idx)) * (self.tab_width + self.gap);
         return .{ .left = left, .top = self.top, .right = left + self.tab_width, .bottom = h };
+    }
+
+    /// The close button of a tab, centered on its title.
+    fn closeRect(self: Layout, tab: c.RECT) c.RECT {
+        const size = scaleDpi(16, self.dpi);
+        const margin = scaleDpi(8, self.dpi);
+        const top = tab.top + @divTrunc(tab.bottom - tab.top - size, 2);
+        return .{
+            .left = tab.right - margin - size,
+            .top = top,
+            .right = tab.right - margin,
+            .bottom = top + size,
+        };
+    }
+
+    /// The element at a point in the bar, if any.
+    fn hit(self: Layout, pt: c.POINT) ?Hit {
+        if (self.caption) |caption| {
+            if (c.PtInRect(&caption.minimize, pt) != 0) return .minimize;
+            if (c.PtInRect(&caption.maximize, pt) != 0) return .maximize;
+            if (c.PtInRect(&caption.close, pt) != 0) return .close_window;
+        }
+        if (c.PtInRect(&self.new_tab, pt) != 0) return .new_tab;
+        if (c.PtInRect(&self.shell_menu, pt) != 0) return .shell_menu;
+        for (0..self.tabs) |i| {
+            const rect = self.tabRect(i, self.height);
+            if (c.PtInRect(&rect, pt) == 0) continue;
+            const close = self.closeRect(rect);
+            if (!self.compact and c.PtInRect(&close, pt) != 0) return .{ .close = i };
+            return .{ .tab = i };
+        }
+        return null;
     }
 
     /// The tab index at an x position, for dragging tabs.
@@ -296,43 +386,95 @@ const Layout = struct {
 fn layout(self: *const TabBar) Layout {
     var client: c.RECT = undefined;
     _ = c.GetClientRect(self.hwnd, &client);
-    const h = client.bottom;
-    const n: c_int = @intCast(@max(1, self.window.tabs.items.len));
+    return .compute(
+        client.right,
+        client.bottom,
+        self.window.tabs.items.len,
+        self.windowDpi(),
+        self.window.hasTitleBarTabs(),
+    );
+}
 
-    // With the tabs in the title bar, the caption buttons (46 by 32, as
-    // Windows 11 draws them) go at the right, after some empty space that
-    // drags the window, even when there are many tabs.
-    const caption_button = self.scale(46);
-    const caption_width = if (self.window.hasTitleBarTabs()) caption_button * 3 else 0;
+test "Layout: tabs share the width up to a maximum" {
+    const testing = std.testing;
 
-    // The new tab and shell buttons follow the last tab, as in browsers.
-    // Tabs share the width up to a maximum, leaving room for the buttons
-    // and, with the caption buttons, some empty space to drag the window.
-    const button = self.scale(tab_button_width);
-    const button_gap = self.scale(4);
-    const left = self.scale(tab_left);
-    const gap = self.scale(tab_gap);
-    const drag_space = if (caption_width == 0) 0 else self.scale(48);
-    const right_limit = client.right - caption_width - drag_space - button_gap - button * 2;
-    const available = @max(0, right_limit - left - gap * (n - 1));
-    const tab_width = @min(self.scale(240), @divTrunc(available, n));
-    const tabs_end = left + n * tab_width + gap * (n - 1);
-    const new_left = tabs_end + button_gap;
+    // A few tabs at 96 DPI are 240 wide, from 8, and the buttons follow.
+    const l: Layout = .compute(1200, 40, 2, 96, false);
+    try testing.expectEqual(@as(c_int, 240), l.tab_width);
+    try testing.expect(!l.compact);
+    try testing.expectEqual(c.RECT{ .left = 248, .top = 6, .right = 488, .bottom = 40 }, l.tabRect(1, 40));
+    try testing.expectEqual(@as(c_int, 492), l.new_tab.left);
+    try testing.expectEqual(l.new_tab.right, l.shell_menu.left);
+    try testing.expect(l.caption == null);
 
-    return .{
-        .tab_width = tab_width,
-        .compact = tab_width < self.scale(compact_tab_width),
-        .left = left,
-        .top = self.scale(tab_top),
-        .gap = gap,
-        .new_tab = .{ .left = new_left, .top = 0, .right = new_left + button, .bottom = h },
-        .shell_menu = .{ .left = new_left + button, .top = 0, .right = new_left + button * 2, .bottom = h },
-        .caption = if (caption_width == 0) null else .{
-            .minimize = .{ .left = client.right - caption_button * 3, .top = 0, .right = client.right - caption_button * 2, .bottom = h },
-            .maximize = .{ .left = client.right - caption_button * 2, .top = 0, .right = client.right - caption_button, .bottom = h },
-            .close = .{ .left = client.right - caption_button, .top = 0, .right = client.right, .bottom = h },
-        },
-    };
+    // At 192 DPI everything doubles.
+    const hi: Layout = .compute(2400, 80, 2, 192, false);
+    try testing.expectEqual(@as(c_int, 480), hi.tab_width);
+    try testing.expectEqual(@as(c_int, 984), hi.new_tab.left);
+}
+
+test "Layout: many tabs shrink, then go compact, and never pass the buttons" {
+    const testing = std.testing;
+    for ([_]usize{ 1, 3, 8, 20, 60 }) |n| {
+        for ([_]bool{ false, true }) |caption| {
+            const l: Layout = .compute(1000, 40, n, 96, caption);
+            const last = l.tabRect(n - 1, 40);
+            try testing.expect(last.right <= l.new_tab.left);
+            try testing.expect(l.shell_menu.right <= if (l.caption) |cb| cb.minimize.left else 1000);
+            try testing.expectEqual(l.tab_width < 88, l.compact);
+        }
+    }
+    try testing.expect(!Layout.compute(1000, 40, 8, 96, false).compact);
+    try testing.expect(Layout.compute(1000, 40, 20, 96, false).compact);
+
+    // Too narrow a window has no room for tabs, but still lays out.
+    const tiny: Layout = .compute(50, 40, 3, 96, true);
+    try testing.expectEqual(@as(c_int, 0), tiny.tab_width);
+    try testing.expect(tiny.compact);
+}
+
+test "Layout: the caption buttons are at the right" {
+    const testing = std.testing;
+    const l: Layout = .compute(1000, 40, 1, 96, true);
+    const cb = l.caption.?;
+    try testing.expectEqual(c.RECT{ .left = 862, .top = 0, .right = 908, .bottom = 40 }, cb.minimize);
+    try testing.expectEqual(cb.minimize.right, cb.maximize.left);
+    try testing.expectEqual(c.RECT{ .left = 954, .top = 0, .right = 1000, .bottom = 40 }, cb.close);
+}
+
+test "Layout: hit testing" {
+    const testing = std.testing;
+    const l: Layout = .compute(1000, 40, 3, 96, true);
+
+    try testing.expectEqual(Hit{ .tab = 0 }, l.hit(.{ .x = 20, .y = 20 }).?);
+    try testing.expectEqual(Hit{ .tab = 2 }, l.hit(.{ .x = 8 + 2 * l.tab_width + 1, .y = 20 }).?);
+    // The close button is at the tab's right, centered on its title.
+    const close = l.closeRect(l.tabRect(1, 40));
+    try testing.expectEqual(Hit{ .close = 1 }, l.hit(.{ .x = close.left + 1, .y = close.top + 1 }).?);
+    try testing.expectEqual(Hit.new_tab, l.hit(.{ .x = l.new_tab.left, .y = 5 }).?);
+    try testing.expectEqual(Hit.shell_menu, l.hit(.{ .x = l.shell_menu.left, .y = 5 }).?);
+    try testing.expectEqual(Hit.minimize, l.hit(.{ .x = 870, .y = 5 }).?);
+    try testing.expectEqual(Hit.maximize, l.hit(.{ .x = 930, .y = 5 }).?);
+    try testing.expectEqual(Hit.close_window, l.hit(.{ .x = 999, .y = 39 }).?);
+    // Above the tabs and in the space before the caption buttons, nothing
+    // (the window's caption, to drag it).
+    try testing.expect(l.hit(.{ .x = 20, .y = 2 }) == null);
+    try testing.expect(l.hit(.{ .x = 840, .y = 20 }) == null);
+
+    // Compact tabs have no close button: there, it's the tab.
+    const many: Layout = .compute(1000, 40, 20, 96, false);
+    try testing.expect(many.compact);
+    const spot = many.closeRect(many.tabRect(4, 40));
+    try testing.expectEqual(Hit{ .tab = 4 }, many.hit(.{ .x = spot.left + 1, .y = spot.top + 1 }).?);
+}
+
+test "Layout: dragging finds the tab under the pointer" {
+    const testing = std.testing;
+    const l: Layout = .compute(1200, 40, 3, 96, false);
+    try testing.expectEqual(@as(usize, 0), l.indexAt(-50));
+    try testing.expectEqual(@as(usize, 0), l.indexAt(247));
+    try testing.expectEqual(@as(usize, 1), l.indexAt(248));
+    try testing.expectEqual(@as(usize, 2), l.indexAt(500));
 }
 
 /// Whether a point in the window's client area (which the tab bar starts
@@ -349,17 +491,10 @@ pub fn setMaximizeHovered(self: *TabBar, hovered: bool) void {
     self.invalidate();
 }
 
-/// The rectangle of the close button of a tab.
 /// The rectangle of the tab at an index, on the screen.
 pub fn tabScreenRect(self: *const TabBar, idx: usize) c.RECT {
-    var client: c.RECT = undefined;
-    _ = c.GetClientRect(self.hwnd, &client);
-    const rect = self.layout().tabRect(idx, client.bottom);
-    var top_left: c.POINT = .{ .x = rect.left, .y = rect.top };
-    var bottom_right: c.POINT = .{ .x = rect.right, .y = rect.bottom };
-    _ = c.ClientToScreen(self.hwnd, &top_left);
-    _ = c.ClientToScreen(self.hwnd, &bottom_right);
-    return .{ .left = top_left.x, .top = top_left.y, .right = bottom_right.x, .bottom = bottom_right.y };
+    const l = self.layout();
+    return self.toScreen(l.tabRect(idx, l.height));
 }
 
 /// The element at a point on the screen, if any.
@@ -369,7 +504,6 @@ pub fn hitAtScreen(self: *const TabBar, pt: c.POINT) ?Hit {
     return self.hitTest(client_pt.x, client_pt.y);
 }
 
-/// The buttons at the end of the tab bar.
 /// The buttons UI Automation exposes after the tabs: the new tab and
 /// shell buttons, and with the tabs in the title bar (the only time we draw
 /// them) the caption buttons, which Windows no longer exposes then.
@@ -392,11 +526,7 @@ pub fn buttonScreenRect(self: *const TabBar, button: Button) c.RECT {
         .maximize => if (l.caption) |caption| caption.maximize else none,
         .close_window => if (l.caption) |caption| caption.close else none,
     };
-    var top_left: c.POINT = .{ .x = rect.left, .y = rect.top };
-    var bottom_right: c.POINT = .{ .x = rect.right, .y = rect.bottom };
-    _ = c.ClientToScreen(self.hwnd, &top_left);
-    _ = c.ClientToScreen(self.hwnd, &bottom_right);
-    return .{ .left = top_left.x, .top = top_left.y, .right = bottom_right.x, .bottom = bottom_right.y };
+    return self.toScreen(rect);
 }
 
 /// A button's name, as in its tooltip.
@@ -439,15 +569,9 @@ pub fn compact(self: *const TabBar) bool {
 /// A tab's close button, in screen coordinates; empty when the tabs are
 /// compact and don't draw one.
 pub fn closeScreenRect(self: *const TabBar, idx: usize) c.RECT {
-    if (self.compact()) return .{ .left = 0, .top = 0, .right = 0, .bottom = 0 };
-    var client: c.RECT = undefined;
-    _ = c.GetClientRect(self.hwnd, &client);
-    const rect = self.closeRect(self.layout().tabRect(idx, client.bottom));
-    var top_left: c.POINT = .{ .x = rect.left, .y = rect.top };
-    var bottom_right: c.POINT = .{ .x = rect.right, .y = rect.bottom };
-    _ = c.ClientToScreen(self.hwnd, &top_left);
-    _ = c.ClientToScreen(self.hwnd, &bottom_right);
-    return .{ .left = top_left.x, .top = top_left.y, .right = bottom_right.x, .bottom = bottom_right.y };
+    const l = self.layout();
+    if (l.compact) return .{ .left = 0, .top = 0, .right = 0, .bottom = 0 };
+    return self.toScreen(l.closeRect(l.tabRect(idx, l.height)));
 }
 
 /// Called when a tab is selected, to tell screen readers.
@@ -455,40 +579,17 @@ pub fn tabSelected(self: *TabBar, tab: *Tab) void {
     if (self.accessibility) |a| a.tabSelected(tab);
 }
 
-fn closeRect(self: *const TabBar, tab: c.RECT) c.RECT {
-    const size = self.scale(16);
-    const margin = self.scale(8);
-    // Centered on the tab's title.
-    const top = tab.top + @divTrunc(tab.bottom - tab.top - size, 2);
-    return .{
-        .left = tab.right - margin - size,
-        .top = top,
-        .right = tab.right - margin,
-        .bottom = top + size,
-    };
+fn hitTest(self: *const TabBar, x: c_int, y: c_int) ?Hit {
+    return self.layout().hit(.{ .x = x, .y = y });
 }
 
-fn hitTest(self: *const TabBar, x: c_int, y: c_int) ?Hit {
-    const l = self.layout();
-    var client: c.RECT = undefined;
-    _ = c.GetClientRect(self.hwnd, &client);
-    const pt: c.POINT = .{ .x = x, .y = y };
-
-    if (l.caption) |caption| {
-        if (c.PtInRect(&caption.minimize, pt) != 0) return .minimize;
-        if (c.PtInRect(&caption.maximize, pt) != 0) return .maximize;
-        if (c.PtInRect(&caption.close, pt) != 0) return .close_window;
-    }
-    if (c.PtInRect(&l.new_tab, pt) != 0) return .new_tab;
-    if (c.PtInRect(&l.shell_menu, pt) != 0) return .shell_menu;
-    for (0..self.window.tabs.items.len) |i| {
-        const rect = l.tabRect(i, client.bottom);
-        if (c.PtInRect(&rect, pt) == 0) continue;
-        const close = self.closeRect(rect);
-        if (!l.compact and c.PtInRect(&close, pt) != 0) return .{ .close = i };
-        return .{ .tab = i };
-    }
-    return null;
+/// A rectangle in the tab bar, on the screen.
+fn toScreen(self: *const TabBar, rect: c.RECT) c.RECT {
+    var top_left: c.POINT = .{ .x = rect.left, .y = rect.top };
+    var bottom_right: c.POINT = .{ .x = rect.right, .y = rect.bottom };
+    _ = c.ClientToScreen(self.hwnd, &top_left);
+    _ = c.ClientToScreen(self.hwnd, &bottom_right);
+    return .{ .left = top_left.x, .top = top_left.y, .right = bottom_right.x, .bottom = bottom_right.y };
 }
 
 //----------------------------------------------------------------------------
@@ -639,7 +740,7 @@ fn paint(self: *TabBar, hdc: c.HDC, client: c.RECT) void {
         // Title, with the tab's number and, for splits, how many terminals
         // it has, like "2: api (3)", at the left as in browsers. Compact
         // tabs have only the number, centered, and no close button.
-        const close = self.closeRect(rect);
+        const close = l.closeRect(rect);
         var text_rect: c.RECT = if (l.compact) .{
             .left = rect.left + self.scale(4),
             .top = rect.top,

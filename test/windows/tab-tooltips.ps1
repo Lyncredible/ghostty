@@ -91,6 +91,23 @@ try {
     # The shell can change the title meanwhile, so compare with the current one.
     $title = WaitFor { $t = $tab.Current.Name; if ((Tooltip) -eq $t) { $t } } "the tab's tooltip ('$($tab.Current.Name)')"
     Write-Host "Hovering the tab shows its title, '$title'."
+
+    # A title longer than the tooltip's buffer (255 UTF-16 units) used to
+    # overflow it. It's cut to what fits, and the emoji whose two units
+    # would straddle the end is left out whole.
+    Stop-Process -Id $process.Id -Force
+    $long = ('x' * 254) + [char]::ConvertFromUtf32(0x1F600) + ('y' * 100)
+    $process = Start-Process -FilePath $Exe -PassThru -ArgumentList '--command=cmd.exe', '--window-save-state=never',
+        '--window-show-tab-bar=always', "`"--title=$long`""
+    $ByProcess = New-Object System.Windows.Automation.PropertyCondition($AE::ProcessIdProperty, $process.Id)
+    $window = WaitFor { TopLevel | Where-Object { $_.Current.ClassName -ne 'tooltips_class32' } | Select-Object -First 1 } 'the long title window'
+    [void][GhosttyTooltip.Win32]::SetForegroundWindow([IntPtr]$window.Current.NativeWindowHandle)
+    $tab = WaitFor { $t = Find ([System.Windows.Automation.ControlType]::TabItem); if ($t -and $t.Current.Name -eq $long) { $t } } 'the tab with the long title'
+    Hover $tab
+    [void](WaitFor { (Tooltip) -eq ('x' * 254) } "the long title's tooltip, cut to 254 units")
+    Start-Sleep -Milliseconds 500
+    if ($process.HasExited) { throw "Ghostty exited after showing the long title's tooltip" }
+    Write-Host "A 356 unit title's tooltip is cut to the 254 units before its emoji, and Ghostty keeps running."
 } catch {
     Write-Host "::error title=tab-tooltips::$($_.Exception.Message)"
     throw
