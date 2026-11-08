@@ -428,6 +428,9 @@ pub fn closeTabLater(self: *TabBar, tab: *Tab) void {
 
 const WM_GHOSTTY_CLOSE_TAB = c.WM_APP + 2;
 
+/// Rename a tab that was double clicked, with prompt_tab_title.
+const WM_GHOSTTY_RENAME_TAB = c.WM_APP + 3;
+
 /// Whether the tabs are compact, without close buttons drawn.
 pub fn compact(self: *const TabBar) bool {
     return self.layout().compact;
@@ -1023,6 +1026,13 @@ pub fn wndProc(
     switch (msg) {
         c.WM_ERASEBKGND => return 1,
 
+        WM_GHOSTTY_RENAME_TAB => {
+            // Compared by address only: the tab may be gone.
+            const tab: *Tab = @ptrFromInt(wparam);
+            if (self.window.tabIndex(tab) != null) tab.focused.performMenuAction(.prompt_tab_title);
+            return 0;
+        },
+
         WM_GHOSTTY_CLOSE_TAB => {
             // Compared by address only: the tab may be gone.
             const tab: *Tab = @ptrFromInt(wparam);
@@ -1112,13 +1122,21 @@ pub fn wndProc(
             return 0;
         },
 
-        // We set CS_DBLCLKS for double clicks on empty space. A quick
-        // second click on anything else is just another click.
+        // We set CS_DBLCLKS for double clicks on empty space (a new tab)
+        // and on tabs (renaming it, as in Windows Terminal). A quick second
+        // click on anything else is just another click.
         c.WM_LBUTTONDOWN, c.WM_LBUTTONDBLCLK => {
             const hit = self.hitTest(util.loword(lparam), util.hiword(lparam)) orelse {
                 if (msg == c.WM_LBUTTONDBLCLK) _ = self.window.newTab();
                 return 0;
             };
+            if (msg == c.WM_LBUTTONDBLCLK and hit == .tab) {
+                // The first click selected it. The dialog is modal, so it
+                // opens from a posted message, after this one.
+                const tab = self.window.tabs.items[hit.tab];
+                _ = c.PostMessageW(hwnd, WM_GHOSTTY_RENAME_TAB, @intFromPtr(tab), 0);
+                return 0;
+            }
             switch (hit) {
                 .tab => |i| {
                     self.window.selectTab(i);

@@ -437,3 +437,10 @@ Checks that screen readers can close tabs: each tab (a TabItem) has a
 "Close Tab" button as its only child, inside the tab, and invoking it closes
 that tab and leaves the other. The tabs also report their position ("1 of
 2"), from which screen readers say where a tab is.
+
+## tab-rename.ps1
+
+Checks that double clicking a tab renames it, as in Windows Terminal: a
+double click on the second tab opens "Change Tab Title", and the title given
+there becomes that tab's name (read with UI Automation) while the first keeps
+its own. It shows a dialog, so it only runs in CI (or with `$env:CI = 'true'`).
