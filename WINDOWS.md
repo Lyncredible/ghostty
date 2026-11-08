@@ -2237,6 +2237,24 @@ Notes:
         installed it on `windows-latest`, and the alias ran.
     - [ ] A signed package for Windows 10 and the Store (needs a
           certificate)
+  - [x] Scoop and winget manifests (2026-11-08, the discussion's
+        "installers and packages"): `dist/windows/manifests.ps1` writes,
+        from a release's zips, a Scoop manifest (`scoop install <its
+        URL>` works without a bucket) and a winget manifest (version,
+        installer and locale files, schema 1.6.0, for `winget install
+        --manifest` or a winget-pkgs submission). Both use each zip's URL
+        and SHA-256 and give the `ghostty` (the app) and `ghostty-cli`
+        (the console launcher, for CLI actions) commands; Scoop also adds
+        a Start menu shortcut. winget only takes `.exe` files as
+        commands, so the zip now has `bin\ghostty-cli.exe` (a copy of
+        `ghostty.com`, as in the MSIX). The release workflow attaches
+        both to the draft release; the fork's CI makes them from the
+        tested zip and runs `winget validate` where winget is installed.
+        Checked here: `winget validate` passed (it first caught an
+        unquoted `:` in the description and the `.com` command), and the
+        unzipped `ghostty-cli.exe +version` ran. Not tried: installing
+        with Scoop (not installed here) or winget from a published
+        release (none yet).
   - [ ] Release builds from CI (the discussion's "GitHub Actions for
         release"): `.github/workflows/windows-release.yml`, run by
         pushing a `windows-unofficial-*` tag (or by hand, once the file is

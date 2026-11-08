@@ -90,6 +90,10 @@ jobs:
     permissions:
       contents: write
     steps:
+      # For dist/windows/manifests.ps1.
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
       - name: Download packages
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
@@ -97,17 +101,34 @@ jobs:
           path: dist
           merge-multiple: true
 
+      - name: Release name
+        run: |
+          if [ "$GITHUB_REF_TYPE" = tag ]; then
+            name="$GITHUB_REF_NAME"
+          else
+            name="windows-unofficial-$(date -u +%Y%m%d)-${GITHUB_SHA::9}"
+          fi
+          echo "RELEASE_NAME=$name" >> "$GITHUB_ENV"
+
+      # A Scoop manifest (`scoop install <its URL>`) and a winget manifest
+      # for the release's zips, attached to it. Their URLs work once the
+      # draft is published.
+      - name: Package manager manifests
+        shell: pwsh
+        run: |
+          ./dist/windows/manifests.ps1 -Dist dist `
+            -Version ($env:RELEASE_NAME -replace '^windows-unofficial-', '') `
+            -BaseUrl "https://github.com/$env:GITHUB_REPOSITORY/releases/download/$env:RELEASE_NAME" `
+            -Repository $env:GITHUB_REPOSITORY -OutDir manifests
+          Copy-Item manifests/ghostty-windows-unofficial.json, manifests/winget/*.yaml dist/
+
       - name: Create the draft release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           cat dist/SHA256SUMS-*.txt > dist/SHA256SUMS.txt
           rm dist/SHA256SUMS-*.txt
-          if [ "$GITHUB_REF_TYPE" = tag ]; then
-            name="$GITHUB_REF_NAME"
-          else
-            name="windows-unofficial-$(date -u +%Y%m%d)-${GITHUB_SHA::9}"
-          fi
+          name="$RELEASE_NAME"
           gh release create "$name" dist/* \
             --repo "$GITHUB_REPOSITORY" \
             --target "$GITHUB_SHA" \

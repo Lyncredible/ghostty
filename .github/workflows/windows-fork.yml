@@ -339,6 +339,23 @@ jobs:
         shell: powershell
         run: ./test/windows/start-menu.ps1 -Zip (Get-ChildItem zig-out/dist/*.zip | Select-Object -First 1).FullName
 
+      # The Scoop and winget manifests that releases attach, made from this
+      # zip: winget validates them where it's installed.
+      - name: Package manager manifests
+        shell: pwsh
+        run: |
+          ./dist/windows/manifests.ps1 -Dist zig-out/dist -Version 0.0.1 `
+            -BaseUrl https://example.invalid/releases/download/test `
+            -Repository "$env:GITHUB_REPOSITORY" -OutDir zig-out/manifests
+          $scoop = Get-Content -Raw zig-out/manifests/ghostty-windows-unofficial.json | ConvertFrom-Json
+          if (-not $scoop.architecture.'64bit'.hash) { throw "the Scoop manifest has no x64 hash" }
+          if (Get-Command winget -ErrorAction SilentlyContinue) {
+            winget validate --manifest zig-out/manifests/winget
+            if ($LASTEXITCODE -ne 0) { throw "winget validate failed with $LASTEXITCODE" }
+          } else {
+            Write-Host "::notice title=manifests::winget isn't installed on this runner, so the winget manifest wasn't validated"
+          }
+
       # The package bundles the ConPTY package's conpty.dll, so programs'
       # OSC 10/11 color queries reach Ghostty and get its colors.
       - name: Color query test (package)
