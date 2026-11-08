@@ -957,7 +957,8 @@ Notes:
         instance have their own tests: `+toggle-quick-terminal` in
         `quick-terminal.ps1`, and now `+new-tab` and `+new-window` in
         `test/windows/cli-ipc.ps1` (in CI: a tab, then a second window,
-        counted with UI Automation; passed here).
+        counted with UI Automation; passed here). CI run 42473473478
+        (9b2b71c45) passed every job, both new CLI steps included.
   - [x] `+list-fonts` printed family names as raw UTF-16BE (a NUL before
         each letter): FreeType faces took the first family name in the
         name table, and only decoded Microsoft BMP names, while Windows
