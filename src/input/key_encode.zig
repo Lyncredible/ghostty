@@ -126,14 +126,11 @@ fn win32(
     if (event.composing) return;
 
     // Text with no key, such as an IME's result, is character-only events.
+    // It can be any length (a long IME conversion, or dictation).
     if (event.key == .unidentified) {
         if (event.action == .release) return;
-        var units: [64]u16 = undefined;
-        const len = std.unicode.utf8ToUtf16Le(&units, event.utf8) catch return;
-        for (units[0..len]) |unit| {
-            try win32Record(writer, .{ .char = unit, .down = true });
-            try win32Record(writer, .{ .char = unit, .down = false });
-        }
+        var units: Utf16Units = .init(event.utf8);
+        while (units.next()) |unit| try win32Char(writer, unit);
         return;
     }
 
@@ -141,30 +138,53 @@ fn win32(
     const down = event.action != .release;
     const state = win32ControlKeyState(event.mods, scan > 0xFF);
 
-    // The characters, as Windows produces them for the key.
-    var text: [8]u16 = undefined;
-    var text_len: usize = 0;
-    if (down) {
-        if (win32ControlChar(event)) |ch| {
-            text[0] = ch;
-            text_len = 1;
-        } else {
-            text_len = std.unicode.utf8ToUtf16Le(&text, event.utf8) catch 0;
-        }
-    }
+    // The characters, as Windows produces them for the key: the first
+    // UTF-16 unit is the key's, and any others follow it.
+    const control = if (down) win32ControlChar(event) else null;
+    var units: Utf16Units = .init(if (down and control == null) event.utf8 else "");
 
     try win32Record(writer, .{
         .vk = win32VirtualKey(event.key, scan, event.mods),
         .scan = @intCast(scan & 0xFF),
-        .char = if (text_len > 0) text[0] else 0,
+        .char = control orelse units.next() orelse 0,
         .down = down,
         .state = state,
     });
-    if (text_len > 1) for (text[1..text_len]) |unit| {
-        try win32Record(writer, .{ .char = unit, .down = true });
-        try win32Record(writer, .{ .char = unit, .down = false });
-    };
+    while (units.next()) |unit| try win32Char(writer, unit);
 }
+
+/// A character-only press and release, for text past a key's first
+/// UTF-16 unit.
+fn win32Char(writer: *std.Io.Writer, unit: u16) std.Io.Writer.Error!void {
+    try win32Record(writer, .{ .char = unit, .down = true });
+    try win32Record(writer, .{ .char = unit, .down = false });
+}
+
+/// The UTF-16 units of UTF-8 text, one at a time, so that text of any
+/// length needs no buffer. Invalid UTF-8 has none.
+const Utf16Units = struct {
+    it: std.unicode.Utf8Iterator,
+    /// The low surrogate after a high one.
+    low: ?u16 = null,
+
+    fn init(utf8: []const u8) Utf16Units {
+        const view = std.unicode.Utf8View.init(utf8) catch
+            return .{ .it = .{ .bytes = "", .i = 0 } };
+        return .{ .it = view.iterator() };
+    }
+
+    fn next(self: *Utf16Units) ?u16 {
+        if (self.low) |unit| {
+            self.low = null;
+            return unit;
+        }
+        const cp = self.it.nextCodepoint() orelse return null;
+        if (cp < 0x10000) return @intCast(cp);
+        const v = cp - 0x10000;
+        self.low = @intCast(0xDC00 + (v & 0x3FF));
+        return @intCast(0xD800 + (v >> 10));
+    }
+};
 
 const Win32Record = struct {
     vk: u16 = 0,
@@ -332,6 +352,49 @@ test "win32 input: encode" {
             writer.buffered(),
         );
     }
+    {
+        // A key's text past its first UTF-16 unit follows as character
+        // events (such as a layout's ligature).
+        var writer: std.Io.Writer = .fixed(&buf);
+        try encode(&writer, .{ .key = .key_a, .utf8 = "😀" }, .{ .win32_input = true });
+        try testing.expectEqualStrings(
+            "\x1b[65;30;55357;1;0;1_" ++
+                "\x1b[0;0;56832;1;0;1_\x1b[0;0;56832;0;0;1_",
+            writer.buffered(),
+        );
+    }
+    {
+        // Invalid UTF-8 has no characters.
+        var writer: std.Io.Writer = .fixed(&buf);
+        try encode(&writer, .{ .key = .key_a, .utf8 = "\xff" }, .{ .win32_input = true });
+        try testing.expectEqualStrings("\x1b[65;30;0;1;0;1_", writer.buffered());
+    }
+}
+
+test "win32 input: long text" {
+    if (comptime !win32_input_available) return error.SkipZigTest;
+
+    // An IME's result or dictation can be any length; it used to overflow
+    // a 64 unit buffer. Each unit is a press and a release.
+    const text = comptime text: {
+        var bytes: [100 * 3 + 4]u8 = undefined;
+        for (0..100) |i| bytes[i * 3 ..][0..3].* = "\u{3042}".*;
+        bytes[300..].* = "😀".*;
+        break :text bytes;
+    };
+    var out: std.Io.Writer.Allocating = .init(testing.allocator);
+    defer out.deinit();
+    try encode(&out.writer, .{ .key = .unidentified, .utf8 = &text }, .{ .win32_input = true });
+    const written = out.written();
+    try testing.expectEqual(@as(usize, 2 * 102), std.mem.count(u8, written, "\x1b["));
+    try testing.expect(std.mem.startsWith(u8, written, "\x1b[0;0;12354;1;0;1_\x1b[0;0;12354;0;0;1_"));
+    try testing.expect(std.mem.endsWith(u8, written, "\x1b[0;0;56832;1;0;1_\x1b[0;0;56832;0;0;1_"));
+
+    // A key's text too, past the old 8 unit buffer.
+    out.clearRetainingCapacity();
+    try encode(&out.writer, .{ .key = .key_a, .utf8 = "abcdefghijkl" }, .{ .win32_input = true });
+    try testing.expect(std.mem.startsWith(u8, out.written(), "\x1b[65;30;97;1;0;1_\x1b[0;0;98;1;0;1_"));
+    try testing.expect(std.mem.endsWith(u8, out.written(), "\x1b[0;0;108;0;0;1_"));
 }
 
 /// Perform Kitty keyboard protocol encoding of the key event.
