@@ -78,6 +78,33 @@ jobs:
           $out = ./zig-out/bin/ghostty.com +validate-config --config-file=invalid.conf | Out-String
           if ($LASTEXITCODE -ne 1 -or $out -notmatch 'unknown field') { throw "+validate-config didn't report: $out" }
           $global:LASTEXITCODE = 0
+          # The other actions that print and exit (piped, so not as TUIs):
+          # each must succeed and print what it's for.
+          $checks = @(
+            @('+list-themes', @(), '\(resources\)'),
+            @('+list-fonts', @(), '\S'),
+            @('+list-keybinds', @(), 'keybind = '),
+            @('+list-colors', @(), 'alice blue = #f0f8ff'),
+            @('+list-actions', @(), 'new_tab'),
+            @('+show-config', @('--default'), 'font-size = '),
+            @('+show-face', @('--string=A'), 'U\+41'),
+            @('+explain-config', @('font-size'), 'Font size'),
+            @('+help', @(), 'Usage'),
+            @('+ssh-cache', @(), ''),
+            @('+crash-report', @(), '')
+          )
+          foreach ($check in $checks) {
+            $out = ./zig-out/bin/ghostty.com $check[0] @($check[1]) 2>&1 | Out-String
+            if ($LASTEXITCODE -ne 0) { throw "$($check[0]) exited with $LASTEXITCODE`: $out" }
+            if ($check[2] -and $out -notmatch $check[2]) { throw "$($check[0]) didn't print /$($check[2])/: $out" }
+            Write-Host "$($check[0]): ok ($(($out -split "`n").Count) lines)"
+          }
+
+      # The actions that talk to a running instance.
+      - name: Test CLI actions with a running instance
+        timeout-minutes: 5
+        shell: pwsh
+        run: ./test/windows/cli-ipc.ps1 -Exe zig-out/bin/ghostty.exe
 
       - name: Test PowerShell integration (5.1)
         shell: powershell
