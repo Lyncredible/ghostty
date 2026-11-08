@@ -1290,6 +1290,8 @@ Notes:
         `TERM=xterm-ghostty`) and 42439780470 (a108ca837: a chosen shell
         doesn't inherit a WSL directory): every job passed, and
         `windows-tip` moved.
+  - [x] Run 42444209016 (5b6cb0829, the jump list's shell tasks): every
+        job passed, and `windows-tip` moved.
 - [ ] Keep the branch on top of upstream: fetch
       `git@github.com:ghostty-org/ghostty.git` from time to time, rebase,
       and check that the build, unit tests and the fork's CI still pass.
