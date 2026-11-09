@@ -2562,6 +2562,9 @@ Notes:
     (`cli-ipc`), including that the overrides outlive the request.
   - The GDI and memory leak tests now also go fullscreen and back and
     zoom a split and back (neither leaks here).
+  - Console sessions handed to us together opened their windows newest
+    first (`openHandoffs` popped from the end); they open in order now.
+    `handoff` passes.
   - The stderr and stdio tests made named pipes with fixed names, and
     libghostty-vt's tests run them too, so its test binary and Ghostty's
     running at once could collide. `testPipeName` adds the process ID.
