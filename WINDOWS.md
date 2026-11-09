@@ -2535,6 +2535,14 @@ Notes:
     The split actions had no test either: `splits.ps1` checks
     `goto_split` (the focus, from `GetGUIThreadInfo`), `resize_split`,
     `equalize_splits` and `toggle_split_zoom`. Both pass here.
+    `window-actions.ps1` also ends with `close_window`, and
+    `translucent.ps1` (in CI, as it reads the screen) now toggles
+    `toggle_background_opacity` there and back.
+  - Pasting read `CF_UNICODETEXT` up to its NUL, which Windows doesn't
+    make other programs include, so text without one was read past its
+    memory. It's now bounded by `GlobalSize` (`clipboardUnits`). The
+    line ending conversions both ways (`crlfToLf`, `lfToCrlf`) moved
+    out of the clipboard code, and all three are unit tested.
   - The stderr and stdio tests made named pipes with fixed names, and
     libghostty-vt's tests run them too, so its test binary and Ghostty's
     running at once could collide. `testPipeName` adds the process ID.
