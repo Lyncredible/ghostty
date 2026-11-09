@@ -2512,7 +2512,11 @@ Notes:
     included; now only the windows it hid come back. No test covered
     either action: `window-cycle.ps1` (in CI; here Windows won't let it
     put a window in front, so it stops early) checks both with a hidden
-    quick terminal.
+    quick terminal. Presenting a surface in a hidden window (a
+    `+new-tab`, a clicked notification) made the invisible window the
+    foreground; now the quick terminal slides in and a window
+    `toggle_visibility` hid comes back (closed windows kept for undo
+    stay hidden), which the test checks with `+new-tab`.
 - [ ] Packaging and release builds
   - [x] Portable zip (`dist/windows/package.ps1`)
   - [x] Per-user install script in the zip (`dist/windows/install.ps1`):
