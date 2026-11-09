@@ -68,8 +68,9 @@ test "fix marks an asynchronous pipe nonblocking" {
     if (comptime builtin.target.os.tag != .windows) return error.SkipZigTest;
 
     const windows = @import("windows.zig");
+    var name_buf: [96]u16 = undefined;
     const handle = windows.exp.kernel32.CreateNamedPipeW(
-        std.unicode.utf8ToUtf16LeStringLiteral("\\\\.\\pipe\\ghostty-stdio-test"),
+        windows.testPipeName(&name_buf, "stdio"),
         windows.PIPE_ACCESS_OUTBOUND | windows.FILE_FLAG_OVERLAPPED,
         windows.PIPE_TYPE_BYTE,
         1,
