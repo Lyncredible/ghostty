@@ -67,7 +67,9 @@ pub const Snapshot = struct {
     fn isBoundary(self: *const Snapshot, pos: u32, unit: Unit) bool {
         if (pos == 0 or pos >= self.len()) return true;
         return switch (unit.effective()) {
-            .character => true,
+            // Not between the two halves of a surrogate pair (an emoji, say).
+            .character => !(std.unicode.utf16IsLowSurrogate(self.text[pos]) and
+                std.unicode.utf16IsHighSurrogate(self.text[pos - 1])),
             .word => !isSpace(self.text[pos]) and isSpace(self.text[pos - 1]),
             .line => self.text[pos - 1] == '\n',
             else => false,
@@ -243,4 +245,88 @@ test Range {
     try testing.expectEqual(@as(u32, 1), snapshot.lineColumn(7).column);
     try testing.expectEqual(@as(u32, 9), snapshot.offsetOf(1, 3));
     try testing.expectEqual(@as(u32, 11), snapshot.offsetOf(1, 99));
+}
+
+test "Range: characters keep surrogate pairs whole" {
+    const testing = std.testing;
+    // "a😀b": the emoji is two UTF-16 units, at 1 and 2.
+    const text = std.unicode.utf8ToUtf16LeStringLiteral("a\u{1F600}b");
+    var snapshot: Snapshot = .{ .alloc = testing.allocator, .text = text, .cursor = 0 };
+
+    var r: Range = .{ .snapshot = &snapshot, .start = 0, .end = 0 };
+    try testing.expectEqual(@as(i32, 1), r.move(.character, 1));
+    try testing.expectEqual(@as(u32, 1), r.start);
+    try testing.expectEqual(@as(u32, 3), r.end);
+    try testing.expectEqual(@as(i32, 1), r.move(.character, 1));
+    try testing.expectEqual(@as(u32, 3), r.start);
+    try testing.expectEqual(@as(i32, -1), r.move(.character, -1));
+    try testing.expectEqual(@as(u32, 1), r.start);
+
+    // Inside the pair, the character is the whole emoji.
+    r = .{ .snapshot = &snapshot, .start = 2, .end = 2 };
+    r.expand(.character);
+    try testing.expectEqual(@as(u32, 1), r.start);
+    try testing.expectEqual(@as(u32, 3), r.end);
+
+    // An end moves over the emoji in one step.
+    r = .{ .snapshot = &snapshot, .start = 0, .end = 1 };
+    try testing.expectEqual(@as(i32, 1), r.moveEndpoint(false, .character, 1));
+    try testing.expectEqual(@as(u32, 3), r.end);
+}
+
+test "Range: words, endpoints and the document" {
+    const testing = std.testing;
+    const text = std.unicode.utf8ToUtf16LeStringLiteral("one  two\nthree");
+    var snapshot: Snapshot = .{ .alloc = testing.allocator, .text = text, .cursor = 0 };
+
+    // Words start after spaces and newlines; moving back by words too.
+    var r: Range = .{ .snapshot = &snapshot, .start = 0, .end = 0 };
+    try testing.expectEqual(@as(i32, 2), r.move(.word, 2));
+    try testing.expectEqual(@as(u32, 9), r.start);
+    try testing.expectEqual(@as(u32, 14), r.end);
+    try testing.expectEqual(@as(i32, -1), r.move(.word, -1));
+    try testing.expectEqual(@as(u32, 5), r.start);
+    try testing.expectEqual(@as(u32, 9), r.end);
+    // Format and paragraph move like word and line.
+    try testing.expectEqual(@as(i32, -1), r.move(.format, -1));
+    try testing.expectEqual(@as(u32, 0), r.start);
+    try testing.expectEqual(@as(i32, 1), r.move(.paragraph, 1));
+    try testing.expectEqual(@as(u32, 9), r.start);
+
+    // Moving the start past the end takes the end with it.
+    r = .{ .snapshot = &snapshot, .start = 0, .end = 2 };
+    try testing.expectEqual(@as(i32, 1), r.moveEndpoint(true, .word, 1));
+    try testing.expectEqual(@as(u32, 5), r.start);
+    try testing.expectEqual(@as(u32, 5), r.end);
+    // And the end before the start takes the start.
+    try testing.expectEqual(@as(i32, -1), r.moveEndpoint(false, .line, -1));
+    try testing.expectEqual(@as(u32, 0), r.end);
+    try testing.expectEqual(@as(u32, 0), r.start);
+
+    // The document unit is the whole text, and its endpoints jump.
+    try testing.expectEqual(@as(i32, 0), r.move(.document, 3));
+    try testing.expectEqual(@as(u32, 0), r.start);
+    try testing.expectEqual(@as(u32, 14), r.end);
+    r = .{ .snapshot = &snapshot, .start = 4, .end = 6 };
+    try testing.expectEqual(@as(i32, 1), r.moveEndpoint(false, .document, 1));
+    try testing.expectEqual(@as(u32, 14), r.end);
+    try testing.expectEqual(@as(i32, 0), r.moveEndpoint(false, .document, 1));
+    try testing.expectEqual(@as(i32, -1), r.moveEndpoint(true, .document, -1));
+    try testing.expectEqual(@as(u32, 0), r.start);
+}
+
+test "Range: an empty screen" {
+    const testing = std.testing;
+    const text = std.unicode.utf8ToUtf16LeStringLiteral("");
+    var snapshot: Snapshot = .{ .alloc = testing.allocator, .text = text, .cursor = 0 };
+    var r: Range = .{ .snapshot = &snapshot, .start = 0, .end = 0 };
+    for ([_]Unit{ .character, .word, .line, .document }) |unit| {
+        try testing.expectEqual(@as(i32, 0), r.move(unit, 1));
+        try testing.expectEqual(@as(i32, 0), r.move(unit, -1));
+        r.expand(unit);
+        try testing.expectEqual(@as(u32, 0), r.start);
+        try testing.expectEqual(@as(u32, 0), r.end);
+        try testing.expectEqual(@as(i32, 0), r.moveEndpoint(false, unit, 1));
+    }
+    try testing.expectEqual(@as(u32, 0), snapshot.offsetOf(3, 3));
 }

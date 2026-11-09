@@ -2366,6 +2366,12 @@ Notes:
     (`SplitRects`, at two divider widths and with no room) and the ratio
     from dragging a divider (`dragRatio`, kept to 5-95%) are now pure and
     tested. `command-palette`, `overlays` and `session-restore` pass.
+  - Screen readers moving by character (UI Automation text ranges,
+    `TextRange.zig`) stepped by UTF-16 unit, so an emoji's surrogate
+    pair was read as two broken halves. A character boundary no longer
+    falls inside a pair. New tests: the emoji, words backwards, format
+    and paragraph units, endpoints crossing, the document unit's
+    endpoints, and an empty screen. `uia-events` passes.
   - `goto_tab` and `move_tab`'s index math (wrapping, 1-based indexes
     past the end, invalid ones) is now `gotoIndex` and `moveIndex` in
     `Window.zig`, unit tested; `tabs`, `session-restore` and `handoff`
