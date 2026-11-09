@@ -2543,6 +2543,11 @@ Notes:
     memory. It's now bounded by `GlobalSize` (`clipboardUnits`). The
     line ending conversions both ways (`crlfToLf`, `lfToCrlf`) moved
     out of the clipboard code, and all three are unit tested.
+  - Dropped paths (`DragQueryFileW`) and IME composition strings
+    (`ImmGetCompositionStringW`) were read as long as a first call said,
+    from a buffer a second call fills; a shorter copy left uninitialized
+    memory in the pasted path or the preedit. Both now take what was
+    copied. (`drag-drop` and `ime` run in CI.)
   - The stderr and stdio tests made named pipes with fixed names, and
     libghostty-vt's tests run them too, so its test binary and Ghostty's
     running at once could collide. `testPipeName` adds the process ID.
