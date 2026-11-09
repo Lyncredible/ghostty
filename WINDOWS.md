@@ -2517,6 +2517,14 @@ Notes:
     foreground; now the quick terminal slides in and a window
     `toggle_visibility` hid comes back (closed windows kept for undo
     stay hidden), which the test checks with `+new-tab`.
+  - The pseudoconsole's size is a `COORD` (signed 16 bits), and the
+    columns and rows (`u16`) went into it through `@intCast`, which
+    panics in safe builds for a grid over 32767 cells: a tiny font
+    across very wide screens. They're now cut to 32767 (`coord`, unit
+    tested), for ConPTY and the handed-off console's resize signal.
+  - The stderr and stdio tests made named pipes with fixed names, and
+    libghostty-vt's tests run them too, so its test binary and Ghostty's
+    running at once could collide. `testPipeName` adds the process ID.
 - [ ] Packaging and release builds
   - [x] Portable zip (`dist/windows/package.ps1`)
   - [x] Per-user install script in the zip (`dist/windows/install.ps1`):
