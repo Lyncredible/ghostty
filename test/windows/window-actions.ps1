@@ -7,7 +7,7 @@
 # counted the title bar the tabs then moved into), and coming back from
 # fullscreen must give the terminal its old size, with the tabs back in
 # the title bar. (The window-options test covers the options that start
-# a window that way.)
+# a window that way.) Last, close_window closes it, and Ghostty quits.
 # Keys are posted to the terminal, so it runs on a locked desktop.
 #
 #     ./window-actions.ps1 -Exe zig-out/bin/ghostty.exe
@@ -45,7 +45,8 @@ $log = Join-Path ([IO.Path]::GetTempPath()) "ghostty-window-actions-$PID.log"
 $process = Start-Process -FilePath $Exe -PassThru -RedirectStandardError $log -ArgumentList '--command=cmd.exe',
     '--window-save-state=never', '--window-width=80', '--window-height=24',
     '--keybind=f5=toggle_maximize', '--keybind=f6=toggle_fullscreen',
-    '--keybind=f7=toggle_window_float_on_top', '--keybind=f8=reset_window_size'
+    '--keybind=f7=toggle_window_float_on_top', '--keybind=f8=reset_window_size',
+    '--keybind=f9=close_window', '--confirm-close-surface=false', '--quit-after-last-window-closed=true'
 
 function Fail([string]$message) {
     Write-Host "::error title=window-actions::$message"
@@ -134,6 +135,11 @@ try {
     $W::Key($surface, 0x77, 0x42)
     [void](WaitFor { -not $W::IsZoomed($window) -and (Size) -eq $startSize } "the maximized window back at $startSize")
     Write-Host "reset_window_size gave the window its first size ($startSize) after a resize and after maximizing."
+
+    # close_window closes it, and with it the last window, Ghostty.
+    $W::Key($surface, 0x78, 0x43)   # F9: close_window
+    if (-not $process.WaitForExit($TimeoutSeconds * 1000)) { Fail "close_window didn't close the last window" }
+    Write-Host 'close_window closed the window, and Ghostty quit.'
 } finally {
     if (-not $process.HasExited) { Stop-Process -Id $process.Id -Force }
     Remove-Item -LiteralPath $log -Force -ErrorAction SilentlyContinue
