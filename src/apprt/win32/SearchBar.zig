@@ -40,7 +40,7 @@ hwnd: c.HWND = null,
 edit: c.HWND = null,
 parent: c.HWND = null,
 instance: c.HINSTANCE = null,
-font: c.HFONT = null,
+font: util.MessageFont = .{},
 edit_brush: c.HBRUSH = null,
 edit_proc: c.WNDPROC = null,
 
@@ -135,7 +135,7 @@ pub fn deinit(self: *SearchBar) void {
         if (self.edit != null) util.unsubclass(self.edit, self.edit_proc);
         _ = c.DestroyWindow(self.hwnd);
     }
-    if (self.font != null) _ = c.DeleteObject(self.font);
+    self.font.deinit();
     if (self.edit_brush != null) _ = c.DeleteObject(self.edit_brush);
     self.* = .{};
 }
@@ -240,19 +240,10 @@ fn layout(self: *SearchBar) void {
 }
 
 fn updateFont(self: *SearchBar) void {
-    if (self.font != null) _ = c.DeleteObject(self.font);
-    self.font = null;
-    var metrics: c.NONCLIENTMETRICSW = undefined;
-    metrics.cbSize = @sizeOf(c.NONCLIENTMETRICSW);
-    if (c.SystemParametersInfoForDpi(
-        c.SPI_GETNONCLIENTMETRICS,
-        metrics.cbSize,
-        &metrics,
-        0,
-        c.GetDpiForWindow(self.hwnd),
-    ) == 0) return;
-    self.font = c.CreateFontIndirectW(&metrics.lfMessageFont);
-    _ = c.SendMessageW(self.edit, c.WM_SETFONT, @intFromPtr(self.font), c.TRUE);
+    const change = self.font.update(c.GetDpiForWindow(self.hwnd), 100) orelse return;
+    // The edit control lets go of the old font before it's deleted.
+    _ = c.SendMessageW(self.edit, c.WM_SETFONT, @intFromPtr(self.font.font), c.TRUE);
+    if (change.old != null) _ = c.DeleteObject(change.old);
 }
 
 /// The rectangle of a button.
@@ -344,7 +335,7 @@ fn paint(self: *SearchBar, dc: c.HDC) void {
     _ = c.FillRect(dc, &edit_rect, col.field_brush);
     if (col.frame) _ = c.FrameRect(dc, &edit_rect, c.GetSysColorBrush(c.COLOR_WINDOWTEXT));
 
-    const old_font = c.SelectObject(dc, self.font);
+    const old_font = c.SelectObject(dc, self.font.font);
     defer _ = c.SelectObject(dc, old_font);
     _ = c.SetBkMode(dc, c.TRANSPARENT);
     _ = c.SetTextColor(dc, col.foreground);

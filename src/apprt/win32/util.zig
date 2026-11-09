@@ -288,6 +288,75 @@ pub const TipColors = struct {
     }
 };
 
+/// The system's message font (Settings > Accessibility > Text size) at a
+/// DPI, or null if the system won't say.
+pub fn messageLogFont(dpi: c.UINT) ?c.LOGFONTW {
+    // Zeroed, so the face name's unused tail compares equal each time.
+    var metrics = std.mem.zeroes(c.NONCLIENTMETRICSW);
+    metrics.cbSize = @sizeOf(c.NONCLIENTMETRICSW);
+    if (c.SystemParametersInfoForDpi(c.SPI_GETNONCLIENTMETRICS, metrics.cbSize, &metrics, 0, dpi) == 0) return null;
+    return metrics.lfMessageFont;
+}
+
+/// The message font, scaled by `percent`, as a GDI font kept until the DPI
+/// or the system font changes. Our overlays lay out on every resize step,
+/// and the link preview on every mouse move over a link, which made and
+/// deleted a font each time.
+pub const MessageFont = struct {
+    font: c.HFONT = null,
+    logfont: c.LOGFONTW = std.mem.zeroes(c.LOGFONTW),
+
+    /// A new font was made. `old` is the one it replaced (null the first
+    /// time), for the caller to delete once nothing uses it: an Edit
+    /// control given it with WM_SETFONT, say.
+    pub const Change = struct { old: c.HFONT };
+
+    /// Make the font for `dpi` if it's different; null if nothing changed.
+    pub fn update(self: *MessageFont, dpi: c.UINT, percent: c.LONG) ?Change {
+        var lf = messageLogFont(dpi) orelse return null;
+        lf.lfHeight = @divTrunc(lf.lfHeight * percent, 100);
+        if (self.font != null and std.mem.eql(u8, std.mem.asBytes(&lf), std.mem.asBytes(&self.logfont))) return null;
+        const font = c.CreateFontIndirectW(&lf) orelse return null;
+        const old = self.font;
+        self.font = font;
+        self.logfont = lf;
+        return .{ .old = old };
+    }
+
+    /// `update`, deleting the old font right away: for a font only
+    /// selected into a DC while painting.
+    pub fn refresh(self: *MessageFont, dpi: c.UINT, percent: c.LONG) void {
+        const change = self.update(dpi, percent) orelse return;
+        if (change.old != null) _ = c.DeleteObject(change.old);
+    }
+
+    pub fn deinit(self: *MessageFont) void {
+        if (self.font != null) _ = c.DeleteObject(self.font);
+        self.* = .{};
+    }
+};
+
+test MessageFont {
+    var font: MessageFont = .{};
+    defer font.deinit();
+    // The first update makes a font, with nothing to delete.
+    const first_change = font.update(96, 100) orelse return error.NoFont;
+    try std.testing.expect(first_change.old == null);
+    const first = font.font orelse return error.NoFont;
+    // The same DPI again changes nothing.
+    try std.testing.expect(font.update(96, 100) == null);
+    // Another DPI makes a new font, and hands back the old one.
+    const change = font.update(192, 100) orelse return error.NoNewFont;
+    try std.testing.expectEqual(@as(c.HFONT, first), change.old);
+    try std.testing.expect(font.font != change.old);
+    _ = c.DeleteObject(change.old);
+    try std.testing.expect(font.logfont.lfHeight != 0);
+    // A smaller size does too.
+    const height = font.logfont.lfHeight;
+    font.refresh(192, 90);
+    try std.testing.expect(@abs(font.logfont.lfHeight) < @abs(height));
+}
+
 /// Make the menus of this process (popup menus and the system menu) dark
 /// or light, to match our windows rather than the system's app theme.
 ///
@@ -343,9 +412,6 @@ pub fn setBlurBehindAccent(hwnd: c.HWND, enable: bool) bool {
     return set(hwnd, &data) != c.FALSE;
 }
 
-/// A handle (HWND, HDC, ...) passed in a message's WPARAM or LPARAM.
-/// Handles aren't pointers to aligned memory, so `@ptrFromInt` would fail
-/// its alignment check for many of them; we reinterpret the bits instead.
 /// Undo subclassing a control with SetWindowLongPtrW(GWLP_WNDPROC) before
 /// it's destroyed: its own window procedure goes back, and our user data
 /// is cleared. Our subclass procedures fall back to DefWindowProcW once
@@ -357,6 +423,9 @@ pub fn unsubclass(hwnd: c.HWND, original: c.WNDPROC) void {
     if (original) |proc| _ = c.SetWindowLongPtrW(hwnd, c.GWLP_WNDPROC, @bitCast(@intFromPtr(proc)));
 }
 
+/// A handle (HWND, HDC, ...) passed in a message's WPARAM or LPARAM.
+/// Handles aren't pointers to aligned memory, so `@ptrFromInt` would fail
+/// its alignment check for many of them; we reinterpret the bits instead.
 pub fn handle(comptime T: type, value: anytype) T {
     comptime std.debug.assert(@sizeOf(@TypeOf(value)) == @sizeOf(T));
     return @as(*const T, @ptrCast(&value)).*;
