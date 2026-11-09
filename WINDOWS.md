@@ -1424,6 +1424,8 @@ Notes:
         pass, and so do the search and scrollbar UI tests. CI runs
         42557868485 (a97bcc108) and 42563453811 (f30eb4770, the screen
         reader fix) passed every job before it.
+        After it, CI run 42571284467 (057a07423) passed every job and
+        `windows-tip` moved.
 - [x] Tip builds, like upstream's `release-tip.yml` (the discussion's
       release workflow item): a rolling prerelease of the latest
       `windows` commit, so people can try it without building. Approved
