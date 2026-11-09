@@ -2390,7 +2390,8 @@ Notes:
     (50 GDI objects before). Also, the search bar deleted its icon font
     while it was still selected into the DC, which `DeleteObject`
     refuses; it's deselected first now (no measured leak, but the
-    documented rule).
+    documented rule). CI run 42584379496 (4e10fba8d) passed every
+    job, the leak test with no growth on the runner either.
   - Screen readers moving by character (UI Automation text ranges,
     `TextRange.zig`) stepped by UTF-16 unit, so an emoji's surrogate
     pair was read as two broken halves. A character boundary no longer
