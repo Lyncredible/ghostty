@@ -1437,7 +1437,9 @@ pub fn hasTitleBarTabs(self: *const Window) bool {
 pub fn surfaceArea(self: *const Window) c.RECT {
     var client: c.RECT = undefined;
     if (c.GetClientRect(self.hwnd, &client) == 0) return std.mem.zeroes(c.RECT);
-    if (self.showTabBar()) client.top = self.tab_bar.height();
+    // Never upside down, which callers would turn into a huge size: a
+    // minimized window's client area is empty, smaller than the tab bar.
+    if (self.showTabBar()) client.top = @min(self.tab_bar.height(), client.bottom);
     return client;
 }
 
