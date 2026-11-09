@@ -95,8 +95,8 @@ pub fn deinit(self: *Badge, alloc: Allocator) void {
 pub fn updateConfig(self: *Badge, config: *const Config) void {
     const bg = config.background;
     const fg = config.foreground;
-    self.background = rgb(bg.r, bg.g, bg.b);
-    self.foreground = rgb(fg.r, fg.g, fg.b);
+    self.background = util.rgb(bg.r, bg.g, bg.b);
+    self.foreground = util.rgb(fg.r, fg.g, fg.b);
     if (self.hwnd != null) _ = c.InvalidateRect(self.hwnd, null, c.FALSE);
 }
 
@@ -154,9 +154,9 @@ fn layout(self: *Badge) void {
 /// client rectangle): at `anchor`, 8 pixels in from the edges (at 96 DPI),
 /// never wider than the parent nor above or left of it.
 fn place(anchor: Anchor, parent: c.RECT, size: c.SIZE, dpi: c_int) c.RECT {
-    const margin = scale(8, dpi);
-    const width = @min(size.cx + 2 * scale(10, dpi), parent.right);
-    const height = size.cy + 2 * scale(5, dpi);
+    const margin = util.scale(8, dpi);
+    const width = @min(size.cx + 2 * util.scale(10, dpi), parent.right);
+    const height = size.cy + 2 * util.scale(5, dpi);
     const center_x = @divTrunc(parent.right - width, 2);
     const right = parent.right - width - margin;
     const bottom = parent.bottom - height - margin;
@@ -197,14 +197,6 @@ test place {
         try testing.expect(rect.left >= 0 and rect.top >= 0);
         try testing.expect(rect.right - rect.left <= 50);
     }
-}
-
-fn scale(v: c_int, dpi: c_int) c_int {
-    return @divTrunc(v * dpi, util.USER_DEFAULT_SCREEN_DPI);
-}
-
-fn rgb(r: u8, g: u8, b: u8) c.COLORREF {
-    return @as(c.COLORREF, r) | (@as(c.COLORREF, g) << 8) | (@as(c.COLORREF, b) << 16);
 }
 
 pub fn wndProc(hwnd: c.HWND, msg: c.UINT, wparam: c.WPARAM, lparam: c.LPARAM) callconv(.c) c.LRESULT {

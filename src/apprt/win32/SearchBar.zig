@@ -143,9 +143,9 @@ pub fn deinit(self: *SearchBar) void {
 pub fn updateConfig(self: *SearchBar, config: *const Config) void {
     const bg = config.background;
     const fg = config.foreground;
-    self.background = rgb(mix(bg.r, fg.r, 0.08), mix(bg.g, fg.g, 0.08), mix(bg.b, fg.b, 0.08));
-    self.field = rgb(mix(bg.r, fg.r, 0.16), mix(bg.g, fg.g, 0.16), mix(bg.b, fg.b, 0.16));
-    self.foreground = rgb(fg.r, fg.g, fg.b);
+    self.background = util.rgb(mix(bg.r, fg.r, 0.08), mix(bg.g, fg.g, 0.08), mix(bg.b, fg.b, 0.08));
+    self.field = util.rgb(mix(bg.r, fg.r, 0.16), mix(bg.g, fg.g, 0.16), mix(bg.b, fg.b, 0.16));
+    self.foreground = util.rgb(fg.r, fg.g, fg.b);
     if (self.edit_brush != null) _ = c.DeleteObject(self.edit_brush);
     self.edit_brush = c.CreateSolidBrush(self.field);
     if (self.hwnd != null) _ = c.InvalidateRect(self.hwnd, null, c.TRUE);
@@ -213,8 +213,7 @@ pub fn parentResized(self: *SearchBar) void {
 }
 
 fn scale(self: *const SearchBar, v: c_int) c_int {
-    const dpi: c_int = @intCast(c.GetDpiForWindow(self.hwnd));
-    return @divTrunc(v * dpi, util.USER_DEFAULT_SCREEN_DPI);
+    return util.scale(v, @intCast(c.GetDpiForWindow(self.hwnd)));
 }
 
 fn layout(self: *SearchBar) void {
@@ -409,10 +408,6 @@ fn fontFound(
     const found: *bool = @ptrFromInt(@as(usize, @bitCast(lparam)));
     found.* = true;
     return 0;
-}
-
-fn rgb(r: u8, g: u8, b: u8) c.COLORREF {
-    return @as(c.COLORREF, r) | (@as(c.COLORREF, g) << 8) | (@as(c.COLORREF, b) << 16);
 }
 
 fn mix(a: u8, b: u8, t: f32) u8 {

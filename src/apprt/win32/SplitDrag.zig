@@ -82,7 +82,7 @@ pub const Handle = struct {
     pub fn updateConfig(self: *Handle, config: *const Config) void {
         const fg = config.foreground;
         if (self.brush != null) _ = c.DeleteObject(self.brush);
-        self.brush = c.CreateSolidBrush(rgb(fg.r, fg.g, fg.b));
+        self.brush = c.CreateSolidBrush(util.rgb(fg.r, fg.g, fg.b));
         if (self.hwnd != null) _ = c.InvalidateRect(self.hwnd, null, c.TRUE);
     }
 
@@ -101,13 +101,13 @@ pub const Handle = struct {
         var parent: c.RECT = undefined;
         _ = c.GetClientRect(self.surface.hwnd, &parent);
         const dpi: c_int = @intCast(c.GetDpiForWindow(self.hwnd));
-        const w = scale(handle_width, dpi);
-        const h = scale(handle_height, dpi);
+        const w = util.scale(handle_width, dpi);
+        const h = util.scale(handle_height, dpi);
         _ = c.SetWindowPos(
             self.hwnd,
             c.HWND_TOP,
             @divTrunc(parent.right - w, 2),
-            scale(handle_margin, dpi),
+            util.scale(handle_margin, dpi),
             w,
             h,
             c.SWP_NOACTIVATE | c.SWP_SHOWWINDOW,
@@ -256,7 +256,7 @@ pub const DropZone = struct {
     pub fn updateConfig(self: *DropZone, config: *const Config) void {
         const fg = config.foreground;
         if (self.brush != null) _ = c.DeleteObject(self.brush);
-        self.brush = c.CreateSolidBrush(rgb(fg.r, fg.g, fg.b));
+        self.brush = c.CreateSolidBrush(util.rgb(fg.r, fg.g, fg.b));
     }
 
     /// Highlight the half of the parent in a direction, or hide.
@@ -330,12 +330,4 @@ test dropDirection {
     try testing.expectEqual(Direction.right, dropDirection(rect, .{ .x = 490, .y = 200 }));
     try testing.expectEqual(Direction.up, dropDirection(rect, .{ .x = 300, .y = 105 }));
     try testing.expectEqual(Direction.down, dropDirection(rect, .{ .x = 300, .y = 295 }));
-}
-
-fn scale(v: c_int, dpi: c_int) c_int {
-    return @divTrunc(v * dpi, util.USER_DEFAULT_SCREEN_DPI);
-}
-
-fn rgb(r: u8, g: u8, b: u8) c.COLORREF {
-    return @as(c.COLORREF, r) | (@as(c.COLORREF, g) << 8) | (@as(c.COLORREF, b) << 16);
 }

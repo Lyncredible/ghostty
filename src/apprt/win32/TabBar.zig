@@ -192,15 +192,11 @@ const compact_tab_width = 88;
 
 /// Scale a size in DPI-independent pixels to physical pixels.
 fn scale(self: *const TabBar, v: c_int) c_int {
-    return scaleDpi(v, self.windowDpi());
+    return util.scale(v, self.windowDpi());
 }
 
 fn windowDpi(self: *const TabBar) c_int {
     return @intCast(c.GetDpiForWindow(self.window.hwnd));
-}
-
-fn scaleDpi(v: c_int, at: c_int) c_int {
-    return @divTrunc(v * at, util.USER_DEFAULT_SCREEN_DPI);
 }
 
 /// Set our font to the system UI font for our DPI, or the family of
@@ -239,7 +235,7 @@ fn iconFont(dpi: c_int) ?c.HFONT {
     defer _ = c.ReleaseDC(null, dc);
     for (faces) |face| {
         var lf = std.mem.zeroes(c.LOGFONTW);
-        lf.lfHeight = -@divTrunc(10 * dpi, util.USER_DEFAULT_SCREEN_DPI);
+        lf.lfHeight = -util.scale(10, dpi);
         lf.lfCharSet = c.DEFAULT_CHARSET;
         @memcpy(lf.lfFaceName[0..face.len], face);
         const font = c.CreateFontIndirectW(&lf) orelse continue;
@@ -292,29 +288,29 @@ const Layout = struct {
         // With the tabs in the title bar, the caption buttons (46 by 32, as
         // Windows 11 draws them) go at the right, after some empty space
         // that drags the window, even when there are many tabs.
-        const caption_button = scaleDpi(46, at);
+        const caption_button = util.scale(46, at);
         const caption_width = if (caption_buttons) caption_button * 3 else 0;
 
         // The new tab and shell buttons follow the last tab, as in
         // browsers. Tabs share the width up to a maximum, leaving room for
         // the buttons and, with the caption buttons, some empty space to
         // drag the window.
-        const button = scaleDpi(tab_button_width, at);
-        const button_gap = scaleDpi(4, at);
-        const left = scaleDpi(tab_left, at);
-        const gap = scaleDpi(tab_gap, at);
-        const drag_space = if (caption_width == 0) 0 else scaleDpi(48, at);
+        const button = util.scale(tab_button_width, at);
+        const button_gap = util.scale(4, at);
+        const left = util.scale(tab_left, at);
+        const gap = util.scale(tab_gap, at);
+        const drag_space = if (caption_width == 0) 0 else util.scale(48, at);
         const right_limit = width - caption_width - drag_space - button_gap - button * 2;
         const available = @max(0, right_limit - left - gap * (n - 1));
-        const tab_width = @min(scaleDpi(240, at), @divTrunc(available, n));
+        const tab_width = @min(util.scale(240, at), @divTrunc(available, n));
         const tabs_end = left + n * tab_width + gap * (n - 1);
         const new_left = tabs_end + button_gap;
 
         return .{
             .tab_width = tab_width,
-            .compact = tab_width < scaleDpi(compact_tab_width, at),
+            .compact = tab_width < util.scale(compact_tab_width, at),
             .left = left,
-            .top = scaleDpi(tab_top, at),
+            .top = util.scale(tab_top, at),
             .gap = gap,
             .tabs = tabs,
             .height = h,
@@ -336,8 +332,8 @@ const Layout = struct {
 
     /// The close button of a tab, centered on its title.
     fn closeRect(self: Layout, tab: c.RECT) c.RECT {
-        const size = scaleDpi(16, self.dpi);
-        const margin = scaleDpi(8, self.dpi);
+        const size = util.scale(16, self.dpi);
+        const margin = util.scale(8, self.dpi);
         const top = tab.top + @divTrunc(tab.bottom - tab.top - size, 2);
         return .{
             .left = tab.right - margin - size,
@@ -677,7 +673,7 @@ fn mix(a: u8, b: u8, t: f32) u8 {
 }
 
 fn colorref(v: Rgb) c.COLORREF {
-    return @as(c.COLORREF, v.r) | (@as(c.COLORREF, v.g) << 8) | (@as(c.COLORREF, v.b) << 16);
+    return util.rgb(v.r, v.g, v.b);
 }
 
 fn fill(hdc: c.HDC, rect: *const c.RECT, color: Rgb) void {

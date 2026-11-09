@@ -85,8 +85,8 @@ pub fn deinit(self: *LinkPreview, alloc: Allocator) void {
 pub fn updateConfig(self: *LinkPreview, config: *const Config) void {
     const bg = config.background;
     const fg = config.foreground;
-    self.background = rgb(bg.r, bg.g, bg.b);
-    self.foreground = rgb(fg.r, fg.g, fg.b);
+    self.background = util.rgb(bg.r, bg.g, bg.b);
+    self.foreground = util.rgb(fg.r, fg.g, fg.b);
     if (self.hwnd != null) _ = c.InvalidateRect(self.hwnd, null, c.FALSE);
 }
 
@@ -154,8 +154,8 @@ fn layout(self: *LinkPreview, cursor: c.POINT) void {
 /// text of `size`: the bottom left corner, or the bottom right one when
 /// `cursor` is over the bottom left one. It's never wider than the parent.
 fn place(parent: c.RECT, size: c.SIZE, cursor: c.POINT, dpi: c_int) struct { rect: c.RECT, right: bool } {
-    const width = @min(size.cx + 2 * scale(8, dpi), parent.right);
-    const height = size.cy + 2 * scale(4, dpi);
+    const width = @min(size.cx + 2 * util.scale(8, dpi), parent.right);
+    const height = size.cy + 2 * util.scale(4, dpi);
     const top = parent.bottom - height;
     const over_left = cursor.x >= 0 and cursor.x < width and
         cursor.y >= top and cursor.y < parent.bottom;
@@ -193,14 +193,6 @@ test place {
     const long: c.SIZE = .{ .cx = 5000, .cy = 16 };
     try testing.expectEqual(c.RECT{ .left = 0, .top = 576, .right = 800, .bottom = 600 }, place(parent, long, .{ .x = 400, .y = 100 }, 96).rect);
     try testing.expectEqual(c.RECT{ .left = 0, .top = 576, .right = 800, .bottom = 600 }, place(parent, long, .{ .x = 400, .y = 590 }, 96).rect);
-}
-
-fn scale(v: c_int, dpi: c_int) c_int {
-    return @divTrunc(v * dpi, util.USER_DEFAULT_SCREEN_DPI);
-}
-
-fn rgb(r: u8, g: u8, b: u8) c.COLORREF {
-    return @as(c.COLORREF, r) | (@as(c.COLORREF, g) << 8) | (@as(c.COLORREF, b) << 16);
 }
 
 pub fn wndProc(hwnd: c.HWND, msg: c.UINT, wparam: c.WPARAM, lparam: c.LPARAM) callconv(.c) c.LRESULT {

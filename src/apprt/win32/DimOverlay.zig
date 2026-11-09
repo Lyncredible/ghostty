@@ -72,9 +72,7 @@ pub fn deinit(self: *DimOverlay) void {
 
 pub fn updateConfig(self: *DimOverlay, config: *const Config) !void {
     const color = config.@"unfocused-split-fill" orelse config.background;
-    const rgb = @as(c.COLORREF, color.r) |
-        (@as(c.COLORREF, color.g) << 8) | (@as(c.COLORREF, color.b) << 16);
-    const brush = c.CreateSolidBrush(rgb) orelse return error.CreateBrushFailed;
+    const brush = c.CreateSolidBrush(util.rgb(color.r, color.g, color.b)) orelse return error.CreateBrushFailed;
     errdefer _ = c.DeleteObject(brush);
 
     const alpha: u8 = @intFromFloat(@round((1 - config.@"unfocused-split-opacity") * 255));

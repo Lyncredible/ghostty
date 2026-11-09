@@ -639,9 +639,9 @@ fn opaqueUnderlay(self: *const Surface) c.COLORREF {
     const config = &self.app.config;
     const bg = config.background;
     const alpha: f32 = @floatCast(@max(0, @min(1, config.@"background-opacity")));
-    if (alpha >= 1) return rgbRef(bg.r, bg.g, bg.b);
+    if (alpha >= 1) return util.rgb(bg.r, bg.g, bg.b);
     const linear = config.@"alpha-blending".isLinear();
-    return rgbRef(
+    return util.rgb(
         underlay(bg.r, alpha, linear),
         underlay(bg.g, alpha, linear),
         underlay(bg.b, alpha, linear),
@@ -662,10 +662,6 @@ fn srgbDecode(v: f32) f32 {
 
 fn srgbEncode(v: f32) f32 {
     return if (v <= 0.0031308) v * 12.92 else 1.055 * std.math.pow(f32, v, 1.0 / 2.4) - 0.055;
-}
-
-fn rgbRef(r: u8, g: u8, b: u8) c.COLORREF {
-    return @as(c.COLORREF, r) | (@as(c.COLORREF, g) << 8) | (@as(c.COLORREF, b) << 16);
 }
 
 test underlay {
