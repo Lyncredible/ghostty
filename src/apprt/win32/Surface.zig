@@ -2278,8 +2278,12 @@ fn imeString(alloc: Allocator, himc: c.HIMC, index: c.DWORD) ?[:0]u8 {
     if (len < 0) return null;
     const buf = alloc.alloc(u16, @as(usize, @intCast(len)) / 2) catch return null;
     defer alloc.free(buf);
-    if (buf.len > 0) _ = c.ImmGetCompositionStringW(himc, index, buf.ptr, @intCast(len));
-    return util.utf8Alloc(alloc, buf) catch null;
+    // Only what it copied (also in bytes), never the rest of the buffer.
+    const copied: usize = if (buf.len > 0)
+        @intCast(@max(0, c.ImmGetCompositionStringW(himc, index, buf.ptr, @intCast(len))))
+    else
+        0;
+    return util.utf8Alloc(alloc, buf[0..@min(copied / 2, buf.len)]) catch null;
 }
 
 fn preedit(self: *Surface, text: ?[]const u8) void {
