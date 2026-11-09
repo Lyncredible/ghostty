@@ -1743,6 +1743,9 @@ pub fn toggleFullscreen(self: *Window) void {
         );
         self.fullscreen = null;
         self.updateDecorations();
+        // The resizes above laid us out while still fullscreen, with the
+        // tabs out of the title bar (and the tab bar hidden); put them back.
+        self.layout();
         return;
     }
 
@@ -1832,7 +1835,11 @@ fn windowSizeFor(self: *const Window, width: u32, height: u32) struct { c_int, c
     // With the tabs in the title bar, the client area starts at the top of
     // the window: only the sides and bottom of the frame remain, so the
     // height is the client's plus the bottom (rect.bottom, from a top of 0).
-    if (self.titlebar_tabs) return .{ rect.right - rect.left, rect.bottom };
+    // Whether they will be, not whether they are yet: the initial size
+    // comes during init, before the tabs move into the title bar (which
+    // keeps the window's size, so the terminal would grow by the title
+    // bar's height).
+    if (self.tabsInTitleBar()) return .{ rect.right - rect.left, rect.bottom };
     return .{ rect.right - rect.left, rect.bottom - rect.top };
 }
 

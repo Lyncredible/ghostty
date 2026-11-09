@@ -354,6 +354,16 @@ another, `:previous` goes back, and `end_search` closes it. The count is
 read from the bar's window text ("Match 2 of 6"), which is also what screen
 readers see.
 
+## window-actions.ps1
+
+Checks the window actions from keybinds, each there and back:
+`toggle_maximize`, `toggle_fullscreen` (the window covers its monitor,
+then returns, and so does its terminal's size, with the tabs back in the
+title bar), `toggle_window_float_on_top` (`WS_EX_TOPMOST`), and
+`reset_window_size` after a resize and after maximizing. The first
+window must already be the size `reset_window_size` gives. Keys are
+posted to the terminal, so it runs on a locked desktop.
+
 ## window-cycle.ps1
 
 Checks `goto_window` and `toggle_visibility` with a hidden quick terminal.
