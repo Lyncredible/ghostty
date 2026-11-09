@@ -847,25 +847,27 @@ pub fn selectTab(self: *Window, idx: usize) void {
 
 /// Go to a tab, using the semantics of the goto_tab action.
 pub fn gotoTab(self: *Window, goto: apprt.action.GotoTab) bool {
-    const total = self.tabs.items.len;
-    if (total == 0) return false;
-    const current = self.active;
+    const idx = gotoIndex(goto, self.active, self.tabs.items.len) orelse return false;
+    if (idx == self.active) return false;
+    self.selectTab(idx);
+    return true;
+}
 
-    const idx: usize = switch (goto) {
+/// The tab that goto_tab goes to from `current` of `total`: previous and
+/// next wrap around, and a 1-based index past the end is the last tab.
+/// Null if there's no such tab.
+fn gotoIndex(goto: apprt.action.GotoTab, current: usize, total: usize) ?usize {
+    if (total == 0) return null;
+    return switch (goto) {
         .previous => if (current > 0) current - 1 else total - 1,
         .next => if (current < total - 1) current + 1 else 0,
         .last => total - 1,
         _ => idx: {
-            // 1-indexed
             const n = @backingInt(goto);
-            if (n <= 0) return false;
+            if (n <= 0) return null;
             break :idx @min(@as(usize, @intCast(n)) - 1, total - 1);
         },
     };
-
-    if (idx == current) return false;
-    self.selectTab(idx);
-    return true;
 }
 
 /// Move the active tab by the given amount, wrapping around.
@@ -873,15 +875,51 @@ pub fn moveTab(self: *Window, amount: isize) bool {
     const total = self.tabs.items.len;
     if (total <= 1) return false;
 
-    const total_i: isize = @intCast(total);
     const from = self.active;
-    const to: usize = @intCast(@mod(@as(isize, @intCast(from)) + amount, total_i));
+    const to = moveIndex(from, amount, total);
     if (from == to) return false;
 
     const tab = self.tabs.orderedRemove(from);
     self.tabs.insertAssumeCapacity(to, tab);
     self.selectTab(to);
     return true;
+}
+
+/// Where move_tab puts the tab at `from` of `total` (at least one),
+/// wrapping around at either end.
+fn moveIndex(from: usize, amount: isize, total: usize) usize {
+    const total_i: isize = @intCast(total);
+    return @intCast(@mod(@as(isize, @intCast(from)) + amount, total_i));
+}
+
+test gotoIndex {
+    const testing = std.testing;
+    const GotoTab = apprt.action.GotoTab;
+    try testing.expectEqual(@as(?usize, 1), gotoIndex(.previous, 2, 4));
+    try testing.expectEqual(@as(?usize, 3), gotoIndex(.previous, 0, 4));
+    try testing.expectEqual(@as(?usize, 3), gotoIndex(.next, 2, 4));
+    try testing.expectEqual(@as(?usize, 0), gotoIndex(.next, 3, 4));
+    try testing.expectEqual(@as(?usize, 3), gotoIndex(.last, 0, 4));
+    // 1-based, and past the end is the last tab (Ctrl+9 with four tabs).
+    try testing.expectEqual(@as(?usize, 0), gotoIndex(@fromBackingInt(@intCast(1)), 2, 4));
+    try testing.expectEqual(@as(?usize, 3), gotoIndex(@fromBackingInt(@intCast(9)), 0, 4));
+    try testing.expectEqual(@as(?usize, null), gotoIndex(@as(GotoTab, @fromBackingInt(@intCast(0))), 0, 4));
+    try testing.expectEqual(@as(?usize, null), gotoIndex(@as(GotoTab, @fromBackingInt(@intCast(-7))), 0, 4));
+    // One tab: next and previous stay on it; no tabs, nowhere to go.
+    try testing.expectEqual(@as(?usize, 0), gotoIndex(.next, 0, 1));
+    try testing.expectEqual(@as(?usize, 0), gotoIndex(.previous, 0, 1));
+    try testing.expectEqual(@as(?usize, null), gotoIndex(.next, 0, 0));
+}
+
+test moveIndex {
+    const testing = std.testing;
+    try testing.expectEqual(@as(usize, 2), moveIndex(1, 1, 4));
+    try testing.expectEqual(@as(usize, 0), moveIndex(1, -1, 4));
+    // Wrapping at either end, and by more than the number of tabs.
+    try testing.expectEqual(@as(usize, 0), moveIndex(3, 1, 4));
+    try testing.expectEqual(@as(usize, 3), moveIndex(0, -1, 4));
+    try testing.expectEqual(@as(usize, 2), moveIndex(1, 9, 4));
+    try testing.expectEqual(@as(usize, 2), moveIndex(1, -7, 4));
 }
 
 /// Close the given tab without confirmation. If it's the last tab, the
