@@ -75,9 +75,9 @@ pub fn send(
     data.uFlags = c.NIF_INFO;
     data.dwInfoFlags = c.NIIF_USER | c.NIIF_LARGE_ICON;
     data.hBalloonIcon = self.icon;
-    copyTruncated(&data.szInfoTitle, if (title.len == 0) "Ghostty" else title);
+    _ = util.utf16TruncateZ(&data.szInfoTitle, if (title.len == 0) "Ghostty" else title);
     // An empty body hides the balloon, so always show something.
-    copyTruncated(&data.szInfo, if (body.len == 0) " " else body);
+    _ = util.utf16TruncateZ(&data.szInfo, if (body.len == 0) " " else body);
     if (c.Shell_NotifyIconW(c.NIM_MODIFY, &data) == 0) {
         log.warn("failed to show notification", .{});
         return;
@@ -123,59 +123,6 @@ fn iconData(self: *const Notifier) c.NOTIFYICONDATAW {
     data.uID = icon_id;
     data.uCallbackMessage = WM_NOTIFY_ICON;
     data.hIcon = self.icon;
-    copyTruncated(&data.szTip, "Ghostty");
+    _ = util.utf16TruncateZ(&data.szTip, "Ghostty");
     return data;
-}
-
-/// Copy UTF-8 into a fixed size UTF-16 buffer, truncating to fit
-/// without splitting a surrogate pair. Invalid UTF-8 is replaced.
-fn copyTruncated(buf: []u16, s: []const u8) void {
-    @memset(buf, 0);
-    const max = buf.len - 1;
-    var i: usize = 0;
-    var pos: usize = 0;
-    while (pos < s.len) {
-        const cp: u21, const len: usize = decode: {
-            const len = std.unicode.utf8ByteSequenceLength(s[pos]) catch
-                break :decode .{ 0xFFFD, 1 };
-            if (pos + len > s.len) break :decode .{ 0xFFFD, 1 };
-            const cp = std.unicode.utf8Decode(s[pos..][0..len]) catch
-                break :decode .{ 0xFFFD, 1 };
-            break :decode .{ cp, len };
-        };
-        pos += len;
-
-        if (cp < 0x10000) {
-            if (i + 1 > max) break;
-            buf[i] = @intCast(cp);
-            i += 1;
-        } else {
-            if (i + 2 > max) break;
-            const v = cp - 0x10000;
-            buf[i] = @intCast(0xD800 + (v >> 10));
-            buf[i + 1] = @intCast(0xDC00 + (v & 0x3FF));
-            i += 2;
-        }
-    }
-}
-
-test copyTruncated {
-    const testing = std.testing;
-
-    var buf: [4]u16 = undefined;
-    copyTruncated(&buf, "ab");
-    try testing.expectEqualSlices(u16, &.{ 'a', 'b', 0, 0 }, &buf);
-
-    copyTruncated(&buf, "abcdef");
-    try testing.expectEqualSlices(u16, &.{ 'a', 'b', 'c', 0 }, &buf);
-
-    // A surrogate pair that doesn't fit is dropped entirely.
-    copyTruncated(&buf, "ab😀");
-    try testing.expectEqualSlices(u16, &.{ 'a', 'b', 0, 0 }, &buf);
-
-    copyTruncated(&buf, "a😀");
-    try testing.expectEqualSlices(u16, &.{ 'a', 0xD83D, 0xDE00, 0 }, &buf);
-
-    copyTruncated(&buf, "a\xffb");
-    try testing.expectEqualSlices(u16, &.{ 'a', 0xFFFD, 'b', 0 }, &buf);
 }
