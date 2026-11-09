@@ -1438,6 +1438,11 @@ Notes:
         tests. CI run 42632284454 (927faef1d) passed every job before it.
         After it, CI run 42645224370 (9a8cc3927) passed every job and
         `windows-tip` moved.
+  - [x] 2026-11-09: an eighteenth sync (3 commits: style runs in the
+        render state's `endUpdate` simplified). No conflicts; dates kept
+        (655 commits checked). The app builds and the render tests pass.
+        CI run 42659400700 (cc1580349, the `+edit-config` command line
+        test) passed every job before it.
 - [x] Tip builds, like upstream's `release-tip.yml` (the discussion's
       release workflow item): a rolling prerelease of the latest
       `windows` commit, so people can try it without building. Approved
