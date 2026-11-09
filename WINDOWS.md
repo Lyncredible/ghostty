@@ -1406,6 +1406,11 @@ Notes:
         default is true again when building the Win32 app (not with
         `-Demit-lib-vt`). Checked: the app build installs the 861 themes,
         and the libghostty-vt build works.
+  - [x] 2026-11-08: a thirteenth sync (7 commits: libghostty-vt's
+        prebuilt Windows zips and relocatable pkg-config files). No
+        conflicts; dates kept (all 636 commits checked). The app and
+        libghostty-vt build. CI run 42540743076 (2442002dd, before the
+        sync) passed every job, with the scrollbar fix and the crash test.
 - [x] Tip builds, like upstream's `release-tip.yml` (the discussion's
       release workflow item): a rolling prerelease of the latest
       `windows` commit, so people can try it without building. Approved
