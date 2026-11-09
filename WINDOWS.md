@@ -2484,6 +2484,17 @@ Notes:
   - CI run 42528498930 (32b573df4, with the sync, the UTF-16 fixes and
     the tab bar tests) passed every job, including `tab-tooltips.ps1`
     hovering the long title, and `windows-tip` moved.
+  - Overlay fonts (2026-11-09): the link preview made and deleted a GDI
+    font on every mouse move over a link, and the badge, search bar and
+    command palette on every layout (each resize step). The search bar
+    and palette also deleted the font their Edit control still had
+    before giving it the new one. `util.MessageFont` keeps the system
+    message font until the DPI or the system font changes, and controls
+    get the new font before the old one goes (unit tested; the GDI leak,
+    memory leak, search, command palette and overlays UI tests pass).
+    Where the badge (each anchor, DPI scaling, a surface smaller than
+    it) and the link preview (its corner, moving away from the mouse, a
+    URL wider than the surface) go is now unit tested too.
 - [ ] Packaging and release builds
   - [x] Portable zip (`dist/windows/package.ps1`)
   - [x] Per-user install script in the zip (`dist/windows/install.ps1`):
