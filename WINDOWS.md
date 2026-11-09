@@ -1442,7 +1442,11 @@ Notes:
         render state's `endUpdate` simplified). No conflicts; dates kept
         (655 commits checked). The app builds and the render tests pass.
         CI run 42659400700 (cc1580349, the `+edit-config` command line
-        test) passed every job before it.
+        test) passed every job before it. Its own run was cancelled by
+        the next push; CI run 42675127583 (0c0078e78: the sync, overlay
+        fonts, the tab bar providers, the quick terminal fixes and
+        `window-cycle.ps1`) passed every job, `window-cycle` included,
+        and `windows-tip` moved.
 - [x] Tip builds, like upstream's `release-tip.yml` (the discussion's
       release workflow item): a rolling prerelease of the latest
       `windows` commit, so people can try it without building. Approved
