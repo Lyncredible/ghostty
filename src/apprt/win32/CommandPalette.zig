@@ -65,6 +65,9 @@ const row_height = 44;
 const max_rows = 8;
 const pad = 8;
 
+/// The longest query, in UTF-16 units.
+const max_query = 255;
+
 hwnd: c.HWND = null,
 edit: c.HWND = null,
 list: c.HWND = null,
@@ -246,6 +249,7 @@ pub fn show(
         .terminals => std.unicode.utf8ToUtf16LeStringLiteral("Switch to a tab…"),
     };
     _ = c.SendMessageW(self.edit, c.EM_SETCUEBANNER, c.TRUE, @bitCast(@intFromPtr(cue.ptr)));
+    _ = c.SendMessageW(self.edit, c.EM_SETLIMITTEXT, max_query, 0);
     _ = c.SetWindowTextW(self.edit, std.unicode.utf8ToUtf16LeStringLiteral(""));
     self.filter();
     self.layout();
@@ -368,7 +372,7 @@ test matches {
 
 /// Show the entries that match the field, selecting the first.
 fn filter(self: *CommandPalette) void {
-    var buf: [256]u16 = undefined;
+    var buf: [max_query + 1]u16 = undefined;
     const len: usize = @intCast(@max(0, c.GetWindowTextW(self.edit, &buf, buf.len)));
     var query: [3 * buf.len]u8 = undefined;
     const n = std.unicode.wtf16LeToWtf8(&query, buf[0..len]);
