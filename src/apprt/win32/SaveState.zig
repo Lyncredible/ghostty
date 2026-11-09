@@ -240,6 +240,62 @@ fn captureTab(alloc: Allocator, tab: *const Tab) !TabState {
     };
 }
 
+/// The most nodes a saved tab can have: 128 terminals, far more than fit,
+/// which also bounds how deep restoring a tree recurses.
+pub const max_nodes = 255;
+
+/// Whether saved nodes make a tree, as `capture` writes them: from node 0,
+/// each split's children are nodes that exist and that nothing else in
+/// the tree has. A damaged file could otherwise make restoring loop, or
+/// share nodes so that a few dozen of them asked for millions of
+/// terminals.
+pub fn validTree(nodes: []const NodeState) bool {
+    if (nodes.len == 0 or nodes.len > max_nodes) return false;
+    var used: std.StaticBitSet(max_nodes) = .empty;
+    return validNode(nodes, 0, &used);
+}
+
+fn validNode(nodes: []const NodeState, index: usize, used: *std.StaticBitSet(max_nodes)) bool {
+    if (index >= nodes.len or used.isSet(index)) return false;
+    used.set(index);
+    const node = nodes[index];
+    if (node.layout == null) return true;
+    return validNode(nodes, node.left, used) and validNode(nodes, node.right, used);
+}
+
+test validTree {
+    const testing = std.testing;
+    const leaf: NodeState = .{};
+    try testing.expect(validTree(&.{leaf}));
+    try testing.expect(validTree(&.{
+        .{ .layout = .horizontal, .left = 1, .right = 2 },
+        .{ .layout = .vertical, .left = 3, .right = 4 },
+        leaf,
+        leaf,
+        leaf,
+    }));
+    // Nodes nothing refers to do no harm.
+    try testing.expect(validTree(&.{ leaf, leaf }));
+
+    try testing.expect(!validTree(&.{}));
+    // A child that doesn't exist.
+    try testing.expect(!validTree(&.{ .{ .layout = .horizontal, .left = 1, .right = 2 }, leaf }));
+    // A split that's its own child: a loop.
+    try testing.expect(!validTree(&.{ .{ .layout = .horizontal, .left = 0, .right = 1 }, leaf }));
+    // Two splits sharing children, which would double the terminals at
+    // each level.
+    try testing.expect(!validTree(&.{
+        .{ .layout = .horizontal, .left = 1, .right = 1 },
+        .{ .layout = .vertical, .left = 2, .right = 3 },
+        leaf,
+        leaf,
+    }));
+    // Too many nodes.
+    const many: [max_nodes + 1]NodeState = @splat(leaf);
+    try testing.expect(validTree(many[0..max_nodes]));
+    try testing.expect(!validTree(&many));
+}
+
 /// The index of a terminal among a tree's terminals, from left to right
 /// (depth first). Unlike the order of the nodes, this survives restoring.
 pub fn leafIndex(tree: *const Tab.Tree, surface: *const anyopaque) ?usize {
