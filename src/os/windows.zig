@@ -433,6 +433,17 @@ pub fn ProcThreadAttributeValue(
         (if (additive) PROC_THREAD_ATTRIBUTE_ADDITIVE else 0);
 }
 
+/// A named pipe's name for a test, with our process ID in it: Ghostty's
+/// and libghostty-vt's test binaries run some of the same tests, and may
+/// run at once, and a pipe made for one instance can't be made again.
+pub fn testPipeName(buf: *[96]u16, comptime what: []const u8) [:0]const u16 {
+    var utf8: [96]u8 = undefined;
+    const name = std.fmt.bufPrint(&utf8, "\\\\.\\pipe\\ghostty-" ++ what ++ "-test-{d}", .{GetCurrentProcessId()}) catch unreachable;
+    const n = std.unicode.utf8ToUtf16Le(buf[0 .. buf.len - 1], name) catch unreachable;
+    buf[n] = 0;
+    return buf[0..n :0];
+}
+
 /// Write one argument of a command line so that CommandLineToArgvW (and
 /// the C runtime) read it back unchanged: as is, or quoted when it's empty
 /// or has whitespace or quotes, with the backslashes before a quote (or

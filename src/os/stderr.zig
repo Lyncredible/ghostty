@@ -85,7 +85,8 @@ test "write waits for an asynchronous pipe" {
     if (comptime builtin.target.os.tag != .windows) return error.SkipZigTest;
 
     const windows = @import("windows.zig");
-    const name = std.unicode.utf8ToUtf16LeStringLiteral("\\\\.\\pipe\\ghostty-stderr-test");
+    var name_buf: [96]u16 = undefined;
+    const name = windows.testPipeName(&name_buf, "stderr");
     const server = windows.exp.kernel32.CreateNamedPipeW(
         name,
         PIPE_ACCESS_INBOUND,
