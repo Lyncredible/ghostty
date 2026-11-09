@@ -1429,6 +1429,13 @@ Notes:
   - [x] 2026-11-09: a sixteenth sync (5 commits: an Indonesian
         translation update, `po/id.po`, which the Windows app doesn't use).
         No conflicts; dates kept (650 commits checked).
+  - [x] 2026-11-09: a seventeenth sync (5 commits: the VT parser's CSI
+        digit parsing, faster UTF-8 error handling in the SIMD decoder,
+        and stream handler errors logged out of line). No conflicts;
+        dates kept (652 commits checked). The app builds; the stream and
+        SIMD tests pass (375, 1 skipped), as do libghostty-vt's stream
+        tests and the scrollbar, search, color query and memory leak UI
+        tests. CI run 42632284454 (927faef1d) passed every job before it.
 - [x] Tip builds, like upstream's `release-tip.yml` (the discussion's
       release workflow item): a rolling prerelease of the latest
       `windows` commit, so people can try it without building. Approved
