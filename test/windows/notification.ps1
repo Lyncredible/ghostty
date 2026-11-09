@@ -93,13 +93,19 @@ try {
     $data.cbSize = [Runtime.InteropServices.Marshal]::SizeOf($data)
     $data.hWnd = $messages
     $data.uID = 1
-    if (-not $W::Shell_NotifyIconW(2, [ref]$data)) { Fail "couldn't delete the icon" }   # NIM_DELETE
+    $deleted = $W::Shell_NotifyIconW(2, [ref]$data)   # NIM_DELETE
+    if (-not $deleted) {
+        # The notification may be gone already (CI's Explorer dismisses it
+        # at once), and with it the icon. Then the next one adds it anew.
+        Write-Host "::notice title=notification::The icon was already gone, so the second notification doesn't check a lost icon here."
+    }
 
     # Notifications more often than once a second are dropped.
     Start-Sleep -Seconds 2
     Set-Content $go 'go'
     [void](WaitFor { (Shown) -ge 2 } 'the second notification, after the icon was deleted')
-    Write-Host 'After the icon was deleted, the second notification showed too.'
+    Write-Host "$(if ($deleted) { 'After the icon was deleted, the' } else { 'The' }) second notification showed too."
+    Get-Content $log | Select-String '(win32).*notification' | ForEach-Object { Write-Host "  $($_.Line)" }
 
     # A click on it brings back its window. The click comes as the icon's
     # message (WM_APP + 2) with NIN_BALLOONUSERCLICK.
