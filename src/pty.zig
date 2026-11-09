@@ -465,7 +465,7 @@ const WindowsPty = struct {
         pty.out_pipe = pipes.out_pipe;
 
         const result = pty.conpty.create(
-            .{ .X = @intCast(size.ws_col), .Y = @intCast(size.ws_row) },
+            coord(size),
             pipes.in_pipe_pty,
             pipes.out_pipe_pty,
             pty.conpty.flags,
@@ -651,7 +651,8 @@ const WindowsPty = struct {
         if (self.handoff) |console| {
             // PTY_SIGNAL_RESIZE_WINDOW, as ConptyResizePseudoConsole
             // writes it.
-            const packet = [3]u16{ 8, @intCast(size.ws_col), @intCast(size.ws_row) };
+            const at = coord(size);
+            const packet = [3]u16{ 8, @bitCast(at.X), @bitCast(at.Y) };
             if (windows.exp.kernel32.WriteFile(
                 console.signal,
                 @ptrCast(&packet),
@@ -663,13 +664,26 @@ const WindowsPty = struct {
             return;
         }
 
-        const result = self.conpty.resize(
-            self.pseudo_console,
-            .{ .X = @intCast(size.ws_col), .Y = @intCast(size.ws_row) },
-        );
+        const result = self.conpty.resize(self.pseudo_console, coord(size));
 
         if (result != windows.S_OK) return error.ResizeFailed;
         self.size = size;
+    }
+
+    /// The size as a console COORD, whose fields are signed 16 bits: a
+    /// grid wider or taller than 32767 cells (a tiny font across very wide
+    /// screens) is cut to that rather than overflowing.
+    fn coord(size: winsize) windows.COORD {
+        const max = std.math.maxInt(i16);
+        return .{ .X = @intCast(@min(size.ws_col, max)), .Y = @intCast(@min(size.ws_row, max)) };
+    }
+
+    test coord {
+        const testing = std.testing;
+        try testing.expectEqual(windows.COORD{ .X = 80, .Y = 24 }, coord(.{ .ws_row = 24, .ws_col = 80 }));
+        try testing.expectEqual(windows.COORD{ .X = 32767, .Y = 32767 }, coord(.{ .ws_row = 32767, .ws_col = 32767 }));
+        try testing.expectEqual(windows.COORD{ .X = 32767, .Y = 50 }, coord(.{ .ws_row = 50, .ws_col = 40000 }));
+        try testing.expectEqual(windows.COORD{ .X = 1, .Y = 32767 }, coord(.{ .ws_row = 65535, .ws_col = 1 }));
     }
 
     /// Make the window that shows the terminal own the pseudoconsole's
