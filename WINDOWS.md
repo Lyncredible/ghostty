@@ -2602,7 +2602,10 @@ Notes:
     failed notification now adds the icon again. `notification.ps1` (in
     CI, as it shows notifications) checks it by deleting the icon itself
     (it times out without the fix), and that clicking a notification
-    brings back its minimized window.
+    brings back its minimized window. In CI (run 42705239766) the icon was
+    already gone when the test went to delete it (Explorer there
+    dismisses notifications at once), so there it's a notice now and
+    the test checks the second notification and the click.
   - Floats from outside went into `@intFromFloat` unchecked, which
     panics on NaN or a value beyond the integer: the points UI
     Automation clients (any process) ask about (the tab bar's
