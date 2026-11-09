@@ -2,13 +2,14 @@
 # allocator, which reports every allocation not freed when the program
 # exits normally ("error(SafeAllocator): leaked ..." with where it was
 # made). Other UI tests end Ghostty with Stop-Process, which skips that.
-# This one does some UI work (the search bar, the command palette, tabs and
-# splits opened and closed and still kept for undo when it quits,
-# resizing, a scrollback full of output, the inspector, font sizes,
-# read-only mode, the quick terminal, a title and a bell), then quits
-# with the quit action, and fails if its standard error reports a leak. Input is posted to Ghostty's windows,
-# so it runs on a locked desktop. Release builds don't use the debug
-# allocator, so it needs a Debug build.
+# This one does some UI work (the search bar, the command palette, tabs
+# and splits opened, zoomed and closed and still kept for undo when it
+# quits, resizing, fullscreen, a scrollback full of output, the
+# inspector, font sizes, read-only mode, the quick terminal, a title and
+# a bell), then quits with the quit action, and fails if its standard
+# error reports a leak. Input is posted to Ghostty's windows, so it runs
+# on a locked desktop. Release builds don't use the debug allocator, so
+# it needs a Debug build.
 #
 #     ./memory-leak.ps1 -Exe zig-out/bin/ghostty.exe
 
@@ -43,7 +44,7 @@ $process = Start-Process -FilePath $Exe -PassThru -RedirectStandardError $log -A
     '--keybind=f8=new_tab', '--keybind=f9=close_tab', '--keybind=f10=new_split:right', '--keybind=f11=close_surface',
     '--undo-timeout=5m', '--keybind=f1=inspector:toggle', '--keybind=f2=increase_font_size:3',
     '--keybind=f3=reset_font_size', '--keybind=f4=toggle_readonly', '--keybind=f12=toggle_quick_terminal',
-    '--keybind=f13=quit'
+    '--keybind=f13=quit', '--keybind=f14=toggle_fullscreen', '--keybind=f15=toggle_split_zoom'
 # Opening the handle now keeps the exit code for later.
 $null = $process.Handle
 
@@ -100,13 +101,21 @@ try {
     $tab = WaitFor { @(Surfaces | Where-Object { $before -notcontains $_ })[0] } 'a new tab'
     $W::Key($tab, 0x79, 0x44)     # F10: new_split:right
     $split = WaitFor { @(Surfaces | Where-Object { $before -notcontains $_ -and $_ -ne $tab })[0] } 'a split'
+    $W::Key($split, 0x7E, 0x66)   # F15: toggle_split_zoom
+    [void](WaitFor { -not $W::IsWindowVisible($tab) } 'the split to zoom')
+    $W::Key($split, 0x7E, 0x66)
+    [void](WaitFor { $W::IsWindowVisible($tab) } 'the split to unzoom')
     $W::Key($split, 0x7A, 0x57)   # F11: close_surface
     [void](WaitFor { -not $W::IsWindowVisible($split) } 'the split to close')
     $W::Key($tab, 0x78, 0x43)     # F9: close_tab
     [void](WaitFor { -not $W::IsWindowVisible($tab) -and $W::IsWindowVisible($first) } 'the tab to close')
     [void]$W::SetWindowPos($window, [IntPtr]::Zero, 60, 60, 900, 600, 0x0014)
     Start-Sleep -Seconds 1
-    Write-Host 'Did the search bar, the command palette, tabs, splits and a resize.'
+    $W::Key($first, 0x7D, 0x65)   # F14: toggle_fullscreen
+    Start-Sleep -Milliseconds 500
+    $W::Key($first, 0x7D, 0x65)
+    Start-Sleep -Milliseconds 500
+    Write-Host 'Did the search bar, the command palette, tabs, splits (zoomed and back), a resize and fullscreen.'
 
     # The inspector, a bigger font (a new glyph atlas) and back, read-only
     # mode (a badge), the quick terminal, and from cmd a title and a bell.
