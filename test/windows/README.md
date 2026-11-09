@@ -371,7 +371,8 @@ Checks the window actions from keybinds, each there and back:
 then returns, and so does its terminal's size, with the tabs back in the
 title bar), `toggle_window_float_on_top` (`WS_EX_TOPMOST`), and
 `reset_window_size` after a resize and after maximizing. The first
-window must already be the size `reset_window_size` gives. Keys are
+window must already be the size `reset_window_size` gives. Last,
+`close_window` must close the window, and Ghostty must quit. Keys are
 posted to the terminal, so it runs on a locked desktop.
 
 ## window-cycle.ps1
