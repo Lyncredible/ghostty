@@ -1436,6 +1436,8 @@ Notes:
         SIMD tests pass (375, 1 skipped), as do libghostty-vt's stream
         tests and the scrollbar, search, color query and memory leak UI
         tests. CI run 42632284454 (927faef1d) passed every job before it.
+        After it, CI run 42645224370 (9a8cc3927) passed every job and
+        `windows-tip` moved.
 - [x] Tip builds, like upstream's `release-tip.yml` (the discussion's
       release workflow item): a rolling prerelease of the latest
       `windows` commit, so people can try it without building. Approved
