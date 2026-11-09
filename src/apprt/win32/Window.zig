@@ -386,13 +386,32 @@ fn slideQuick(self: *Window, to: f32) void {
         .from = self.quick_shown,
         .to = to,
         .start_ms = c.GetTickCount64(),
-        .duration_ms = if (animate) @intFromFloat(seconds * 1000 * distance) else 0,
+        .duration_ms = if (animate) slideMs(seconds, distance) else 0,
     };
     self.stepQuickSlide();
     if (self.quick_slide != null) {
         // About 100 frames per second; timers aren't more precise anyway.
         _ = c.SetTimer(self.hwnd, quick_slide_timer_id, 10, null);
     }
+}
+
+/// How long a slide over `distance` (0 to 1 of the window) takes, in
+/// milliseconds, for an animation of `seconds`. A duration that isn't a
+/// number or is absurdly long (infinite, say) is capped at a minute.
+fn slideMs(seconds: f64, distance: f64) u64 {
+    // Not `@min` alone, which takes the other number over NaN.
+    if (!(seconds > 0) or !(distance > 0)) return 0;
+    return @intFromFloat(@min(seconds, 60) * 1000 * @min(distance, 1));
+}
+
+test slideMs {
+    const testing = std.testing;
+    try testing.expectEqual(@as(u64, 200), slideMs(0.2, 1));
+    try testing.expectEqual(@as(u64, 100), slideMs(0.2, 0.5));
+    try testing.expectEqual(@as(u64, 60000), slideMs(std.math.inf(f64), 1));
+    try testing.expectEqual(@as(u64, 60000), slideMs(1e30, 1));
+    try testing.expectEqual(@as(u64, 0), slideMs(std.math.nan(f64), 1));
+    try testing.expectEqual(@as(u64, 0), slideMs(-1, 1));
 }
 
 /// Advance the quick terminal's slide animation.
