@@ -984,16 +984,49 @@ pub fn presentSurface(self: *App, surface: *CoreSurface) void {
 
 /// Activate the window before or after the given one, in creation order.
 fn gotoWindow(self: *App, from: *Window, direction: apprt.action.GotoWindow) bool {
-    const len = self.windows.items.len;
-    if (len <= 1) return false;
     const idx = std.mem.indexOfScalar(*Window, self.windows.items, from) orelse return false;
-    const next = switch (direction) {
-        .next => (idx + 1) % len,
-        .previous => (idx + len - 1) % len,
-    };
+    const next = cycleWindow(self.windows.items, idx, direction) orelse return false;
     const window = self.windows.items[next];
     window.present(window.activeSurface());
     return true;
+}
+
+/// The index of the window `direction` of the one at `from`, wrapping
+/// around, or null if there's no other. The quick terminal is skipped:
+/// it's toggled, not cycled to, and may be hidden.
+fn cycleWindow(windows: []const *Window, from: usize, direction: apprt.action.GotoWindow) ?usize {
+    const len = windows.len;
+    var i = from;
+    for (1..len) |_| {
+        i = switch (direction) {
+            .next => (i + 1) % len,
+            .previous => (i + len - 1) % len,
+        };
+        if (!windows[i].quick) return i;
+    }
+    return null;
+}
+
+test cycleWindow {
+    const testing = std.testing;
+    // Only `quick` is read.
+    var storage: [4]Window = undefined;
+    for (&storage, [_]bool{ false, true, false, false }) |*w, quick| w.quick = quick;
+    const windows = [_]*Window{ &storage[0], &storage[1], &storage[2], &storage[3] };
+
+    // Next and previous wrap around, past the quick terminal.
+    try testing.expectEqual(@as(?usize, 2), cycleWindow(&windows, 0, .next));
+    try testing.expectEqual(@as(?usize, 0), cycleWindow(&windows, 3, .next));
+    try testing.expectEqual(@as(?usize, 3), cycleWindow(&windows, 0, .previous));
+    try testing.expectEqual(@as(?usize, 0), cycleWindow(&windows, 2, .previous));
+    // From the quick terminal, the windows beside it.
+    try testing.expectEqual(@as(?usize, 2), cycleWindow(&windows, 1, .next));
+    try testing.expectEqual(@as(?usize, 0), cycleWindow(&windows, 1, .previous));
+    // One window and the quick terminal: nowhere to go from the window.
+    try testing.expectEqual(@as(?usize, null), cycleWindow(windows[0..2], 0, .next));
+    try testing.expectEqual(@as(?usize, null), cycleWindow(windows[0..2], 0, .previous));
+    try testing.expectEqual(@as(?usize, 0), cycleWindow(windows[0..2], 1, .next));
+    try testing.expectEqual(@as(?usize, null), cycleWindow(windows[0..1], 0, .next));
 }
 
 /// Whether windows let the desktop show through the terminal background.
@@ -1038,11 +1071,19 @@ fn toggleVisibility(self: *App) void {
     log.debug("toggle visibility hide={}", .{active != null});
     if (active) |window| {
         self.hidden_active = window;
-        for (self.windows.items) |w| _ = c.ShowWindow(w.hwnd, c.SW_HIDE);
+        for (self.windows.items) |w| {
+            w.hidden_by_toggle = c.IsWindowVisible(w.hwnd) != 0;
+            _ = c.ShowWindow(w.hwnd, c.SW_HIDE);
+        }
         return;
     }
 
-    for (self.windows.items) |w| _ = c.ShowWindow(w.hwnd, c.SW_SHOWNA);
+    // Only the windows we hid come back: a quick terminal that was hidden
+    // stays hidden.
+    for (self.windows.items) |w| if (w.hidden_by_toggle) {
+        w.hidden_by_toggle = false;
+        _ = c.ShowWindow(w.hwnd, c.SW_SHOWNA);
+    };
     const target = if (self.hidden_active) |hidden|
         if (std.mem.indexOfScalar(*Window, self.windows.items, hidden) != null) hidden else null
     else
