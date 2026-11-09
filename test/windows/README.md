@@ -517,8 +517,11 @@ only reports what came back.
 
 Checks the CLI actions that talk to a running Ghostty: `+new-tab` adds a tab
 to its window and `+new-window` opens another window, through the console
-launcher (`ghostty.com`) with the instance's `--class`. Tabs and windows are
-counted with UI Automation.
+launcher (`ghostty.com`) with the instance's `--class`. Then `+new-tab` with
+`--title` and `-e` must open a tab with that title running that command.
+The overrides are parsed into memory that's freed once the request is
+handled, so this also checks nothing keeps pointing into it. Tabs and
+windows are counted with UI Automation.
 
 ## tab-close-uia.ps1
 
