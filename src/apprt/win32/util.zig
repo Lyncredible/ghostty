@@ -19,6 +19,28 @@ pub fn rgb(r: u8, g: u8, b: u8) c.COLORREF {
     return @as(c.COLORREF, r) | (@as(c.COLORREF, g) << 8) | (@as(c.COLORREF, b) << 16);
 }
 
+/// A number from outside, such as a point another process asks about, as
+/// an integer: cut to the type's range, with NaN as 0, where
+/// `@intFromFloat` would panic.
+pub fn saturate(comptime T: type, v: f64) T {
+    comptime std.debug.assert(@bitSizeOf(T) <= 32);
+    if (std.math.isNan(v)) return 0;
+    const lo: f64 = @floatFromInt(std.math.minInt(T));
+    const hi: f64 = @floatFromInt(std.math.maxInt(T));
+    return @intFromFloat(std.math.clamp(v, lo, hi));
+}
+
+test saturate {
+    const testing = std.testing;
+    try testing.expectEqual(@as(c_int, 12), saturate(c_int, 12.7));
+    try testing.expectEqual(@as(c_int, -12), saturate(c_int, -12.7));
+    try testing.expectEqual(@as(c_int, std.math.maxInt(c_int)), saturate(c_int, 1e20));
+    try testing.expectEqual(@as(c_int, std.math.minInt(c_int)), saturate(c_int, -std.math.inf(f64)));
+    try testing.expectEqual(@as(c_int, 0), saturate(c_int, std.math.nan(f64)));
+    try testing.expectEqual(@as(u32, 0), saturate(u32, -5));
+    try testing.expectEqual(@as(u32, std.math.maxInt(u32)), saturate(u32, std.math.inf(f64)));
+}
+
 /// A color channel from `a` toward `b` by `t` (0 to 1).
 pub fn mix(a: u8, b: u8, t: f32) u8 {
     const af: f32 = @floatFromInt(a);

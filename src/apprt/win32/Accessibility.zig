@@ -624,8 +624,9 @@ fn textRangeFromPoint(iface: *Interface, point: UiaPoint, out: *?*anyopaque) cal
     out.* = null;
     const snapshot = self.takeSnapshot() catch return UIA_E_ELEMENTNOTAVAILABLE;
     defer snapshot.unref();
-    const line: u32 = if (snapshot.cell_height > 0) @intFromFloat(@max(0, (point.y - snapshot.origin_y) / snapshot.cell_height)) else 0;
-    const column: u32 = if (snapshot.cell_width > 0) @intFromFloat(@max(0, (point.x - snapshot.origin_x) / snapshot.cell_width)) else 0;
+    // The point is the client's, so it can be anything (NaN, far away).
+    const line: u32 = if (snapshot.cell_height > 0) util.saturate(u32, (point.y - snapshot.origin_y) / snapshot.cell_height) else 0;
+    const column: u32 = if (snapshot.cell_width > 0) util.saturate(u32, (point.x - snapshot.origin_x) / snapshot.cell_width) else 0;
     const pos = snapshot.offsetOf(line, column);
     const range = self.newRange(snapshot, pos, pos) catch return E_OUTOFMEMORY;
     out.* = &range.iface;
