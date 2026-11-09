@@ -84,7 +84,7 @@ pub fn create(
 /// tab of a new window.
 pub fn createRestored(window: *Window, state: SaveState.TabState, first: bool) !*Tab {
     const alloc = window.app.core_app.alloc;
-    if (state.nodes.len == 0) return error.InvalidState;
+    if (!SaveState.validTree(state.nodes)) return error.InvalidState;
 
     var arena: std.heap.ArenaAllocator = .init(alloc);
     defer arena.deinit();
