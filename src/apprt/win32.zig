@@ -30,4 +30,6 @@ test {
     _ = @import("win32/TabBar.zig");
     _ = @import("win32/Tab.zig");
     _ = @import("win32/Scrollbar.zig");
+    _ = @import("win32/Badge.zig");
+    _ = @import("win32/LinkPreview.zig");
 }
