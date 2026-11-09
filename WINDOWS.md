@@ -1412,6 +1412,11 @@ Notes:
         conflicts; dates kept (all 636 commits checked). The app and
         libghostty-vt build. CI run 42540743076 (2442002dd, before the
         sync) passed every job, with the scrollbar fix and the crash test.
+  - [x] 2026-11-08: a fourteenth sync (2 commits: a GitHub Actions
+        bump in upstream's `release-tip.yml`, which the fork doesn't
+        run). No conflicts; dates kept (640 commits checked). CI run
+        42552051247 (4ce6f2d23, after the thirteenth sync) passed every
+        job and `windows-tip` moved.
 - [x] Tip builds, like upstream's `release-tip.yml` (the discussion's
       release workflow item): a rolling prerelease of the latest
       `windows` commit, so people can try it without building. Approved
