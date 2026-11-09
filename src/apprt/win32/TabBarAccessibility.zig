@@ -249,7 +249,8 @@ const root_fragment_root_vtbl = FragmentRootVtbl{
             const self = fromIface("fragment_root", i);
             out.* = null;
             const bar = self.bar orelse return UIA_E_ELEMENTNOTAVAILABLE;
-            const pt: c.POINT = .{ .x = @intFromFloat(x), .y = @intFromFloat(y) };
+            // The point is the client's, so it can be anything.
+            const pt: c.POINT = .{ .x = util.saturate(c_int, x), .y = util.saturate(c_int, y) };
             const kind: ?Item.Kind = if (bar.hitAtScreen(pt)) |hit| switch (hit) {
                 .tab => |idx| .{ .tab = bar.window.tabs.items[idx] },
                 .close => |idx| .{ .close = bar.window.tabs.items[idx] },
