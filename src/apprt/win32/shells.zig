@@ -123,3 +123,29 @@ fn appendWslDistributions(
         });
     }
 }
+
+test list {
+    const testing = std.testing;
+    var arena: std.heap.ArenaAllocator = .init(testing.allocator);
+    defer arena.deinit();
+    const shells = try list(arena.allocator());
+
+    // The configured command comes first, then what's installed: every
+    // Windows has cmd, found on the PATH as a full path.
+    try testing.expectEqualStrings("Configured default", shells[0].label);
+    try testing.expect(shells[0].command == null);
+    var cmd: ?[:0]const u8 = null;
+    for (shells[1..]) |shell| {
+        const argv = shell.command.?.direct;
+        try testing.expect(argv.len > 0);
+        try testing.expect(std.fs.path.isAbsolute(argv[0]));
+        if (std.mem.eql(u8, shell.label, "Command Prompt")) cmd = argv[0];
+        // A distribution runs the WSL found above with its name.
+        if (std.mem.startsWith(u8, shell.label, "WSL: ")) {
+            try testing.expectEqual(@as(usize, 3), argv.len);
+            try testing.expectEqualStrings("-d", argv[1]);
+            try testing.expectEqualStrings(shell.label["WSL: ".len..], argv[2]);
+        }
+    }
+    try testing.expect(std.ascii.endsWithIgnoreCase(cmd.?, "\\cmd.exe"));
+}
