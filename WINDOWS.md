@@ -2375,6 +2375,22 @@ Notes:
     (`SplitRects`, at two divider widths and with no room) and the ratio
     from dragging a divider (`dragRatio`, kept to 5-95%) are now pure and
     tested. `command-palette`, `overlays` and `session-restore` pass.
+  - GDI and USER object leaks (2026-11-09): a new test,
+    `test/windows/gdi-leak.ps1` (in CI), repeats the search bar, the
+    command palette, a new tab, a split, resizing and hovering the tab
+    bar, and checks the counts from `GetGuiResources`. It found GDI
+    objects growing by exactly 2 a round. Leaving steps out narrowed it
+    down: a surface whose search bar or command palette had been shown
+    leaked one GDI object each when it closed. Both subclass their Edit
+    control, and their `deinit` cleared the control's user data before
+    destroying it, so the subclass procedure passed `WM_DESTROY` and
+    `WM_NCDESTROY` to `DefWindowProcW` instead of the Edit's own
+    procedure, which never freed what it had made. `util.unsubclass` now
+    puts the original procedure back first. Now no growth over 25 rounds
+    (50 GDI objects before). Also, the search bar deleted its icon font
+    while it was still selected into the DC, which `DeleteObject`
+    refuses; it's deselected first now (no measured leak, but the
+    documented rule).
   - Screen readers moving by character (UI Automation text ranges,
     `TextRange.zig`) stepped by UTF-16 unit, so an emoji's surrogate
     pair was read as two broken halves. A character boundary no longer

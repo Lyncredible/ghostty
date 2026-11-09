@@ -362,6 +362,17 @@ thumb jumps to the click: the top shows cmd's banner, the middle lines from
 the middle of the output, and the bottom `L1300` again. What's in view is
 the surface's UI Automation value.
 
+## gdi-leak.ps1
+
+Checks that Ghostty's own drawn UI doesn't leak GDI or USER objects (a
+process may have 10,000 of each, so a leak on every paint or every new tab
+breaks drawing after a long session): after a warm-up, 25 rounds of the
+search bar, the command palette, a new tab and a split (each closed again),
+a resize and hovering the tab bar may add at most half an object a round
+(`GetGuiResources`). `-Steps` runs only some of them, to find a leak. It
+found one: each surface whose search bar or command palette had been shown
+leaked a GDI object when it closed.
+
 ## crash-report.ps1
 
 Checks the crash handler: Ghostty, with F12 bound to `crash:main` and its

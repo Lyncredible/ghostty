@@ -132,7 +132,7 @@ fn createWindows(self: *SearchBar) !void {
 pub fn deinit(self: *SearchBar) void {
     if (self.hwnd != null) {
         _ = c.SetWindowLongPtrW(self.hwnd, util.GWLP_USERDATA, 0);
-        if (self.edit != null) _ = c.SetWindowLongPtrW(self.edit, util.GWLP_USERDATA, 0);
+        if (self.edit != null) util.unsubclass(self.edit, self.edit_proc);
         _ = c.DestroyWindow(self.hwnd);
     }
     if (self.font != null) _ = c.DeleteObject(self.font);
@@ -363,11 +363,14 @@ fn paint(self: *SearchBar, dc: c.HDC) void {
 
     // Buttons, drawn with Segoe Fluent Icons (Windows 11) or Segoe MDL2
     // Assets (Windows 10) glyphs.
+    // A font still selected into a DC can't be deleted (DeleteObject
+    // fails and it leaks), so the previous one goes back in first.
     const icon_font = self.iconFont();
+    const before_icons = if (icon_font != null) c.SelectObject(dc, icon_font) else null;
     defer if (icon_font != null) {
+        _ = c.SelectObject(dc, before_icons);
         _ = c.DeleteObject(icon_font);
     };
-    if (icon_font != null) _ = c.SelectObject(dc, icon_font);
     inline for (.{
         .{ Button.previous, 0xE70E },
         .{ Button.next, 0xE70D },
