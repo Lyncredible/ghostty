@@ -125,9 +125,10 @@ try {
     Write-Host 'toggle_window_float_on_top made the window topmost and then not.'
 
     # reset_window_size after the window is resized, and after it's
-    # maximized.
-    [void]$W::SetWindowPos($window, [IntPtr]::Zero, 0, 0, 1300, 950, 0x0016)   # SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE
-    [void](WaitFor { (Size) -eq '1300x950' } 'the window to resize')
+    # maximized. It's made smaller, since Windows won't make a window
+    # larger than the monitor (CI's is 1024x768).
+    [void]$W::SetWindowPos($window, [IntPtr]::Zero, 0, 0, 500, 350, 0x0016)   # SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE
+    [void](WaitFor { (Size) -eq '500x350' } 'the window to resize')
     $W::Key($surface, 0x77, 0x42)   # F8
     [void](WaitFor { (Size) -eq $startSize } "the window back at $startSize")
     $W::Key($surface, 0x74, 0x3F)
