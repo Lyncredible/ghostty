@@ -32,4 +32,5 @@ test {
     _ = @import("win32/Scrollbar.zig");
     _ = @import("win32/Badge.zig");
     _ = @import("win32/LinkPreview.zig");
+    _ = @import("win32/shells.zig");
 }
