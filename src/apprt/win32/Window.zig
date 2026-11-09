@@ -293,6 +293,11 @@ pub fn show(self: *Window) void {
 /// focus it. The screen is chosen each time, so it follows the mouse with
 /// `quick-terminal-screen = mouse`.
 pub fn showQuick(self: *Window) void {
+    self.showQuickWith(self.activeSurface());
+}
+
+/// `showQuick`, focusing `surface`.
+fn showQuickWith(self: *Window, surface: *Surface) void {
     // If it's still sliding out, it slides back in from where it is.
     if (c.IsWindowVisible(self.hwnd) == 0) self.quick_shown = 0;
     const target = self.quickTarget() orelse self.quick_target;
@@ -313,7 +318,9 @@ pub fn showQuick(self: *Window) void {
     );
     self.slideQuick(1);
     _ = c.ShowWindow(self.hwnd, c.SW_SHOW);
-    self.present(self.activeSurface());
+    // present calls back here while it's hidden.
+    if (!self.quickShowing()) return;
+    self.present(surface);
 }
 
 /// Whether the quick terminal is shown or sliding in.
@@ -1678,6 +1685,15 @@ pub fn systemUsesDarkTheme() bool {
 
 /// Bring this window to the front and focus the given surface.
 pub fn present(self: *Window, surface: *Surface) void {
+    // A hidden quick terminal slides in (showQuick presents it again once
+    // it's showing), and a window toggle_visibility hid comes back. Other
+    // hidden windows, such as closed ones kept for undo, stay hidden.
+    if (self.quick) {
+        if (!self.quickShowing()) return self.showQuickWith(surface);
+    } else if (self.hidden_by_toggle) {
+        self.hidden_by_toggle = false;
+        _ = c.ShowWindow(self.hwnd, c.SW_SHOW);
+    }
     if (c.IsIconic(self.hwnd) != 0) _ = c.ShowWindow(self.hwnd, c.SW_RESTORE);
     _ = c.SetForegroundWindow(self.hwnd);
     const tab = self.tabOf(surface) orelse return;

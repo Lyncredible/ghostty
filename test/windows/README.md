@@ -361,7 +361,9 @@ Two windows and the quick terminal are opened with posted keys, and the
 quick terminal is hidden again. `goto_window:next` must go from one window
 to the other and back without going to the quick terminal, and
 `toggle_visibility` must hide both windows and bring back only them, with
-the quick terminal still hidden. Hiding the quick terminal and the windows
+the quick terminal still hidden. With the windows hidden again, `+new-tab`
+must bring back the window it adds its tab to, and only that one. Hiding
+the quick terminal and the windows
 needs a Ghostty window in front. Outside CI, Windows may refuse that, and
 then the test stops early with a message. In CI that counts as a failure.
 
