@@ -147,7 +147,7 @@ const file_items = [_]Item{
     .separator,
     .act("&Close", .close_surface),
     .act("Close T&ab", .{ .close_tab = .this }),
-    .act("Close All Windo&ws", .close_all_windows),
+    .act("Close All W&indows", .close_all_windows),
 };
 
 const edit_items = [_]Item{
@@ -175,7 +175,7 @@ const view_items = [_]Item{
     .act("Command &Palette", .toggle_command_palette),
     .separator,
     .act("Change Tab &Title…", .prompt_tab_title),
-    .act("Change Terminal T&itle…", .prompt_surface_title),
+    .act("Change Ter&minal Title…", .prompt_surface_title),
     .act("Change &Window Title…", .prompt_window_title),
     .separator,
     .act("Terminal Read-&only", .toggle_readonly),
@@ -361,16 +361,13 @@ fn build(
         },
         .submenu => |s| {
             const submenu = c.CreatePopupMenu() orelse return error.CreateMenuFailed;
+            errdefer _ = c.DestroyMenu(submenu);
             try build(alloc, submenu, s.items, surface, list, next_id, shift);
-            _ = c.AppendMenuW(
-                menu,
-                c.MF_POPUP,
-                @intFromPtr(submenu),
-                (try util.utf16Alloc(alloc, s.label)).ptr,
-            );
+            try appendSubmenu(alloc, menu, c.MF_POPUP, submenu, s.label);
         },
         .shells => |s| {
             const submenu = c.CreatePopupMenu() orelse return error.CreateMenuFailed;
+            errdefer _ = c.DestroyMenu(submenu);
             const first = shell_id_base + @as(usize, @backingInt(s.target)) * max_shells;
             try appendShells(alloc, submenu, list[0..@min(list.len, max_shells)], first, shift);
             var flags: c_uint = c.MF_POPUP;
@@ -378,14 +375,15 @@ fn build(
             if (surface) |sf| if (!sf.core_initialized) {
                 flags |= c.MF_GRAYED;
             };
-            _ = c.AppendMenuW(
-                menu,
-                flags,
-                @intFromPtr(submenu),
-                (try util.utf16Alloc(alloc, s.label)).ptr,
-            );
+            try appendSubmenu(alloc, menu, flags, submenu, s.label);
         },
     };
+}
+
+/// Append a submenu, which the menu then owns (destroying it with itself).
+fn appendSubmenu(alloc: Allocator, menu: c.HMENU, flags: c_uint, submenu: c.HMENU, label: []const u8) !void {
+    const text = try util.utf16Alloc(alloc, label);
+    if (c.AppendMenuW(menu, flags, @intFromPtr(submenu), text.ptr) == 0) return error.AppendMenuFailed;
 }
 
 /// Whether an item applies to the surface right now.
@@ -549,4 +547,50 @@ test "menus have fewer actions than the first shell ID" {
         while (actionAt(items, count) != null) count += 1;
         try testing.expect(count < shell_id_base);
     }
+}
+
+/// The access key of a label (the letter after `&`), lowercased, if it
+/// has one.
+fn accessKey(label: []const u8) ?u8 {
+    const i = std.mem.indexOfScalar(u8, label, '&') orelse return null;
+    if (i + 1 >= label.len) return null;
+    return std.ascii.toLower(label[i + 1]);
+}
+
+/// Checks that each item in a menu (not counting its submenus) has an
+/// access key, no other item in the menu has the same one, and separators
+/// only go between items.
+fn expectAccessKeys(items: []const Item) !void {
+    const testing = std.testing;
+    var seen: std.StaticBitSet(256) = .empty;
+    for (items, 0..) |item, i| {
+        const label = switch (item) {
+            .separator => {
+                try testing.expect(i > 0 and i + 1 < items.len);
+                try testing.expect(items[i + 1] != .separator);
+                continue;
+            },
+            .action => |a| a.label,
+            .submenu => |s| label: {
+                try expectAccessKeys(s.items);
+                break :label s.label;
+            },
+            .shells => |s| s.label,
+        };
+        const key = accessKey(label) orelse {
+            std.debug.print("no access key: {s}\n", .{label});
+            return error.TestExpectedAccessKey;
+        };
+        if (seen.isSet(key)) {
+            std.debug.print("access key '{c}' used twice, again by: {s}\n", .{ key, label });
+            return error.TestDuplicateAccessKey;
+        }
+        seen.set(key);
+    }
+}
+
+test "menu items have their own access keys" {
+    try std.testing.expectEqual(@as(?u8, 't'), accessKey("Change &Title…"));
+    try std.testing.expectEqual(@as(?u8, null), accessKey("Title"));
+    for ([_][]const Item{ &main, &context, &tab }) |items| try expectAccessKeys(items);
 }
