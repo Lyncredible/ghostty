@@ -347,6 +347,11 @@ pub fn wndProc(hwnd: c.HWND, msg: c.UINT, wparam: c.WPARAM, lparam: c.LPARAM) ca
             };
             _ = c.TrackMouseEvent(&track);
             self.updateHover();
+            // Only moves with the left button down drag: taking the capture
+            // makes Windows send a move at the real cursor, which (with
+            // posted clicks, as in tests) can be anywhere, and that move
+            // would throw the thumb there. A real drag has the button down.
+            if (wparam & c.MK_LBUTTON == 0) return 0;
             if (self.drag_offset) |offset| {
                 const y: c_int = util.hiword(lparam);
                 self.scrollTo(self.rowAt(y - self.scale(margin) - offset, self.trackHeight()));

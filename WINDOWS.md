@@ -2370,6 +2370,16 @@ Notes:
     `session-restore`, `tab-close-uia`, `tab-reorder`, `tabs`,
     `titlebar-tabs`, `uia-events`, `window-options`, `window-theme`).
     `flood.ps1` was skipped: it presses a real Ctrl+C.
+  - CI run 42535135626 (00d1d3cc6): `scrollbar.ps1` failed on the
+    runner. The clicks at the top and middle worked, but the bottom one
+    left the middle in view. Taking the capture makes Windows send a
+    `WM_MOUSEMOVE` at the real cursor, and the scrollbar dragged on any
+    move while its button was down, so the thumb followed the runner's
+    cursor (as the split drag handle once did). Moves without
+    `MK_LBUTTON` no longer drag; a real drag always has it. The test's
+    bottom click now posts such a stray move to the top of the track
+    between press and release: without the fix it scrolls to cmd's
+    banner (checked), with it to L1300.
   - CI run 42528498930 (32b573df4, with the sync, the UTF-16 fixes and
     the tab bar tests) passed every job, including `tab-tooltips.ps1`
     hovering the long title, and `windows-tip` moved.
