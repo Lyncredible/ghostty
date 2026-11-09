@@ -193,6 +193,21 @@ pub const Range = struct {
         return moved;
     }
 
+    /// Move one end of the range to an endpoint of another range. That
+    /// range can be of another snapshot (screen readers mix the
+    /// document's range with a newer selection's), so a position past
+    /// this one's text is its end. The other end follows if they'd cross.
+    pub fn moveEndpointTo(self: *Range, is_start: bool, pos: u32) void {
+        const p = @min(pos, self.snapshot.len());
+        if (is_start) {
+            self.start = p;
+            if (self.end < p) self.end = p;
+        } else {
+            self.end = p;
+            if (self.start > p) self.start = p;
+        }
+    }
+
     pub fn expand(self: *Range, unit: Unit) void {
         const s = self.snapshot;
         if (unit.effective() == .document) {
@@ -329,4 +344,21 @@ test "Range: an empty screen" {
         try testing.expectEqual(@as(i32, 0), r.moveEndpoint(false, unit, 1));
     }
     try testing.expectEqual(@as(u32, 0), snapshot.offsetOf(3, 3));
+}
+
+test "Range: endpoints from another snapshot" {
+    const testing = std.testing;
+    const text = std.unicode.utf8ToUtf16LeStringLiteral("ab cd");
+    var snapshot: Snapshot = .{ .alloc = testing.allocator, .text = text, .cursor = 0 };
+    var r: Range = .{ .snapshot = &snapshot, .start = 1, .end = 3 };
+    r.moveEndpointTo(false, 4);
+    try testing.expectEqual([2]u32{ 1, 4 }, [2]u32{ r.start, r.end });
+    // A newer, longer screen's end is this one's.
+    r.moveEndpointTo(false, 200);
+    try testing.expectEqual([2]u32{ 1, 5 }, [2]u32{ r.start, r.end });
+    r.moveEndpointTo(true, 200);
+    try testing.expectEqual([2]u32{ 5, 5 }, [2]u32{ r.start, r.end });
+    // The other end follows when they'd cross.
+    r.moveEndpointTo(false, 2);
+    try testing.expectEqual([2]u32{ 2, 2 }, [2]u32{ r.start, r.end });
 }

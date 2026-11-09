@@ -546,3 +546,11 @@ restart would delete it while a notification is up. Last, clicking the
 notification (its message, posted to Ghostty) brings back the minimized
 window it came from. It shows notifications, so it only runs in CI (or with
 `$env:CI = 'true'`).
+
+## uia-ranges.ps1
+
+Checks that screen readers can mix text ranges taken at different times:
+the document's range is taken on an empty screen, the shell prints, and the
+range's ends are moved to the newer selection's end (`MoveEndpointByRange`)
+and read. That end is past the old range's text, which crashed Ghostty. It
+uses UI Automation only, so it runs on a locked desktop.
