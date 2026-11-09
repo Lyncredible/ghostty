@@ -169,12 +169,7 @@ fn runWindows(alloc: Allocator, stderr: *std.Io.Writer, path: []const u8) !u8 {
     };
     defer if (editor) |v| alloc.free(v);
 
-    // With /s, cmd removes only the outer quotes and runs the rest as it
-    // is, so the editor and the quoted path don't need more escaping.
-    const command_line = if (editor) |v|
-        try std.fmt.allocPrint(alloc, "cmd.exe /d /s /c \"{s} \"{s}\"\"", .{ v, path })
-    else
-        try std.fmt.allocPrint(alloc, "notepad.exe \"{s}\"", .{path});
+    const command_line = try editCommandLine(alloc, editor, path);
     defer alloc.free(command_line);
     const command_line_w = try std.unicode.utf8ToUtf16LeAllocZ(alloc, command_line);
     defer alloc.free(command_line_w);
@@ -218,6 +213,38 @@ fn runWindows(alloc: Allocator, stderr: *std.Io.Writer, path: []const u8) !u8 {
     var code: windows.DWORD = 1;
     _ = windows.exp.kernel32.GetExitCodeProcess(process_information.hProcess, &code);
     return @truncate(code);
+}
+
+/// The command line that edits the config at `path` on Windows: the editor
+/// (`$VISUAL` or `$EDITOR`, a command that may have arguments) through cmd,
+/// or Notepad. With /s, cmd removes only the outermost quotes and runs the
+/// rest as it is, so neither the editor nor the quoted path needs more
+/// escaping.
+fn editCommandLine(alloc: Allocator, editor: ?[]const u8, path: []const u8) ![]u8 {
+    if (editor) |v| return std.fmt.allocPrint(alloc, "cmd.exe /d /s /c \"{s} \"{s}\"\"", .{ v, path });
+    return std.fmt.allocPrint(alloc, "notepad.exe \"{s}\"", .{path});
+}
+
+test editCommandLine {
+    const testing = std.testing;
+    const alloc = testing.allocator;
+    const path = "C:\\Users\\Jane Doe\\AppData\\Local\\ghostty\\config.ghostty";
+
+    const notepad = try editCommandLine(alloc, null, path);
+    defer alloc.free(notepad);
+    try testing.expectEqualStrings("notepad.exe \"" ++ path ++ "\"", notepad);
+
+    // An editor with arguments, and one whose quoted path has spaces: cmd
+    // drops only the outer quotes, leaving `"C:\...\code.cmd" --wait "..."`.
+    const code = try editCommandLine(alloc, "code --wait", path);
+    defer alloc.free(code);
+    try testing.expectEqualStrings("cmd.exe /d /s /c \"code --wait \"" ++ path ++ "\"\"", code);
+    const quoted = try editCommandLine(alloc, "\"C:\\Program Files\\VS Code\\bin\\code.cmd\" --wait", path);
+    defer alloc.free(quoted);
+    try testing.expectEqualStrings(
+        "cmd.exe /d /s /c \"\"C:\\Program Files\\VS Code\\bin\\code.cmd\" --wait \"" ++ path ++ "\"\"",
+        quoted,
+    );
 }
 
 extern "kernel32" fn GetStdHandle(std_handle: u32) callconv(.winapi) ?*anyopaque;
