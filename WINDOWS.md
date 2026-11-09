@@ -2360,6 +2360,10 @@ Notes:
     (`SplitRects`, at two divider widths and with no room) and the ratio
     from dragging a divider (`dragRatio`, kept to 5-95%) are now pure and
     tested. `command-palette`, `overlays` and `session-restore` pass.
+  - `goto_tab` and `move_tab`'s index math (wrapping, 1-based indexes
+    past the end, invalid ones) is now `gotoIndex` and `moveIndex` in
+    `Window.zig`, unit tested; `tabs`, `session-restore` and `handoff`
+    pass.
   - The scrollbar's thumb (`thumbSpan`) asserted in `std.math.clamp`
     (a panic in safe builds) when the terminal was shorter than its two
     2 pt margins, as a squashed split can be: the track's height was
