@@ -220,34 +220,9 @@ pub fn updateFont(self: *TabBar) void {
     self.font = font;
 
     if (self.icon_font) |old| _ = c.DeleteObject(old);
-    self.icon_font = iconFont(@intCast(dpi));
+    // The caption glyphs are 10 by 10, as in Windows Terminal.
+    self.icon_font = util.iconFont(10, @intCast(dpi));
     self.invalidate();
-}
-
-/// The first of the system's icon fonts that's installed, at 10 points
-/// (the caption glyphs are 10 by 10, as in Windows Terminal).
-fn iconFont(dpi: c_int) ?c.HFONT {
-    const faces = [_][:0]const u16{
-        std.unicode.utf8ToUtf16LeStringLiteral("Segoe Fluent Icons"),
-        std.unicode.utf8ToUtf16LeStringLiteral("Segoe MDL2 Assets"),
-    };
-    const dc = c.GetDC(null) orelse return null;
-    defer _ = c.ReleaseDC(null, dc);
-    for (faces) |face| {
-        var lf = std.mem.zeroes(c.LOGFONTW);
-        lf.lfHeight = -util.scale(10, dpi);
-        lf.lfCharSet = c.DEFAULT_CHARSET;
-        @memcpy(lf.lfFaceName[0..face.len], face);
-        const font = c.CreateFontIndirectW(&lf) orelse continue;
-        // Windows substitutes another font for one that isn't installed.
-        const old = c.SelectObject(dc, font);
-        var got: [c.LF_FACESIZE]u16 = undefined;
-        const n = c.GetTextFaceW(dc, got.len, &got);
-        _ = c.SelectObject(dc, old);
-        if (n > 0 and std.mem.eql(u16, got[0..@intCast(n - 1)], face)) return font;
-        _ = c.DeleteObject(font);
-    }
-    return null;
 }
 
 //----------------------------------------------------------------------------
@@ -660,16 +635,10 @@ fn sysColor(index: c_int) Rgb {
 /// Blend color `a` toward `b` by `t` (0 to 1).
 fn blend(a: Rgb, b: Rgb, t: f32) Rgb {
     return .{
-        .r = mix(a.r, b.r, t),
-        .g = mix(a.g, b.g, t),
-        .b = mix(a.b, b.b, t),
+        .r = util.mix(a.r, b.r, t),
+        .g = util.mix(a.g, b.g, t),
+        .b = util.mix(a.b, b.b, t),
     };
-}
-
-fn mix(a: u8, b: u8, t: f32) u8 {
-    const af: f32 = @floatFromInt(a);
-    const bf: f32 = @floatFromInt(b);
-    return @intFromFloat(@round(af + (bf - af) * t));
 }
 
 fn colorref(v: Rgb) c.COLORREF {

@@ -41,6 +41,9 @@ edit: c.HWND = null,
 parent: c.HWND = null,
 instance: c.HINSTANCE = null,
 font: util.MessageFont = .{},
+/// The buttons' glyph font, and the DPI it's for.
+icon_font: c.HFONT = null,
+icon_dpi: c.UINT = 0,
 edit_brush: c.HBRUSH = null,
 edit_proc: c.WNDPROC = null,
 
@@ -136,6 +139,7 @@ pub fn deinit(self: *SearchBar) void {
         _ = c.DestroyWindow(self.hwnd);
     }
     self.font.deinit();
+    if (self.icon_font != null) _ = c.DeleteObject(self.icon_font);
     if (self.edit_brush != null) _ = c.DeleteObject(self.edit_brush);
     self.* = .{};
 }
@@ -143,8 +147,8 @@ pub fn deinit(self: *SearchBar) void {
 pub fn updateConfig(self: *SearchBar, config: *const Config) void {
     const bg = config.background;
     const fg = config.foreground;
-    self.background = util.rgb(mix(bg.r, fg.r, 0.08), mix(bg.g, fg.g, 0.08), mix(bg.b, fg.b, 0.08));
-    self.field = util.rgb(mix(bg.r, fg.r, 0.16), mix(bg.g, fg.g, 0.16), mix(bg.b, fg.b, 0.16));
+    self.background = util.blend(bg, fg, 0.08);
+    self.field = util.blend(bg, fg, 0.16);
     self.foreground = util.rgb(fg.r, fg.g, fg.b);
     if (self.edit_brush != null) _ = c.DeleteObject(self.edit_brush);
     self.edit_brush = c.CreateSolidBrush(self.field);
@@ -354,12 +358,11 @@ fn paint(self: *SearchBar, dc: c.HDC) void {
     // Buttons, drawn with Segoe Fluent Icons (Windows 11) or Segoe MDL2
     // Assets (Windows 10) glyphs.
     // A font still selected into a DC can't be deleted (DeleteObject
-    // fails and it leaks), so the previous one goes back in first.
+    // fails and it leaks), so the previous one goes back in after.
     const icon_font = self.iconFont();
     const before_icons = if (icon_font != null) c.SelectObject(dc, icon_font) else null;
     defer if (icon_font != null) {
         _ = c.SelectObject(dc, before_icons);
-        _ = c.DeleteObject(icon_font);
     };
     inline for (.{
         .{ Button.previous, 0xE70E },
@@ -378,42 +381,15 @@ fn paint(self: *SearchBar, dc: c.HDC) void {
     }
 }
 
-fn iconFont(self: *const SearchBar) c.HFONT {
-    var lf = std.mem.zeroes(c.LOGFONTW);
-    lf.lfHeight = -self.scale(10);
-    lf.lfCharSet = c.DEFAULT_CHARSET;
-    const names = [_][]const u8{ "Segoe Fluent Icons", "Segoe MDL2 Assets" };
-    for (names) |name| {
-        const n = std.unicode.utf8ToUtf16Le(lf.lfFaceName[0 .. lf.lfFaceName.len - 1], name) catch continue;
-        lf.lfFaceName[n] = 0;
-        if (fontExists(&lf)) return c.CreateFontIndirectW(&lf);
+/// The buttons' glyph font at our DPI, made when the DPI changes.
+fn iconFont(self: *SearchBar) c.HFONT {
+    const dpi = c.GetDpiForWindow(self.hwnd);
+    if (dpi != self.icon_dpi) {
+        if (self.icon_font != null) _ = c.DeleteObject(self.icon_font);
+        self.icon_font = util.iconFont(10, @intCast(dpi)) orelse null;
+        self.icon_dpi = dpi;
     }
-    return null;
-}
-
-fn fontExists(lf: *const c.LOGFONTW) bool {
-    const dc = c.GetDC(null);
-    defer _ = c.ReleaseDC(null, dc);
-    var found = false;
-    _ = c.EnumFontFamiliesExW(dc, @constCast(lf), fontFound, @bitCast(@intFromPtr(&found)), 0);
-    return found;
-}
-
-fn fontFound(
-    _: [*c]const c.LOGFONTW,
-    _: [*c]const c.TEXTMETRICW,
-    _: c.DWORD,
-    lparam: c.LPARAM,
-) callconv(.c) c_int {
-    const found: *bool = @ptrFromInt(@as(usize, @bitCast(lparam)));
-    found.* = true;
-    return 0;
-}
-
-fn mix(a: u8, b: u8, t: f32) u8 {
-    const af: f32 = @floatFromInt(a);
-    const bf: f32 = @floatFromInt(b);
-    return @intFromFloat(@round(af + (bf - af) * t));
+    return self.icon_font;
 }
 
 pub fn wndProc(hwnd: c.HWND, msg: c.UINT, wparam: c.WPARAM, lparam: c.LPARAM) callconv(.c) c.LRESULT {
