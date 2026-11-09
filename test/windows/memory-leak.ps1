@@ -5,8 +5,8 @@
 # This one does some UI work (the search bar, the command palette, tabs and
 # splits opened and closed and still kept for undo when it quits,
 # resizing, a scrollback full of output, the inspector, font sizes,
-# read-only mode, the quick terminal, a title and a bell), then closes the window so Ghostty quits, and fails if
-# its standard error reports a leak. Input is posted to Ghostty's windows,
+# read-only mode, the quick terminal, a title and a bell), then quits
+# with the quit action, and fails if its standard error reports a leak. Input is posted to Ghostty's windows,
 # so it runs on a locked desktop. Release builds don't use the debug
 # allocator, so it needs a Debug build.
 #
@@ -42,7 +42,8 @@ $process = Start-Process -FilePath $Exe -PassThru -RedirectStandardError $log -A
     '--keybind=f5=start_search', '--keybind=f6=end_search', '--keybind=f7=toggle_command_palette',
     '--keybind=f8=new_tab', '--keybind=f9=close_tab', '--keybind=f10=new_split:right', '--keybind=f11=close_surface',
     '--undo-timeout=5m', '--keybind=f1=inspector:toggle', '--keybind=f2=increase_font_size:3',
-    '--keybind=f3=reset_font_size', '--keybind=f4=toggle_readonly', '--keybind=f12=toggle_quick_terminal'
+    '--keybind=f3=reset_font_size', '--keybind=f4=toggle_readonly', '--keybind=f12=toggle_quick_terminal',
+    '--keybind=f13=quit'
 # Opening the handle now keeps the exit code for later.
 $null = $process.Handle
 
@@ -127,17 +128,16 @@ try {
     Start-Sleep -Seconds 1
     Write-Host 'Did the inspector, font sizes, read-only mode, the quick terminal, a title and a bell.'
 
-    # Close the windows (the main one, and the quick terminal, which a
-    # second toggle only hides when it's in front): with the last one
-    # closed, Ghostty quits normally, and the debug allocator reports
-    # what's left. The closed tab and split are still kept for undo then,
-    # which must be freed too.
-    $windows = @(TopLevel | ForEach-Object { [IntPtr]$_.Current.NativeWindowHandle })
-    Write-Host "Closing $($windows.Count) windows."
-    foreach ($h in $windows) { [void]$W::PostMessageW($h, 0x0010, [IntPtr]::Zero, [IntPtr]::Zero) }   # WM_CLOSE
+    # Quit with the quit action, which closes every window (the quick
+    # terminal too: a second toggle hides it when it's in front, and a
+    # hidden quick terminal still has a terminal, so closing the main
+    # window alone doesn't quit). Ghostty then exits normally, and the
+    # debug allocator reports what's left. The closed tab and split are
+    # still kept for undo then, which must be freed too.
+    $W::Key($first, 0x7C, 0x64)   # F13: quit
     if (-not $process.WaitForExit($TimeoutSeconds * 1000)) {
         $left = TopLevel | ForEach-Object { "$($_.Current.ClassName) '$($_.Current.Name)'" }
-        Fail "Ghostty did not quit after its window closed; its windows: $($left -join ', ')"
+        Fail "Ghostty did not quit; its windows: $($left -join ', ')"
     }
     Write-Host "Ghostty quit with exit code $($process.ExitCode)."
     if ($process.ExitCode -ne 0) { Fail "Ghostty quit with exit code $($process.ExitCode)" }
