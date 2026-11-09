@@ -108,4 +108,14 @@ test parse {
     const none_result = try parse(alloc, &.{});
     try testing.expect(none_result.command == null);
     try testing.expect(none_result.working_directory == null);
+
+    // --command= is a shell command line; a bare -e leaves it, and one
+    // that can't be parsed is skipped.
+    const shell = try parse(alloc, &.{ "--command=cmd.exe /k echo hi", "-e" });
+    try testing.expectEqualStrings("cmd.exe /k echo hi", shell.command.?.shell);
+    const direct = try parse(alloc, &.{ "--command=cmd.exe", "-e", "pwsh" });
+    try testing.expectEqualStrings("pwsh", direct.command.?.direct[0]);
+    const bad = try parse(alloc, &.{ "--command=", "--shell-integration=nope" });
+    try testing.expect(bad.command == null);
+    try testing.expect(bad.shell_integration == null);
 }
