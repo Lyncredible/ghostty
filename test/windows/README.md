@@ -354,6 +354,16 @@ another, `:previous` goes back, and `end_search` closes it. The count is
 read from the bar's window text ("Match 2 of 6"), which is also what screen
 readers see.
 
+## splits.ps1
+
+Checks the split actions from keybinds: `new_split:right` makes two even
+terminals side by side with the new one focused, `goto_split:left` and
+`goto_split:right` move the keyboard focus (read from Ghostty's thread
+with `GetGUIThreadInfo`), `resize_split:right,200` moves the divider 200
+pixels, `equalize_splits` evens them out, and `toggle_split_zoom` gives
+the focused terminal the whole tab and then puts both back. Keys are
+posted, so it runs on a locked desktop.
+
 ## window-actions.ps1
 
 Checks the window actions from keybinds, each there and back:
