@@ -2411,6 +2411,14 @@ Notes:
     a title and ring the bell: still no leaks. (The quick terminal stays
     shown when toggled from posted input, so the test closes every
     window it finds rather than just the first.)
+- [x] CI run 42614152414 (15bf23eb8, test and doc changes only) failed
+      in the Links test: the link preview never showed while holding Ctrl
+      over a link. The same timeout happened once before (run
+      42164080425), on a commit that didn't touch links either. The test
+      held Ctrl and made one real mouse move; if Ghostty handled it before
+      it had the link or saw Ctrl, nothing asked again. It now nudges the
+      mouse a pixel and back on every check while waiting, as a hand on
+      it would.
   - Screen readers moving by character (UI Automation text ranges,
     `TextRange.zig`) stepped by UTF-16 unit, so an emoji's surrogate
     pair was read as two broken halves. A character boundary no longer

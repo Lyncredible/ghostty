@@ -138,10 +138,17 @@ function ClickLink([string]$url) {
         $W::mouse_event(0x0001, 1, 0, 0, [IntPtr]::Zero)      # a move, so Ghostty sees the link
         Start-Sleep -Milliseconds 300
 
+        # Each check nudges the mouse a pixel and back, as a hand on it
+        # would: a single move can reach Ghostty before it has the link or
+        # sees Ctrl held, and then nothing asks again (this timed out twice
+        # in CI, in runs 42164080425 and 42614152414).
         $h = [IntPtr]$surface.Current.NativeWindowHandle
+        $script:nudge = 1
         $preview = WaitFor {
             $p = $W::FindWindowExW($h, [IntPtr]::Zero, 'GhosttyLinkPreview', $null)
-            if ($p -ne [IntPtr]::Zero -and $W::IsWindowVisible($p)) { $p }
+            if ($p -ne [IntPtr]::Zero -and $W::IsWindowVisible($p)) { return $p }
+            $W::mouse_event(0x0001, $script:nudge, 0, 0, [IntPtr]::Zero)
+            $script:nudge = -$script:nudge
         } 'the link preview to show'
         $name = New-Object System.Text.StringBuilder 64
         [void]$W::GetClassNameW($W::GetWindow($preview, 2), $name, $name.Capacity)   # GW_HWNDNEXT
