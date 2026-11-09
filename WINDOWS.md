@@ -2548,6 +2548,14 @@ Notes:
     from a buffer a second call fills; a shorter copy left uninitialized
     memory in the pasted path or the preedit. Both now take what was
     copied. (`drag-drop` and `ime` run in CI.)
+  - Restoring a saved tab followed its splits' child indices with only a
+    depth limit, so a damaged state file with splits sharing children
+    could ask for 2^n terminals from n nodes. `SaveState.validTree`
+    checks the tree first (children exist, each node used once, at most
+    255 nodes); unit tested, and `session-restore` passes. Also,
+    `Notifier.copyTruncated` was a copy of `util.utf16TruncateZ` and is
+    gone, and `+new-tab` with `--title` and `-e` is now tested
+    (`cli-ipc`), including that the overrides outlive the request.
   - The stderr and stdio tests made named pipes with fixed names, and
     libghostty-vt's tests run them too, so its test binary and Ghostty's
     running at once could collide. `testPipeName` adds the process ID.
