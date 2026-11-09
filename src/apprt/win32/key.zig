@@ -193,7 +193,7 @@ test "utf16ToUtf8Buf" {
     // U+1F600, a surrogate pair
     try testing.expectEqualStrings("\u{1F600}", utf16ToUtf8Buf(&.{ 0xD83D, 0xDE00 }, &buf));
     // Truncates at a codepoint boundary
-    var small: [5]u8 = undefined;
+    var small: [4]u8 = undefined;
     try testing.expectEqualStrings("\u{1F600}", utf16ToUtf8Buf(&.{ 0xD83D, 0xDE00, 0xD83D, 0xDE00 }, &small));
 }
 
@@ -214,4 +214,18 @@ test "altCode" {
     try testing.expect(!altCode(.numpad_add, .{ .alt = true }));
     try testing.expect(!altCode(.numpad_1, .{ .alt = true, .ctrl = true }));
     try testing.expect(!altCode(.numpad_1, .{ .alt = true, .shift = true }));
+}
+
+test "utf16ToUtf8Buf: lone surrogates and a full buffer" {
+    const testing = std.testing;
+    var out: [16]u8 = undefined;
+    // Halves of a pair on their own (a lost WM_CHAR) become U+FFFD, and
+    // what follows them is kept.
+    try testing.expectEqualStrings("a\u{FFFD}b", utf16ToUtf8Buf(&.{ 'a', 0xDC00, 'b' }, &out));
+    try testing.expectEqualStrings("\u{FFFD}a", utf16ToUtf8Buf(&.{ 0xD800, 'a' }, &out));
+    try testing.expectEqualStrings("\u{FFFD}", utf16ToUtf8Buf(&.{0xD800}, &out));
+    try testing.expectEqualStrings("\u{1F600}", utf16ToUtf8Buf(&.{ 0xD83D, 0xDE00 }, &out));
+    // Only whole characters fit.
+    var small: [4]u8 = undefined;
+    try testing.expectEqualStrings("a", utf16ToUtf8Buf(&.{ 'a', 0xD83D, 0xDE00 }, &small));
 }
