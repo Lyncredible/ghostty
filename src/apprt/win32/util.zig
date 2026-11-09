@@ -19,11 +19,72 @@ pub fn rgb(r: u8, g: u8, b: u8) c.COLORREF {
     return @as(c.COLORREF, r) | (@as(c.COLORREF, g) << 8) | (@as(c.COLORREF, b) << 16);
 }
 
+/// A color channel from `a` toward `b` by `t` (0 to 1).
+pub fn mix(a: u8, b: u8, t: f32) u8 {
+    const af: f32 = @floatFromInt(a);
+    const bf: f32 = @floatFromInt(b);
+    return @intFromFloat(@round(af + (bf - af) * t));
+}
+
+/// The color `a` toward `b` by `t` (0 to 1), of any two colors with `r`,
+/// `g` and `b` fields, as GDI wants it.
+pub fn blend(a: anytype, b: @TypeOf(a), t: f32) c.COLORREF {
+    return rgb(mix(a.r, b.r, t), mix(a.g, b.g, t), mix(a.b, b.b, t));
+}
+
+/// The first of the system's icon fonts that's installed, Segoe Fluent
+/// Icons (Windows 11) or Segoe MDL2 Assets (Windows 10), at a size in
+/// points (at 96 DPI) for a DPI. The caller deletes it.
+pub fn iconFont(points: c_int, dpi: c_int) ?c.HFONT {
+    const faces = [_][:0]const u16{
+        std.unicode.utf8ToUtf16LeStringLiteral("Segoe Fluent Icons"),
+        std.unicode.utf8ToUtf16LeStringLiteral("Segoe MDL2 Assets"),
+    };
+    const dc = c.GetDC(null) orelse return null;
+    defer _ = c.ReleaseDC(null, dc);
+    for (faces) |face| {
+        var lf = std.mem.zeroes(c.LOGFONTW);
+        lf.lfHeight = -scale(points, dpi);
+        lf.lfCharSet = c.DEFAULT_CHARSET;
+        @memcpy(lf.lfFaceName[0..face.len], face);
+        const font = c.CreateFontIndirectW(&lf) orelse continue;
+        // Windows substitutes another font for one that isn't installed.
+        const old = c.SelectObject(dc, font);
+        var got: [c.LF_FACESIZE]u16 = undefined;
+        const n = c.GetTextFaceW(dc, got.len, &got);
+        _ = c.SelectObject(dc, old);
+        if (n > 0 and std.mem.eql(u16, got[0..@intCast(n - 1)], face)) return font;
+        _ = c.DeleteObject(font);
+    }
+    return null;
+}
+
 test "scale and rgb" {
     try std.testing.expectEqual(@as(c_int, 48), scale(48, 96));
     try std.testing.expectEqual(@as(c_int, 72), scale(48, 144));
     try std.testing.expectEqual(@as(c_int, 7), scale(5, 144));
     try std.testing.expectEqual(@as(c.COLORREF, 0x00563412), rgb(0x12, 0x34, 0x56));
+}
+
+test "mix and blend" {
+    try std.testing.expectEqual(@as(u8, 0), mix(0, 255, 0));
+    try std.testing.expectEqual(@as(u8, 255), mix(0, 255, 1));
+    try std.testing.expectEqual(@as(u8, 20), mix(0, 255, 0.08));
+    try std.testing.expectEqual(@as(u8, 235), mix(255, 0, 0.08));
+    const Rgb = struct { r: u8, g: u8, b: u8 };
+    const black: Rgb = .{ .r = 0, .g = 0, .b = 0 };
+    const white: Rgb = .{ .r = 255, .g = 255, .b = 255 };
+    try std.testing.expectEqual(rgb(128, 128, 128), blend(black, white, 0.5));
+    try std.testing.expectEqual(rgb(255, 255, 255), blend(black, white, 1));
+}
+
+test iconFont {
+    // Windows 10 and 11 both have one of them.
+    const font = iconFont(10, 144) orelse return error.TestNoIconFont;
+    defer _ = c.DeleteObject(font);
+    var lf: c.LOGFONTW = undefined;
+    try std.testing.expect(c.GetObjectW(font, @sizeOf(c.LOGFONTW), &lf) != 0);
+    try std.testing.expectEqual(@as(c.LONG, -15), lf.lfHeight);
 }
 
 /// Load one of the predefined system cursors (IDC_*).
