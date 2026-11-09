@@ -202,10 +202,10 @@ pub fn deinit(self: *CommandPalette) void {
 pub fn updateConfig(self: *CommandPalette, config: *const Config) void {
     const bg = config.background;
     const fg = config.foreground;
-    self.background = rgb(mix(bg.r, fg.r, 0.08), mix(bg.g, fg.g, 0.08), mix(bg.b, fg.b, 0.08));
-    self.field = rgb(mix(bg.r, fg.r, 0.16), mix(bg.g, fg.g, 0.16), mix(bg.b, fg.b, 0.16));
-    self.foreground = rgb(fg.r, fg.g, fg.b);
-    self.dim = rgb(mix(fg.r, bg.r, 0.4), mix(fg.g, bg.g, 0.4), mix(fg.b, bg.b, 0.4));
+    self.background = util.rgb(mix(bg.r, fg.r, 0.08), mix(bg.g, fg.g, 0.08), mix(bg.b, fg.b, 0.08));
+    self.field = util.rgb(mix(bg.r, fg.r, 0.16), mix(bg.g, fg.g, 0.16), mix(bg.b, fg.b, 0.16));
+    self.foreground = util.rgb(fg.r, fg.g, fg.b);
+    self.dim = util.rgb(mix(fg.r, bg.r, 0.4), mix(fg.g, bg.g, 0.4), mix(fg.b, bg.b, 0.4));
     if (self.background_brush != null) _ = c.DeleteObject(self.background_brush);
     if (self.field_brush != null) _ = c.DeleteObject(self.field_brush);
     self.background_brush = c.CreateSolidBrush(self.background);
@@ -417,8 +417,7 @@ fn chooseSelected(self: *CommandPalette) void {
 }
 
 fn scale(self: *const CommandPalette, v: c_int) c_int {
-    const dpi: c_int = @intCast(c.GetDpiForWindow(self.hwnd));
-    return @divTrunc(v * dpi, util.USER_DEFAULT_SCREEN_DPI);
+    return util.scale(v, @intCast(c.GetDpiForWindow(self.hwnd)));
 }
 
 fn layout(self: *CommandPalette) void {
@@ -571,10 +570,6 @@ fn drawItem(self: *CommandPalette, item: *const c.DRAWITEMSTRUCT) void {
         @as(c_uint, c.DT_SINGLELINE | c.DT_END_ELLIPSIS | c.DT_NOPREFIX) |
             @as(c_uint, if (has_description) c.DT_BOTTOM else c.DT_VCENTER),
     );
-}
-
-fn rgb(r: u8, g: u8, b: u8) c.COLORREF {
-    return @as(c.COLORREF, r) | (@as(c.COLORREF, g) << 8) | (@as(c.COLORREF, b) << 16);
 }
 
 fn mix(a: u8, b: u8, t: f32) u8 {

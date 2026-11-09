@@ -9,6 +9,23 @@ pub const CW_USEDEFAULT: c_int = @bitCast(@as(c_uint, 0x80000000));
 pub const GWLP_USERDATA: c_int = -21;
 pub const USER_DEFAULT_SCREEN_DPI = 96;
 
+/// A size at 96 DPI scaled to a DPI.
+pub fn scale(v: c_int, dpi: c_int) c_int {
+    return @divTrunc(v * dpi, USER_DEFAULT_SCREEN_DPI);
+}
+
+/// A color as GDI wants it (RGB()).
+pub fn rgb(r: u8, g: u8, b: u8) c.COLORREF {
+    return @as(c.COLORREF, r) | (@as(c.COLORREF, g) << 8) | (@as(c.COLORREF, b) << 16);
+}
+
+test "scale and rgb" {
+    try std.testing.expectEqual(@as(c_int, 48), scale(48, 96));
+    try std.testing.expectEqual(@as(c_int, 72), scale(48, 144));
+    try std.testing.expectEqual(@as(c_int, 7), scale(5, 144));
+    try std.testing.expectEqual(@as(c.COLORREF, 0x00563412), rgb(0x12, 0x34, 0x56));
+}
+
 /// Load one of the predefined system cursors (IDC_*).
 pub fn loadSystemCursor(id: u16) c.HCURSOR {
     return LoadCursorW(null, id);

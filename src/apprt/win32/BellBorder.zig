@@ -93,19 +93,15 @@ fn accentColor() c.COLORREF {
     const color = if (util.highContrast()) c.GetSysColor(c.COLOR_HIGHLIGHT) else color: {
         var argb: c.DWORD = 0;
         var opaque_blend: c.BOOL = 0;
-        if (c.DwmGetColorizationColor(&argb, &opaque_blend) < 0) return rgb(0, 120, 215);
-        break :color rgb(
+        if (c.DwmGetColorizationColor(&argb, &opaque_blend) < 0) return util.rgb(0, 120, 215);
+        break :color util.rgb(
             @truncate(argb >> 16),
             @truncate(argb >> 8),
             @truncate(argb),
         );
     };
     // Avoid our transparent color key.
-    return if (color == transparent_key) rgb(0xFE, 0, 0xFF) else color;
-}
-
-fn rgb(r: u8, g: u8, b: u8) c.COLORREF {
-    return @as(c.COLORREF, r) | (@as(c.COLORREF, g) << 8) | (@as(c.COLORREF, b) << 16);
+    return if (color == transparent_key) util.rgb(0xFE, 0, 0xFF) else color;
 }
 
 pub fn wndProc(hwnd: c.HWND, msg: c.UINT, wparam: c.WPARAM, lparam: c.LPARAM) callconv(.c) c.LRESULT {
@@ -120,7 +116,7 @@ pub fn wndProc(hwnd: c.HWND, msg: c.UINT, wparam: c.WPARAM, lparam: c.LPARAM) ca
             var rect: c.RECT = undefined;
             _ = c.GetClientRect(hwnd, &rect);
             const dpi: c_int = @intCast(c.GetDpiForWindow(hwnd));
-            const border: c_int = @max(1, @divTrunc(width * dpi, util.USER_DEFAULT_SCREEN_DPI));
+            const border: c_int = @max(1, util.scale(width, dpi));
 
             const accent = c.CreateSolidBrush(accentColor());
             defer _ = c.DeleteObject(accent);

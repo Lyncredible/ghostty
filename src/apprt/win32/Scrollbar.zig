@@ -93,7 +93,7 @@ pub fn deinit(self: *Scrollbar) void {
 pub fn updateConfig(self: *Scrollbar, config: *const Config) void {
     self.enabled = config.scrollbar != .never;
     const fg = config.foreground;
-    self.color = @as(c.COLORREF, fg.r) | (@as(c.COLORREF, fg.g) << 8) | (@as(c.COLORREF, fg.b) << 16);
+    self.color = util.rgb(fg.r, fg.g, fg.b);
     if (self.color == transparent_key) self.color ^= 1;
     if (!self.enabled) self.hide();
     self.layout();
@@ -179,8 +179,7 @@ fn autoHide() bool {
 }
 
 fn scale(self: *const Scrollbar, v: c_int) c_int {
-    const dpi: c_int = @intCast(c.GetDpiForWindow(self.hwnd));
-    return @divTrunc(v * dpi, util.USER_DEFAULT_SCREEN_DPI);
+    return util.scale(v, @intCast(c.GetDpiForWindow(self.hwnd)));
 }
 
 /// Position our window along the right edge of the surface.

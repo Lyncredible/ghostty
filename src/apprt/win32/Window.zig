@@ -1465,17 +1465,17 @@ pub fn layout(self: *Window) void {
 /// The color of the dividers between splits.
 fn dividerColor(self: *const Window) c.COLORREF {
     const config = &self.app.config;
-    if (config.@"split-divider-color") |v| return rgb(v.r, v.g, v.b);
+    if (config.@"split-divider-color") |v| return util.rgb(v.r, v.g, v.b);
 
     // A high contrast theme gets the terminal's foreground itself, which
     // stands out from the terminals on either side.
     const fg = config.foreground;
-    if (util.highContrast()) return rgb(fg.r, fg.g, fg.b);
+    if (util.highContrast()) return util.rgb(fg.r, fg.g, fg.b);
 
     // By default, blend the background toward the foreground a little so
     // the divider is visible but subtle in both light and dark themes.
     const bg = config.background;
-    return rgb(
+    return util.rgb(
         mix(bg.r, fg.r),
         mix(bg.g, fg.g),
         mix(bg.b, fg.b),
@@ -1484,10 +1484,6 @@ fn dividerColor(self: *const Window) c.COLORREF {
 
 fn mix(a: u8, b: u8) u8 {
     return @intCast((@as(u16, a) * 3 + @as(u16, b)) / 4);
-}
-
-fn rgb(r: u8, g: u8, b: u8) c.COLORREF {
-    return @as(c.COLORREF, r) | (@as(c.COLORREF, g) << 8) | (@as(c.COLORREF, b) << 16);
 }
 
 //----------------------------------------------------------------------------
@@ -1657,8 +1653,8 @@ fn updateTheme(self: *Window) void {
     const ghostty = theme == .ghostty and !util.highContrast();
     const background = config.@"window-titlebar-background" orelse config.background;
     const foreground = config.@"window-titlebar-foreground" orelse config.foreground;
-    const caption: c.COLORREF = if (ghostty) rgb(background.r, background.g, background.b) else DWMWA_COLOR_DEFAULT;
-    const text: c.COLORREF = if (ghostty) rgb(foreground.r, foreground.g, foreground.b) else DWMWA_COLOR_DEFAULT;
+    const caption: c.COLORREF = if (ghostty) util.rgb(background.r, background.g, background.b) else DWMWA_COLOR_DEFAULT;
+    const text: c.COLORREF = if (ghostty) util.rgb(foreground.r, foreground.g, foreground.b) else DWMWA_COLOR_DEFAULT;
     _ = c.DwmSetWindowAttribute(self.hwnd, DWMWA_CAPTION_COLOR, &caption, @sizeOf(c.COLORREF));
     _ = c.DwmSetWindowAttribute(self.hwnd, DWMWA_TEXT_COLOR, &text, @sizeOf(c.COLORREF));
 }
