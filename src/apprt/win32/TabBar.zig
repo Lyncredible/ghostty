@@ -207,18 +207,9 @@ fn scaleDpi(v: c_int, at: c_int) c_int {
 /// `window-title-font-family` at the system UI font's size.
 pub fn updateFont(self: *TabBar) void {
     const dpi = c.GetDpiForWindow(self.window.hwnd);
-    var metrics: c.NONCLIENTMETRICSW = undefined;
-    metrics.cbSize = @sizeOf(c.NONCLIENTMETRICSW);
-    if (c.SystemParametersInfoForDpi(
-        c.SPI_GETNONCLIENTMETRICS,
-        metrics.cbSize,
-        &metrics,
-        0,
-        dpi,
-    ) == 0) return;
-
+    var lf = util.messageLogFont(dpi) orelse return;
     if (self.window.app.config.@"window-title-font-family") |family| {
-        const face = &metrics.lfMessageFont.lfFaceName;
+        const face = &lf.lfFaceName;
         // The face name is a fixed buffer; too long a name can't name a
         // font, so we keep the system font then.
         const len = std.unicode.calcUtf16LeLen(family) catch 0;
@@ -228,7 +219,7 @@ pub fn updateFont(self: *TabBar) void {
         }
     }
 
-    const font = c.CreateFontIndirectW(&metrics.lfMessageFont) orelse return;
+    const font = c.CreateFontIndirectW(&lf) orelse return;
     if (self.font) |old| _ = c.DeleteObject(old);
     self.font = font;
 

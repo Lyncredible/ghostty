@@ -70,8 +70,8 @@ edit: c.HWND = null,
 list: c.HWND = null,
 parent: c.HWND = null,
 instance: c.HINSTANCE = null,
-font: c.HFONT = null,
-small_font: c.HFONT = null,
+font: util.MessageFont = .{},
+small_font: util.MessageFont = .{},
 edit_proc: c.WNDPROC = null,
 
 on_choose: ?*const fn (ctx: *anyopaque, choice: Choice) void = null,
@@ -191,8 +191,8 @@ pub fn deinit(self: *CommandPalette) void {
         if (self.edit != null) util.unsubclass(self.edit, self.edit_proc);
         _ = c.DestroyWindow(self.hwnd);
     }
-    if (self.font != null) _ = c.DeleteObject(self.font);
-    if (self.small_font != null) _ = c.DeleteObject(self.small_font);
+    self.font.deinit();
+    self.small_font.deinit();
     if (self.background_brush != null) _ = c.DeleteObject(self.background_brush);
     if (self.field_brush != null) _ = c.DeleteObject(self.field_brush);
     if (self.arena) |*arena| arena.deinit();
@@ -457,23 +457,12 @@ fn layout(self: *CommandPalette) void {
 }
 
 fn updateFonts(self: *CommandPalette) void {
-    var metrics: c.NONCLIENTMETRICSW = undefined;
-    metrics.cbSize = @sizeOf(c.NONCLIENTMETRICSW);
-    if (c.SystemParametersInfoForDpi(
-        c.SPI_GETNONCLIENTMETRICS,
-        metrics.cbSize,
-        &metrics,
-        0,
-        c.GetDpiForWindow(self.hwnd),
-    ) == 0) return;
-
-    if (self.font != null) _ = c.DeleteObject(self.font);
-    if (self.small_font != null) _ = c.DeleteObject(self.small_font);
-    self.font = c.CreateFontIndirectW(&metrics.lfMessageFont);
-    var small = metrics.lfMessageFont;
-    small.lfHeight = @divTrunc(small.lfHeight * 9, 10);
-    self.small_font = c.CreateFontIndirectW(&small);
-    _ = c.SendMessageW(self.edit, c.WM_SETFONT, @intFromPtr(self.font), c.TRUE);
+    const dpi = c.GetDpiForWindow(self.hwnd);
+    self.small_font.refresh(dpi, 90);
+    const change = self.font.update(dpi, 100) orelse return;
+    // The edit control lets go of the old font before it's deleted.
+    _ = c.SendMessageW(self.edit, c.WM_SETFONT, @intFromPtr(self.font.font), c.TRUE);
+    if (change.old != null) _ = c.DeleteObject(change.old);
 }
 
 /// The colors to draw with: the terminal's, or with a high contrast
@@ -551,7 +540,7 @@ fn drawItem(self: *CommandPalette, item: *const c.DRAWITEMSTRUCT) void {
     const middle = @divTrunc(rect.top + rect.bottom, 2);
 
     // The shortcut, on the right, and the description are dimmed.
-    const old_font = c.SelectObject(dc, self.small_font);
+    const old_font = c.SelectObject(dc, self.small_font.font);
     defer _ = c.SelectObject(dc, old_font);
     _ = c.SetTextColor(dc, if (selected) col.selected_dim else col.dim);
     var shortcut_rect = rect;
@@ -570,7 +559,7 @@ fn drawItem(self: *CommandPalette, item: *const c.DRAWITEMSTRUCT) void {
         _ = c.DrawTextW(dc, entry.description.ptr, @intCast(entry.description.len), &description_rect, c.DT_SINGLELINE | c.DT_TOP | c.DT_END_ELLIPSIS | c.DT_NOPREFIX);
     }
 
-    _ = c.SelectObject(dc, self.font);
+    _ = c.SelectObject(dc, self.font.font);
     _ = c.SetTextColor(dc, if (selected) col.selected_text else col.foreground);
     var title_rect = rect;
     if (has_description) title_rect.bottom = middle;

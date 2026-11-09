@@ -19,7 +19,7 @@ parent: c.HWND = null,
 instance: c.HINSTANCE = null,
 /// The overlay this goes above; see `util.placeAbove`.
 above: *const c.HWND = undefined,
-font: c.HFONT = null,
+font: util.MessageFont = .{},
 
 /// The URL being shown, if any.
 text: ?[:0]u16 = null,
@@ -77,7 +77,7 @@ pub fn deinit(self: *LinkPreview, alloc: Allocator) void {
         _ = c.SetWindowLongPtrW(self.hwnd, util.GWLP_USERDATA, 0);
         _ = c.DestroyWindow(self.hwnd);
     }
-    if (self.font != null) _ = c.DeleteObject(self.font);
+    self.font.deinit();
     if (self.text) |v| alloc.free(v);
     self.* = .{};
 }
@@ -126,11 +126,11 @@ fn layout(self: *LinkPreview, cursor: c.POINT) void {
     var parent_rect: c.RECT = undefined;
     _ = c.GetClientRect(self.parent, &parent_rect);
     const dpi: c_int = @intCast(c.GetDpiForWindow(self.hwnd));
-    self.updateFont(dpi);
+    self.font.refresh(@intCast(dpi), 100);
 
     // Measure the text.
     const dc = c.GetDC(self.hwnd);
-    const old = c.SelectObject(dc, self.font);
+    const old = c.SelectObject(dc, self.font.font);
     var size: c.SIZE = undefined;
     _ = c.GetTextExtentPoint32W(dc, text.ptr, @intCast(text.len), &size);
     _ = c.SelectObject(dc, old);
@@ -158,23 +158,6 @@ fn layout(self: *LinkPreview, cursor: c.POINT) void {
         c.SWP_NOZORDER | c.SWP_NOACTIVATE | c.SWP_SHOWWINDOW,
     );
     _ = c.InvalidateRect(self.hwnd, null, c.FALSE);
-}
-
-fn updateFont(self: *LinkPreview, dpi: c_int) void {
-    if (self.font != null) _ = c.DeleteObject(self.font);
-    var metrics: c.NONCLIENTMETRICSW = undefined;
-    metrics.cbSize = @sizeOf(c.NONCLIENTMETRICSW);
-    if (c.SystemParametersInfoForDpi(
-        c.SPI_GETNONCLIENTMETRICS,
-        metrics.cbSize,
-        &metrics,
-        0,
-        @intCast(dpi),
-    ) == 0) {
-        self.font = null;
-        return;
-    }
-    self.font = c.CreateFontIndirectW(&metrics.lfMessageFont);
 }
 
 fn scale(v: c_int, dpi: c_int) c_int {
@@ -215,7 +198,7 @@ pub fn wndProc(hwnd: c.HWND, msg: c.UINT, wparam: c.WPARAM, lparam: c.LPARAM) ca
             _ = c.FillRect(dc, &inner, background);
 
             const text = self.text orelse return 0;
-            const old = c.SelectObject(dc, self.font);
+            const old = c.SelectObject(dc, self.font.font);
             defer _ = c.SelectObject(dc, old);
             _ = c.SetBkMode(dc, c.TRANSPARENT);
             _ = c.SetTextColor(dc, col.foreground);
