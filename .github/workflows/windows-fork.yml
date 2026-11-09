@@ -251,6 +251,11 @@ jobs:
         shell: pwsh
         run: ./test/windows/scrollbar.ps1 -Exe zig-out/bin/ghostty.exe
 
+      - name: GDI leak test
+        timeout-minutes: 8
+        shell: pwsh
+        run: ./test/windows/gdi-leak.ps1 -Exe zig-out/bin/ghostty.exe
+
       - name: Crash report test
         timeout-minutes: 3
         shell: pwsh

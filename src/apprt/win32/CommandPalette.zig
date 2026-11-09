@@ -188,7 +188,7 @@ fn updateListTheme(self: *const CommandPalette) void {
 pub fn deinit(self: *CommandPalette) void {
     if (self.hwnd != null) {
         _ = c.SetWindowLongPtrW(self.hwnd, util.GWLP_USERDATA, 0);
-        if (self.edit != null) _ = c.SetWindowLongPtrW(self.edit, util.GWLP_USERDATA, 0);
+        if (self.edit != null) util.unsubclass(self.edit, self.edit_proc);
         _ = c.DestroyWindow(self.hwnd);
     }
     if (self.font != null) _ = c.DeleteObject(self.font);

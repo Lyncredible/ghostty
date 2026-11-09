@@ -346,6 +346,17 @@ pub fn setBlurBehindAccent(hwnd: c.HWND, enable: bool) bool {
 /// A handle (HWND, HDC, ...) passed in a message's WPARAM or LPARAM.
 /// Handles aren't pointers to aligned memory, so `@ptrFromInt` would fail
 /// its alignment check for many of them; we reinterpret the bits instead.
+/// Undo subclassing a control with SetWindowLongPtrW(GWLP_WNDPROC) before
+/// it's destroyed: its own window procedure goes back, and our user data
+/// is cleared. Our subclass procedures fall back to DefWindowProcW once
+/// the user data is gone, so without the original procedure back the
+/// control (an Edit) never saw WM_DESTROY or WM_NCDESTROY and never freed
+/// what it had made, a GDI object among it.
+pub fn unsubclass(hwnd: c.HWND, original: c.WNDPROC) void {
+    _ = c.SetWindowLongPtrW(hwnd, GWLP_USERDATA, 0);
+    if (original) |proc| _ = c.SetWindowLongPtrW(hwnd, c.GWLP_WNDPROC, @bitCast(@intFromPtr(proc)));
+}
+
 pub fn handle(comptime T: type, value: anytype) T {
     comptime std.debug.assert(@sizeOf(@TypeOf(value)) == @sizeOf(T));
     return @as(*const T, @ptrCast(&value)).*;
