@@ -537,3 +537,12 @@ Checks that double clicking a tab renames it, as in Windows Terminal: a
 double click on the second tab opens "Change Tab Title", and the title given
 there becomes that tab's name (read with UI Automation) while the first keeps
 its own. It shows a dialog, so it only runs in CI (or with `$env:CI = 'true'`).
+
+## notification.ps1
+
+Checks desktop notifications (OSC 9): one shows from the notification area
+icon, and another still shows after the icon is deleted, as Explorer's
+restart would delete it while a notification is up. Last, clicking the
+notification (its message, posted to Ghostty) brings back the minimized
+window it came from. It shows notifications, so it only runs in CI (or with
+`$env:CI = 'true'`).
