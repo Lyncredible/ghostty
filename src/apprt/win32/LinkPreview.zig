@@ -136,28 +136,63 @@ fn layout(self: *LinkPreview, cursor: c.POINT) void {
     _ = c.SelectObject(dc, old);
     _ = c.ReleaseDC(self.hwnd, dc);
 
-    const pad_x = scale(8, dpi);
-    const pad_y = scale(4, dpi);
-    const width = @min(size.cx + 2 * pad_x, parent_rect.right);
-    const height = size.cy + 2 * pad_y;
-    const top = parent_rect.bottom - height;
-
-    // Move to the right if the mouse is over our left position.
-    const over_left = cursor.x >= 0 and cursor.x < width and
-        cursor.y >= top and cursor.y < parent_rect.bottom;
-    self.right = over_left;
-    const left = if (over_left) parent_rect.right - width else 0;
-
+    const p = place(parent_rect, size, cursor, dpi);
+    self.right = p.right;
     _ = c.SetWindowPos(
         self.hwnd,
         null,
-        left,
-        top,
-        width,
-        height,
+        p.rect.left,
+        p.rect.top,
+        p.rect.right - p.rect.left,
+        p.rect.bottom - p.rect.top,
         c.SWP_NOZORDER | c.SWP_NOACTIVATE | c.SWP_SHOWWINDOW,
     );
     _ = c.InvalidateRect(self.hwnd, null, c.FALSE);
+}
+
+/// Where the preview goes in a parent of `parent` (a client rectangle) for
+/// text of `size`: the bottom left corner, or the bottom right one when
+/// `cursor` is over the bottom left one. It's never wider than the parent.
+fn place(parent: c.RECT, size: c.SIZE, cursor: c.POINT, dpi: c_int) struct { rect: c.RECT, right: bool } {
+    const width = @min(size.cx + 2 * scale(8, dpi), parent.right);
+    const height = size.cy + 2 * scale(4, dpi);
+    const top = parent.bottom - height;
+    const over_left = cursor.x >= 0 and cursor.x < width and
+        cursor.y >= top and cursor.y < parent.bottom;
+    const left = if (over_left) parent.right - width else 0;
+    return .{
+        .rect = .{ .left = left, .top = top, .right = left + width, .bottom = parent.bottom },
+        .right = over_left,
+    };
+}
+
+test place {
+    const testing = std.testing;
+    const parent: c.RECT = .{ .left = 0, .top = 0, .right = 800, .bottom = 600 };
+    const text: c.SIZE = .{ .cx = 200, .cy = 16 };
+
+    // At 96 DPI: 8 pixels each side, 4 above and below, in the bottom left.
+    const away = place(parent, text, .{ .x = 400, .y = 100 }, 96);
+    try testing.expect(!away.right);
+    try testing.expectEqual(c.RECT{ .left = 0, .top = 576, .right = 216, .bottom = 600 }, away.rect);
+
+    // The mouse over it moves it to the bottom right; just outside doesn't.
+    const over = place(parent, text, .{ .x = 10, .y = 590 }, 96);
+    try testing.expect(over.right);
+    try testing.expectEqual(c.RECT{ .left = 584, .top = 576, .right = 800, .bottom = 600 }, over.rect);
+    try testing.expect(!place(parent, text, .{ .x = 216, .y = 590 }, 96).right);
+    try testing.expect(!place(parent, text, .{ .x = 10, .y = 575 }, 96).right);
+    try testing.expect(!place(parent, text, .{ .x = -1, .y = 590 }, 96).right);
+
+    // Padding scales with the DPI.
+    const big = place(parent, text, .{ .x = 400, .y = 100 }, 192);
+    try testing.expectEqual(c.RECT{ .left = 0, .top = 568, .right = 232, .bottom = 600 }, big.rect);
+
+    // A URL wider than the surface is cut to its width (and ellipsized
+    // when drawn), even in the right corner.
+    const long: c.SIZE = .{ .cx = 5000, .cy = 16 };
+    try testing.expectEqual(c.RECT{ .left = 0, .top = 576, .right = 800, .bottom = 600 }, place(parent, long, .{ .x = 400, .y = 100 }, 96).rect);
+    try testing.expectEqual(c.RECT{ .left = 0, .top = 576, .right = 800, .bottom = 600 }, place(parent, long, .{ .x = 400, .y = 590 }, 96).rect);
 }
 
 fn scale(v: c_int, dpi: c_int) c_int {

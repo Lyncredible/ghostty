@@ -137,29 +137,66 @@ fn layout(self: *Badge) void {
     _ = c.SelectObject(dc, old);
     _ = c.ReleaseDC(self.hwnd, dc);
 
-    const margin = scale(8, dpi);
-    const width = @min(size.cx + 2 * scale(10, dpi), parent.right);
-    const height = size.cy + 2 * scale(5, dpi);
-    const x: c_int, const y: c_int = switch (self.anchor) {
-        .top_left => .{ margin, margin },
-        .top_center => .{ @divTrunc(parent.right - width, 2), margin },
-        .top_right => .{ parent.right - width - margin, margin },
-        .bottom_left => .{ margin, parent.bottom - height - margin },
-        .bottom_center => .{ @divTrunc(parent.right - width, 2), parent.bottom - height - margin },
-        .bottom_right => .{ parent.right - width - margin, parent.bottom - height - margin },
-        .center => .{ @divTrunc(parent.right - width, 2), @divTrunc(parent.bottom - height, 2) },
-    };
-
+    const rect = place(self.anchor, parent, size, dpi);
     _ = c.SetWindowPos(
         self.hwnd,
         null,
-        @max(0, x),
-        @max(0, y),
-        width,
-        height,
+        rect.left,
+        rect.top,
+        rect.right - rect.left,
+        rect.bottom - rect.top,
         c.SWP_NOZORDER | c.SWP_NOACTIVATE | c.SWP_SHOWWINDOW,
     );
     _ = c.InvalidateRect(self.hwnd, null, c.FALSE);
+}
+
+/// Where a badge with text of `size` goes in a parent of `parent` (a
+/// client rectangle): at `anchor`, 8 pixels in from the edges (at 96 DPI),
+/// never wider than the parent nor above or left of it.
+fn place(anchor: Anchor, parent: c.RECT, size: c.SIZE, dpi: c_int) c.RECT {
+    const margin = scale(8, dpi);
+    const width = @min(size.cx + 2 * scale(10, dpi), parent.right);
+    const height = size.cy + 2 * scale(5, dpi);
+    const center_x = @divTrunc(parent.right - width, 2);
+    const right = parent.right - width - margin;
+    const bottom = parent.bottom - height - margin;
+    const x: c_int, const y: c_int = switch (anchor) {
+        .top_left => .{ margin, margin },
+        .top_center => .{ center_x, margin },
+        .top_right => .{ right, margin },
+        .bottom_left => .{ margin, bottom },
+        .bottom_center => .{ center_x, bottom },
+        .bottom_right => .{ right, bottom },
+        .center => .{ center_x, @divTrunc(parent.bottom - height, 2) },
+    };
+    return .{ .left = @max(0, x), .top = @max(0, y), .right = @max(0, x) + width, .bottom = @max(0, y) + height };
+}
+
+test place {
+    const testing = std.testing;
+    const parent: c.RECT = .{ .left = 0, .top = 0, .right = 800, .bottom = 600 };
+    const text: c.SIZE = .{ .cx = 80, .cy = 16 };
+
+    // 100 by 26 at 96 DPI: 10 pixels each side and 5 above and below.
+    try testing.expectEqual(c.RECT{ .left = 692, .top = 8, .right = 792, .bottom = 34 }, place(.top_right, parent, text, 96));
+    try testing.expectEqual(c.RECT{ .left = 8, .top = 8, .right = 108, .bottom = 34 }, place(.top_left, parent, text, 96));
+    try testing.expectEqual(c.RECT{ .left = 350, .top = 8, .right = 450, .bottom = 34 }, place(.top_center, parent, text, 96));
+    try testing.expectEqual(c.RECT{ .left = 8, .top = 566, .right = 108, .bottom = 592 }, place(.bottom_left, parent, text, 96));
+    try testing.expectEqual(c.RECT{ .left = 350, .top = 566, .right = 450, .bottom = 592 }, place(.bottom_center, parent, text, 96));
+    try testing.expectEqual(c.RECT{ .left = 692, .top = 566, .right = 792, .bottom = 592 }, place(.bottom_right, parent, text, 96));
+    try testing.expectEqual(c.RECT{ .left = 350, .top = 287, .right = 450, .bottom = 313 }, place(.center, parent, text, 96));
+
+    // Twice the DPI, twice the padding and margins.
+    try testing.expectEqual(c.RECT{ .left = 664, .top = 16, .right = 784, .bottom = 52 }, place(.top_right, parent, text, 192));
+
+    // Text wider than the surface: as wide as it, and never off its left
+    // or top edge, even in a surface shorter than the badge.
+    const tiny: c.RECT = .{ .left = 0, .top = 0, .right = 50, .bottom = 20 };
+    for (std.enums.values(Anchor)) |anchor| {
+        const rect = place(anchor, tiny, text, 96);
+        try testing.expect(rect.left >= 0 and rect.top >= 0);
+        try testing.expect(rect.right - rect.left <= 50);
+    }
 }
 
 fn scale(v: c_int, dpi: c_int) c_int {
