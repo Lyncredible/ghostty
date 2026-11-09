@@ -1405,21 +1405,15 @@ fn readClipboardText(alloc: Allocator, hwnd: c.HWND) !?[:0]u8 {
     defer _ = c.CloseClipboard();
 
     const handle = c.GetClipboardData(c.CF_UNICODETEXT) orelse return null;
-    const ptr: [*:0]const u16 = @ptrCast(@alignCast(c.GlobalLock(handle) orelse return null));
+    const ptr: [*]const u16 = @ptrCast(@alignCast(c.GlobalLock(handle) orelse return null));
     defer _ = c.GlobalUnlock(handle);
 
-    const text = try util.utf8Alloc(alloc, std.mem.span(ptr));
+    const text = try util.utf8Alloc(alloc, clipboardUnits(ptr, c.GlobalSize(handle)));
     errdefer alloc.free(text);
 
-    // Normalize CRLF to LF. The core turns LF into CR for the terminal
-    // (as is standard), so CRLF would otherwise become two newlines.
-    var len: usize = 0;
-    var i: usize = 0;
-    while (i < text.len) : (i += 1) {
-        if (text[i] == '\r' and i + 1 < text.len and text[i + 1] == '\n') continue;
-        text[len] = text[i];
-        len += 1;
-    }
+    // The core turns LF into CR for the terminal (as is standard), so
+    // CRLF would otherwise become two newlines.
+    const len = crlfToLf(text);
     text[len] = 0;
     if (len == text.len) return text;
     const shrunk = try alloc.realloc(text[0 .. text.len + 1], len + 1);
@@ -1429,15 +1423,9 @@ fn readClipboardText(alloc: Allocator, hwnd: c.HWND) !?[:0]u8 {
 /// Write text to the clipboard. Line endings are converted from LF to
 /// CRLF, as is standard for text on Windows.
 fn writeClipboardText(alloc: Allocator, hwnd: c.HWND, text: []const u8, html: ?[]const u8) !void {
-    // Convert LF to CRLF.
-    var crlf: std.ArrayList(u8) = .empty;
-    defer crlf.deinit(alloc);
-    for (text, 0..) |ch, i| {
-        if (ch == '\n' and (i == 0 or text[i - 1] != '\r')) try crlf.append(alloc, '\r');
-        try crlf.append(alloc, ch);
-    }
-
-    const text16 = try util.utf16Alloc(alloc, crlf.items);
+    const crlf = try lfToCrlf(alloc, text);
+    defer alloc.free(crlf);
+    const text16 = try util.utf16Alloc(alloc, crlf);
     defer alloc.free(text16);
 
     const bytes = (text16.len + 1) * @sizeOf(u16);
@@ -1479,6 +1467,82 @@ fn writeClipboardText(alloc: Allocator, hwnd: c.HWND, text: []const u8, html: ?[
         dst[data.len] = 0;
         _ = c.GlobalUnlock(html_mem);
         if (c.SetClipboardData(format, html_mem) == null) _ = c.GlobalFree(html_mem);
+    }
+}
+
+/// The text in clipboard memory of `bytes` bytes: up to its first NUL, and
+/// never past the memory, since another program may have put text there
+/// without one.
+fn clipboardUnits(ptr: [*]const u16, bytes: usize) []const u16 {
+    return std.mem.sliceTo(ptr[0 .. bytes / @sizeOf(u16)], 0);
+}
+
+/// Turn each CRLF in `text` into LF, in place, and return the new length.
+fn crlfToLf(text: []u8) usize {
+    var len: usize = 0;
+    for (text, 0..) |ch, i| {
+        if (ch == '\r' and i + 1 < text.len and text[i + 1] == '\n') continue;
+        text[len] = ch;
+        len += 1;
+    }
+    return len;
+}
+
+/// `text` with each LF that isn't already after a CR made CRLF, as text
+/// on the Windows clipboard has it.
+fn lfToCrlf(alloc: Allocator, text: []const u8) Allocator.Error![]u8 {
+    var crlf: std.ArrayList(u8) = .empty;
+    errdefer crlf.deinit(alloc);
+    for (text, 0..) |ch, i| {
+        if (ch == '\n' and (i == 0 or text[i - 1] != '\r')) try crlf.append(alloc, '\r');
+        try crlf.append(alloc, ch);
+    }
+    return crlf.toOwnedSlice(alloc);
+}
+
+test clipboardUnits {
+    const testing = std.testing;
+    const text = [_]u16{ 'h', 'i', 0, 'x' };
+    try testing.expectEqualSlices(u16, &.{ 'h', 'i' }, clipboardUnits(&text, 8));
+    // Without a NUL, it stops at the end of the memory.
+    const unterminated = [_]u16{ 'h', 'i' };
+    try testing.expectEqualSlices(u16, &.{ 'h', 'i' }, clipboardUnits(&unterminated, 4));
+    try testing.expectEqualSlices(u16, &.{'h'}, clipboardUnits(&unterminated, 3));
+    try testing.expectEqualSlices(u16, &.{}, clipboardUnits(&unterminated, 0));
+}
+
+test crlfToLf {
+    const testing = std.testing;
+    const cases = [_][2][]const u8{
+        .{ "a\r\nb\r\n", "a\nb\n" },
+        .{ "\r\n\r\n", "\n\n" },
+        // A CR on its own, or at the end, stays.
+        .{ "a\rb\r", "a\rb\r" },
+        .{ "\r\r\n", "\r\n" },
+        .{ "", "" },
+    };
+    for (cases) |case| {
+        var buf: [16]u8 = undefined;
+        const text = buf[0..case[0].len];
+        @memcpy(text, case[0]);
+        try testing.expectEqualStrings(case[1], text[0..crlfToLf(text)]);
+    }
+}
+
+test lfToCrlf {
+    const testing = std.testing;
+    const cases = [_][2][]const u8{
+        .{ "a\nb\n", "a\r\nb\r\n" },
+        .{ "\n", "\r\n" },
+        // Text that already has CRLF keeps it.
+        .{ "a\r\nb", "a\r\nb" },
+        .{ "\r", "\r" },
+        .{ "", "" },
+    };
+    for (cases) |case| {
+        const crlf = try lfToCrlf(testing.allocator, case[0]);
+        defer testing.allocator.free(crlf);
+        try testing.expectEqualStrings(case[1], crlf);
     }
 }
 
