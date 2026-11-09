@@ -1417,6 +1417,13 @@ Notes:
         run). No conflicts; dates kept (640 commits checked). CI run
         42552051247 (4ce6f2d23, after the thirteenth sync) passed every
         job and `windows-tip` moved.
+  - [x] 2026-11-08: a fifteenth sync (3 commits: simdutf's AVX-512
+        kernels built again, and the VT decoder's valid prefix). No
+        conflicts, though `SharedDeps.zig` is changed here too; dates
+        kept (642 commits checked). The app builds, the 111 SIMD tests
+        pass, and so do the search and scrollbar UI tests. CI runs
+        42557868485 (a97bcc108) and 42563453811 (f30eb4770, the screen
+        reader fix) passed every job before it.
 - [x] Tip builds, like upstream's `release-tip.yml` (the discussion's
       release workflow item): a rolling prerelease of the latest
       `windows` commit, so people can try it without building. Approved
