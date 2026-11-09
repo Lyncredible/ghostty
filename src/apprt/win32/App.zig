@@ -1704,7 +1704,9 @@ pub fn handOff(self: *App, pending: Handoff.Pending) void {
 
 fn openHandoffs(self: *App) void {
     const alloc = self.core_app.alloc;
-    while (self.pending_handoffs.pop()) |pending| {
+    // In the order they came, so their windows open in that order too.
+    while (self.pending_handoffs.items.len > 0) {
+        const pending = self.pending_handoffs.orderedRemove(0);
         defer if (pending.title) |title| alloc.free(title);
         self.next_handoff = pending.handoff;
         self.next_show = pending.show;
