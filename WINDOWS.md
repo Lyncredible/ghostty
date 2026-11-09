@@ -2218,9 +2218,12 @@ Notes:
     those. `test/windows/win-key-defaults.ps1` reports the taken ones
     from `+list-keybinds --default`, and runs in CI to show what a clean
     Windows takes.
-    - [ ] Read the CI report. If a clean Windows takes Win+Ctrl+[ and ],
-          add Windows defaults for `goto_split:previous`/`next` (the
-          directional ones already have Ctrl+Alt+arrows).
+    - [x] The CI report (run 42540743076, `windows-latest`): all seven
+          are free there ("None is taken"), so a clean Windows doesn't
+          register Win+Ctrl+[ and ]; on the dev machine it's some
+          installed program's hotkey. No new defaults needed. Still for a
+          real keyboard: whether a keyboard hook (the shell's desktop
+          switching) eats the Win+Ctrl+Shift arrows.
 - [x] Bug (reported 2026-11-07): from a WSL tab, opening a new Command
       Prompt tab (the new tab menu) opened WSL instead. The new terminal
       inherited the WSL tab's directory (a `\\wsl.localhost\...` share
