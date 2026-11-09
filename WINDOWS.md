@@ -1447,6 +1447,15 @@ Notes:
         fonts, the tab bar providers, the quick terminal fixes and
         `window-cycle.ps1`) passed every job, `window-cycle` included,
         and `windows-tip` moved.
+  - [x] 2026-11-09: a nineteenth sync (9 commits: CI and build changes,
+        chiefly a test runner that shards the unit tests, `--shard=I/N`,
+        run as one process per core, and smaller printSlice differential
+        tests). No conflicts; dates kept (710 commits checked). The app
+        builds and the win32 unit tests pass under the new runner. Its
+        first run after the rebase failed in shard 2 of 8 with nothing
+        but the Overrides test's expected warnings shown, and six fresh
+        runs since (and that shard run directly) passed; watching for it
+        in CI, since the shards now run at once.
 - [x] Tip builds, like upstream's `release-tip.yml` (the discussion's
       release workflow item): a rolling prerelease of the latest
       `windows` commit, so people can try it without building. Approved
