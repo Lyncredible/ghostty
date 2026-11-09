@@ -2581,6 +2581,25 @@ Notes:
     so the key went back and forth between them instead of choosing.
     They're Close All W&indows and Change Ter&minal Title now, and a unit
     test checks that every item of every menu has its own access key.
+  - The search bar enumerated the system's fonts and made its icon font
+    on every paint; it keeps one per DPI, from the tab bar's lookup, now
+    `util.iconFont`. Three copies of `mix` became `util.mix` and
+    `util.blend`.
+  - The search box and command palette read their text into fixed
+    buffers (1023 and 255 UTF-16 units), cutting longer text wherever it
+    fell, maybe inside an emoji; the boxes are limited to that now
+    (`EM_SETLIMITTEXT`), and a search from `search_selection` is cut at a
+    character.
+  - The jump list wrote `"--class=<class>"` as is, which a class with a
+    quote would break; it's quoted like the shells' arguments now. The
+    shell list and `--command=` overrides got unit tests.
+  - Notifications stopped for good if Explorer restarted while one was
+    up: the icon (only there while one shows) was gone, but Ghostty
+    still thought it was there, and every later `NIM_MODIFY` failed. A
+    failed notification now adds the icon again. `notification.ps1` (in
+    CI, as it shows notifications) checks it by deleting the icon itself
+    (it times out without the fix), and that clicking a notification
+    brings back its minimized window.
 - [ ] Packaging and release builds
   - [x] Portable zip (`dist/windows/package.ps1`)
   - [x] Per-user install script in the zip (`dist/windows/install.ps1`):
