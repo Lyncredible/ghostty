@@ -2572,7 +2572,10 @@ Notes:
     1300x950 to test `reset_window_size`, and Windows won't make a
     window larger than the runner's 1024x768 monitor. It shrinks the
     window now. Everything before that step passed, the new `splits`
-    test included; the steps after it didn't run.
+    test included; the steps after it didn't run. With the fix, run
+    42695370329 passed every job (`window-actions`, `window-cycle`,
+    `translucent` with the opacity toggle, the leak tests' new steps,
+    ARM64), and `windows-tip` moved.
   - Ten files built GDI colors themselves (seven with their own `rgb`)
     and six scaled sizes from 96 DPI themselves; they share `util.rgb`
     and `util.scale` now (unit tested).
