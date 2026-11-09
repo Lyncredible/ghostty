@@ -2495,6 +2495,15 @@ Notes:
     Where the badge (each anchor, DPI scaling, a surface smaller than
     it) and the link preview (its corner, moving away from the mouse, a
     URL wider than the surface) go is now unit tested too.
+  - The tab bar's UI Automation providers returned `E_NOINTERFACE`
+    without clearing the out pointer, as COM requires (a client that
+    releases whatever came back would release garbage). Every other COM
+    object we implement (the terminal's provider and text ranges, the
+    handoff objects, DirectWrite's text source) already cleared it. New
+    unit tests call the tab bar's providers through their vtables:
+    interfaces, references, the patterns of tabs, buttons and close
+    buttons, and elements of a detached tab bar. `tab-close-uia`,
+    `uia-events` and `tabs` pass.
 - [ ] Packaging and release builds
   - [x] Portable zip (`dist/windows/package.ps1`)
   - [x] Per-user install script in the zip (`dist/windows/install.ps1`):
