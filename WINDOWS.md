@@ -23,9 +23,10 @@ https://github.com/ghostty-org/ghostty/discussions/2563
 As of October 2026 the team says porting the full desktop app to Windows
 is on hiatus, and the discussion is closed. They still welcome
 contributions that improve Ghostty internals on Windows (for example
-libghostty-vt), but "no +10k diff PRs". This branch adds about 33k lines
-(25k in `src`, 19k of them the Win32 apprt and the Direct3D renderer,
-as of 2026-11-04) and must not go upstream as one PR. Candidates to upstream separately,
+libghostty-vt), but "no +10k diff PRs". This branch adds about 40k lines
+(28k in `src`, 20k of them the Win32 apprt and the Direct3D renderer,
+as of 2026-11-08) and must not go upstream as one PR. Candidates to
+upstream separately,
 roughly in order:
 
 1. Core compile and test fixes (`posix_c`, `Dmabuf`, tinyio symlink
