@@ -3,6 +3,7 @@
 # black one on top of it, splits it, prints enough lines to scroll, and
 # scrolls with the wheel. Both panes must show the red window through them,
 # and the scrollbar's thumb must be drawn over the translucent background.
+# toggle_background_opacity must hide the red window, and then show it.
 # Then the search bar and the command palette must be drawn opaque over it.
 # With -Blur (acrylic) it only reports the colors: Windows draws acrylic as
 # a solid color without a GPU, as on GitHub's runners. It only sends
@@ -65,6 +66,12 @@ public static uint MenuCommand(System.IntPtr menu, string label) {
 [DllImport("user32.dll")] public static extern System.IntPtr SendMessageW(System.IntPtr h, uint m, System.IntPtr w, System.IntPtr l);
 [DllImport("user32.dll")] public static extern bool PostMessageW(System.IntPtr h, uint m, System.IntPtr w, System.IntPtr l);
 [DllImport("user32.dll")] public static extern bool IsWindowVisible(System.IntPtr h);
+public static void Key(System.IntPtr h, int vk, int scan) {
+  PostMessageW(h, 0x0100, (System.IntPtr)vk, (System.IntPtr)(1 | (scan << 16)));
+  System.Threading.Thread.Sleep(30);
+  uint up = 1u | ((uint)scan << 16) | (3u << 30);
+  PostMessageW(h, 0x0101, (System.IntPtr)vk, (System.IntPtr)unchecked((int)up));
+}
 [DllImport("user32.dll", CharSet = CharSet.Unicode)] public static extern int GetClassNameW(System.IntPtr h, System.Text.StringBuilder s, int n);
 public delegate bool EnumProc(System.IntPtr h, System.IntPtr l);
 [DllImport("user32.dll")] public static extern bool EnumChildWindows(System.IntPtr h, EnumProc f, System.IntPtr l);
@@ -140,6 +147,7 @@ try {
     [void](WaitFor { $s = Surfaces $back; $s -and ($s.Texts -match '>') } 'the red window')
 
     $frontArgs = $common + '--background=#000000', '--background-opacity=0.5', '--foreground=#ffffff',
+        '--keybind=f12=toggle_background_opacity',
         '"--command=cmd.exe /k for /l %i in (1,1,300) do @echo %i"'
     if ($Blur) { $frontArgs += '--background-blur=true' }
     $front = Start-Process -FilePath $Exe -PassThru -ArgumentList $frontArgs
@@ -179,6 +187,20 @@ try {
         }
     } 'the scrollbar over the translucent background'
     Notice "scrollbar at $found"
+
+    # toggle_background_opacity (F12) makes the panes opaque, hiding the
+    # red window, and then translucent again.
+    if (-not $Blur) {
+        $right = $s.Handles | Sort-Object { (Rect $_).l } | Select-Object -Last 1
+        $r = Rect $right
+        $x = $r.r - [int](($r.r - $r.l) / 4)
+        $y = [int](($r.t + $r.b) / 2)
+        foreach ($want in @($false, $true)) {
+            $W::Key($right, 0x7B, 0x58)
+            $pixel = WaitFor { $p = (Column $x $y ($y + 1))[0]; if ((IsShowingRed $p) -eq $want) { $p } } "the pane to $(if ($want) { 'show' } else { 'hide' }) the red window"
+            Notice "after toggle_background_opacity: $(Describe $pixel)"
+        }
+    }
 
     # Overlays, from the window menu (found by label): Find and Command
     # Palette. Each must hide the red behind it.
