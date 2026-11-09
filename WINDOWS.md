@@ -2568,6 +2568,19 @@ Notes:
   - The stderr and stdio tests made named pipes with fixed names, and
     libghostty-vt's tests run them too, so its test binary and Ghostty's
     running at once could collide. `testPipeName` adds the process ID.
+  - CI (run 42685392648) failed `window-actions`: it made the window
+    1300x950 to test `reset_window_size`, and Windows won't make a
+    window larger than the runner's 1024x768 monitor. It shrinks the
+    window now. Everything before that step passed, the new `splits`
+    test included; the steps after it didn't run.
+  - Ten files built GDI colors themselves (seven with their own `rgb`)
+    and six scaled sizes from 96 DPI themselves; they share `util.rgb`
+    and `util.scale` now (unit tested).
+  - Two menus had an access key twice: File's New &Window and Close All
+    Windo&ws, and View's &Increase Font Size and Change Terminal T&itle,
+    so the key went back and forth between them instead of choosing.
+    They're Close All W&indows and Change Ter&minal Title now, and a unit
+    test checks that every item of every menu has its own access key.
 - [ ] Packaging and release builds
   - [x] Portable zip (`dist/windows/package.ps1`)
   - [x] Per-user install script in the zip (`dist/windows/install.ps1`):
