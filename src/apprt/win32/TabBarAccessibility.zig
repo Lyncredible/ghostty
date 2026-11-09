@@ -75,8 +75,11 @@ fn queryInterface(self: *Root, iid: *const GUID, out: *?*anyopaque) HRESULT {
         &self.fragment_root
     else if (eqlGuid(iid, &IID_ISelectionProvider))
         &self.selection
-    else
+    else {
+        // COM wants the out pointer cleared on failure.
+        out.* = null;
         return E_NOINTERFACE;
+    };
     _ = self.addRef();
     return S_OK;
 }
@@ -366,8 +369,10 @@ const Item = struct {
             &self.selection_item
         else if (self.kind != .tab and eqlGuid(iid, &IID_IInvokeProvider))
             &self.invoke
-        else
+        else {
+            out.* = null;
             return E_NOINTERFACE;
+        };
         _ = self.addRef();
         return S_OK;
     }
@@ -833,3 +838,91 @@ extern "uiautomationcore" fn UiaRaiseAutomationEvent(provider: *Interface, id: i
 extern "oleaut32" fn SysAllocStringLen(s: ?[*]const u16, len: u32) callconv(.winapi) ?[*:0]u16;
 extern "oleaut32" fn SafeArrayCreateVector(vt: u16, lower: i32, count: u32) callconv(.winapi) ?*anyopaque;
 extern "oleaut32" fn SafeArrayPutElement(array: *anyopaque, index: *const i32, value: *const anyopaque) callconv(.winapi) HRESULT;
+
+/// A vtable's functions, to call an interface as a client would.
+fn vtable(comptime T: type, iface: *const Interface) *const T {
+    return @ptrCast(@alignCast(iface.vtbl));
+}
+
+test "the tab bar's providers: interfaces and references" {
+    const testing = std.testing;
+    const alloc = testing.allocator;
+    // Detached, as after the tab bar is gone: nothing reaches a window.
+    const root = try alloc.create(Root);
+    root.* = .{ .alloc = alloc, .bar = null };
+    // The testing allocator reports it if this doesn't free the root.
+    defer _ = root.release();
+    const simple = vtable(SimpleVtbl, &root.simple);
+
+    // Each interface comes from any other, with a reference.
+    const cases = .{
+        .{ &IID_IUnknown, &root.simple },
+        .{ &IID_IRawElementProviderSimple, &root.simple },
+        .{ &IID_IRawElementProviderFragment, &root.fragment },
+        .{ &IID_IRawElementProviderFragmentRoot, &root.fragment_root },
+        .{ &IID_ISelectionProvider, &root.selection },
+    };
+    inline for (cases) |case| {
+        var out: ?*anyopaque = null;
+        try testing.expectEqual(S_OK, vtable(FragmentVtbl, &root.fragment).QueryInterface(&root.fragment, case[0], &out));
+        try testing.expectEqual(@as(?*anyopaque, case[1]), out);
+        try testing.expectEqual(@as(u32, 1), simple.Release(&root.simple));
+    }
+
+    // One it doesn't have clears the out pointer and adds no reference.
+    var out: ?*anyopaque = @ptrFromInt(0x1000);
+    try testing.expectEqual(E_NOINTERFACE, simple.QueryInterface(&root.simple, &IID_IInvokeProvider, &out));
+    try testing.expectEqual(@as(?*anyopaque, null), out);
+    try testing.expectEqual(@as(u32, 1), root.refs.load(.acquire));
+
+    // Detached, it's no longer available, and has no children.
+    var value: VARIANT = .{};
+    try testing.expectEqual(UIA_E_ELEMENTNOTAVAILABLE, simple.GetPropertyValue(&root.simple, UIA_NamePropertyId, &value));
+    out = @ptrFromInt(0x1000);
+    try testing.expectEqual(UIA_E_ELEMENTNOTAVAILABLE, vtable(FragmentVtbl, &root.fragment).Navigate(&root.fragment, NavigateDirection_FirstChild, &out));
+    try testing.expectEqual(@as(?*anyopaque, null), out);
+    try testing.expectEqual(@as(usize, 0), root.childCount());
+    try testing.expectEqual(@as(?*Item, null), root.childAt(0));
+
+    // A button can be invoked but not selected; a tab the other way
+    // around. Each item holds a reference to the root while it lives.
+    const tab_ptr: *Tab = @ptrFromInt(0x10000);
+    const items = [_]struct { kind: Item.Kind, pattern: i32, has: *const GUID, lacks: *const GUID }{
+        .{ .kind = .{ .button = buttons[0] }, .pattern = UIA_InvokePatternId, .has = &IID_IInvokeProvider, .lacks = &IID_ISelectionItemProvider },
+        .{ .kind = .{ .close = tab_ptr }, .pattern = UIA_InvokePatternId, .has = &IID_IInvokeProvider, .lacks = &IID_ISelectionItemProvider },
+        .{ .kind = .{ .tab = tab_ptr }, .pattern = UIA_SelectionItemPatternId, .has = &IID_ISelectionItemProvider, .lacks = &IID_IInvokeProvider },
+    };
+    for (items) |case| {
+        const item = try Item.create(root, case.kind);
+        try testing.expectEqual(@as(u32, 2), root.refs.load(.acquire));
+        const item_simple = vtable(SimpleVtbl, &item.simple);
+
+        out = null;
+        try testing.expectEqual(S_OK, item_simple.QueryInterface(&item.simple, case.has, &out));
+        try testing.expect(out != null);
+        try testing.expectEqual(@as(u32, 1), item_simple.Release(&item.simple));
+        out = @ptrFromInt(0x1000);
+        try testing.expectEqual(E_NOINTERFACE, item_simple.QueryInterface(&item.simple, case.lacks, &out));
+        try testing.expectEqual(@as(?*anyopaque, null), out);
+
+        // The pattern is the same interface.
+        out = null;
+        try testing.expectEqual(S_OK, item_simple.GetPatternProvider(&item.simple, case.pattern, &out));
+        try testing.expect(out != null);
+        try testing.expectEqual(@as(u32, 1), item_simple.Release(&item.simple));
+
+        // Its tab bar is gone, so it's no longer available.
+        var rect: UiaRect = undefined;
+        try testing.expectEqual(UIA_E_ELEMENTNOTAVAILABLE, vtable(FragmentVtbl, &item.fragment).get_BoundingRectangle(&item.fragment, &rect));
+        try testing.expectEqual(UIA_E_ELEMENTNOTAVAILABLE, item_simple.GetPropertyValue(&item.simple, UIA_NamePropertyId, &value));
+
+        // Its fragment root is the tab bar's, with a reference.
+        out = null;
+        try testing.expectEqual(S_OK, vtable(FragmentVtbl, &item.fragment).get_FragmentRoot(&item.fragment, &out));
+        try testing.expectEqual(@as(?*anyopaque, &root.fragment_root), out);
+        try testing.expectEqual(@as(u32, 2), simple.Release(&root.simple));
+
+        try testing.expectEqual(@as(u32, 0), item_simple.Release(&item.simple));
+        try testing.expectEqual(@as(u32, 1), root.refs.load(.acquire));
+    }
+}
