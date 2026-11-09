@@ -1,7 +1,10 @@
 # Checks the CLI actions that talk to a running Ghostty: `+new-tab` adds a
 # tab to its window and `+new-window` opens another window, through the
-# console launcher (ghostty.com) with the instance's `--class`. Tabs and
-# windows are counted with UI Automation, so it runs on a locked desktop.
+# console launcher (ghostty.com) with the instance's `--class`. Then
+# `+new-tab --title=... -e cmd.exe ...` must open a tab with that title,
+# running that command, which last after the request's memory is freed.
+# Tabs and windows are counted with UI Automation, so it runs on a locked
+# desktop.
 #
 #     ./cli-ipc.ps1 -Exe zig-out/bin/ghostty.exe
 
@@ -50,9 +53,20 @@ function WaitFor([string]$expected, [string]$what) {
     Fail "timed out waiting for $what (windows/tabs: $count, wanted $expected)"
 }
 
-function Run([string]$action) {
-    $out = & $cli $action "--class=$class" 2>&1 | Out-String
+function Run([string]$action, [string[]]$arguments = @()) {
+    $out = & $cli $action "--class=$class" @arguments 2>&1 | Out-String
     if ($LASTEXITCODE -ne 0) { Fail "$action exited with $LASTEXITCODE`: $out" }
+}
+
+# The names of the instance's tabs.
+function TabNames {
+    $condition = New-Object System.Windows.Automation.PropertyCondition($AE::ProcessIdProperty, $process.Id)
+    foreach ($window in @($AE::RootElement.FindAll([System.Windows.Automation.TreeScope]::Children, $condition))) {
+        foreach ($tab in @($window.FindAll([System.Windows.Automation.TreeScope]::Descendants,
+            (New-Object System.Windows.Automation.PropertyCondition($AE::ControlTypeProperty, [System.Windows.Automation.ControlType]::TabItem))))) {
+            $tab.Current.Name
+        }
+    }
 }
 
 try {
@@ -63,6 +77,30 @@ try {
     Run '+new-window'
     WaitFor '2/3' '+new-window to open a window'
     Write-Host '+new-window opened a second window.'
+
+    # Overrides: a title and a command. They're parsed into memory that's
+    # freed once the request is handled, so a tab that kept pointing into
+    # it would show garbage (Debug builds overwrite freed memory) or crash.
+    Run '+new-tab' @('--title=IPC override title', '-e', 'cmd.exe', '/k', 'echo IPC-OVERRIDE-MARKER')
+    WaitFor '2/4' '+new-tab with overrides to add a tab'
+    $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
+    while ((Get-Date) -lt $deadline -and (TabNames) -notcontains 'IPC override title') { Start-Sleep -Milliseconds 250 }
+    if ((TabNames) -notcontains 'IPC override title') { Fail "no tab is titled 'IPC override title': $((TabNames) -join ', ')" }
+    $condition = New-Object System.Windows.Automation.PropertyCondition($AE::ClassNameProperty, 'GhosttySurface')
+    $marker = $false
+    while ((Get-Date) -lt $deadline -and -not $marker) {
+        foreach ($s in @($AE::RootElement.FindAll([System.Windows.Automation.TreeScope]::Descendants, $condition))) {
+            if ($s.Current.ProcessId -ne $process.Id) { continue }
+            $value = $s.GetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern).Current.Value
+            if ($value -match 'IPC-OVERRIDE-MARKER') { $marker = $true }
+        }
+        if (-not $marker) { Start-Sleep -Milliseconds 250 }
+    }
+    if (-not $marker) { Fail "the tab's command didn't print its marker" }
+    Start-Sleep -Seconds 1
+    if ((TabNames) -notcontains 'IPC override title') { Fail "the override title didn't last: $((TabNames) -join ', ')" }
+    Write-Host "+new-tab with --title and -e opened a tab titled 'IPC override title' running the command."
+    if ($process.HasExited) { Fail "Ghostty exited" }
 } finally {
     if (-not $process.HasExited) { Stop-Process -Id $process.Id -Force }
     Start-Sleep -Milliseconds 500
