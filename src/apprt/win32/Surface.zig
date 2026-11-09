@@ -605,7 +605,7 @@ fn updateKeyBadge(self: *Surface) void {
 
 /// Show the search bar, for the start_search action.
 pub fn startSearch(self: *Surface, needle: []const u8) void {
-    self.search_bar.show(self.app.core_app.alloc, needle);
+    self.search_bar.show(needle);
 }
 
 /// Hide the search bar, for the end_search action.

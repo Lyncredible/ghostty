@@ -9,7 +9,6 @@
 const SearchBar = @This();
 
 const std = @import("std");
-const Allocator = std.mem.Allocator;
 const Config = @import("../../config.zig").Config;
 
 const util = @import("util.zig");
@@ -35,6 +34,9 @@ const height = 36;
 const pad = 6;
 const button = 24;
 const count_width = 56;
+
+/// The longest search text, in UTF-16 units.
+const max_needle = 1023;
 
 hwnd: c.HWND = null,
 edit: c.HWND = null,
@@ -115,6 +117,7 @@ fn createWindows(self: *SearchBar) !void {
         self.instance,
         null,
     ) orelse return error.CreateWindowFailed;
+    _ = c.SendMessageW(edit, c.EM_SETLIMITTEXT, max_needle, 0);
     _ = c.SendMessageW(edit, c.EM_SETCUEBANNER, c.TRUE, @bitCast(@intFromPtr(
         std.unicode.utf8ToUtf16LeStringLiteral("Find").ptr,
     )));
@@ -160,19 +163,18 @@ pub fn visible(self: *const SearchBar) bool {
     return c.GetWindowLongPtrW(self.hwnd, c.GWL_STYLE) & c.WS_VISIBLE != 0;
 }
 
-/// Show and focus the search box. A non-empty needle replaces the text.
-pub fn show(self: *SearchBar, alloc: Allocator, needle: []const u8) void {
+/// Show and focus the search box. A non-empty needle replaces the text,
+/// cut to what the box holds.
+pub fn show(self: *SearchBar, needle: []const u8) void {
     self.createWindows() catch |err| {
         log.warn("unable to create the search bar err={}", .{err});
         return;
     };
     if (needle.len > 0) {
-        if (util.utf16Alloc(alloc, needle)) |text| {
-            defer alloc.free(text);
-            self.setting_text = true;
-            _ = c.SetWindowTextW(self.edit, text);
-            self.setting_text = false;
-        } else |_| {}
+        var buf: [max_needle + 1]u16 = undefined;
+        self.setting_text = true;
+        _ = c.SetWindowTextW(self.edit, util.utf16TruncateZ(&buf, needle));
+        self.setting_text = false;
     }
     self.layout();
     _ = c.ShowWindow(self.hwnd, c.SW_SHOW);
@@ -280,7 +282,7 @@ fn emit(self: *SearchBar, event: Event) void {
 
 fn editChanged(self: *SearchBar) void {
     if (self.setting_text) return;
-    var buf: [1024]u16 = undefined;
+    var buf: [max_needle + 1]u16 = undefined;
     const len: usize = @intCast(@max(0, c.GetWindowTextW(self.edit, &buf, buf.len)));
     var utf8: [3 * buf.len]u8 = undefined;
     const n = std.unicode.wtf16LeToWtf8(&utf8, buf[0..len]);
