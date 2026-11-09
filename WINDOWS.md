@@ -2603,6 +2603,15 @@ Notes:
     CI, as it shows notifications) checks it by deleting the icon itself
     (it times out without the fix), and that clicking a notification
     brings back its minimized window.
+  - Floats from outside went into `@intFromFloat` unchecked, which
+    panics on NaN or a value beyond the integer: the points UI
+    Automation clients (any process) ask about (the tab bar's
+    `ElementProviderFromPoint` on NaN; `RangeFromPoint` on far points,
+    which .NET's client rejects but others needn't), now through
+    `util.saturate`, and `quick-terminal-animation-duration` (`inf`
+    panicked on the first slide), now capped at a minute (`slideMs`).
+    Both unit tested; the other conversions are of clamped or our own
+    values.
 - [ ] Packaging and release builds
   - [x] Portable zip (`dist/windows/package.ps1`)
   - [x] Per-user install script in the zip (`dist/windows/install.ps1`):
