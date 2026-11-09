@@ -2522,6 +2522,16 @@ Notes:
     panics in safe builds for a grid over 32767 cells: a tiny font
     across very wide screens. They're now cut to 32767 (`coord`, unit
     tested), for ConPTY and the handed-off console's resize signal.
+  - No test ran the window actions (maximize, fullscreen, float on top,
+    reset size) from a keybind. The new `window-actions.ps1` found two
+    bugs. The first window was a title bar too tall, so
+    `window-height = 24` gave 25 rows: the initial size comes during
+    init, before the tabs move into the title bar, and was worked out
+    for a separate one. And coming back from fullscreen left the
+    system's title bar and a hidden tab bar, since the window was laid
+    out while still counted as fullscreen. Both are fixed and checked.
+    Separately, `surfaceArea` could be upside down (a minimized window
+    with the tab bar showing), which `resize_window` cast into a panic.
   - The stderr and stdio tests made named pipes with fixed names, and
     libghostty-vt's tests run them too, so its test binary and Ghostty's
     running at once could collide. `testPipeName` adds the process ID.
