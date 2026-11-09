@@ -542,9 +542,9 @@ its own. It shows a dialog, so it only runs in CI (or with `$env:CI = 'true'`).
 
 Checks desktop notifications (OSC 9): one shows from the notification area
 icon, and another still shows after the icon is deleted, as Explorer's
-restart would delete it while a notification is up. (CI's Explorer dismisses
-notifications at once, taking the icon, so there it's a notice and only the
-second notification is checked.) Last, clicking the
+restart would delete it while a notification is up. (CI's Explorer times
+notifications out at once, taking the icon, so there those two checks are
+notices and only the second notification is checked.) Last, clicking the
 notification (its message, posted to Ghostty) brings back the minimized
 window it came from. It shows notifications, so it only runs in CI (or with
 `$env:CI = 'true'`).
