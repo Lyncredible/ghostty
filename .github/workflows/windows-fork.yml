@@ -371,6 +371,11 @@ jobs:
         shell: powershell
         run: ./test/windows/uia-events.ps1 -Exe zig-out/bin/ghostty.exe
 
+      - name: Screen reader text ranges test
+        timeout-minutes: 5
+        shell: pwsh
+        run: ./test/windows/uia-ranges.ps1 -Exe zig-out/bin/ghostty.exe
+
       - name: Quick terminal test
         shell: pwsh
         run: |

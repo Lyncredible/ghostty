@@ -861,13 +861,7 @@ fn rangeMoveEndpointByRange(iface: *Interface, endpoint: i32, target: ?*Interfac
     const self = RangeObject.from(iface);
     const other = self.other(target) orelse return E_INVALIDARG;
     const pos = if (target_endpoint == 0) other.range.start else other.range.end;
-    if (endpoint == 0) {
-        self.range.start = pos;
-        if (self.range.end < pos) self.range.end = pos;
-    } else {
-        self.range.end = pos;
-        if (self.range.start > pos) self.range.start = pos;
-    }
+    self.range.moveEndpointTo(endpoint == 0, pos);
     return S_OK;
 }
 
