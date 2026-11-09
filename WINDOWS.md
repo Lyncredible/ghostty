@@ -2504,6 +2504,15 @@ Notes:
     interfaces, references, the patterns of tabs, buttons and close
     buttons, and elements of a detached tab bar. `tab-close-uia`,
     `uia-events` and `tabs` pass.
+  - `goto_window` cycled through the quick terminal too, so next or
+    previous could make the hidden quick terminal the foreground window.
+    It's skipped now (`cycleWindow`, unit tested), as `windowAt` and
+    `lastWindow` already did. `toggle_visibility` showed every window
+    when bringing them back, a quick terminal hidden beforehand
+    included; now only the windows it hid come back. No test covered
+    either action: `window-cycle.ps1` (in CI; here Windows won't let it
+    put a window in front, so it stops early) checks both with a hidden
+    quick terminal.
 - [ ] Packaging and release builds
   - [x] Portable zip (`dist/windows/package.ps1`)
   - [x] Per-user install script in the zip (`dist/windows/install.ps1`):
