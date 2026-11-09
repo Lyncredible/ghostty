@@ -404,7 +404,8 @@ Checks that Ghostty's own drawn UI doesn't leak GDI or USER objects (a
 process may have 10,000 of each, so a leak on every paint or every new tab
 breaks drawing after a long session): after a warm-up, 25 rounds of the
 search bar, the command palette, a new tab and a split (each closed again),
-a resize and hovering the tab bar may add at most half an object a round
+a resize, hovering the tab bar, fullscreen and back, and a split zoomed
+and back may add at most half an object a round
 (`GetGuiResources`), and kernel handles at most four a round (each
 terminal has a pseudoconsole, pipes, threads and a process). `-Steps` runs
 only some of them, to find a leak. It

@@ -3,7 +3,8 @@
 # paint and never deleted would make drawing fail after a long session.
 # After a warm-up round, it repeats a round of UI work (the search bar,
 # the command palette, a new tab and closing it, a split and closing it,
-# resizing the window, and hovering the tab bar) and checks that the
+# resizing the window, hovering the tab bar, fullscreen and back, and a
+# split zoomed and back) and checks that the
 # counts (GetGuiResources) stay about where they were. Input is posted
 # to Ghostty's windows, so it runs on a locked desktop.
 #
@@ -15,7 +16,7 @@ param(
     # Objects a round may add on average before it counts as a leak.
     [double]$PerRound = 0.5,
     # Which steps a round does (all by default), to find a leak.
-    [string[]]$Steps = @('search', 'palette', 'tab', 'split', 'resize', 'hover'),
+    [string[]]$Steps = @('search', 'palette', 'tab', 'split', 'resize', 'hover', 'fullscreen', 'zoom'),
     [int]$TimeoutSeconds = 30
 )
 
@@ -41,7 +42,8 @@ $log = Join-Path ([IO.Path]::GetTempPath()) "ghostty-gdi-leak-$PID.log"
 $process = Start-Process -FilePath $Exe -PassThru -RedirectStandardError $log -ArgumentList '--command=cmd.exe',
     '--window-save-state=never', '--confirm-close-surface=false', '--window-show-tab-bar=always',
     '--keybind=f5=start_search', '--keybind=f6=end_search', '--keybind=f7=toggle_command_palette',
-    '--keybind=f8=new_tab', '--keybind=f9=close_tab', '--keybind=f10=new_split:right', '--keybind=f11=close_surface'
+    '--keybind=f8=new_tab', '--keybind=f9=close_tab', '--keybind=f10=new_split:right', '--keybind=f11=close_surface',
+    '--keybind=f12=toggle_fullscreen', '--keybind=f1=toggle_split_zoom'
 
 function Fail([string]$message) {
     Write-Host "::error title=gdi-leak::$message"
@@ -110,6 +112,23 @@ function Round([int]$i) {
     if ($Steps -contains 'hover') {
         $bar = $W::FindWindowExW($window, [IntPtr]::Zero, 'GhosttyTabBar', $null)
         if ($bar -ne [IntPtr]::Zero) { for ($x = 10; $x -lt 400; $x += 30) { $W::Move($bar, $x, 20) } }
+    }
+    if ($Steps -contains 'fullscreen') {
+        Press 0x7B 0x58   # F12: toggle_fullscreen
+        Start-Sleep -Milliseconds 300
+        Press 0x7B 0x58
+        Start-Sleep -Milliseconds 300
+    }
+    if ($Steps -contains 'zoom') {
+        $before = @(Surfaces)
+        Press 0x79 0x44   # F10: new_split:right
+        $split = WaitFor { @(Surfaces | Where-Object { $before -notcontains $_ })[0] } 'a split to zoom'
+        $W::Key($split, 0x70, 0x3B)   # F1: toggle_split_zoom
+        Start-Sleep -Milliseconds 200
+        $W::Key($split, 0x70, 0x3B)
+        Start-Sleep -Milliseconds 200
+        $W::Key($split, 0x7A, 0x57)   # F11: close_surface
+        [void](WaitFor { @(Surfaces).Count -eq $tabs } 'the zoomed split to close')
     }
     Start-Sleep -Milliseconds 200
 }
