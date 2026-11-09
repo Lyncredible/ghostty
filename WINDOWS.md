@@ -2405,6 +2405,12 @@ Notes:
     checks standard error: no leaks. A planted 7-byte allocation in
     `Surface.init` was reported three times with its stack, so the
     check works.
+    CI run 42605913449 (d631a787b) passed it. It now also opens and
+    closes the inspector, changes the font size (a new glyph atlas) and
+    back, toggles read-only mode and the quick terminal, and has cmd set
+    a title and ring the bell: still no leaks. (The quick terminal stays
+    shown when toggled from posted input, so the test closes every
+    window it finds rather than just the first.)
   - Screen readers moving by character (UI Automation text ranges,
     `TextRange.zig`) stepped by UTF-16 unit, so an emoji's surrogate
     pair was read as two broken halves. A character boundary no longer

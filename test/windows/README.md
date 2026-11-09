@@ -382,7 +382,9 @@ reports every allocation still live when Ghostty exits normally (other
 tests end it with `Stop-Process`, which skips that): it prints 400 lines of
 scrollback, opens and closes the search bar and the command palette, opens
 a tab and a split and closes both (they're still kept for undo at exit),
-resizes, then closes the window so Ghostty quits, and fails if standard
+resizes, opens and closes the inspector, changes the font size and back,
+toggles read-only mode and the quick terminal, has cmd set a title and ring
+the bell, then closes its windows so Ghostty quits, and fails if standard
 error reports a leak. Checked that it reports one: a 7-byte allocation
 planted in `Surface.init` showed up three times, with where it was made.
 
