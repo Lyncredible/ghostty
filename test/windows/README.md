@@ -384,8 +384,9 @@ scrollback, opens and closes the search bar and the command palette, opens
 a tab and a split and closes both (they're still kept for undo at exit),
 resizes, opens and closes the inspector, changes the font size and back,
 toggles read-only mode and the quick terminal, has cmd set a title and ring
-the bell, then closes its windows so Ghostty quits, and fails if standard
-error reports a leak. Checked that it reports one: a 7-byte allocation
+the bell, then quits with the `quit` action (a hidden quick terminal
+still has a terminal, so closing the main window alone doesn't quit), and
+fails if standard error reports a leak. Checked that it reports one: a 7-byte allocation
 planted in `Surface.init` showed up three times, with where it was made.
 
 ## crash-report.ps1

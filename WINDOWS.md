@@ -2422,6 +2422,13 @@ Notes:
       it had the link or saw Ctrl, nothing asked again. It now nudges the
       mouse a pixel and back on every check while waiting, as a hand on
       it would.
+  - Run 42622938006 (4c1719e8d): the Links test passed with the
+    nudges. The memory leak test failed: Ghostty didn't quit after the
+    test closed its windows. On the runner the quick terminal's second
+    toggle did hide it (it was in front), and a hidden quick terminal
+    still has a terminal, so Ghostty rightly kept running
+    (`quit-after-last-window-closed` counts surfaces). The test now ends
+    with the `quit` action, which closes everything and exits normally.
   - Screen readers moving by character (UI Automation text ranges,
     `TextRange.zig`) stepped by UTF-16 unit, so an emoji's surrogate
     pair was read as two broken halves. A character boundary no longer
