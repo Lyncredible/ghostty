@@ -2392,6 +2392,10 @@ Notes:
     refuses; it's deselected first now (no measured leak, but the
     documented rule). CI run 42584379496 (4e10fba8d) passed every
     job, the leak test with no growth on the runner either.
+    The test now also checks kernel handles (each terminal has a
+    pseudoconsole, pipes, threads and a process): over 25 rounds they
+    fell by 11, and 40 rounds of only tabs and splits (80 terminals
+    opened and closed) left them at -3. No handle leak.
   - Screen readers moving by character (UI Automation text ranges,
     `TextRange.zig`) stepped by UTF-16 unit, so an emoji's surrogate
     pair was read as two broken halves. A character boundary no longer
