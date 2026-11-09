@@ -57,12 +57,25 @@ pub fn send(
     title: []const u8,
     body: []const u8,
 ) void {
+    if (!self.show(title, body)) {
+        // Our icon is gone if Explorer restarted while it was there (it
+        // only stays while a notification shows), so add it again.
+        if (!self.added) return;
+        self.added = false;
+        if (!self.show(title, body)) return;
+    }
+    log.debug("showing notification title={s}", .{title});
+    self.surface = surface;
+}
+
+/// Add our icon if it isn't there, and show the notification on it.
+fn show(self: *Notifier, title: []const u8, body: []const u8) bool {
     var data = self.iconData();
     if (!self.added) {
         data.uFlags = c.NIF_MESSAGE | c.NIF_ICON | c.NIF_TIP;
         if (c.Shell_NotifyIconW(c.NIM_ADD, &data) == 0) {
             log.warn("failed to add notification icon", .{});
-            return;
+            return false;
         }
         self.added = true;
 
@@ -80,10 +93,9 @@ pub fn send(
     _ = util.utf16TruncateZ(&data.szInfo, if (body.len == 0) " " else body);
     if (c.Shell_NotifyIconW(c.NIM_MODIFY, &data) == 0) {
         log.warn("failed to show notification", .{});
-        return;
+        return false;
     }
-    log.debug("showing notification title={s}", .{title});
-    self.surface = surface;
+    return true;
 }
 
 /// Handle a callback message from our icon. Returns the surface to

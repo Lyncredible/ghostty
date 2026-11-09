@@ -266,6 +266,11 @@ jobs:
         shell: pwsh
         run: ./test/windows/window-cycle.ps1 -Exe zig-out/bin/ghostty.exe
 
+      - name: Notification test
+        timeout-minutes: 5
+        shell: pwsh
+        run: ./test/windows/notification.ps1 -Exe zig-out/bin/ghostty.exe
+
       - name: GDI leak test
         timeout-minutes: 8
         shell: pwsh
