@@ -1426,6 +1426,9 @@ Notes:
         reader fix) passed every job before it.
         After it, CI run 42571284467 (057a07423) passed every job and
         `windows-tip` moved.
+  - [x] 2026-11-09: a sixteenth sync (5 commits: an Indonesian
+        translation update, `po/id.po`, which the Windows app doesn't use).
+        No conflicts; dates kept (650 commits checked).
 - [x] Tip builds, like upstream's `release-tip.yml` (the discussion's
       release workflow item): a rolling prerelease of the latest
       `windows` commit, so people can try it without building. Approved
