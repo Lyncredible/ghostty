@@ -95,7 +95,7 @@ try {
     $data.uID = 1
     $deleted = $W::Shell_NotifyIconW(2, [ref]$data)   # NIM_DELETE
     if (-not $deleted) {
-        # The notification may be gone already (CI's Explorer dismisses it
+        # The notification may be gone already (CI's Explorer times it out
         # at once), and with it the icon. Then the next one adds it anew.
         Write-Host "::notice title=notification::The icon was already gone, so the second notification doesn't check a lost icon here."
     }
@@ -108,7 +108,17 @@ try {
     Get-Content $log | Select-String '(win32).*notification' | ForEach-Object { Write-Host "  $($_.Line)" }
 
     # A click on it brings back its window. The click comes as the icon's
-    # message (WM_APP + 2) with NIN_BALLOONUSERCLICK.
+    # message (WM_APP + 2) with NIN_BALLOONUSERCLICK. A notification that
+    # timed out or was hidden (NIN_BALLOONTIMEOUT, NIN_BALLOONHIDE) can't
+    # be clicked, and CI's Explorer times them out at once.
+    Start-Sleep -Milliseconds 500
+    $lines = @(Get-Content $log)
+    $last = 0
+    for ($i = 0; $i -lt $lines.Count; $i++) { if ($lines[$i] -match 'showing notification') { $last = $i } }
+    if (@($lines[$last..($lines.Count - 1)] | Where-Object { $_ -match 'notification icon event=0x40[34]' }).Count -gt 0) {
+        Write-Host '::notice title=notification::The notification timed out at once, so its click isn''t checked here.'
+        exit 0
+    }
     $process.Refresh()
     $window = $process.MainWindowHandle
     [void]$W::ShowWindow($window, 6)   # SW_MINIMIZE
