@@ -2612,6 +2612,13 @@ Notes:
     panicked on the first slide), now capped at a minute (`slideMs`).
     Both unit tested; the other conversions are of clamped or our own
     values.
+  - A screen reader could crash Ghostty by mixing text ranges taken at
+    different times: moving the document's range (from an empty screen)
+    to a newer selection's end (`MoveEndpointByRange`) put its end past
+    its own text, and reading it sliced out of bounds. The end stays in
+    its text now (`Range.moveEndpointTo`, unit tested), and
+    `uia-ranges.ps1` (locked desktop too) does what a reader would; it
+    crashed Ghostty before.
 - [ ] Packaging and release builds
   - [x] Portable zip (`dist/windows/package.ps1`)
   - [x] Per-user install script in the zip (`dist/windows/install.ps1`):
