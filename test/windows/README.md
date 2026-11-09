@@ -375,6 +375,17 @@ only some of them, to find a leak. It
 found one: each surface whose search bar or command palette had been shown
 leaked a GDI object when it closed.
 
+## memory-leak.ps1
+
+Checks for memory leaks with the debug allocator of Debug builds, which
+reports every allocation still live when Ghostty exits normally (other
+tests end it with `Stop-Process`, which skips that): it prints 400 lines of
+scrollback, opens and closes the search bar and the command palette, opens
+a tab and a split and closes both (they're still kept for undo at exit),
+resizes, then closes the window so Ghostty quits, and fails if standard
+error reports a leak. Checked that it reports one: a 7-byte allocation
+planted in `Surface.init` showed up three times, with where it was made.
+
 ## crash-report.ps1
 
 Checks the crash handler: Ghostty, with F12 bound to `crash:main` and its

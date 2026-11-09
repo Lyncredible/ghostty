@@ -2396,6 +2396,15 @@ Notes:
     pseudoconsole, pipes, threads and a process): over 25 rounds they
     fell by 11, and 40 rounds of only tabs and splits (80 terminals
     opened and closed) left them at -3. No handle leak.
+  - Memory leaks (2026-11-09): Debug builds use Zig's debug allocator,
+    which reports what's still allocated when Ghostty exits normally,
+    but every UI test ended it with `Stop-Process`. The new
+    `test/windows/memory-leak.ps1` (in CI) prints scrollback, uses the
+    search bar and command palette, opens and closes a tab and a split
+    (still kept for undo when it quits), resizes, closes the window and
+    checks standard error: no leaks. A planted 7-byte allocation in
+    `Surface.init` was reported three times with its stack, so the
+    check works.
   - Screen readers moving by character (UI Automation text ranges,
     `TextRange.zig`) stepped by UTF-16 unit, so an emoji's surrogate
     pair was read as two broken halves. A character boundary no longer
