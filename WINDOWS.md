@@ -2532,6 +2532,9 @@ Notes:
     out while still counted as fullscreen. Both are fixed and checked.
     Separately, `surfaceArea` could be upside down (a minimized window
     with the tab bar showing), which `resize_window` cast into a panic.
+    The split actions had no test either: `splits.ps1` checks
+    `goto_split` (the focus, from `GetGUIThreadInfo`), `resize_split`,
+    `equalize_splits` and `toggle_split_zoom`. Both pass here.
   - The stderr and stdio tests made named pipes with fixed names, and
     libghostty-vt's tests run them too, so its test binary and Ghostty's
     running at once could collide. `testPipeName` adds the process ID.
