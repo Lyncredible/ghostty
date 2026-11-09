@@ -72,13 +72,11 @@ fn updateInner(class: ?[]const u8) !void {
 
     // A custom class has its own jump list (it's the AppUserModelID), and
     // its new windows belong to its instance.
-    var args_buf: [300]u16 = undefined;
-    const args: [*:0]const u16 = args: {
-        const custom = class orelse break :args std.unicode.utf8ToUtf16LeStringLiteral("");
-        var utf8_buf: [300]u8 = undefined;
-        const utf8 = std.fmt.bufPrint(&utf8_buf, "\"--class={s}\"", .{custom}) catch return error.ClassTooLong;
-        break :args util.utf16Exact(&args_buf, utf8) catch return error.ClassTooLong;
-    };
+    var utf8_buf: [600]u8 = undefined;
+    var utf8: std.Io.Writer = .fixed(&utf8_buf);
+    writeClass(&utf8, class) catch return error.ClassTooLong;
+    var args_buf: [600]u16 = undefined;
+    const args = util.utf16Exact(&args_buf, utf8.buffered()) catch return error.ClassTooLong;
     const link = try shellLink(exe, args, std.unicode.utf8ToUtf16LeStringLiteral("New Window"), exe);
     defer _ = link.lpVtbl.*.Release.?(link);
     try check(tasks.?.lpVtbl.*.AddObject.?(tasks, @ptrCast(link)));
@@ -124,13 +122,24 @@ fn addShellTasks(exe: [*:0]const u16, class: ?[]const u8, tasks: *c.IObjectColle
 /// the shell's program and arguments, quoted for the command line.
 fn taskArguments(alloc: std.mem.Allocator, class: ?[]const u8, argv: []const [:0]const u8) ![]const u8 {
     var out: std.Io.Writer.Allocating = .init(alloc);
-    if (class) |v| try out.writer.print("\"--class={s}\" ", .{v});
+    if (class != null) {
+        try writeClass(&out.writer, class);
+        try out.writer.writeByte(' ');
+    }
     try out.writer.writeAll("-e");
     for (argv) |arg| {
         try out.writer.writeByte(' ');
         try internal_os.windows.writeCommandLineArg(&out.writer, arg);
     }
     return out.written();
+}
+
+/// `--class=` with our class, if it's custom, for the command line.
+fn writeClass(writer: *std.Io.Writer, class: ?[]const u8) std.Io.Writer.Error!void {
+    const v = class orelse return;
+    var buf: [300]u8 = undefined;
+    const arg = std.fmt.bufPrint(&buf, "--class={s}", .{v}) catch return error.WriteFailed;
+    try internal_os.windows.writeCommandLineArg(writer, arg);
 }
 
 test taskArguments {
@@ -144,12 +153,17 @@ test taskArguments {
         try taskArguments(alloc, null, &.{"C:\\Windows\\system32\\cmd.exe"}),
     );
     try testing.expectEqualStrings(
-        "\"--class=com.example.work\" -e \"C:\\Program Files\\PowerShell\\7\\pwsh.exe\"",
+        "--class=com.example.work -e \"C:\\Program Files\\PowerShell\\7\\pwsh.exe\"",
         try taskArguments(alloc, "com.example.work", &.{"C:\\Program Files\\PowerShell\\7\\pwsh.exe"}),
     );
     try testing.expectEqualStrings(
         "-e wsl.exe -d \"Ubuntu 24.04\" \"\" \"a\\\"b\" \"c d\\\\\"",
         try taskArguments(alloc, null, &.{ "wsl.exe", "-d", "Ubuntu 24.04", "", "a\"b", "c d\\" }),
+    );
+    // A class is an argument like any other.
+    try testing.expectEqualStrings(
+        "\"--class=a\\\"b\" -e cmd.exe",
+        try taskArguments(alloc, "a\"b", &.{"cmd.exe"}),
     );
 }
 
