@@ -145,6 +145,10 @@ title_override: ?[:0]const u8 = null,
 /// without a taskbar button that's toggled into view.
 quick: bool = false,
 
+/// Whether toggle_visibility hid this window, so showing them again
+/// brings back only the ones that were shown.
+hidden_by_toggle: bool = false,
+
 /// The quick terminal's rectangle when fully shown, and how much of it is
 /// shown, from 0 (hidden) to 1. It slides in from its edge of the screen.
 quick_target: c.RECT = std.mem.zeroes(c.RECT),

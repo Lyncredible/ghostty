@@ -354,6 +354,17 @@ another, `:previous` goes back, and `end_search` closes it. The count is
 read from the bar's window text ("Match 2 of 6"), which is also what screen
 readers see.
 
+## window-cycle.ps1
+
+Checks `goto_window` and `toggle_visibility` with a hidden quick terminal.
+Two windows and the quick terminal are opened with posted keys, and the
+quick terminal is hidden again. `goto_window:next` must go from one window
+to the other and back without going to the quick terminal, and
+`toggle_visibility` must hide both windows and bring back only them, with
+the quick terminal still hidden. Hiding the quick terminal and the windows
+needs a Ghostty window in front. Outside CI, Windows may refuse that, and
+then the test stops early with a message. In CI that counts as a failure.
+
 ## scrollbar.ps1
 
 Checks the scrollbar: cmd prints 301 numbered lines (`L1000` to `L1300`),
