@@ -63,7 +63,7 @@ function WaitFor([scriptblock]$condition, [string]$what) {
 
 function Counts {
     $process.Refresh()
-    @{ Gdi = [int]$W::GetGuiResources($process.Handle, 0); User = [int]$W::GetGuiResources($process.Handle, 1) }
+    @{ Gdi = [int]$W::GetGuiResources($process.Handle, 0); User = [int]$W::GetGuiResources($process.Handle, 1); Handles = $process.HandleCount }
 }
 
 # The surfaces (terminals) in the window.
@@ -123,18 +123,23 @@ try {
     Round 0; Round 1
     Start-Sleep -Milliseconds 500
     $before = Counts
-    Write-Host "After warming up: $($before.Gdi) GDI and $($before.User) USER objects."
+    Write-Host "After warming up: $($before.Gdi) GDI and $($before.User) USER objects, $($before.Handles) kernel handles."
 
     for ($i = 2; $i -lt $Rounds + 2; $i++) { Round $i }
     Start-Sleep -Milliseconds 500
     $after = Counts
     $gdi = $after.Gdi - $before.Gdi
     $user = $after.User - $before.User
-    Write-Host "After $Rounds more rounds: $($after.Gdi) GDI ($gdi) and $($after.User) USER ($user) objects."
+    $handles = $after.Handles - $before.Handles
+    Write-Host "After $Rounds more rounds: $($after.Gdi) GDI ($gdi) and $($after.User) USER ($user) objects, $($after.Handles) kernel handles ($handles)."
     $limit = [int][Math]::Ceiling($Rounds * $PerRound)
     if ($gdi -gt $limit) { Fail "GDI objects grew by $gdi over $Rounds rounds (limit $limit): a leak" }
     if ($user -gt $limit) { Fail "USER objects grew by $user over $Rounds rounds (limit $limit): a leak" }
-    Write-Host "Neither count grew by more than $limit."
+    # Kernel handles come and go with threads and the terminals' processes
+    # and pipes, so they get a looser limit: a few a round.
+    $handle_limit = $Rounds * 4
+    if ($handles -gt $handle_limit) { Fail "kernel handles grew by $handles over $Rounds rounds (limit $handle_limit): a leak" }
+    Write-Host "Neither GDI nor USER objects grew by more than $limit, nor kernel handles by more than $handle_limit."
 } finally {
     if (-not $process.HasExited) { Stop-Process -Id $process.Id -Force }
     Remove-Item -LiteralPath $log -Force -ErrorAction SilentlyContinue
