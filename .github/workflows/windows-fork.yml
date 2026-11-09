@@ -256,6 +256,11 @@ jobs:
         shell: pwsh
         run: ./test/windows/gdi-leak.ps1 -Exe zig-out/bin/ghostty.exe
 
+      - name: Memory leak test
+        timeout-minutes: 4
+        shell: pwsh
+        run: ./test/windows/memory-leak.ps1 -Exe zig-out/bin/ghostty.exe
+
       - name: Crash report test
         timeout-minutes: 3
         shell: pwsh
