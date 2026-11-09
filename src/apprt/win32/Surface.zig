@@ -791,9 +791,11 @@ fn dropFiles(self: *Surface, hdrop: c.HDROP) void {
     var paths: std.ArrayList([]const u8) = .empty;
     for (0..count) |i| {
         const len = c.DragQueryFileW(hdrop, @intCast(i), null, 0);
+        if (len == 0) continue;
         const buf = alloc.alloc(u16, len + 1) catch return;
-        _ = c.DragQueryFileW(hdrop, @intCast(i), buf.ptr, len + 1);
-        const path = util.utf8Alloc(alloc, buf[0..len]) catch return;
+        // What it copied, which a failure makes less than it said.
+        const copied = c.DragQueryFileW(hdrop, @intCast(i), buf.ptr, len + 1);
+        const path = util.utf8Alloc(alloc, buf[0..@min(copied, len)]) catch return;
         paths.append(alloc, path) catch return;
     }
     if (paths.items.len == 0) return;
