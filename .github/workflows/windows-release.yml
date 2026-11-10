@@ -1,7 +1,14 @@
 on:
   # A tag like windows-unofficial-2026.11.01 makes a draft release for it.
+  # A change to this file or the packaging script on the windows branch
+  # runs it too, as a check without a release (path filters don't apply
+  # to tags, which always run).
   push:
     tags: ["windows-unofficial-*"]
+    branches: ["windows"]
+    paths:
+      - ".github/workflows/windows-release.yml"
+      - "dist/windows/package.ps1"
   # Starting it by hand needs this file on the default branch.
   workflow_dispatch:
     inputs:
@@ -16,8 +23,8 @@ name: Windows release (fork)
 # for x64 and ARM64 in ReleaseSafe, with SHA-256 checksums, and keeps them
 # as a 90 day artifact. For a tag, or with draft_release, it also creates a
 # draft release with them, which stays private until someone publishes it.
-# It only runs for those tags or when started by hand, and never in
-# ghostty-org/ghostty.
+# It only runs for those tags, changes to its own files on the windows
+# branch, or when started by hand, and never in ghostty-org/ghostty.
 
 permissions:
   contents: read
