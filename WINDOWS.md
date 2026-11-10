@@ -2732,6 +2732,15 @@ Notes:
     option only applies to new terminals, as documented): in CI run
     42772338175 (every job green) the new terminal's left padding went
     from 2 to 53 pixels.
+- [ ] A `PATH` entry that isn't a valid path (found 2026-11-10: one
+      with a stray `"` made `zig build` itself panic with
+      `OBJECT_NAME_INVALID`, in the standard library's file access, as
+      `--working-directory` once did here). To check: does Ghostty's
+      search of `PATH` (`os/path.zig` `expand`, which opens each
+      candidate and returns any other error) skip such an entry, or
+      fail to start the command, or panic in debug and safe builds? A
+      unit test with a quoted and a `bad|name` entry before the real
+      directory would tell.
 - [ ] Translations (found 2026-11-10): the Windows app's UI was English
       only, while `po/` has 34 languages that the GTK app shows through
       gettext. Windows has no libintl to read `.mo` files and no `msgfmt`
