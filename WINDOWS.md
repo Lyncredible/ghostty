@@ -2793,7 +2793,9 @@ Notes:
         to check the workflow before then, a change to it or to
         `package.ps1` on the `windows` branch runs it too, without a
         release (the draft release job only runs for a tag or
-        `draft_release`).
+        `draft_release`). Its first run, 42867669539 (896a374f6), built
+        and checked both packages (x64 in 12 minutes, ARM64 in 13) and
+        kept them as artifacts; the fork's CI passed the same commit.
 - [x] Unimplemented apprt actions (as of 2026-10-25)
   - [x] `show_on_screen_keyboard`: toggles the touch keyboard through the
         shell's (undocumented) `ITipInvocation`, starting TabTip.exe if
