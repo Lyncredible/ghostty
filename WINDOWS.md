@@ -1471,6 +1471,8 @@ Notes:
   - [x] 2026-11-10: a twenty-second sync (1 commit: the VOUCHED list). No
         conflicts; dates kept (731 commits checked). CI run 42778700681
         (46ee203e5) passed every job, and `windows-tip` moved.
+  - [x] 2026-11-10: a twenty-third sync (1 commit: Dutch translations for
+        the command palette). No conflicts; dates kept. The app builds.
 - [x] Tip builds, like upstream's `release-tip.yml` (the discussion's
       release workflow item): a rolling prerelease of the latest
       `windows` commit, so people can try it without building. Approved
