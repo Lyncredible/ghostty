@@ -494,7 +494,8 @@ Checks reordering tabs by dragging: the second tab, named `SECOND` with
 cmd's `title` (the shell integration's titles are off), is dragged onto the
 first with posted mouse messages, and UI Automation then lists it first,
 still shown. Then `move_tab:1` moves it back to second, and again wraps it
-around to first. The tabs' positions come from UI Automation, so the test
+around to first, and `copy_title_to_clipboard` puts its title on the
+clipboard. The tabs' positions come from UI Automation, so the test
 follows the tab bar's layout.
 
 ## compact-tabs.ps1
