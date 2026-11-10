@@ -129,8 +129,8 @@ $env:XDG_CONFIG_HOME = $configHome
 try {
     # OK closes the terminal.
     $dialog = StartAndPress $long 0x77 $closeTitle
-    $ok = $W::FindWindowExW($dialog, [IntPtr]::Zero, 'Button', 'OK')
-    if ($ok -eq [IntPtr]::Zero) { Fail "the close dialog has no OK button" }
+    # The dialog can be found before its controls are made.
+    $ok = WaitFor { $b = $W::FindWindowExW($dialog, [IntPtr]::Zero, 'Button', 'OK'); if ($b -ne [IntPtr]::Zero) { $b } } "the close dialog's OK button"
     [void]$W::PostMessageW($ok, 0x00F5, [IntPtr]::Zero, [IntPtr]::Zero)   # BM_CLICK
     [void](WaitFor { $script:process.HasExited -or -not (SurfaceElement) } 'the terminal to close after OK')
     Write-Host 'OK in "Close terminal?" closed the terminal.'

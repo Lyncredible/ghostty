@@ -72,8 +72,8 @@ function Dialog {
 function SetTitle([string]$title) {
     $W::Key($surface, 0x78, 0x43)   # F9: prompt_surface_title
     $dialog = WaitFor { Dialog } 'the title dialog'
-    $edit = $W::FindWindowExW($dialog, [IntPtr]::Zero, 'Edit', [NullString]::Value)
-    if ($edit -eq [IntPtr]::Zero) { Fail 'the title dialog has no text field' }
+    # The dialog can be found before its controls are made.
+    $edit = WaitFor { $e = $W::FindWindowExW($dialog, [IntPtr]::Zero, 'Edit', [NullString]::Value); if ($e -ne [IntPtr]::Zero) { $e } } "the title dialog's text field"
     [void]$W::SendMessageW($edit, 0x000C, [IntPtr]::Zero, $title)   # WM_SETTEXT
     $ok = $W::GetDlgItem($dialog, 1)   # IDOK
     if ($ok -eq [IntPtr]::Zero) { Fail 'the title dialog has no OK button' }

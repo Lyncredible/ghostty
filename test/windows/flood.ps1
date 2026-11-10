@@ -13,7 +13,10 @@
 param(
     [string]$Exe,
     [string]$Zip,
-    [int]$Probes = 40
+    [int]$Probes = 40,
+    # Skip the Ctrl+C check, for runners where Windows won't put a window
+    # in the foreground (the ARM64 one).
+    [switch]$NoInterrupt
 )
 
 $ErrorActionPreference = 'Stop'
@@ -80,7 +83,7 @@ try {
     if ($slow -gt 2 -or $median -gt 200) { throw "the window stopped responding during the flood: $summary" }
     Write-Host "::notice title=flood::$summary"
 
-    if ($env:CI -eq 'true') {
+    if ($env:CI -eq 'true' -and -not $NoInterrupt) {
         [void]$W::SetForegroundWindow($h)
         $deadline = (Get-Date).AddSeconds(10)
         while ($W::GetForegroundWindow() -ne $h) {

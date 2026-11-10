@@ -99,8 +99,8 @@ try {
     $W::Mouse($bar, 0x0202, 0, $x, $y)   # WM_LBUTTONUP
 
     $dialog = WaitFor { Dialog } 'the Change Tab Title dialog'
-    $edit = $W::FindWindowExW($dialog, [IntPtr]::Zero, 'Edit', [NullString]::Value)
-    if ($edit -eq [IntPtr]::Zero) { Fail 'the dialog has no text field' }
+    # The dialog can be found before its controls are made.
+    $edit = WaitFor { $e = $W::FindWindowExW($dialog, [IntPtr]::Zero, 'Edit', [NullString]::Value); if ($e -ne [IntPtr]::Zero) { $e } } "the dialog's text field"
     [void]$W::SendMessageW($edit, 0x000C, [IntPtr]::Zero, 'Renamed Tab')   # WM_SETTEXT
     [void]$W::PostMessageW($W::GetDlgItem($dialog, 1), 0x00F5, [IntPtr]::Zero, [IntPtr]::Zero)   # BM_CLICK on OK
     [void](WaitFor { -not (Dialog) } 'the dialog to close')

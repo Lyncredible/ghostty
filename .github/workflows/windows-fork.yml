@@ -626,11 +626,12 @@ jobs:
 
       # Output goes through the terminal's SIMD paths, which are ARM's
       # here: a flood of output and the frames it draws, on the release
-      # package, as on x64.
+      # package, as on x64. Windows won't put a window in the foreground
+      # on this runner (run 42811152895), so there's no Ctrl+C check.
       - name: Flood test
         timeout-minutes: 10
         shell: powershell
-        run: ./test/windows/flood.ps1 -Zip (Get-ChildItem zig-out/dist/*.zip | Select-Object -First 1).FullName
+        run: ./test/windows/flood.ps1 -NoInterrupt -Zip (Get-ChildItem zig-out/dist/*.zip | Select-Object -First 1).FullName
 
       - name: Output frames test
         timeout-minutes: 5
