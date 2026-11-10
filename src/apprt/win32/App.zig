@@ -818,7 +818,7 @@ fn msgWndProc(
                 _ = shell.saveAs(
                     self.core_app.alloc,
                     owner,
-                    "Export Terminal IO Events",
+                    internal_os.i18n.text("Export Terminal IO Events"),
                     "ghostty-terminal-io.txt",
                     pending.contents,
                 );
