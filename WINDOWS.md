@@ -2786,8 +2786,11 @@ Notes:
         `ghostty.com +version` runs, writes SHA-256 checksums, and keeps
         it all as a 90 day artifact. For a tag (or with `draft_release`)
         it also creates a draft GitHub release, which stays private until someone
-        publishes it. Not run yet: pushing a tag is up to the repository's
-        owner.
+        publishes it. Pushing a tag is up to the repository's owner, so
+        to check the workflow before then, a change to it or to
+        `package.ps1` on the `windows` branch runs it too, without a
+        release (the draft release job only runs for a tag or
+        `draft_release`).
 - [x] Unimplemented apprt actions (as of 2026-10-25)
   - [x] `show_on_screen_keyboard`: toggles the touch keyboard through the
         shell's (undocumented) `ITipInvocation`, starting TabTip.exe if
