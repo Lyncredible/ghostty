@@ -236,6 +236,11 @@ jobs:
         shell: pwsh
         run: ./test/windows/window-theme.ps1 -Exe zig-out/bin/ghostty.exe
 
+      - name: Config reload test
+        timeout-minutes: 5
+        shell: pwsh
+        run: ./test/windows/config-reload.ps1 -Exe zig-out/bin/ghostty.exe
+
       - name: Session restore test
         timeout-minutes: 5
         shell: pwsh
