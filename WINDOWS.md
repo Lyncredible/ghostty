@@ -2661,7 +2661,8 @@ Notes:
   - Reloading was only tested for the window theme and the config
     errors dialog, never that a change in the file takes effect:
     `config-reload.ps1` adds a keybind to the config file, reloads, and
-    uses it, then takes it out again. It passes here.
+    uses it, then takes it out again. It passes here and in CI (run
+    42760614541, every job green).
 - [ ] Packaging and release builds
   - [x] Portable zip (`dist/windows/package.ps1`)
   - [x] Per-user install script in the zip (`dist/windows/install.ps1`):
