@@ -87,7 +87,7 @@ function Surface {
         foreach ($surface in $window.FindAll([System.Windows.Automation.TreeScope]::Descendants,
                 (New-Object System.Windows.Automation.PropertyCondition(
                     [System.Windows.Automation.AutomationElement]::ClassNameProperty, 'GhosttySurface')))) {
-            if ($surface.GetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern).Current.Value.Contains('>')) {
+            if ($(try { $surface.GetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern).Current.Value } catch { '' }).Contains('>')) {
                 return @{ Window = [IntPtr]$window.Current.NativeWindowHandle; Handle = [IntPtr]$surface.Current.NativeWindowHandle }
             }
         }

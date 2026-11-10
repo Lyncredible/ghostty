@@ -54,7 +54,7 @@ function Find {
         $surface = $window.FindFirst($Scope::Descendants,
             (New-Object System.Windows.Automation.PropertyCondition($AE::ClassNameProperty, 'GhosttySurface')))
         if (-not $surface) { continue }
-        $text = $surface.GetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern).Current.Value
+        $text = $(try { $surface.GetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern).Current.Value } catch { '' })
         if ($text.Contains('>')) { return @{ Window = $window; Surface = $surface } }
     }
 }
@@ -94,7 +94,7 @@ try {
         # Screen readers speak typing themselves, so only the output is new.
         if (([regex]::Matches($note, "uia-$PID")).Count -ne 1) { throw "the announcement repeats the typed command: $note" }
     } catch {
-        $text = $found.Surface.GetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern).Current.Value
+        $text = $(try { $found.Surface.GetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern).Current.Value } catch { '' })
         $failures += "$($_.Exception.Message); the screen has uia-$PID $(([regex]::Matches($text, "uia-$PID")).Count) times"
     }
 

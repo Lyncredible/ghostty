@@ -103,7 +103,7 @@ function Surfaces($process) {
         if ($window.Current.ClassName -ne 'GhosttyWindow') { continue }
         $surfaces = @($window.FindAll($Scope::Descendants,
             (New-Object System.Windows.Automation.PropertyCondition($AE::ClassNameProperty, 'GhosttySurface'))))
-        $texts = @($surfaces | ForEach-Object { $_.GetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern).Current.Value })
+        $texts = @($surfaces | ForEach-Object { $(try { $_.GetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern).Current.Value } catch { '' }) })
         return @{
             Window = [IntPtr]$window.Current.NativeWindowHandle
             Handles = @($surfaces | ForEach-Object { [IntPtr]$_.Current.NativeWindowHandle })

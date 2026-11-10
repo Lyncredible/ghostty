@@ -91,7 +91,7 @@ try {
     while ((Get-Date) -lt $deadline -and -not $marker) {
         foreach ($s in @($AE::RootElement.FindAll([System.Windows.Automation.TreeScope]::Descendants, $condition))) {
             if ($s.Current.ProcessId -ne $process.Id) { continue }
-            $value = $s.GetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern).Current.Value
+            $value = $(try { $s.GetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern).Current.Value } catch { '' })
             if ($value -match 'IPC-OVERRIDE-MARKER') { $marker = $true }
         }
         if (-not $marker) { Start-Sleep -Milliseconds 250 }

@@ -94,7 +94,7 @@ function Note { $script:note = "terminals: $(@(Surfaces).Count), visible: $(@(Vi
 function Text($surface) {
     try {
         $element = [System.Windows.Automation.AutomationElement]::FromHandle($surface)
-        $element.GetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern).Current.Value
+        $(try { $element.GetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern).Current.Value } catch { '' })
     } catch { '' }
 }
 

@@ -30,7 +30,7 @@ function SurfaceText($process) {
         foreach ($surface in $window.FindAll([System.Windows.Automation.TreeScope]::Descendants,
                 (New-Object System.Windows.Automation.PropertyCondition(
                     [System.Windows.Automation.AutomationElement]::ClassNameProperty, 'GhosttySurface')))) {
-            return $surface.GetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern).Current.Value
+            return $(try { $surface.GetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern).Current.Value } catch { '' })
         }
     }
 }

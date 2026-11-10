@@ -120,7 +120,7 @@ function GhosttyText {
             foreach ($surface in $window.FindAll([System.Windows.Automation.TreeScope]::Descendants,
                     (New-Object System.Windows.Automation.PropertyCondition(
                         [System.Windows.Automation.AutomationElement]::ClassNameProperty, 'GhosttySurface')))) {
-                @{ Process = $process; Text = $surface.GetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern).Current.Value }
+                @{ Process = $process; Text = $(try { $surface.GetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern).Current.Value } catch { '' }) }
             }
         }
     }
