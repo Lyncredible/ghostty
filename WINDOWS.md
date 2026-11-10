@@ -2681,7 +2681,8 @@ Notes:
     foreground there for the Ctrl+C check, which ARM64 now skips
     (`-NoInterrupt`). The same run's `title-prompt` found the dialog
     before its text field was made; it, `tab-rename` and `dialog-race`
-    now wait for the dialog's controls.
+    now wait for the dialog's controls. Run 42817464446 passed every job, the
+    ARM64 flood (median 0.6 ms) and output frames tests included.
   - CI run 42741916540 cancelled `gdi-leak` at its 8 minute limit; it had
     taken 7:54 the run before, since the fullscreen and zoom steps. The
     step has 12 minutes now. Run 42746575157 (a8af1740e) passed every
