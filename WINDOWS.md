@@ -2732,6 +2732,62 @@ Notes:
     option only applies to new terminals, as documented): in CI run
     42772338175 (every job green) the new terminal's left padding went
     from 2 to 53 pixels.
+- [ ] Translations (found 2026-11-10): the Windows app's UI was English
+      only, while `po/` has 34 languages that the GTK app shows through
+      gettext. Windows has no libintl to read `.mo` files and no `msgfmt`
+      to make them (upstream's build says i18n is unsupported there), and
+      this port keeps C dependencies out.
+  - [x] An embedded catalog: the build compiles the `.po` files itself
+        (`src/build/po_compile.zig`, with the parser and format in
+        `src/os/i18n_catalog.zig`) into one blob in the executable (778
+        KB), and `i18n._` looks messages up in it with a binary search.
+        The language is the first we have of `LANGUAGE` (as for gettext:
+        `de`, `pt_BR:es`), or else of the display languages the user
+        prefers (`GetUserPreferredUILanguages`), as Windows' own apps
+        choose; English before one we have means English. A region we
+        don't have falls back to the language's first locale (`pt-PT`
+        gets `pt_BR`), Chinese goes by script or region, and Serbian by
+        script. Only the Win32 app embeds it (not libghostty-vt). Unit
+        tests: the parser (escapes, continued strings, fuzzy and
+        untranslated messages, contexts and plurals left out, bad files
+        refused), the catalog (lookups, and damaged or cut blobs are
+        refused rather than read past), `localeFor`, and that every
+        locale's catalog is in the test build with its messages.
+  - [x] The Win32 UI's text goes through it, where upstream has a
+        translation:
+    - Menus: 34 labels are GTK's messages; 20 more (the macOS-style
+      ones, such as "Find Next" or "Select Split Above") show the
+      translation of a message that says the same ("Next Match", "Focus
+      Split: Up"), which a unit test keeps in step with the catalog.
+      Translated labels have no access keys (GTK's have none), so
+      Windows takes their first letter.
+    - The command palette: its entries' titles and descriptions (the
+      core translates them for Win32 as for GTK), and "Focus: <title>".
+    - Close confirmations: GTK's questions when both the title and the
+      message have a translation, so a dialog is never half English;
+      English keeps our wording. Clipboard confirmations likewise,
+      without the English "Paste anyway?" (the buttons are Windows' own
+      OK and Cancel, in its language).
+    - The title dialog (its hint gets a second line when a translation
+      is long, and a test builds it in every language), toasts
+      ("Copied to clipboard", "Reloaded the configuration"), command
+      finished notifications' titles, tab bar tooltips and accessible
+      names ("Close Tab", "New Tab", "Close"), and "Untitled".
+  - Still English everywhere, since upstream has no messages for them:
+    the File, Edit and View submenus' names, the shell submenus, "Quick
+    Terminal", "Show/Hide All Terminals", the search bar's match count,
+    the caption buttons' tooltips, the configuration errors and link
+    dialogs, and notification bodies. Translating them needs new
+    messages upstream (or our own `.po` files next to upstream's).
+  - [ ] Follow a change of the display language while running? Windows
+        apps pick it up at start, so probably not.
+  - [ ] The catalog repeats each message in every locale (about half
+        of its 778 KB): one shared table of messages, with offsets per
+        locale, would halve it.
+  - [ ] A person who reads one of the languages should look over a
+        translated build: the menus mix GTK's wording into macOS's
+        layout, and right-to-left languages (Hebrew) aren't laid out
+        right to left.
 - [ ] Packaging and release builds
   - [x] Portable zip (`dist/windows/package.ps1`)
   - [x] Per-user install script in the zip (`dist/windows/install.ps1`):
