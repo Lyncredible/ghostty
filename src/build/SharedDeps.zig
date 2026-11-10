@@ -649,6 +649,11 @@ pub fn add(
 
             step.root_module.addImport("d3d11_shaders", d3d11Shaders(b, optimize));
         }
+
+        // The Windows app's translations, see src/os/i18n.zig.
+        if (self.config.app_runtime == .win32) {
+            step.root_module.addImport("i18n_catalog_data", i18nCatalog(b));
+        }
     }
 
     // cimgui
@@ -1346,5 +1351,36 @@ fn d3d11Shaders(b: *std.Build, optimize: std.builtin.OptimizeMode) *std.Build.Mo
     }
 
     const file = wf.add("d3d11_shaders.zig", index.written());
+    return b.createModule(.{ .root_source_file = file });
+}
+
+/// The translations in `po/`, compiled into one catalog for the Windows
+/// app to embed: Windows has no gettext to compile or read them with.
+/// See src/os/i18n_catalog.zig.
+fn i18nCatalog(b: *std.Build) *std.Build.Module {
+    const tool = b.addExecutable(.{
+        .name = "po_compile",
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("src/build/po_compile.zig"),
+            .target = b.graph.host,
+        }),
+    });
+    tool.root_module.addImport("i18n_catalog", b.createModule(.{
+        .root_source_file = b.path("src/os/i18n_catalog.zig"),
+    }));
+
+    const run = b.addRunArtifact(tool);
+    const blob = run.addOutputFileArg("i18n_catalog.bin");
+    inline for (@import("../os/i18n_locales.zig").locales) |locale| {
+        run.addArg(locale);
+        run.addFileArg(b.path("po/" ++ locale ++ ".po"));
+    }
+
+    const wf = b.addWriteFiles();
+    _ = wf.addCopyFile(blob, "i18n_catalog.bin");
+    const file = wf.add(
+        "i18n_catalog_data.zig",
+        "pub const blob = @embedFile(\"i18n_catalog.bin\");\n",
+    );
     return b.createModule(.{ .root_source_file = file });
 }

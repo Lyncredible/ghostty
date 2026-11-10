@@ -227,6 +227,10 @@ pub fn init(opts: InitOpts) !void {
     if (self.resources_dir.app()) |v| internal_os.i18n.init(v) catch |err| {
         std.log.warn("failed to init i18n, translations will not be available err={}", .{err});
     };
+
+    // The Windows app's translations are part of the executable, so
+    // they don't need the resources directory.
+    internal_os.i18n.initEmbedded();
 }
 
 /// Cleans up the global state. This doesn't _need_ to be called but
