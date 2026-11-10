@@ -1459,6 +1459,8 @@ Notes:
         (36104b43b) passed every job with the sharded runner, the new
         `notification` (its lost icon and click checks as notices there)
         and `uia-ranges` included, and `windows-tip` moved.
+  - [x] 2026-11-10: a twentieth sync (2 commits: a GitHub action's version
+        in the color scheme workflow). No conflicts; dates kept.
 - [x] Tip builds, like upstream's `release-tip.yml` (the discussion's
       release workflow item): a rolling prerelease of the latest
       `windows` commit, so people can try it without building. Approved
