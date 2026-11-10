@@ -1665,7 +1665,8 @@ Notes:
         still needs a desktop. That job now also runs `titlebar-tabs`,
         `window-theme`, `window-actions`, `tabs` and `overlays`, whose
         frame, theme and title bar code takes older Windows' paths
-        there (no system backdrop, older DWM attributes).
+        there (no system backdrop, older DWM attributes). All five
+        passed there in their first run, 42877378931.
 - [x] Single instance and IPC
   - [x] `+new-window` and `+new-tab` (with `-e`, `--working-directory`,
         `--title`, `--shell-integration`)
