@@ -2,7 +2,8 @@
 # output too), `close_tab:this` and then `undo` brings the closed tab back
 # and `redo` closes it again, and `move_tab_to_new_window` moves the current tab, with its output, into
 # a new window. Last, `close_all_windows`, bound to a key sequence (F12
-# then F11), closes both windows, and Ghostty quits. One terminal per tab, so terminals count tabs. Keys and
+# then F11), closes both windows, and Ghostty quits; while the sequence
+# waits for its second key, a badge on the terminal shows the first. One terminal per tab, so terminals count tabs. Keys and
 # characters are posted to Ghostty's windows, so it runs on a locked
 # desktop.
 #
@@ -24,6 +25,7 @@ Add-Type -Namespace GhosttyTabs -Name Win32 -MemberDefinition @'
 [DllImport("user32.dll")] public static extern bool PostMessageW(System.IntPtr h, uint m, System.IntPtr w, System.IntPtr l);
 [DllImport("user32.dll")] public static extern bool IsWindowVisible(System.IntPtr h);
 [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(System.IntPtr h, out uint pid);
+[DllImport("user32.dll", CharSet = CharSet.Unicode)] public static extern int GetWindowTextW(System.IntPtr h, System.Text.StringBuilder s, int n);
 [DllImport("user32.dll", CharSet = CharSet.Unicode)] public static extern System.IntPtr FindWindowExW(System.IntPtr parent, System.IntPtr after, string cls, string title);
 // The process's top-level windows of a class.
 public static System.IntPtr[] TopLevel(uint pid, string cls) {
@@ -78,7 +80,7 @@ function WaitFor([scriptblock]$condition, [string]$what) {
 # A window's terminals (one per tab), and the shown one.
 function Terminals([IntPtr]$window) {
     $list = @(); $h = [IntPtr]::Zero
-    while (($h = $W::FindWindowExW($window, $h, 'GhosttySurface', $null)) -ne [IntPtr]::Zero) { $list += $h }
+    while (($h = $W::FindWindowExW($window, $h, 'GhosttySurface', [NullString]::Value)) -ne [IntPtr]::Zero) { $list += $h }
     $list
 }
 function Shown([IntPtr]$window) { @(Terminals $window | Where-Object { $W::IsWindowVisible($_) }) | Select-Object -First 1 }
@@ -143,10 +145,18 @@ try {
     if (@(Terminals $window)[0] -ne $third) { Fail 'the first window lost the tab that stayed' }
     Write-Host 'move_tab_to_new_window moved the tab, with its output, into a new window.'
 
-    # The sequence's first key alone does nothing.
+    # The sequence's first key alone does nothing but show itself.
     $W::Key($moved, 0x7B, 0x58)   # F12
-    Start-Sleep -Seconds 1
+    $badge = WaitFor {
+        $h = [IntPtr]::Zero
+        while (($h = $W::FindWindowExW($moved, $h, 'GhosttyBadge', [NullString]::Value)) -ne [IntPtr]::Zero) {
+            $text = New-Object System.Text.StringBuilder 256
+            [void]$W::GetWindowTextW($h, $text, 256)
+            if ($W::IsWindowVisible($h) -and $text.ToString() -match 'f12') { return $text.ToString() }
+        }
+    } 'a badge showing the pending key'
     if (@(Windows).Count -ne 2) { Fail "the sequence's first key closed something" }
+    Write-Host "The sequence's first key showed '$badge' on the terminal and nothing else."
     $W::Key($moved, 0x7A, 0x57)   # F11: close_all_windows
     if (-not $process.WaitForExit($TimeoutSeconds * 1000)) { Note; Fail "close_all_windows didn't close every window ($script:note)" }
     Write-Host 'The key sequence F12 F11 ran close_all_windows: both windows closed, and Ghostty quit.'
