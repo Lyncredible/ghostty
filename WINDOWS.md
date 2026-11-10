@@ -1466,7 +1466,8 @@ Notes:
   - [x] 2026-11-10: a twenty-first sync (2 commits: the page list keeps a
         pruned page's memory when growing prunes by lines). No conflicts;
         dates kept (727 commits checked). The PageList tests pass on
-        Windows and the app builds.
+        Windows and the app builds. CI run 42767218736 (a7ccc5f39) passed
+        every job, and `windows-tip` moved.
 - [x] Tip builds, like upstream's `release-tip.yml` (the discussion's
       release workflow item): a rolling prerelease of the latest
       `windows` commit, so people can try it without building. Approved
