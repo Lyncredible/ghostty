@@ -561,3 +561,11 @@ the document's range is taken on an empty screen, the shell prints, and the
 range's ends are moved to the newer selection's end (`MoveEndpointByRange`)
 and read. That end is past the old range's text, which crashed Ghostty. It
 uses UI Automation only, so it runs on a locked desktop.
+
+## config-reload.ps1
+
+Checks that `reload_config` takes up changes to the config file: Ghostty
+starts with only a config file of the test's, a keybind for `new_tab` is
+added to it and the config reloaded with a key, and the new keybind must
+open a tab (it doesn't before the reload). Taken out again and reloaded,
+the key does nothing. It runs on a locked desktop.

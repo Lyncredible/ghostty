@@ -2658,6 +2658,10 @@ Notes:
     step has 12 minutes now. Run 42746575157 (a8af1740e) passed every
     job: the key sequence badge, the link preview's name (`links`), and
     all the tests with real null titles, and `windows-tip` moved.
+  - Reloading was only tested for the window theme and the config
+    errors dialog, never that a change in the file takes effect:
+    `config-reload.ps1` adds a keybind to the config file, reloads, and
+    uses it, then takes it out again. It passes here.
 - [ ] Packaging and release builds
   - [x] Portable zip (`dist/windows/package.ps1`)
   - [x] Per-user install script in the zip (`dist/windows/install.ps1`):
