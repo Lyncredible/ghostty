@@ -1469,7 +1469,8 @@ Notes:
         Windows and the app builds. CI run 42767218736 (a7ccc5f39) passed
         every job, and `windows-tip` moved.
   - [x] 2026-11-10: a twenty-second sync (1 commit: the VOUCHED list). No
-        conflicts; dates kept.
+        conflicts; dates kept (731 commits checked). CI run 42778700681
+        (46ee203e5) passed every job, and `windows-tip` moved.
 - [x] Tip builds, like upstream's `release-tip.yml` (the discussion's
       release workflow item): a rolling prerelease of the latest
       `windows` commit, so people can try it without building. Approved
@@ -2625,7 +2626,9 @@ Notes:
     failed notification now adds the icon again. `notification.ps1` (in
     CI, as it shows notifications) checks it by deleting the icon itself
     (it times out without the fix), and that clicking a notification
-    brings back its minimized window. In CI (run 42705239766) the icon was
+    brings back its minimized window. A retry deletes the icon before adding it,
+    in case it was there after all (adding would fail too, and Ghostty
+    would think it had none from then on). In CI (run 42705239766) the icon was
     already gone when the test went to delete it (Explorer there
     times notifications out at once, `NIN_BALLOONTIMEOUT`), and a
     timed-out notification can't be clicked, so there both are notices
