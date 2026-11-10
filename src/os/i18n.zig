@@ -2,6 +2,7 @@ const std = @import("std");
 const builtin = @import("builtin");
 const build_config = @import("../build_config.zig");
 const locales = @import("i18n_locales.zig");
+const catalog = @import("i18n_catalog.zig");
 
 const log = std.log.scoped(.i18n);
 
@@ -29,7 +30,8 @@ pub fn init(resources_dir: []const u8) InitError!void {
     if (comptime !build_config.i18n) return;
 
     switch (builtin.target.os.tag) {
-        // i18n is unsupported on Windows
+        // gettext is unsupported on Windows; the app has its own
+        // catalog, see initEmbedded.
         .windows => return,
 
         else => {
@@ -67,10 +69,100 @@ pub fn initGlobalDomain() error{OutOfMemory}!void {
 /// translation. This still allows the string to be marked for translation
 /// while remaining usable in comptime contexts.
 pub fn _(msgid: [*:0]const u8) [*:0]const u8 {
+    if (comptime embedded) {
+        if (@inComptime()) return msgid;
+        const current = embedded_catalog orelse return msgid;
+        const translated = current.get(std.mem.span(msgid)) orelse return msgid;
+        return translated.ptr;
+    }
     if (comptime !build_config.i18n) return msgid;
     if (@inComptime()) return msgid;
     return dgettext(build_config.bundle_id, msgid);
 }
+
+/// Whether translations come from the catalog compiled into the
+/// executable rather than gettext: the Windows app, where there's no
+/// libintl to read `.mo` files or `msgfmt` to make them. The build
+/// compiles the `po/` files itself, see i18n_catalog.zig.
+pub const embedded = builtin.target.os.tag == .windows and
+    build_config.app_runtime == .win32;
+
+/// The messages of the user's language, if we have it. Set once by
+/// `initEmbedded`, before any other thread starts.
+var embedded_catalog: ?catalog.Catalog = null;
+
+/// Choose the language of the embedded catalog: the first we have of
+/// `LANGUAGE` (as for gettext, "de" or "pt_BR:es"), or else of the
+/// display languages the user prefers, as Windows' own apps do. English
+/// anywhere before one we have means the messages as they're written.
+pub fn initEmbedded() void {
+    if (comptime !embedded) return;
+
+    var buf: [512]u8 = undefined;
+    var list: [16][]const u8 = undefined;
+    const languages = embeddedLanguages(&buf, &list);
+    const locale = catalog.localeForLanguages(&supported_locales, languages) orelse {
+        log.debug("no translations for the preferred languages count={}", .{languages.len});
+        return;
+    };
+    embedded_catalog = catalog.Catalog.find(@import("i18n_catalog_data").blob, locale) orelse {
+        log.warn("the translations for locale={s} are missing or damaged", .{locale});
+        return;
+    };
+    log.info("translations locale={s} messages={}", .{ locale, embedded_catalog.?.count });
+}
+
+/// The user's languages in order of preference, in `list`, with their
+/// text in `buf`. Those that don't fit are left out.
+fn embeddedLanguages(buf: []u8, list: [][]const u8) []const []const u8 {
+    const windows = struct {
+        const MUI_LANGUAGE_NAME = 0x8;
+        extern "kernel32" fn GetEnvironmentVariableW(name: [*:0]const u16, buf: [*]u16, size: u32) callconv(.winapi) u32;
+        extern "kernel32" fn GetUserPreferredUILanguages(flags: u32, count: *u32, buf: ?[*]u16, size: *u32) callconv(.winapi) i32;
+    };
+    var wide: [512]u16 = undefined;
+
+    const env_len = windows.GetEnvironmentVariableW(
+        std.unicode.utf8ToUtf16LeStringLiteral("LANGUAGE"),
+        &wide,
+        wide.len,
+    );
+    if (env_len > 0 and env_len < wide.len) {
+        const languages = splitLanguages(buf, list, wide[0..env_len], ':');
+        if (languages.len > 0) return languages;
+    }
+
+    // The names come as "de-DE\0en-US\0\0".
+    var count: u32 = 0;
+    var size: u32 = wide.len;
+    if (windows.GetUserPreferredUILanguages(windows.MUI_LANGUAGE_NAME, &count, &wide, &size) == 0 or
+        size > wide.len) return &.{};
+    return splitLanguages(buf, list, wide[0..size], 0);
+}
+
+/// Split UTF-16 language names at a separator into `list`, as ASCII in
+/// `buf`: language names are ASCII, and one that isn't matches nothing.
+fn splitLanguages(
+    buf: []u8,
+    list: [][]const u8,
+    wide: []const u16,
+    separator: u16,
+) []const []const u8 {
+    var count: usize = 0;
+    var used: usize = 0;
+    var it = std.mem.tokenizeScalar(u16, wide, separator);
+    while (it.next()) |name| {
+        if (count == list.len or name.len > buf.len - used) break;
+        const dest = buf[used..][0..name.len];
+        for (name, dest) |unit, *ch| ch.* = if (unit < 0x80) @intCast(unit) else '?';
+        list[count] = dest;
+        count += 1;
+        used += name.len;
+    }
+    return list[0..count];
+}
+
+const supported_locales = @import("i18n_locales.zig").locales;
 
 /// Mark a string for translation without translating it immediately.
 pub fn N_(msgid: [:0]const u8) [:0]const u8 {
@@ -200,6 +292,65 @@ test "canonicalizeLocale darwin" {
     // canonicalizeLocale does not handle encodings and will turn them into
     // underscores. We should parse them out before calling this function.
     try testing.expectEqualStrings("en_US.UTF_8", try canonicalizeLocale(&buf, "en_US.UTF-8"));
+}
+
+test {
+    _ = catalog;
+}
+
+test splitLanguages {
+    const testing = std.testing;
+    const L = std.unicode.utf8ToUtf16LeStringLiteral;
+    var buf: [16]u8 = undefined;
+    var list: [3][]const u8 = undefined;
+
+    // As GetUserPreferredUILanguages gives them.
+    {
+        const languages = splitLanguages(&buf, &list, L("de-DE\x00en-US\x00\x00"), 0);
+        try testing.expectEqual(2, languages.len);
+        try testing.expectEqualStrings("de-DE", languages[0]);
+        try testing.expectEqualStrings("en-US", languages[1]);
+    }
+
+    // As in LANGUAGE.
+    {
+        const languages = splitLanguages(&buf, &list, L(":pt_BR::es:"), ':');
+        try testing.expectEqual(2, languages.len);
+        try testing.expectEqualStrings("pt_BR", languages[0]);
+        try testing.expectEqualStrings("es", languages[1]);
+    }
+
+    // More than fit in the list, or in the buffer, and no ASCII.
+    try testing.expectEqual(3, splitLanguages(&buf, &list, L("a:b:c:d:e"), ':').len);
+    try testing.expectEqual(1, splitLanguages(&buf, &list, L("de:a-language-name-that-is-too-long:fr"), ':').len);
+    try testing.expectEqualStrings("d?", splitLanguages(&buf, &list, L("dé"), ':')[0]);
+    try testing.expectEqual(0, splitLanguages(&buf, &list, L(""), 0).len);
+}
+
+test "embedded catalog" {
+    if (comptime !embedded) return error.SkipZigTest;
+    const testing = std.testing;
+    const blob = @import("i18n_catalog_data").blob;
+
+    // Every locale has translations, with the messages every one of
+    // them has had since the first.
+    for (supported_locales) |locale| {
+        errdefer std.debug.print("locale: {s}\n", .{locale});
+        const messages = catalog.Catalog.find(blob, locale).?;
+        try testing.expect(messages.count > 50);
+        try testing.expect(messages.get("Copy") != null);
+        try testing.expect(messages.get("New Tab") != null);
+        try testing.expect(messages.get("") == null);
+    }
+
+    // Tests run in English.
+    try testing.expectEqualStrings("Close Tab", std.mem.span(@"_"("Close Tab")));
+
+    embedded_catalog = catalog.Catalog.find(blob, "de");
+    defer embedded_catalog = null;
+    try testing.expectEqualStrings("Tab schließen", std.mem.span(@"_"("Close Tab")));
+    const untranslated = "A message nobody translated";
+    try testing.expectEqual(@as([*:0]const u8, untranslated), @"_"(untranslated));
 }
 
 test "_ returns msgid at comptime" {
