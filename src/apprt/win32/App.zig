@@ -1637,6 +1637,31 @@ fn configErrorsMessage(alloc: Allocator, config: *const Config) ![:0]u16 {
     return try util.utf16Alloc(alloc, text.written());
 }
 
+test configErrorsMessage {
+    const testing = std.testing;
+    var config = try Config.default(testing.allocator);
+    defer config.deinit();
+    const arena = config._arena.?.allocator();
+    for (0..17) |i| try config._diagnostics.append(arena, .{
+        .key = try std.fmt.allocPrintSentinel(arena, "key-{d}", .{i}, 0),
+        .message = "is wrong",
+    });
+
+    const message = try configErrorsMessage(testing.allocator, &config);
+    defer testing.allocator.free(message);
+    const text = try std.unicode.utf16LeToUtf8Alloc(testing.allocator, message);
+    defer testing.allocator.free(text);
+
+    // The first 15 are listed, then how many more there are, and the
+    // question the message box asks.
+    try testing.expect(std.mem.startsWith(u8, text, "One or more configuration errors were found:\n\n"));
+    try testing.expect(std.mem.indexOf(u8, text, "key-0") != null);
+    try testing.expect(std.mem.indexOf(u8, text, "key-14") != null);
+    try testing.expect(std.mem.indexOf(u8, text, "key-15") == null);
+    try testing.expect(std.mem.indexOf(u8, text, "...and 2 more\n") != null);
+    try testing.expect(std.mem.endsWith(u8, text, "Reload the configuration now? Choose No to ignore these errors."));
+}
+
 fn askAboutConfigErrors(self: *App, message: [:0]const u16) void {
     const owner = if (self.activeWindow()) |window| window.hwnd else null;
     const choice = c.MessageBoxW(
