@@ -245,10 +245,11 @@ pub fn show(
         break :entries &.{};
     };
 
-    const cue = switch (contents) {
-        .commands => std.unicode.utf8ToUtf16LeStringLiteral("Execute a command…"),
-        .terminals => std.unicode.utf8ToUtf16LeStringLiteral("Switch to a tab…"),
-    };
+    var cue_buf: [128]u16 = undefined;
+    const cue = util.utf16TruncateZ(&cue_buf, switch (contents) {
+        .commands => i18n.text("Execute a command…"),
+        .terminals => "Switch to a tab…",
+    });
     _ = c.SendMessageW(self.edit, c.EM_SETCUEBANNER, c.TRUE, @bitCast(@intFromPtr(cue.ptr)));
     _ = c.SendMessageW(self.edit, c.EM_SETLIMITTEXT, max_query, 0);
     _ = c.SetWindowTextW(self.edit, std.unicode.utf8ToUtf16LeStringLiteral(""));
@@ -300,6 +301,17 @@ fn buildEntries(
             .choice = .{ .action = try command.action.clone(alloc) },
         });
     };
+
+    // The commands come sorted by their English titles. Translated, they
+    // go by the titles shown, in code unit order: near enough to find
+    // one, and the same wherever it runs.
+    if (i18n.translating()) {
+        std.mem.sort(Entry, entries.items, {}, struct {
+            fn lessThan(_: void, a: Entry, b: Entry) bool {
+                return std.mem.order(u16, a.title, b.title) == .lt;
+            }
+        }.lessThan);
+    }
 
     for (targets) |target| {
         const title = switch (contents) {
