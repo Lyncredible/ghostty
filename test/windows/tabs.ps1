@@ -1,7 +1,8 @@
 # Checks tab operations: `close_tab:other` keeps only the current tab (its
 # output too), `close_tab:this` and then `undo` brings the closed tab back
 # and `redo` closes it again, and `move_tab_to_new_window` moves the current tab, with its output, into
-# a new window. One terminal per tab, so terminals count tabs. Keys and
+# a new window. Last, `close_all_windows`, bound to a key sequence (F12
+# then F11), closes both windows, and Ghostty quits. One terminal per tab, so terminals count tabs. Keys and
 # characters are posted to Ghostty's windows, so it runs on a locked
 # desktop.
 #
@@ -52,7 +53,8 @@ $log = Join-Path ([IO.Path]::GetTempPath()) "ghostty-tabs-$PID.log"
 $process = Start-Process -FilePath $Exe -PassThru -RedirectStandardError $log -ArgumentList '--command=cmd.exe',
     '--window-save-state=never', '--confirm-close-surface=false', '--keybind=f5=new_tab',
     '--keybind=f6=close_tab:other', '--keybind=f7=close_tab:this', '--keybind=f8=undo',
-    '--keybind=f9=move_tab_to_new_window', '--keybind=f10=redo'
+    '--keybind=f9=move_tab_to_new_window', '--keybind=f10=redo',
+    '--keybind=f12>f11=close_all_windows', '--quit-after-last-window-closed=true'
 
 function Fail([string]$message) {
     Write-Host "::error title=tabs::$message"
@@ -140,6 +142,14 @@ try {
     if (-not ((ScreenText $moved) -match 'MOVE-THIS-TAB')) { Fail "the moved tab lost its output" }
     if (@(Terminals $window)[0] -ne $third) { Fail 'the first window lost the tab that stayed' }
     Write-Host 'move_tab_to_new_window moved the tab, with its output, into a new window.'
+
+    # The sequence's first key alone does nothing.
+    $W::Key($moved, 0x7B, 0x58)   # F12
+    Start-Sleep -Seconds 1
+    if (@(Windows).Count -ne 2) { Fail "the sequence's first key closed something" }
+    $W::Key($moved, 0x7A, 0x57)   # F11: close_all_windows
+    if (-not $process.WaitForExit($TimeoutSeconds * 1000)) { Note; Fail "close_all_windows didn't close every window ($script:note)" }
+    Write-Host 'The key sequence F12 F11 ran close_all_windows: both windows closed, and Ghostty quit.'
 } finally {
     if (-not $process.HasExited) { Stop-Process -Id $process.Id -Force }
     Remove-Item -LiteralPath $log -Force -ErrorAction SilentlyContinue
