@@ -2689,7 +2689,8 @@ Notes:
     its third link: no preview in 30 s, and nothing in Ghostty's log
     then, so the real input wasn't reaching it. The hover now starts over
     up to three times (Ctrl up, the window to the front, Ctrl down and
-    the mouse back on the link), with a notice when it does.
+    the mouse back on the link), with a notice when it does. Run
+    42833401782 passed every job (no retry was needed there).
   - CI run 42741916540 cancelled `gdi-leak` at its 8 minute limit; it had
     taken 7:54 the run before, since the fullscreen and zoom steps. The
     step has 12 minutes now. Run 42746575157 (a8af1740e) passed every
