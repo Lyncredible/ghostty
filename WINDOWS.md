@@ -2649,6 +2649,9 @@ Notes:
     title, which PowerShell turns into `""`, so they only matched windows
     without text (badges with text were missed). They pass
     `[NullString]::Value` now (42 calls in 21 tests).
+  - CI run 42741916540 cancelled `gdi-leak` at its 8 minute limit; it had
+    taken 7:54 the run before, since the fullscreen and zoom steps. The
+    step has 12 minutes now.
 - [ ] Packaging and release builds
   - [x] Portable zip (`dist/windows/package.ps1`)
   - [x] Per-user install script in the zip (`dist/windows/install.ps1`):

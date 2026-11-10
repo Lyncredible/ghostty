@@ -272,7 +272,7 @@ jobs:
         run: ./test/windows/notification.ps1 -Exe zig-out/bin/ghostty.exe
 
       - name: GDI leak test
-        timeout-minutes: 8
+        timeout-minutes: 12
         shell: pwsh
         run: ./test/windows/gdi-leak.ps1 -Exe zig-out/bin/ghostty.exe
 
