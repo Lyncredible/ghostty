@@ -92,6 +92,11 @@ Notes:
   on Windows now, and ReleaseFast builds work (built again 2026-10-31).
 - When scripting input from a DPI-unaware process, Windows scales mouse
   message coordinates for per-monitor-aware windows.
+- A build from `zig build` uses the ConPTY built into Windows, which
+  doesn't pass color queries (OSC 10, 11, 4) on to Ghostty, so programs
+  that ask for the terminal's colors get no answer. The packages bundle
+  Microsoft's newer ConPTY; to use it with a dev build, put it next to
+  `ghostty.exe`: `./dist/windows/conpty.ps1 -Destination zig-out\bin`.
 
 ## Status
 
@@ -2206,7 +2211,7 @@ Notes:
       `title` feature, cmd's and PowerShell's prompts set the title to the
       folder again, and Ghostty no longer passes a console title
       (`lpTitle`) when it starts a shell.
-- [ ] OSC 10/11 color queries get no reply (reported 2026-11-07: Codex
+- [x] OSC 10/11 color queries get no reply (reported 2026-11-07: Codex
       in tmux over SSH from WSL drew its input box without a background,
       since it couldn't learn the terminal's colors). Reproduced locally
       without SSH or tmux: a probe in WSL (raw `/dev/tty`, one second
@@ -2253,6 +2258,9 @@ Notes:
     `OpenConsole.exe` (`build\native\runtimes\x64`) from the
     Microsoft.Windows.Console.ConPTY 1.25.260930003 package next to
     `ghostty.exe`, or build with `package.ps1 -BundleConpty`.
+  - Done: the packages answer (checked in CI by `color-query.ps1 -Zip`),
+    and "Building and testing" says how to give a dev build the same
+    ConPTY.
 - [ ] Default split keys that use the Windows key (found 2026-11-08 in
       `+list-keybinds --default`): Windows gets Linux's defaults,
       `super+ctrl+[` and `super+ctrl+]` (`goto_split:previous/next`) and
