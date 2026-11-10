@@ -73,7 +73,7 @@ function TopLevel {
 
 function Surfaces {
     $list = @(); $h = [IntPtr]::Zero
-    while (($h = $W::FindWindowExW($window, $h, 'GhosttySurface', $null)) -ne [IntPtr]::Zero) { $list += $h }
+    while (($h = $W::FindWindowExW($window, $h, 'GhosttySurface', [NullString]::Value)) -ne [IntPtr]::Zero) { $list += $h }
     $list
 }
 

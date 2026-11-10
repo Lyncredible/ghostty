@@ -81,7 +81,7 @@ function Tabs {
     $script:note = "tabs: " + (($list | ForEach-Object { $_.Current.Name }) -join ', ')
     , $list
 }
-function Shown { $h = [IntPtr]::Zero; while (($h = $W::FindWindowExW($window, $h, 'GhosttySurface', $null)) -ne [IntPtr]::Zero) { if ($W::IsWindowVisible($h)) { return $h } } }
+function Shown { $h = [IntPtr]::Zero; while (($h = $W::FindWindowExW($window, $h, 'GhosttySurface', [NullString]::Value)) -ne [IntPtr]::Zero) { if ($W::IsWindowVisible($h)) { return $h } } }
 function Center($element) {
     $r = $element.Current.BoundingRectangle
     @{ X = [int]($r.X + $r.Width / 2); Y = [int]($r.Y + $r.Height / 2) }
@@ -89,7 +89,7 @@ function Center($element) {
 
 try {
     $window = WaitFor { $process.Refresh(); if ($process.MainWindowHandle -ne 0) { $process.MainWindowHandle } } 'the window'
-    $bar = WaitFor { $h = $W::FindWindowExW($window, [IntPtr]::Zero, 'GhosttyTabBar', $null); if ($h -ne [IntPtr]::Zero -and $W::IsWindowVisible($h)) { $h } } 'the tab bar'
+    $bar = WaitFor { $h = $W::FindWindowExW($window, [IntPtr]::Zero, 'GhosttyTabBar', [NullString]::Value); if ($h -ne [IntPtr]::Zero -and $W::IsWindowVisible($h)) { $h } } 'the tab bar'
     [void](WaitFor { Shown } 'the first terminal')
 
     # A second tab, named SECOND by cmd. An elevated console (as on CI

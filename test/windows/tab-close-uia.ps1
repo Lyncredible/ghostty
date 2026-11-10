@@ -55,11 +55,11 @@ function Tabs {
     $script:note = "$($list.Count) tabs"
     , $list
 }
-function Shown { $h = [IntPtr]::Zero; while (($h = $W::FindWindowExW($window, $h, 'GhosttySurface', $null)) -ne [IntPtr]::Zero) { if ($W::IsWindowVisible($h)) { return $h } } }
+function Shown { $h = [IntPtr]::Zero; while (($h = $W::FindWindowExW($window, $h, 'GhosttySurface', [NullString]::Value)) -ne [IntPtr]::Zero) { if ($W::IsWindowVisible($h)) { return $h } } }
 
 try {
     $window = WaitFor { $process.Refresh(); if ($process.MainWindowHandle -ne 0) { $process.MainWindowHandle } } 'the window'
-    $bar = WaitFor { $h = $W::FindWindowExW($window, [IntPtr]::Zero, 'GhosttyTabBar', $null); if ($h -ne [IntPtr]::Zero -and $W::IsWindowVisible($h)) { $h } } 'the tab bar'
+    $bar = WaitFor { $h = $W::FindWindowExW($window, [IntPtr]::Zero, 'GhosttyTabBar', [NullString]::Value); if ($h -ne [IntPtr]::Zero -and $W::IsWindowVisible($h)) { $h } } 'the tab bar'
     $first = WaitFor { Shown } 'the first terminal'
     $W::Key($first, 0x74, 0x3F)   # F5: new_tab
     $tabs = WaitFor { $t = Tabs; if ($t.Count -eq 2) { , $t } } 'a second tab'

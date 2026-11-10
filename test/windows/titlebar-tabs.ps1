@@ -104,12 +104,12 @@ function CaptionGap {
 }
 
 function Visible([IntPtr]$h) { $W::IsWindowVisible($h) }
-function Shown { $h = [IntPtr]::Zero; while (($h = $W::FindWindowExW($window, $h, 'GhosttySurface', $null)) -ne [IntPtr]::Zero) { if (Visible $h) { return $h } } }
+function Shown { $h = [IntPtr]::Zero; while (($h = $W::FindWindowExW($window, $h, 'GhosttySurface', [NullString]::Value)) -ne [IntPtr]::Zero) { if (Visible $h) { return $h } } }
 
 try {
     $window = WaitFor { $process.Refresh(); if ($process.MainWindowHandle -ne 0) { $process.MainWindowHandle } } 'the window'
     [void](WaitFor { Shown } 'the terminal')
-    $bar = WaitFor { $h = $W::FindWindowExW($window, [IntPtr]::Zero, 'GhosttyTabBar', $null); if ($h -ne [IntPtr]::Zero -and (Visible $h)) { $h } } 'the tab bar'
+    $bar = WaitFor { $h = $W::FindWindowExW($window, [IntPtr]::Zero, 'GhosttyTabBar', [NullString]::Value); if ($h -ne [IntPtr]::Zero -and (Visible $h)) { $h } } 'the tab bar'
     [void](WaitFor { (CaptionGap) -le 0 } 'the tab to take the title bar')
     Write-Host "One tab: the tab is in the title bar ($note)."
 

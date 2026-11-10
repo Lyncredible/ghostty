@@ -77,7 +77,7 @@ function Size { $r = New-Object GhosttyWindowActions.Win32+RECT; [void]$W::GetWi
 function Terminal {
     $r = New-Object GhosttyWindowActions.Win32+RECT
     [void]$W::GetWindowRect($surface, [ref]$r)
-    $bar = $W::FindWindowExW($window, [IntPtr]::Zero, 'GhosttyTabBar', $null)
+    $bar = $W::FindWindowExW($window, [IntPtr]::Zero, 'GhosttyTabBar', [NullString]::Value)
     "$($r.r - $r.l)x$($r.b - $r.t), tab bar $(if ($bar -ne 0 -and $W::IsWindowVisible($bar)) { 'shown' } else { 'hidden' })"
 }
 function Caption { ($W::GetWindowLongW($window, -16) -band 0x00C00000) -eq 0x00C00000 }   # GWL_STYLE, WS_CAPTION
@@ -85,7 +85,7 @@ function Topmost { ($W::GetWindowLongW($window, -20) -band 0x8) -ne 0 }   # GWL_
 
 try {
     $window = WaitFor { $process.Refresh(); if ($process.MainWindowHandle -ne 0) { $process.MainWindowHandle } } 'the window'
-    $surface = WaitFor { $s = $W::FindWindowExW($window, [IntPtr]::Zero, 'GhosttySurface', $null); if ($s -ne 0) { $s } } 'the terminal'
+    $surface = WaitFor { $s = $W::FindWindowExW($window, [IntPtr]::Zero, 'GhosttySurface', [NullString]::Value); if ($s -ne 0) { $s } } 'the terminal'
     Start-Sleep -Seconds 1
     $start = Rect
     $startSize = Size

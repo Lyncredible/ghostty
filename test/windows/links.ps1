@@ -145,7 +145,7 @@ function ClickLink([string]$url) {
         $h = [IntPtr]$surface.Current.NativeWindowHandle
         $script:nudge = 1
         $preview = WaitFor {
-            $p = $W::FindWindowExW($h, [IntPtr]::Zero, 'GhosttyLinkPreview', $null)
+            $p = $W::FindWindowExW($h, [IntPtr]::Zero, 'GhosttyLinkPreview', [NullString]::Value)
             if ($p -ne [IntPtr]::Zero -and $W::IsWindowVisible($p)) { return $p }
             $W::mouse_event(0x0001, $script:nudge, 0, 0, [IntPtr]::Zero)
             $script:nudge = -$script:nudge

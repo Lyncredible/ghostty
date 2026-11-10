@@ -55,7 +55,7 @@ function WaitFor([scriptblock]$condition, [string]$what) {
 $report = $null
 try {
     $window = WaitFor { $process.Refresh(); if ($process.MainWindowHandle -ne 0) { $process.MainWindowHandle } } 'the window'
-    $surface = WaitFor { $h = $W::FindWindowExW($window, [IntPtr]::Zero, 'GhosttySurface', $null); if ($h -ne [IntPtr]::Zero) { $h } } 'the surface'
+    $surface = WaitFor { $h = $W::FindWindowExW($window, [IntPtr]::Zero, 'GhosttySurface', [NullString]::Value); if ($h -ne [IntPtr]::Zero) { $h } } 'the surface'
     Start-Sleep -Milliseconds 500
     $W::Key($surface, 0x7B, 0x58)   # F12: crash:main
 

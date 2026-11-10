@@ -66,7 +66,7 @@ function WaitFor([scriptblock]$condition, [string]$what) {
 
 function Surfaces {
     $list = @(); $h = [IntPtr]::Zero
-    while (($h = $W::FindWindowExW($window, $h, 'GhosttySurface', $null)) -ne [IntPtr]::Zero) { $list += $h }
+    while (($h = $W::FindWindowExW($window, $h, 'GhosttySurface', [NullString]::Value)) -ne [IntPtr]::Zero) { $list += $h }
     $list
 }
 function Box($h) { $r = New-Object GhosttySplits.Win32+RECT; [void]$W::GetWindowRect($h, [ref]$r); $r }

@@ -84,7 +84,7 @@ function WaitFor([scriptblock]$condition, [string]$what, [int]$seconds = $Timeou
     Fail "timed out waiting for $what"
 }
 
-function Surface($window) { WaitFor { $s = $W::FindWindowExW($window, [IntPtr]::Zero, 'GhosttySurface', $null); if ($s -ne 0) { $s } } 'a terminal' }
+function Surface($window) { WaitFor { $s = $W::FindWindowExW($window, [IntPtr]::Zero, 'GhosttySurface', [NullString]::Value); if ($s -ne 0) { $s } } 'a terminal' }
 function Visible($window) { $W::IsWindowVisible($window) }
 
 try {

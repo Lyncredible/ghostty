@@ -79,15 +79,15 @@ function Count {
 
 try {
     $window = WaitFor { $process.Refresh(); if ($process.MainWindowHandle -ne 0) { $process.MainWindowHandle } } 'the window'
-    $surface = WaitFor { $h = $W::FindWindowExW($window, [IntPtr]::Zero, 'GhosttySurface', $null); if ($h -ne [IntPtr]::Zero) { $h } } 'the surface'
+    $surface = WaitFor { $h = $W::FindWindowExW($window, [IntPtr]::Zero, 'GhosttySurface', [NullString]::Value); if ($h -ne [IntPtr]::Zero) { $h } } 'the surface'
     [void](WaitFor { $script:note = 'no prompt yet'; (ScreenText) -match '>\s*$' } 'the prompt')
 
     $W::Type($surface, "echo $marker & echo $marker & echo $marker`r")
     [void](WaitFor { $n = ([regex]::Matches((ScreenText), $marker)).Count; $script:note = "$n on screen"; $n -eq 6 } 'the markers')
 
     $W::Key($surface, 0x78, 0x43)   # F9: start_search
-    $script:bar = WaitFor { $h = $W::FindWindowExW($surface, [IntPtr]::Zero, 'GhosttySearchBar', $null); if ($h -ne [IntPtr]::Zero -and $W::IsWindowVisible($h)) { $h } } 'the search bar'
-    $edit = $W::FindWindowExW($bar, [IntPtr]::Zero, 'Edit', $null)
+    $script:bar = WaitFor { $h = $W::FindWindowExW($surface, [IntPtr]::Zero, 'GhosttySearchBar', [NullString]::Value); if ($h -ne [IntPtr]::Zero -and $W::IsWindowVisible($h)) { $h } } 'the search bar'
+    $edit = $W::FindWindowExW($bar, [IntPtr]::Zero, 'Edit', [NullString]::Value)
     if ($edit -eq [IntPtr]::Zero) { Fail 'the search bar has no text field' }
     $W::Type($edit, $marker)
     $count = WaitFor { $c = Count; if ($c -and $c.Total -eq 6) { $c } } 'six matches'
