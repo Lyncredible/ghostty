@@ -544,6 +544,34 @@ jobs:
           -Extra "--background-opacity=0.8","--background-blur=true"
           -ExpectLog "background blur=true with the blur behind accent build=\d+ ok=true"
 
+      # Windows Server 2022 is Windows 10's code (build 20348): no system
+      # backdrop, and older DWM title bar attributes. The window's frame,
+      # theme, actions, tabs and overlays take those paths here.
+      - name: Title bar tabs test
+        timeout-minutes: 5
+        shell: pwsh
+        run: ./test/windows/titlebar-tabs.ps1 -Exe zig-out/bin/ghostty.exe
+
+      - name: Window theme test
+        timeout-minutes: 5
+        shell: pwsh
+        run: ./test/windows/window-theme.ps1 -Exe zig-out/bin/ghostty.exe
+
+      - name: Window actions test
+        timeout-minutes: 5
+        shell: pwsh
+        run: ./test/windows/window-actions.ps1 -Exe zig-out/bin/ghostty.exe
+
+      - name: Tabs test
+        timeout-minutes: 5
+        shell: pwsh
+        run: ./test/windows/tabs.ps1 -Exe zig-out/bin/ghostty.exe
+
+      - name: Overlays test
+        timeout-minutes: 5
+        shell: pwsh
+        run: ./test/windows/overlays.ps1 -Exe zig-out/bin/ghostty.exe
+
   # The app on ARM64 hardware.
   build-windows-arm64:
     if: github.repository != 'ghostty-org/ghostty'

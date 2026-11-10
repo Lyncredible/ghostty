@@ -1662,7 +1662,10 @@ Notes:
         smoke test with blur on `windows-2022` (Windows Server 2022, build
         20348, which has no system backdrop) and expects the accent path
         to succeed. It passed in run 41296536006. Seeing the blur itself
-        still needs a desktop.
+        still needs a desktop. That job now also runs `titlebar-tabs`,
+        `window-theme`, `window-actions`, `tabs` and `overlays`, whose
+        frame, theme and title bar code takes older Windows' paths
+        there (no system backdrop, older DWM attributes).
 - [x] Single instance and IPC
   - [x] `+new-window` and `+new-tab` (with `-e`, `--working-directory`,
         `--title`, `--shell-integration`)
