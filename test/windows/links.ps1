@@ -34,6 +34,7 @@ Add-Type -Namespace GhosttyLinks -Name Win32 -MemberDefinition @'
 [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(System.IntPtr h, out uint pid);
 [DllImport("user32.dll")] public static extern System.IntPtr GetWindow(System.IntPtr h, uint cmd);
 [DllImport("user32.dll")] public static extern bool IsWindowVisible(System.IntPtr h);
+[DllImport("user32.dll", CharSet = CharSet.Unicode)] public static extern int GetWindowTextW(System.IntPtr h, System.Text.StringBuilder s, int n);
 [DllImport("user32.dll", CharSet = CharSet.Unicode)] public static extern int GetClassNameW(System.IntPtr h, System.Text.StringBuilder s, int n);
 public static void Key(ushort vk, bool up) {
   var i = new INPUT[1]; i[0].type = 1; i[0].u.ki.wVk = vk; i[0].u.ki.dwFlags = up ? 2u : 0u;
@@ -153,6 +154,10 @@ function ClickLink([string]$url) {
         $name = New-Object System.Text.StringBuilder 64
         [void]$W::GetClassNameW($W::GetWindow($preview, 2), $name, $name.Capacity)   # GW_HWNDNEXT
         if ($name.ToString() -ne 'GhosttyScrollbar') { Fail "the link preview is just above $name, not the scrollbar" }
+        # Its name (for screen readers) is the URL it shows.
+        $text = New-Object System.Text.StringBuilder 512
+        [void]$W::GetWindowTextW($preview, $text, $text.Capacity)
+        if (-not $text.ToString().StartsWith($url)) { Fail "the link preview is named '$text', not the URL $url" }
 
         $W::mouse_event(0x0002, 0, 0, 0, [IntPtr]::Zero)      # left down
         $W::mouse_event(0x0004, 0, 0, 0, [IntPtr]::Zero)      # left up

@@ -96,6 +96,11 @@ pub fn setUrl(self: *LinkPreview, alloc: Allocator, url: []const u8, cursor: c.P
     self.text = null;
     if (url.len > 0) self.text = util.utf16Alloc(alloc, url) catch null;
     self.layout(cursor);
+    // The URL is only drawn, so also make it the window's text, which
+    // screen readers (and tests) see as its name.
+    if (self.hwnd != null) {
+        if (self.text) |text| _ = c.SetWindowTextW(self.hwnd, text.ptr);
+    }
 }
 
 /// Called when the mouse moves, to get out of its way.
