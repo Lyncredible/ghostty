@@ -2667,6 +2667,11 @@ Notes:
   - `configErrorsMessage` (the config errors dialog's text: 15 listed,
     then how many more) is unit tested. Every script in `test/windows`
     is in its README and the fork's workflow.
+  - CI run 42796473581 failed `scrollbar` once: its first read of the
+    terminal's text got "Unsupported Pattern", as UI Automation hands out
+    an element without our patterns when a busy, just started Ghostty
+    doesn't answer in time. The test asks again now. Other tests read the
+    text the same way; none has failed so.
   - CI run 42741916540 cancelled `gdi-leak` at its 8 minute limit; it had
     taken 7:54 the run before, since the fullscreen and zoom steps. The
     step has 12 minutes now. Run 42746575157 (a8af1740e) passed every
