@@ -2762,7 +2762,16 @@ Notes:
       Translated labels have no access keys (GTK's have none), so
       Windows takes their first letter.
     - The command palette: its entries' titles and descriptions (the
-      core translates them for Win32 as for GTK), and "Focus: <title>".
+      core translates them for Win32 as for GTK), its placeholder, and
+      "Focus: <title>". Translated entries are sorted by the titles
+      shown (they come sorted by their English ones). Seen in captures
+      with `LANGUAGE=ja` and `de`: the text draws (no missing glyphs),
+      sorted, with the placeholder translated.
+    - `test/windows/localization.ps1` (in CI) starts Ghostty with
+      `LANGUAGE` set and reads the palette's entry and the context
+      menu's first item: German for `de` and `tlh:de_DE.UTF-8`, English
+      for `en` and for a language we have nothing for. Passes here.
+      The full unit test suite: 4,313 passed, 87 skipped, 0 failed.
     - Close confirmations: GTK's questions when both the title and the
       message have a translation, so a dialog is never half English;
       English keeps our wording. Clipboard confirmations likewise,

@@ -94,6 +94,13 @@ pub fn translation(msgid: [:0]const u8) ?[:0]const u8 {
     return current.get(msgid);
 }
 
+/// Whether messages are being translated from the embedded catalog: the
+/// user's language is one we have.
+pub fn translating() bool {
+    if (comptime !embedded) return false;
+    return embedded_catalog != null;
+}
+
 /// Use a locale's messages from the embedded catalog, or none (English)
 /// for null. Returns false if we don't have the locale. For `initEmbedded`,
 /// and for tests of translated text; not safe while other threads
@@ -376,12 +383,14 @@ test "embedded catalog" {
     try testing.expectEqualStrings("Close Tab", std.mem.span(@"_"("Close Tab")));
 
     try testing.expect(translation("Close Tab") == null);
+    try testing.expect(!translating());
     try testing.expect(!useEmbeddedLocale("xx"));
 
     try testing.expect(useEmbeddedLocale("de"));
     defer _ = useEmbeddedLocale(null);
     try testing.expectEqualStrings("Tab schließen", std.mem.span(@"_"("Close Tab")));
     try testing.expectEqualStrings("Tab schließen", text("Close Tab"));
+    try testing.expect(translating());
     const untranslated = "A message nobody translated";
     try testing.expectEqual(@as([*:0]const u8, untranslated), @"_"(untranslated));
     try testing.expectEqualStrings(untranslated, text(untranslated));
