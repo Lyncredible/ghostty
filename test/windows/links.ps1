@@ -133,24 +133,40 @@ function ClickLink([string]$url) {
 
     $rect = $surface.Current.BoundingRectangle
     $x = [int]($rect.Left + 40); $y = [int]($rect.Top + $rect.Height / 2)
-    $W::Key(0x11, $false)                                 # Ctrl down
+    $h = [IntPtr]$surface.Current.NativeWindowHandle
     try {
-        [void]$W::SetCursorPos($x, $y)
-        $W::mouse_event(0x0001, 1, 0, 0, [IntPtr]::Zero)      # a move, so Ghostty sees the link
-        Start-Sleep -Milliseconds 300
-
         # Each check nudges the mouse a pixel and back, as a hand on it
         # would: a single move can reach Ghostty before it has the link or
         # sees Ctrl held, and then nothing asks again (this timed out twice
-        # in CI, in runs 42164080425 and 42614152414).
-        $h = [IntPtr]$surface.Current.NativeWindowHandle
-        $script:nudge = 1
-        $preview = WaitFor {
-            $p = $W::FindWindowExW($h, [IntPtr]::Zero, 'GhosttyLinkPreview', [NullString]::Value)
-            if ($p -ne [IntPtr]::Zero -and $W::IsWindowVisible($p)) { return $p }
-            $W::mouse_event(0x0001, $script:nudge, 0, 0, [IntPtr]::Zero)
-            $script:nudge = -$script:nudge
-        } 'the link preview to show'
+        # in CI, in runs 42164080425 and 42614152414). And if none of it
+        # reaches Ghostty for a while (run 42827995514, where its log has
+        # nothing in 30 s), start over: Ctrl up, the window to the front,
+        # Ctrl down and the mouse back on the link.
+        $preview = $null
+        for ($attempt = 1; $attempt -le 3 -and -not $preview; $attempt++) {
+            if ($attempt -gt 1) {
+                $W::Key(0x11, $true)
+                Write-Host "::notice title=links::No link preview after 10 s; trying again (attempt $attempt)."
+                [void]$W::SetCursorPos($x + 200, $y + 100)
+                [void]$W::SetForegroundWindow($window)
+                Start-Sleep -Milliseconds 500
+            }
+            $W::Key(0x11, $false)                                 # Ctrl down
+            [void]$W::SetCursorPos($x, $y)
+            $W::mouse_event(0x0001, 1, 0, 0, [IntPtr]::Zero)      # a move, so Ghostty sees the link
+            Start-Sleep -Milliseconds 300
+            $script:nudge = 1
+            $deadline = (Get-Date).AddSeconds(10)
+            while ((Get-Date) -lt $deadline) {
+                if ($process.HasExited) { Fail 'Ghostty exited while waiting for the link preview' }
+                $p = $W::FindWindowExW($h, [IntPtr]::Zero, 'GhosttyLinkPreview', [NullString]::Value)
+                if ($p -ne [IntPtr]::Zero -and $W::IsWindowVisible($p)) { $preview = $p; break }
+                $W::mouse_event(0x0001, $script:nudge, 0, 0, [IntPtr]::Zero)
+                $script:nudge = -$script:nudge
+                Start-Sleep -Milliseconds 250
+            }
+        }
+        if (-not $preview) { Fail 'timed out waiting for the link preview to show' }
         $name = New-Object System.Text.StringBuilder 64
         [void]$W::GetClassNameW($W::GetWindow($preview, 2), $name, $name.Capacity)   # GW_HWNDNEXT
         if ($name.ToString() -ne 'GhosttyScrollbar') { Fail "the link preview is just above $name, not the scrollbar" }
