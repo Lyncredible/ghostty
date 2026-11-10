@@ -301,6 +301,11 @@ jobs:
         shell: pwsh
         run: ./test/windows/command-palette.ps1 -Exe zig-out/bin/ghostty.exe
 
+      - name: Localization test
+        timeout-minutes: 5
+        shell: pwsh
+        run: ./test/windows/localization.ps1 -Exe zig-out/bin/ghostty.exe
+
       - name: Tabs test
         timeout-minutes: 5
         shell: pwsh
