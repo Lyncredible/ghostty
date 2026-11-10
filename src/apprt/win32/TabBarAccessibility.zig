@@ -15,6 +15,7 @@ const std = @import("std");
 const Allocator = std.mem.Allocator;
 
 const util = @import("util.zig");
+const i18n = @import("../../os/main.zig").i18n;
 const c = util.c;
 const Tab = @import("Tab.zig");
 const TabBar = @import("TabBar.zig");
@@ -446,7 +447,7 @@ const item_simple_vtbl = SimpleVtbl{
                 UIA_NamePropertyId => setString(out, switch (self.kind) {
                     .tab => |tab| tab.title(),
                     .button => |button| bar.buttonName(button),
-                    .close => "Close Tab",
+                    .close => i18n.text("Close Tab"),
                 }),
                 // "2 of 3" for screen readers, which custom providers must
                 // give themselves. Counted from one.

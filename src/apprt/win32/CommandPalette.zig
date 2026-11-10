@@ -15,6 +15,7 @@ const input = @import("../../input.zig");
 const CoreSurface = @import("../../Surface.zig");
 
 const util = @import("util.zig");
+const i18n = @import("../../os/main.zig").i18n;
 const c = util.c;
 const Menu = @import("Menu.zig");
 
@@ -302,7 +303,7 @@ fn buildEntries(
 
     for (targets) |target| {
         const title = switch (contents) {
-            .commands => try std.fmt.allocPrint(alloc, "Focus: {s}", .{target.title}),
+            .commands => try std.fmt.allocPrint(alloc, "{s}: {s}", .{ i18n.text("Focus"), target.title }),
             .terminals => target.title,
         };
 

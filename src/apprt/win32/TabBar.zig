@@ -6,6 +6,7 @@ const TabBar = @This();
 const std = @import("std");
 
 const util = @import("util.zig");
+const i18n = @import("../../os/main.zig").i18n;
 const c = util.c;
 const App = @import("App.zig");
 const Tab = @import("Tab.zig");
@@ -143,12 +144,12 @@ const TTN_GETDISPINFOW: c.UINT = @bitCast(@as(i32, -530));
 fn tooltipText(self: *TabBar, hit: Hit) []const u8 {
     return switch (hit) {
         .tab => |i| if (i < self.window.tabs.items.len) self.window.tabs.items[i].title() else "",
-        .close => "Close Tab",
-        .new_tab => "New Tab",
+        .close => i18n.text("Close Tab"),
+        .new_tab => i18n.text("New Tab"),
         .shell_menu => "New Tab With a Shell",
         .minimize => "Minimize",
         .maximize => if (c.IsZoomed(self.window.hwnd) != 0) "Restore Down" else "Maximize",
-        .close_window => "Close",
+        .close_window => i18n.text("Close"),
     };
 }
 

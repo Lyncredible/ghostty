@@ -9071,11 +9071,12 @@ pub const RepeatableCommand = struct {
         try self.value.ensureUnusedCapacity(alloc, inputpkg.command.defaults.len);
         try self.value_c.ensureUnusedCapacity(alloc, inputpkg.command.defaults.len);
         for (inputpkg.command.defaults) |cmd| {
-            // Translation is currently a GTK-only feature. In particular,
-            // translating these shared strings for the embedded runtime gives
-            // the macOS app a localized command palette in an otherwise
-            // unlocalized UI.
-            const localized = if (comptime build_config.app_runtime == .gtk)
+            // Translation is currently a GTK and Windows feature. In
+            // particular, translating these shared strings for the embedded
+            // runtime gives the macOS app a localized command palette in an
+            // otherwise unlocalized UI.
+            const localized = if (comptime build_config.app_runtime == .gtk or
+                build_config.app_runtime == .win32)
                 cmd.translated()
             else
                 cmd;

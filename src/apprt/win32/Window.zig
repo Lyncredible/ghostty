@@ -11,6 +11,7 @@ const configpkg = @import("../../config.zig");
 const CoreSurface = @import("../../Surface.zig");
 
 const util = @import("util.zig");
+const i18n = @import("../../os/main.zig").i18n;
 const c = util.c;
 const App = @import("App.zig");
 const Surface = @import("Surface.zig");
@@ -1223,11 +1224,7 @@ pub fn closeTabs(self: *Window, surface: *Surface, mode: apprt.action.CloseTabMo
     const identity = c.GetWindowLongPtrW(hwnd, util.GWLP_USERDATA);
     for (targets.items) |tab| {
         if (tab.needsConfirmQuit()) {
-            if (!confirm(
-                self,
-                "Close tabs?",
-                "A process is still running in at least one of the terminals. Closing them will kill the processes.",
-            )) return;
+            if (!confirmClosing(self, .tabs)) return;
             // MessageBox pumps messages. A child can exit and close the
             // window while the confirmation is open.
             if (c.GetWindowLongPtrW(hwnd, util.GWLP_USERDATA) != identity) return;
@@ -2014,6 +2011,115 @@ pub fn confirm(window: ?*Window, title: []const u8, message: []const u8) bool {
     return result == c.IDOK;
 }
 
+/// What a close confirmation asks about, for its text in the user's
+/// language.
+pub const Closing = enum {
+    terminal,
+    tabs,
+    window,
+    all_windows,
+    app,
+
+    const Text = struct { title: [:0]const u8, message: [:0]const u8 };
+
+    /// Our wording, which says what closing does to the processes.
+    fn english(self: Closing) Text {
+        return switch (self) {
+            .terminal => .{
+                .title = "Close terminal?",
+                .message = "A process is still running in this terminal. Closing it will kill the process.",
+            },
+            .tabs => .{
+                .title = "Close tabs?",
+                .message = "A process is still running in at least one of the terminals. Closing them will kill the processes.",
+            },
+            .window => .{
+                .title = "Close window?",
+                .message = "A process is still running in at least one of the terminals. Closing the window will kill the processes.",
+            },
+            .all_windows => .{
+                .title = "Close all windows?",
+                .message = "All terminal sessions will be terminated.",
+            },
+            .app => .{
+                .title = "Quit Ghostty?",
+                .message = "All terminal sessions will be terminated.",
+            },
+        };
+    }
+
+    /// The messages of GTK's close confirmation for the same question,
+    /// which have translations.
+    fn translatable(self: Closing) Text {
+        return switch (self) {
+            .terminal => .{
+                .title = "Close Split?",
+                .message = "The currently running process in this split will be terminated.",
+            },
+            .tabs => .{
+                .title = "Close Tab?",
+                .message = "All terminal sessions in this tab will be terminated.",
+            },
+            .window => .{
+                .title = "Close Window?",
+                .message = "All terminal sessions in this window will be terminated.",
+            },
+            .all_windows => .{
+                .title = "Close All Windows",
+                .message = "All terminal sessions will be terminated.",
+            },
+            .app => .{
+                .title = "Quit Ghostty?",
+                .message = "All terminal sessions will be terminated.",
+            },
+        };
+    }
+
+    /// The title and message to show: translated if both are, so that
+    /// a dialog is in one language.
+    fn text(self: Closing) Text {
+        const msgids = self.translatable();
+        return .{
+            .title = i18n.translation(msgids.title) orelse return self.english(),
+            .message = i18n.translation(msgids.message) orelse return self.english(),
+        };
+    }
+};
+
+/// Ask whether to close something with processes still running. Returns
+/// true if the user confirmed.
+pub fn confirmClosing(window: ?*Window, what: Closing) bool {
+    const text = what.text();
+    return confirm(window, text.title, text.message);
+}
+
+test "Closing: text" {
+    const testing = std.testing;
+    try testing.expectEqualStrings("Close terminal?", Closing.terminal.text().title);
+    try testing.expectEqualStrings("Quit Ghostty?", Closing.app.text().title);
+
+    if (comptime !i18n.embedded) return;
+    defer _ = i18n.useEmbeddedLocale(null);
+    try testing.expect(i18n.useEmbeddedLocale("de"));
+    try testing.expectEqualStrings("Ghostty schließen?", Closing.app.text().title);
+    try testing.expectEqualStrings("Alle Terminalsitzungen werden beendet.", Closing.app.text().message);
+
+    // Every question's messages have translations somewhere, and each
+    // language shows a dialog in one language.
+    var translated: [std.enums.values(Closing).len]bool = @splat(false);
+    for (@import("../../os/i18n_locales.zig").locales) |locale| {
+        try testing.expect(i18n.useEmbeddedLocale(locale));
+        for (std.enums.values(Closing)) |what| {
+            const text = what.text();
+            const english = what.english();
+            const is_english = text.title.ptr == english.title.ptr;
+            try testing.expectEqual(is_english, text.message.ptr == english.message.ptr);
+            if (!is_english) translated[@backingInt(what)] = true;
+        }
+    }
+    for (translated) |v| try testing.expect(v);
+}
+
 /// Like `confirm`, with a preview of some text below the message, such as
 /// what's about to be pasted. Like GTK, the user sees what they allow.
 pub fn confirmText(
@@ -2371,11 +2477,7 @@ pub fn wndProc(
             for (self.tabs.items) |tab| {
                 if (tab.needsConfirmQuit()) {
                     const identity = c.GetWindowLongPtrW(hwnd, util.GWLP_USERDATA);
-                    if (!confirm(
-                        self,
-                        "Close window?",
-                        "A process is still running in at least one of the terminals. Closing the window will kill the processes.",
-                    )) return 0;
+                    if (!confirmClosing(self, .window)) return 0;
                     if (c.GetWindowLongPtrW(hwnd, util.GWLP_USERDATA) != identity) return 0;
                     break;
                 }
