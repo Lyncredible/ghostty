@@ -1,7 +1,9 @@
 # Checks reordering tabs by dragging: the second tab, named with cmd's
 # `title` (the shell integration's titles are off so the name stays), is
 # dragged over the first one with posted mouse messages, and UI Automation
-# then lists it first. The tabs' positions come from UI Automation, so it
+# then lists it first. Then `move_tab:1` from a keybind moves it back to
+# second, and `move_tab:1` again (past the end) wraps it around to first,
+# like the other platforms. The tabs' positions come from UI Automation, so it
 # follows the tab bar's layout (margins and gaps between tabs) and runs on
 # a locked desktop.
 #
@@ -48,7 +50,8 @@ $W = [GhosttyTabReorder.Win32]
 
 $log = Join-Path ([IO.Path]::GetTempPath()) "ghostty-tab-reorder-$PID.log"
 $process = Start-Process -FilePath $Exe -PassThru -RedirectStandardError $log -ArgumentList '--command=cmd.exe',
-    '--window-save-state=never', '--shell-integration-features=no-title', '--keybind=f5=new_tab'
+    '--window-save-state=never', '--shell-integration-features=no-title', '--keybind=f5=new_tab',
+    '--keybind=f6=move_tab:1'
 
 function Fail([string]$message) {
     Write-Host "::error title=tab-reorder::$message"
@@ -109,6 +112,13 @@ try {
     [void](WaitFor { $t = Tabs; $t.Count -eq 2 -and $t[0].Current.Name -match 'SECOND$' } 'SECOND to be the first tab')
     if ((Shown) -ne $second) { Fail 'the dragged tab is no longer the one shown' }
     Write-Host "After dragging the second tab onto the first: $note, and it's still the one shown."
+
+    $W::Key($second, 0x75, 0x40)   # F6: move_tab:1
+    [void](WaitFor { $t = Tabs; $t.Count -eq 2 -and $t[1].Current.Name -match 'SECOND$' } 'move_tab:1 to move SECOND back to second')
+    $W::Key($second, 0x75, 0x40)
+    [void](WaitFor { $t = Tabs; $t.Count -eq 2 -and $t[0].Current.Name -match 'SECOND$' } 'move_tab:1 past the end to wrap SECOND around to first')
+    if ((Shown) -ne $second) { Fail 'the moved tab is no longer the one shown' }
+    Write-Host "move_tab:1 moved it back to second, and again wrapped it around to first: $note."
 } finally {
     if (-not $process.HasExited) { Stop-Process -Id $process.Id -Force }
     Remove-Item -LiteralPath $log -Force -ErrorAction SilentlyContinue

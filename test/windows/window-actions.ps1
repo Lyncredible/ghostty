@@ -1,7 +1,8 @@
 # Checks the window actions from keybinds, each there and back:
 # toggle_maximize maximizes and restores the window, toggle_fullscreen
 # covers its monitor and puts it back where it was,
-# toggle_window_float_on_top makes it topmost and not, and
+# toggle_window_float_on_top makes it topmost and not,
+# toggle_window_decorations takes its title bar away and back, and
 # reset_window_size gives a resized window its first size again. The
 # first size must already be the one reset_window_size gives (it once
 # counted the title bar the tabs then moved into), and coming back from
@@ -46,7 +47,7 @@ $process = Start-Process -FilePath $Exe -PassThru -RedirectStandardError $log -A
     '--window-save-state=never', '--window-width=80', '--window-height=24',
     '--keybind=f5=toggle_maximize', '--keybind=f6=toggle_fullscreen',
     '--keybind=f7=toggle_window_float_on_top', '--keybind=f8=reset_window_size',
-    '--keybind=f9=close_window', '--confirm-close-surface=false', '--quit-after-last-window-closed=true'
+    '--keybind=f9=close_window', '--keybind=f11=toggle_window_decorations', '--confirm-close-surface=false', '--quit-after-last-window-closed=true'
 
 function Fail([string]$message) {
     Write-Host "::error title=window-actions::$message"
@@ -79,6 +80,7 @@ function Terminal {
     $bar = $W::FindWindowExW($window, [IntPtr]::Zero, 'GhosttyTabBar', $null)
     "$($r.r - $r.l)x$($r.b - $r.t), tab bar $(if ($bar -ne 0 -and $W::IsWindowVisible($bar)) { 'shown' } else { 'hidden' })"
 }
+function Caption { ($W::GetWindowLongW($window, -16) -band 0x00C00000) -eq 0x00C00000 }   # GWL_STYLE, WS_CAPTION
 function Topmost { ($W::GetWindowLongW($window, -20) -band 0x8) -ne 0 }   # GWL_EXSTYLE, WS_EX_TOPMOST
 
 try {
@@ -123,6 +125,17 @@ try {
     $W::Key($surface, 0x76, 0x41)
     [void](WaitFor { -not (Topmost) } 'the window to stop floating on top')
     Write-Host 'toggle_window_float_on_top made the window topmost and then not.'
+
+    # toggle_window_decorations, there and back.
+    if (-not (Caption)) { Fail "the window started without a title bar" }
+    $W::Key($surface, 0x7A, 0x57)   # F11
+    [void](WaitFor { -not (Caption) } 'the title bar to go')
+    $W::Key($surface, 0x7A, 0x57)
+    [void](WaitFor { Caption } 'the title bar to come back')
+    $deadline = (Get-Date).AddSeconds(5)
+    while ((Get-Date) -lt $deadline -and (Terminal) -ne $terminal) { Start-Sleep -Milliseconds 100 }
+    if ((Terminal) -ne $terminal) { Fail "with its title bar back, the terminal is $(Terminal), not $terminal" }
+    Write-Host 'toggle_window_decorations took the title bar away and brought it back, with the terminal as it was.'
 
     # reset_window_size after the window is resized, and after it's
     # maximized. It's made smaller, since Windows won't make a window
