@@ -1487,7 +1487,8 @@ Notes:
         `memset` is no longer exported on Darwin or x86_64, where
         compiler_rt's is as fast or faster; ARM64 Windows still uses
         it). No conflicts; dates kept (754 commits checked). The app
-        builds for x64.
+        builds for x64. CI run 42903245029 (9e283ff61) passed every
+        job.
 - [x] Tip builds, like upstream's `release-tip.yml` (the discussion's
       release workflow item): a rolling prerelease of the latest
       `windows` commit, so people can try it without building. Approved
@@ -2748,7 +2749,7 @@ Notes:
       this port keeps C dependencies out.
   - [x] An embedded catalog: the build compiles the `.po` files itself
         (`src/build/po_compile.zig`, with the parser and format in
-        `src/os/i18n_catalog.zig`) into one blob in the executable (778
+        `src/os/i18n_catalog.zig`) into one blob in the executable (460
         KB), and `i18n._` looks messages up in it with a binary search.
         The language is the first we have of `LANGUAGE` (as for gettext:
         `de`, `pt_BR:es`), or else of the display languages the user
@@ -2799,9 +2800,11 @@ Notes:
     messages upstream (or our own `.po` files next to upstream's).
   - [ ] Follow a change of the display language while running? Windows
         apps pick it up at start, so probably not.
-  - [ ] The catalog repeats each message in every locale (about half
-        of its 778 KB): one shared table of messages, with offsets per
-        locale, would halve it.
+  - [x] The catalog repeated each message in every locale: now the
+        messages are stored once, with each locale's offsets to its
+        translations of them. 460 KB, from 778. The unit tests (which
+        also change every byte of a small catalog in turn, and cut it
+        at every length) and `localization.ps1` pass.
   - [ ] A person who reads one of the languages should look over a
         translated build: the menus mix GTK's wording into macOS's
         layout, and right-to-left languages (Hebrew) aren't laid out
