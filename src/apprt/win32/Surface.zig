@@ -534,8 +534,9 @@ fn showTitlePrompt(self: *Surface, kind: apprt.action.PromptTitle) !void {
 }
 
 pub fn setReadonly(self: *Surface, value: apprt.action.Readonly) void {
+    var buf: [128]u8 = undefined;
     self.readonly_badge.set(self.app.core_app.alloc, switch (value) {
-        .on => "\u{1F512} Read-only",
+        .on => std.fmt.bufPrint(&buf, "\u{1F512} {s}", .{i18n.text("Read-only")}) catch "\u{1F512}",
         .off => null,
     });
 }
