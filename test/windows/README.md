@@ -452,6 +452,15 @@ entries, typing `new_split:right` narrows the list, Enter runs it (the
 terminal splits left and right) and closes the palette, and Escape closes
 it without running anything.
 
+## localization.ps1
+
+Checks the app's translations, whatever the machine's display language:
+with `LANGUAGE=de` (and `tlh:de_DE.UTF-8`, a language we don't have and
+then a POSIX locale) the command palette's entry for `new_split:right` is
+"Nach rechts teilen" and the terminal's context menu starts with
+"Kopieren"; with `LANGUAGE=en`, and with only a language we have nothing
+for, they're "Split Right" and "&Copy". The log names the locale it loaded.
+
 ## tabs.ps1
 
 Checks tab operations, one terminal per tab: `close_tab:other` keeps only
