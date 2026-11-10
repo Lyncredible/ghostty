@@ -2664,6 +2664,9 @@ Notes:
     title, which PowerShell turns into `""`, so they only matched windows
     without text (badges with text were missed). They pass
     `[NullString]::Value` now (42 calls in 21 tests).
+  - `configErrorsMessage` (the config errors dialog's text: 15 listed,
+    then how many more) is unit tested. Every script in `test/windows`
+    is in its README and the fork's workflow.
   - CI run 42741916540 cancelled `gdi-leak` at its 8 minute limit; it had
     taken 7:54 the run before, since the fullscreen and zoom steps. The
     step has 12 minutes now. Run 42746575157 (a8af1740e) passed every
