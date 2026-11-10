@@ -59,9 +59,11 @@ pub fn send(
 ) void {
     if (!self.show(title, body)) {
         // Our icon is gone if Explorer restarted while it was there (it
-        // only stays while a notification shows), so add it again.
+        // only stays while a notification shows), so add it again. It's
+        // deleted first in case it's there after all (then adding it
+        // would fail too, and we'd think it gone for good).
         if (!self.added) return;
-        self.added = false;
+        self.remove();
         if (!self.show(title, body)) return;
     }
     log.debug("showing notification title={s}", .{title});
