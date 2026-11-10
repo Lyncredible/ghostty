@@ -3,7 +3,8 @@
 # dragged over the first one with posted mouse messages, and UI Automation
 # then lists it first. Then `move_tab:1` from a keybind moves it back to
 # second, and `move_tab:1` again (past the end) wraps it around to first,
-# like the other platforms. The tabs' positions come from UI Automation, so it
+# like the other platforms, and `copy_title_to_clipboard` copies its title.
+# The tabs' positions come from UI Automation, so it
 # follows the tab bar's layout (margins and gaps between tabs) and runs on
 # a locked desktop.
 #
@@ -51,7 +52,7 @@ $W = [GhosttyTabReorder.Win32]
 $log = Join-Path ([IO.Path]::GetTempPath()) "ghostty-tab-reorder-$PID.log"
 $process = Start-Process -FilePath $Exe -PassThru -RedirectStandardError $log -ArgumentList '--command=cmd.exe',
     '--window-save-state=never', '--shell-integration-features=no-title', '--keybind=f5=new_tab',
-    '--keybind=f6=move_tab:1'
+    '--keybind=f6=move_tab:1', '--keybind=f7=copy_title_to_clipboard'
 
 function Fail([string]$message) {
     Write-Host "::error title=tab-reorder::$message"
@@ -119,6 +120,11 @@ try {
     [void](WaitFor { $t = Tabs; $t.Count -eq 2 -and $t[0].Current.Name -match 'SECOND$' } 'move_tab:1 past the end to wrap SECOND around to first')
     if ((Shown) -ne $second) { Fail 'the moved tab is no longer the one shown' }
     Write-Host "move_tab:1 moved it back to second, and again wrapped it around to first: $note."
+
+    Set-Clipboard -Value 'not the title'
+    $W::Key($second, 0x76, 0x41)   # F7: copy_title_to_clipboard
+    [void](WaitFor { (Get-Clipboard -Raw) -match 'SECOND$' } 'the title on the clipboard')
+    Write-Host "copy_title_to_clipboard copied '$(Get-Clipboard -Raw)'."
 } finally {
     if (-not $process.HasExited) { Stop-Process -Id $process.Id -Force }
     Remove-Item -LiteralPath $log -Force -ErrorAction SilentlyContinue
