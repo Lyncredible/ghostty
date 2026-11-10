@@ -1468,6 +1468,8 @@ Notes:
         dates kept (727 commits checked). The PageList tests pass on
         Windows and the app builds. CI run 42767218736 (a7ccc5f39) passed
         every job, and `windows-tip` moved.
+  - [x] 2026-11-10: a twenty-second sync (1 commit: the VOUCHED list). No
+        conflicts; dates kept.
 - [x] Tip builds, like upstream's `release-tip.yml` (the discussion's
       release workflow item): a rolling prerelease of the latest
       `windows` commit, so people can try it without building. Approved
