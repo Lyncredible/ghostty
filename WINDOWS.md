@@ -2651,7 +2651,9 @@ Notes:
     `[NullString]::Value` now (42 calls in 21 tests).
   - CI run 42741916540 cancelled `gdi-leak` at its 8 minute limit; it had
     taken 7:54 the run before, since the fullscreen and zoom steps. The
-    step has 12 minutes now.
+    step has 12 minutes now. Run 42746575157 (a8af1740e) passed every
+    job: the key sequence badge, the link preview's name (`links`), and
+    all the tests with real null titles, and `windows-tip` moved.
 - [ ] Packaging and release builds
   - [x] Portable zip (`dist/windows/package.ps1`)
   - [x] Per-user install script in the zip (`dist/windows/install.ps1`):
