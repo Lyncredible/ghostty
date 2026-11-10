@@ -46,6 +46,11 @@ pub fn expand(
             .{},
         ) catch |err| switch (err) {
             error.FileNotFound => continue,
+            // An entry that isn't a directory, or can't be the name of
+            // one (on Windows, say one with a stray quote), has nothing
+            // for us, like one that doesn't exist: a single bad entry
+            // mustn't hide the rest of PATH.
+            error.NotDir, error.BadPathName, error.NameTooLong => continue,
             error.AccessDenied => {
                 // Accumulate this and return it later so we can try other
                 // paths that we have access to.
@@ -99,6 +104,35 @@ test "expand: directory ending with a separator" {
     // Search only its directory, with a separator at the end.
     const dir = std.fs.path.dirname(found).?;
     const search = try std.mem.concat(alloc, u8, &.{ dir, &.{std.fs.path.sep} });
+    defer alloc.free(search);
+    var only: std.process.Environ.Map = .init(alloc);
+    defer only.deinit();
+    try only.put("PATH", search);
+
+    const path = (try expand(testing.io, alloc, &only, executable)).?;
+    defer alloc.free(path);
+    try testing.expectEqualStrings(found, path);
+}
+
+test "expand: skips PATH entries that aren't valid paths" {
+    const alloc = testing.allocator;
+    var environ_map = try testing.environ.createMap(alloc);
+    defer environ_map.deinit();
+    const executable = if (builtin.target.os.tag == .windows) "hostname.exe" else "uname";
+    const found = (try expand(testing.io, alloc, &environ_map, executable)).?;
+    defer alloc.free(found);
+
+    // Entries a broken PATH can have, before the directory that has the
+    // program: a stray quote (seen in a machine's PATH on Windows, where
+    // a quote can't be part of a file name), a file used as a directory,
+    // and other characters Windows forbids.
+    const delim = [_]u8{std.fs.path.delimiter};
+    const search = try std.mem.concat(alloc, u8, &.{
+        "C:\\Program Files\\Some Tool\"", &delim,
+        found,                            &delim,
+        "bad|name<>?*",                   &delim,
+        std.fs.path.dirname(found).?,
+    });
     defer alloc.free(search);
     var only: std.process.Environ.Map = .init(alloc);
     defer only.deinit();
