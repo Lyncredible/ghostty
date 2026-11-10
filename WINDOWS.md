@@ -2796,7 +2796,9 @@ Notes:
       is long, and a test builds it in every language), toasts
       ("Copied to clipboard", "Reloaded the configuration"), command
       finished notifications' titles, tab bar tooltips and accessible
-      names ("Close Tab", "New Tab", "Close"), and "Untitled".
+      names ("Close Tab", "New Tab", "Close"), "Untitled", the
+      read-only badge, the inspector's export dialog's title, and the
+      jump list's "New Window" task.
   - Still English everywhere, since upstream has no messages for them:
     the File, Edit and View submenus' names, the shell submenus, "Quick
     Terminal", "Show/Hide All Terminals", the search bar's match count,

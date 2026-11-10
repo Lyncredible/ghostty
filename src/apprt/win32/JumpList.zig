@@ -77,7 +77,9 @@ fn updateInner(class: ?[]const u8) !void {
     writeClass(&utf8, class) catch return error.ClassTooLong;
     var args_buf: [600]u16 = undefined;
     const args = util.utf16Exact(&args_buf, utf8.buffered()) catch return error.ClassTooLong;
-    const link = try shellLink(exe, args, std.unicode.utf8ToUtf16LeStringLiteral("New Window"), exe);
+    var title_buf: [128]u16 = undefined;
+    const title = util.utf16TruncateZ(&title_buf, internal_os.i18n.text("New Window"));
+    const link = try shellLink(exe, args, title, exe);
     defer _ = link.lpVtbl.*.Release.?(link);
     try check(tasks.?.lpVtbl.*.AddObject.?(tasks, @ptrCast(link)));
 
