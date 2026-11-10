@@ -1476,7 +1476,8 @@ Notes:
   - [x] 2026-11-10: a twenty-fourth sync (3 commits: Kitty graphics keeps
         a replaced image until its transmission ends; the VOUCHED list).
         No conflicts; dates kept (747 commits checked). The Kitty tests
-        pass on Windows and the app builds.
+        pass on Windows and the app builds. CI run 42855924838 (731742918)
+        passed every job, and `windows-tip` moved.
 - [x] Tip builds, like upstream's `release-tip.yml` (the discussion's
       release workflow item): a rolling prerelease of the latest
       `windows` commit, so people can try it without building. Approved
