@@ -64,8 +64,13 @@ function WaitFor([scriptblock]$condition, [string]$what) {
 }
 
 function ScreenText {
-    $el = [System.Windows.Automation.AutomationElement]::FromHandle($surface)
-    $el.GetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern).Current.Value
+    # A busy, just started Ghostty may not answer UI Automation in time,
+    # which then hands out an element without our patterns ("Unsupported
+    # Pattern", CI run 42796473581); asking again gets ours.
+    try {
+        $el = [System.Windows.Automation.AutomationElement]::FromHandle($surface)
+        $el.GetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern).Current.Value
+    } catch { '' }
 }
 
 # The numbered lines in view (L1000 to L1300), or none.
