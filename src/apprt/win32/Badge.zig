@@ -137,6 +137,10 @@ fn layout(self: *Badge) void {
     _ = c.SelectObject(dc, old);
     _ = c.ReleaseDC(self.hwnd, dc);
 
+    // The text is only drawn, so also make it the window's text, which
+    // screen readers (and tests) see as its name.
+    _ = c.SetWindowTextW(self.hwnd, text.ptr);
+
     const rect = place(self.anchor, parent, size, dpi);
     _ = c.SetWindowPos(
         self.hwnd,

@@ -459,7 +459,7 @@ the current tab, `close_tab:this` and then `undo` brings back the same
 terminal and `redo` closes it again, and `move_tab_to_new_window` moves the current tab, with its
 output, into a second window while the other tab stays. Last,
 `close_all_windows`, bound to a key sequence (F12 then F11), closes both
-windows, and Ghostty quits. A closed tab is
+windows, and Ghostty quits; in between, a badge shows the pending key. A closed tab is
 kept hidden for `undo-timeout`, so the checks follow which terminal is
 shown rather than counting windows.
 
