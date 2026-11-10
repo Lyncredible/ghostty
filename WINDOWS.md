@@ -1463,6 +1463,10 @@ Notes:
         in the color scheme workflow). No conflicts; dates kept (723
         commits checked). CI run 42754562358 (a31e5149f) passed every
         job, and `windows-tip` moved.
+  - [x] 2026-11-10: a twenty-first sync (2 commits: the page list keeps a
+        pruned page's memory when growing prunes by lines). No conflicts;
+        dates kept (727 commits checked). The PageList tests pass on
+        Windows and the app builds.
 - [x] Tip builds, like upstream's `release-tip.yml` (the discussion's
       release workflow item): a rolling prerelease of the latest
       `windows` commit, so people can try it without building. Approved
