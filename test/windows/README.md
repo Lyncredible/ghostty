@@ -371,8 +371,9 @@ posted, so it runs on a locked desktop.
 Checks the window actions from keybinds, each there and back:
 `toggle_maximize`, `toggle_fullscreen` (the window covers its monitor,
 then returns, and so does its terminal's size, with the tabs back in the
-title bar), `toggle_window_float_on_top` (`WS_EX_TOPMOST`), and
-`reset_window_size` after a resize and after maximizing. The first
+title bar), `toggle_window_float_on_top` (`WS_EX_TOPMOST`),
+`toggle_window_decorations` (`WS_CAPTION`, with the terminal's size as it
+was after), and `reset_window_size` after a resize and after maximizing. The first
 window must already be the size `reset_window_size` gives. Last,
 `close_window` must close the window, and Ghostty must quit. Keys are
 posted to the terminal, so it runs on a locked desktop.
@@ -455,7 +456,7 @@ it without running anything.
 
 Checks tab operations, one terminal per tab: `close_tab:other` keeps only
 the current tab, `close_tab:this` and then `undo` brings back the same
-terminal, and `move_tab_to_new_window` moves the current tab, with its
+terminal and `redo` closes it again, and `move_tab_to_new_window` moves the current tab, with its
 output, into a second window while the other tab stays. A closed tab is
 kept hidden for `undo-timeout`, so the checks follow which terminal is
 shown rather than counting windows.
@@ -492,7 +493,8 @@ with one tab again the system's title bar comes back.
 Checks reordering tabs by dragging: the second tab, named `SECOND` with
 cmd's `title` (the shell integration's titles are off), is dragged onto the
 first with posted mouse messages, and UI Automation then lists it first,
-still shown. The tabs' positions come from UI Automation, so the test
+still shown. Then `move_tab:1` moves it back to second, and again wraps it
+around to first. The tabs' positions come from UI Automation, so the test
 follows the tab bar's layout.
 
 ## compact-tabs.ps1

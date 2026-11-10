@@ -1,6 +1,6 @@
 # Checks tab operations: `close_tab:other` keeps only the current tab (its
-# output too), `close_tab:this` and then `undo` brings the closed tab back,
-# and `move_tab_to_new_window` moves the current tab, with its output, into
+# output too), `close_tab:this` and then `undo` brings the closed tab back
+# and `redo` closes it again, and `move_tab_to_new_window` moves the current tab, with its output, into
 # a new window. One terminal per tab, so terminals count tabs. Keys and
 # characters are posted to Ghostty's windows, so it runs on a locked
 # desktop.
@@ -52,7 +52,7 @@ $log = Join-Path ([IO.Path]::GetTempPath()) "ghostty-tabs-$PID.log"
 $process = Start-Process -FilePath $Exe -PassThru -RedirectStandardError $log -ArgumentList '--command=cmd.exe',
     '--window-save-state=never', '--confirm-close-surface=false', '--keybind=f5=new_tab',
     '--keybind=f6=close_tab:other', '--keybind=f7=close_tab:this', '--keybind=f8=undo',
-    '--keybind=f9=move_tab_to_new_window'
+    '--keybind=f9=move_tab_to_new_window', '--keybind=f10=redo'
 
 function Fail([string]$message) {
     Write-Host "::error title=tabs::$message"
@@ -119,10 +119,14 @@ try {
     [void](WaitFor { Note; (Shown $window) -eq $closed } 'undo to reopen the closed tab')
     Write-Host 'close_tab:this and then undo reopened the same tab.'
 
-    # Move a tab to a new window. Close the reopened tab first (it's kept
-    # for undo until the timeout, then destroyed).
-    $W::Key($closed, 0x76, 0x41)   # F7: close the reopened tab again
-    [void](WaitFor { Note; @(Terminals $window).Count -eq 1 } 'the reopened tab to close and expire')
+    # And redo closes it again. It's kept for undo until the timeout, then
+    # destroyed.
+    $W::Key($closed, 0x79, 0x44)   # F10: redo
+    [void](WaitFor { Note; (Shown $window) -eq $third } 'redo to close the reopened tab again')
+    [void](WaitFor { Note; @(Terminals $window).Count -eq 1 } 'the closed tab to expire')
+    Write-Host 'redo closed it again.'
+
+    # Move a tab to a new window.
     $W::Key($third, 0x74, 0x3F)   # F5: a second tab, which will move
     $left = WaitFor { Note; $s = Shown $window; if (@(Terminals $window).Count -eq 2 -and $s -and $s -ne $third) { $s } } 'a new tab to move'
     Prompt $left 'the tab to move'
