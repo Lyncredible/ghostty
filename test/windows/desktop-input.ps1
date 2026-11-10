@@ -99,7 +99,7 @@ function Surfaces {
 }
 
 function Text($surface) {
-    $surface.GetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern).Current.Value
+    $(try { $surface.GetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern).Current.Value } catch { '' })
 }
 
 function TypeLine([string]$text) {

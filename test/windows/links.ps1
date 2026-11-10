@@ -124,7 +124,7 @@ function ClickLink([string]$url) {
         if ($process.MainWindowHandle -ne 0) {
             $s = [System.Windows.Automation.AutomationElement]::FromHandle($process.MainWindowHandle).FindFirst(
                 [System.Windows.Automation.TreeScope]::Descendants, $surfaceClass)
-            if ($s -and $s.GetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern).Current.Value.Contains('OPEN-THIS-LINK')) { $s }
+            if ($s -and $(try { $s.GetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern).Current.Value } catch { '' }).Contains('OPEN-THIS-LINK')) { $s }
         }
     } 'the links to show'
     $window = $process.MainWindowHandle

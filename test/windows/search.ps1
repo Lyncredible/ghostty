@@ -66,7 +66,7 @@ function WaitFor([scriptblock]$condition, [string]$what) {
 
 function ScreenText {
     $el = [System.Windows.Automation.AutomationElement]::FromHandle($surface)
-    $el.GetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern).Current.Value
+    $(try { $el.GetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern).Current.Value } catch { '' })
 }
 
 # The search bar's name: "N matches", "Match I of N", or "No matches".

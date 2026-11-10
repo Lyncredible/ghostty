@@ -126,7 +126,7 @@ function SurfaceText {
         [System.Windows.Automation.TreeScope]::Descendants,
         (New-Object System.Windows.Automation.PropertyCondition(
             [System.Windows.Automation.AutomationElement]::ClassNameProperty, 'GhosttySurface')))
-    if ($surface) { $surface.GetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern).Current.Value }
+    if ($surface) { $(try { $surface.GetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern).Current.Value } catch { '' }) }
 }
 
 # Start Ghostty and return its top-level window once the script is ready.

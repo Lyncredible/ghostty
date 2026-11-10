@@ -88,7 +88,7 @@ function Windows { $W::TopLevel([uint32]$process.Id, 'GhosttyWindow') }
 function Note { $script:note = "windows: $(@(Windows).Count), tabs in the first: $(@(Terminals $window).Count)" }
 function ScreenText([IntPtr]$surface) {
     $el = [System.Windows.Automation.AutomationElement]::FromHandle($surface)
-    $el.GetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern).Current.Value
+    $(try { $el.GetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern).Current.Value } catch { '' })
 }
 function Prompt([IntPtr]$surface, [string]$what) {
     [void](WaitFor { (ScreenText $surface) -match '>\s*$' } "the prompt in $what")

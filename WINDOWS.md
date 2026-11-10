@@ -2691,6 +2691,10 @@ Notes:
     up to three times (Ctrl up, the window to the front, Ctrl down and
     the mouse back on the link), with a notice when it does. Run
     42833401782 passed every job (no retry was needed there).
+  - The other tests read the terminal's text the way `scrollbar` did
+    before it failed once on "Unsupported Pattern"; their 21 reads now
+    give empty text on that error, so their waits ask again instead of
+    the test failing. All parse, and those that run here pass.
   - CI run 42741916540 cancelled `gdi-leak` at its 8 minute limit; it had
     taken 7:54 the run before, since the fullscreen and zoom steps. The
     step has 12 minutes now. Run 42746575157 (a8af1740e) passed every

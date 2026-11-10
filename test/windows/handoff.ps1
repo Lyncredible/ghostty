@@ -109,7 +109,7 @@ function Surfaces {
             # text yet; the next poll sees it.
             try {
                 $handle = $surface.Current.NativeWindowHandle
-                $text = $surface.GetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern).Current.Value
+                $text = $(try { $surface.GetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern).Current.Value } catch { '' })
             } catch { continue }
             if (-not $handle) { continue }
             @{ Handle = [IntPtr]$handle; Text = $text }

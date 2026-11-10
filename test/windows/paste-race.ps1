@@ -61,7 +61,7 @@ function SurfaceElement {
 }
 
 function Text($surface) {
-    $surface.GetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern).Current.Value
+    $(try { $surface.GetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern).Current.Value } catch { '' })
 }
 
 # Start Ghostty running $command, wait for $ready on screen, and paste

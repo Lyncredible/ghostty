@@ -49,7 +49,7 @@ function Surface {
                     [System.Windows.Automation.AutomationElement]::ClassNameProperty, 'GhosttySurface')))) {
             return @{
                 Handle = [IntPtr]$surface.Current.NativeWindowHandle
-                Text = $surface.GetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern).Current.Value
+                Text = $(try { $surface.GetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern).Current.Value } catch { '' })
             }
         }
     }
