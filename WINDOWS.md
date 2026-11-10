@@ -2671,7 +2671,7 @@ Notes:
     terminal's text got "Unsupported Pattern", as UI Automation hands out
     an element without our patterns when a busy, just started Ghostty
     doesn't answer in time. The test asks again now. Other tests read the
-    text the same way; none has failed so.
+    text the same way; none has failed so. Run 42801534499 passed every job.
   - CI run 42741916540 cancelled `gdi-leak` at its 8 minute limit; it had
     taken 7:54 the run before, since the fullscreen and zoom steps. The
     step has 12 minutes now. Run 42746575157 (a8af1740e) passed every
