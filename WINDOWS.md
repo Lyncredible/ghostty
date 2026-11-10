@@ -2638,7 +2638,8 @@ Notes:
   - Actions no test ran from a keybind are now covered: `redo` (in
     `tabs`), `move_tab` with wrapping and `copy_title_to_clipboard` (in
     `tab-reorder`), and `toggle_window_decorations` there and back (in
-    `window-actions`). All pass here. `close_all_windows` is now run
+    `window-actions`). All pass here and in CI (run 42733898975, every
+    job). `close_all_windows` is now run
     from a key sequence (F12 then F11) in `tabs`, which checks that the
     first key alone only shows itself in a badge.
   - The key sequence and read-only badges only drew their text, so
