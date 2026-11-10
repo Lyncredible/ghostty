@@ -2628,7 +2628,8 @@ Notes:
     (it times out without the fix), and that clicking a notification
     brings back its minimized window. A retry deletes the icon before adding it,
     in case it was there after all (adding would fail too, and Ghostty
-    would think it had none from then on). In CI (run 42705239766) the icon was
+    would think it had none from then on); CI run 42787512875 passed
+    every job with it. In CI (run 42705239766) the icon was
     already gone when the test went to delete it (Explorer there
     times notifications out at once, `NIN_BALLOONTIMEOUT`), and a
     timed-out notification can't be clicked, so there both are notices
