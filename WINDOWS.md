@@ -2635,6 +2635,10 @@ Notes:
     its text now (`Range.moveEndpointTo`, unit tested), and
     `uia-ranges.ps1` (locked desktop too) does what a reader would; it
     crashed Ghostty before.
+  - Actions no test ran from a keybind are now covered: `redo` (in
+    `tabs`), `move_tab` with wrapping and `copy_title_to_clipboard` (in
+    `tab-reorder`), and `toggle_window_decorations` there and back (in
+    `window-actions`). All pass here.
 - [ ] Packaging and release builds
   - [x] Portable zip (`dist/windows/package.ps1`)
   - [x] Per-user install script in the zip (`dist/windows/install.ps1`):
