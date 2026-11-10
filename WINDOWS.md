@@ -1483,6 +1483,11 @@ Notes:
         No conflicts; dates kept (747 commits checked). The Kitty tests
         pass on Windows and the app builds. CI run 42855924838 (731742918)
         passed every job, and `windows-tip` moved.
+  - [x] 2026-11-10: a twenty-fifth sync (4 commits: the hand-written
+        `memset` is no longer exported on Darwin or x86_64, where
+        compiler_rt's is as fast or faster; ARM64 Windows still uses
+        it). No conflicts; dates kept (754 commits checked). The app
+        builds for x64.
 - [x] Tip builds, like upstream's `release-tip.yml` (the discussion's
       release workflow item): a rolling prerelease of the latest
       `windows` commit, so people can try it without building. Approved
