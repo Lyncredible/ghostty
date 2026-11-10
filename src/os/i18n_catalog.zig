@@ -9,28 +9,28 @@
 //!
 //! The blob, all integers little endian:
 //!
-//!     "GTR1", locale count: u32
-//!     for each locale: name ([16]u8, NUL padded), offset: u32, length: u32
-//!     for each locale, at its offset:
-//!       message count: u32
-//!       for each message, sorted by msgid: msgid offset: u32, msgstr
-//!         offset: u32 (both from the locale's offset)
-//!       the strings, each NUL terminated
+//!     "GTR2", locale count: u32, message count: u32
+//!     for each message that some locale translates, sorted: its
+//!       msgid's offset: u32
+//!     for each locale: name ([16]u8, NUL padded), and the offset of its
+//!       translations: u32
+//!     the msgids, then for each locale its translations: for each
+//!       message its msgstr's offset: u32, or 0 if it has none; then the
+//!       msgstrs
+//!
+//! Offsets are from the start of the blob, and strings are NUL
+//! terminated. The msgids are stored once: they're half the text.
 const std = @import("std");
 const Allocator = std.mem.Allocator;
 
-const magic = "GTR1";
+const magic = "GTR2";
 const name_len = 16;
-const locale_entry_len = name_len + 8;
+const locale_entry_len = name_len + 4;
 
 /// A translated message from a `.po` file.
 pub const Message = struct {
     id: []const u8,
     str: []const u8,
-
-    fn lessThan(_: void, a: Message, b: Message) bool {
-        return std.mem.order(u8, a.id, b.id) == .lt;
-    }
 };
 
 pub const ParseError = error{InvalidPo} || Allocator.Error;
@@ -181,61 +181,86 @@ pub const CompileError = error{ InvalidPo, LocaleNameTooLong, CatalogTooLarge } 
 
 /// Compile `.po` files into the blob that `Catalog.find` reads.
 pub fn compile(alloc: Allocator, sources: []const Source) CompileError![]u8 {
+    var arena_state: std.heap.ArenaAllocator = .init(alloc);
+    defer arena_state.deinit();
+    const arena = arena_state.allocator();
+
+    // Every locale's messages, and the messages any of them translates,
+    // sorted for the binary search.
+    const translations = try arena.alloc([]Message, sources.len);
+    var ids: std.ArrayList([]const u8) = .empty;
+    for (sources, translations) |source, *messages| {
+        if (source.locale.len == 0 or source.locale.len > name_len) return error.LocaleNameTooLong;
+        messages.* = try parse(arena, source.po);
+        for (messages.*) |message| {
+            // The strings are NUL terminated, so they can't hold one.
+            if (std.mem.indexOfScalar(u8, message.id, 0) != null or
+                std.mem.indexOfScalar(u8, message.str, 0) != null) return error.InvalidPo;
+            try ids.append(arena, message.id);
+        }
+    }
+    std.mem.sort([]const u8, ids.items, {}, lessThan);
+    var id_count: usize = 0;
+    for (ids.items, 0..) |id, i| {
+        if (i > 0 and std.mem.eql(u8, ids.items[id_count - 1], id)) continue;
+        ids.items[id_count] = id;
+        id_count += 1;
+    }
+    ids.items.len = id_count;
+
     var out: std.ArrayList(u8) = .empty;
     errdefer out.deinit(alloc);
     try out.appendSlice(alloc, magic);
     try appendInt(alloc, &out, sources.len);
-    const table = out.items.len;
+    try appendInt(alloc, &out, ids.items.len);
+    const id_table = out.items.len;
+    try out.appendNTimes(alloc, 0, ids.items.len * 4);
+    const locale_table = out.items.len;
     try out.appendNTimes(alloc, 0, sources.len * locale_entry_len);
 
-    for (sources, 0..) |source, i| {
-        if (source.locale.len == 0 or source.locale.len > name_len) return error.LocaleNameTooLong;
-        const messages = try parse(alloc, source.po);
-        defer freeMessages(alloc, messages);
+    for (ids.items, 0..) |id, i| {
+        try writeInt(out.items[id_table + i * 4 ..], out.items.len);
+        try out.appendSlice(alloc, id);
+        try out.append(alloc, 0);
+    }
 
-        // Sorted for the binary search. Of messages given twice, which
-        // msgfmt refuses, the first stays.
-        // (The sort is stable.)
-        std.mem.sort(Message, messages, {}, Message.lessThan);
-        var count: usize = 0;
-        for (messages, 0..) |message, j| {
-            if (j == 0 or !std.mem.eql(u8, messages[j - 1].id, message.id)) count += 1;
-        }
-
-        const start = out.items.len;
-        try appendInt(alloc, &out, count);
-        const offsets = out.items.len;
-        try out.appendNTimes(alloc, 0, count * 8);
-        var index: usize = 0;
-        for (messages, 0..) |message, j| {
-            if (j > 0 and std.mem.eql(u8, messages[j - 1].id, message.id)) continue;
-            defer index += 1;
-            for ([_][]const u8{ message.id, message.str }, 0..) |text, k| {
-                // The strings are NUL terminated, so they can't hold one.
-                if (std.mem.indexOfScalar(u8, text, 0) != null) return error.InvalidPo;
-                writeInt(out.items[offsets + index * 8 + k * 4 ..], out.items.len - start) catch
-                    return error.CatalogTooLarge;
-                try out.appendSlice(alloc, text);
-                try out.append(alloc, 0);
-            }
-        }
-
-        const entry = out.items[table + i * locale_entry_len ..][0..locale_entry_len];
+    for (sources, translations, 0..) |source, messages, i| {
+        const entry = out.items[locale_table + i * locale_entry_len ..][0..locale_entry_len];
         @memcpy(entry[0..source.locale.len], source.locale);
-        writeInt(entry[name_len..], start) catch return error.CatalogTooLarge;
-        writeInt(entry[name_len + 4 ..], out.items.len - start) catch return error.CatalogTooLarge;
+        try writeInt(entry[name_len..], out.items.len);
+
+        const table = out.items.len;
+        try out.appendNTimes(alloc, 0, ids.items.len * 4);
+        for (messages) |message| {
+            const index = std.sort.binarySearch([]const u8, ids.items, message.id, order).?;
+            // Of messages given twice, which msgfmt refuses, the first
+            // stays.
+            const slot = table + index * 4;
+            if (readInt(out.items, slot).? != 0) continue;
+            try writeInt(out.items[slot..], out.items.len);
+            try out.appendSlice(alloc, message.str);
+            try out.append(alloc, 0);
+        }
     }
 
     return try out.toOwnedSlice(alloc);
 }
 
-fn appendInt(alloc: Allocator, out: *std.ArrayList(u8), value: usize) CompileError!void {
-    try out.appendNTimes(alloc, 0, 4);
-    writeInt(out.items[out.items.len - 4 ..], value) catch return error.CatalogTooLarge;
+fn lessThan(_: void, a: []const u8, b: []const u8) bool {
+    return std.mem.order(u8, a, b) == .lt;
 }
 
-fn writeInt(dest: []u8, value: usize) error{Overflow}!void {
-    const v = std.math.cast(u32, value) orelse return error.Overflow;
+fn order(a: []const u8, b: []const u8) std.math.Order {
+    return std.mem.order(u8, a, b);
+}
+
+fn appendInt(alloc: Allocator, out: *std.ArrayList(u8), value: usize) CompileError!void {
+    try out.appendNTimes(alloc, 0, 4);
+    try writeInt(out.items[out.items.len - 4 ..], value);
+}
+
+fn writeInt(dest: []u8, value: usize) error{CatalogTooLarge}!void {
+    const v = std.math.cast(u32, value) orelse return error.CatalogTooLarge;
     std.mem.writeInt(u32, dest[0..4], v, .little);
 }
 
@@ -246,8 +271,16 @@ fn readInt(data: []const u8, offset: usize) ?usize {
 
 /// One locale's messages in a compiled blob.
 pub const Catalog = struct {
-    /// The locale's part of the blob.
-    data: []const u8,
+    blob: []const u8,
+
+    /// Where the offsets of the messages, and of this locale's
+    /// translations of them, start.
+    ids: usize,
+    translations: usize,
+
+    /// How many messages the blob has, and how many of them this locale
+    /// translates.
+    messages: usize,
     count: usize,
 
     /// The locale's catalog in a blob, if it has one and it's well formed
@@ -255,38 +288,49 @@ pub const Catalog = struct {
     pub fn find(blob: []const u8, locale: []const u8) ?Catalog {
         if (!std.mem.startsWith(u8, blob, magic)) return null;
         const locale_count = readInt(blob, magic.len) orelse return null;
-        var entry: usize = magic.len + 4;
-        for (0..locale_count) |_| {
-            if (blob.len - entry < locale_entry_len) return null;
-            defer entry += locale_entry_len;
-            const name = std.mem.sliceTo(blob[entry..][0..name_len], 0);
-            if (!std.mem.eql(u8, name, locale)) continue;
+        const messages = readInt(blob, magic.len + 4) orelse return null;
+        const ids = magic.len + 8;
+        if ((blob.len - ids) / 4 < messages) return null;
+        const locales = ids + messages * 4;
+        if ((blob.len - locales) / locale_entry_len < locale_count) return null;
 
-            const offset = readInt(blob, entry + name_len).?;
-            const len = readInt(blob, entry + name_len + 4).?;
-            if (offset > blob.len or blob.len - offset < len) return null;
-            const data = blob[offset..][0..len];
-            const count = readInt(data, 0) orelse return null;
-            if ((data.len - 4) / 8 < count) return null;
-            // Every string starts inside the data, which ends with a
-            // string's NUL.
-            if (count > 0 and data[data.len - 1] != 0) return null;
-            for (0..count * 2) |i| {
-                if (readInt(data, 4 + i * 4).? >= data.len) return null;
-            }
-            return .{ .data = data, .count = count };
+        const translations = for (0..locale_count) |i| {
+            const entry = locales + i * locale_entry_len;
+            const name = std.mem.sliceTo(blob[entry..][0..name_len], 0);
+            if (std.mem.eql(u8, name, locale)) break readInt(blob, entry + name_len).?;
+        } else return null;
+        if (translations > blob.len or (blob.len - translations) / 4 < messages) return null;
+
+        // Every string starts inside the blob, which ends with a
+        // string's NUL.
+        if (messages > 0 and blob[blob.len - 1] != 0) return null;
+        var count: usize = 0;
+        for (0..messages) |i| {
+            if (readInt(blob, ids + i * 4).? >= blob.len) return null;
+            const translation = readInt(blob, translations + i * 4).?;
+            if (translation >= blob.len) return null;
+            if (translation != 0) count += 1;
         }
-        return null;
+        return .{
+            .blob = blob,
+            .ids = ids,
+            .translations = translations,
+            .messages = messages,
+            .count = count,
+        };
     }
 
     /// The translation of a message, if the locale has one.
     pub fn get(self: Catalog, msgid: []const u8) ?[:0]const u8 {
         var low: usize = 0;
-        var high: usize = self.count;
+        var high: usize = self.messages;
         while (low < high) {
             const mid = low + (high - low) / 2;
-            switch (std.mem.order(u8, self.string(mid * 2), msgid)) {
-                .eq => return self.string(mid * 2 + 1),
+            switch (std.mem.order(u8, self.string(readInt(self.blob, self.ids + mid * 4).?), msgid)) {
+                .eq => {
+                    const translation = readInt(self.blob, self.translations + mid * 4).?;
+                    return if (translation == 0) null else self.string(translation);
+                },
                 .lt => low = mid + 1,
                 .gt => high = mid,
             }
@@ -294,9 +338,8 @@ pub const Catalog = struct {
         return null;
     }
 
-    fn string(self: Catalog, index: usize) [:0]const u8 {
-        const offset = readInt(self.data, 4 + index * 4).?;
-        return std.mem.sliceTo(@as([*:0]const u8, @ptrCast(self.data[offset..].ptr)), 0);
+    fn string(self: Catalog, offset: usize) [:0]const u8 {
+        return std.mem.sliceTo(@as([*:0]const u8, @ptrCast(self.blob[offset..].ptr)), 0);
     }
 };
 
@@ -536,12 +579,11 @@ test "Catalog.find: damaged blobs" {
         try testing.expect(Catalog.find(blob[0..len], "de") == null);
     }
 
-    // With any one byte of its tables changed, it's refused or lookups
-    // still end (finding nothing, or a wrong string from inside it).
-    const tables_len = magic.len + 4 + locale_entry_len + 4 + 5 * 8;
+    // With any one byte changed, it's refused or lookups still end
+    // (finding nothing, or a wrong string from inside it).
     const copy = try testing.allocator.dupe(u8, blob);
     defer testing.allocator.free(copy);
-    for (0..tables_len) |i| {
+    for (0..copy.len) |i| {
         for ([_]u8{ 0x00, 0x7f, 0xff }) |value| {
             const old = copy[i];
             defer copy[i] = old;
