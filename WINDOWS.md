@@ -2667,7 +2667,11 @@ Notes:
     errors dialog, never that a change in the file takes effect:
     `config-reload.ps1` adds a keybind to the config file, reloads, and
     uses it, then takes it out again. It passes here and in CI (run
-    42760614541, every job green).
+    42760614541, every job green). It also reloads a larger
+    `window-padding-x` and checks that a tab opened after has it (the
+    option only applies to new terminals, as documented): in CI run
+    42772338175 (every job green) the new terminal's left padding went
+    from 2 to 53 pixels.
 - [ ] Packaging and release builds
   - [x] Portable zip (`dist/windows/package.ps1`)
   - [x] Per-user install script in the zip (`dist/windows/install.ps1`):
