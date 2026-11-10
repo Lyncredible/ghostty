@@ -2733,15 +2733,20 @@ Notes:
     option only applies to new terminals, as documented): in CI run
     42772338175 (every job green) the new terminal's left padding went
     from 2 to 53 pixels.
-- [ ] A `PATH` entry that isn't a valid path (found 2026-11-10: one
+- [x] A `PATH` entry that isn't a valid path (found 2026-11-10: one
       with a stray `"` made `zig build` itself panic with
       `OBJECT_NAME_INVALID`, in the standard library's file access, as
-      `--working-directory` once did here). To check: does Ghostty's
-      search of `PATH` (`os/path.zig` `expand`, which opens each
-      candidate and returns any other error) skip such an entry, or
-      fail to start the command, or panic in debug and safe builds? A
-      unit test with a quoted and a `bad|name` entry before the real
-      directory would tell.
+      `--working-directory` once did here). Ghostty didn't panic, but
+      its search of `PATH` (`os/path.zig` `expand`) gave up at such an
+      entry with `BadPathName`, so programs in the directories after it
+      weren't found: a `command` given by name failed to start, and the
+      new tab menu lost the shells it looks up (PowerShell, WSL). Such
+      an entry, and one that's a file, is now skipped like one that
+      doesn't exist. Unit test: "expand: skips PATH entries that aren't
+      valid paths" (a quoted entry, a file, and `bad|name<>?*` before
+      the real directory), which failed before. Checked in the app:
+      with such an entry first in `PATH`, `--command=powershell.exe`
+      started PowerShell.
 - [ ] Translations (found 2026-11-10): the Windows app's UI was English
       only, while `po/` has 34 languages that the GTK app shows through
       gettext. Windows has no libintl to read `.mo` files and no `msgfmt`
