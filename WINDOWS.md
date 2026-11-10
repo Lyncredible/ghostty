@@ -1455,7 +1455,10 @@ Notes:
         first run after the rebase failed in shard 2 of 8 with nothing
         but the Overrides test's expected warnings shown, and six fresh
         runs since (and that shard run directly) passed; watching for it
-        in CI, since the shards now run at once.
+        in CI, since the shards now run at once. CI run 42724442454
+        (36104b43b) passed every job with the sharded runner, the new
+        `notification` (its lost icon and click checks as notices there)
+        and `uia-ranges` included, and `windows-tip` moved.
 - [x] Tip builds, like upstream's `release-tip.yml` (the discussion's
       release workflow item): a rolling prerelease of the latest
       `windows` commit, so people can try it without building. Approved
