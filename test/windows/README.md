@@ -568,4 +568,7 @@ Checks that `reload_config` takes up changes to the config file: Ghostty
 starts with only a config file of the test's, a keybind for `new_tab` is
 added to it and the config reloaded with a key, and the new keybind must
 open a tab (it doesn't before the reload). Taken out again and reloaded,
-the key does nothing. It runs on a locked desktop.
+the key does nothing. Last, a larger `window-padding-x` must reach a
+terminal opened after the reload (it only applies to new ones, as
+documented), read from the renderer's debug log. It runs on a locked
+desktop.

@@ -2,7 +2,10 @@
 # starts with only a config file of ours, the test then adds a keybind for
 # new_tab to it and reloads with a key, and the new keybind must open a
 # tab, which it doesn't before the reload. Then the keybind is taken out
-# again, and after another reload the key does nothing. Keys are posted
+# again, and after another reload the key does nothing. Last, a larger
+# `window-padding-x` must reach a terminal opened after the reload (it
+# only applies to new ones, as documented; the renderer logs its padding,
+# in debug builds as CI's are). Keys are posted
 # to the terminal, so it runs on a locked desktop.
 #
 #     ./config-reload.ps1 -Exe zig-out/bin/ghostty.exe
@@ -93,6 +96,22 @@ try {
     Start-Sleep -Seconds 2
     if (@(Terminals).Count -ne 2) { Fail 'F6 still opened a tab after its keybind was taken out' }
     Write-Host 'With the keybind taken out again and the config reloaded, F6 did nothing.'
+
+    # Padding: the renderer logs it with each size it's given.
+    $padding = { @(Select-String -Path $log -Pattern '\.padding = \.\{ \.top = \d+, \.bottom = \d+, \.right = (\d+), \.left = (\d+)' -ErrorAction SilentlyContinue) }
+    $first = & $padding
+    if ($first.Count -eq 0) {
+        Write-Host '::notice title=config-reload::No padding in the log (not a debug build?), so padding isn''t checked.'
+    } else {
+        $old = [int]$first[-1].Matches[0].Groups[2].Value
+        Set-Content -Encoding utf8 $config ($base + 'window-padding-x = 40' + 'keybind = f6=new_tab')
+        $W::Key((Shown), 0x7B, 0x58)
+        $W::Key((Shown), 0x75, 0x40)   # F6: new_tab
+        [void](WaitFor { @(Terminals).Count -eq 3 } 'a tab after the padding was changed')
+        [void](WaitFor { $p = & $padding; [int]$p[-1].Matches[0].Groups[2].Value -ge 40 } 'the new terminal to get the new padding')
+        $new = [int](& $padding)[-1].Matches[0].Groups[2].Value
+        Write-Host "With window-padding-x = 40 reloaded, a new tab's terminal has $new pixels of left padding (it was $old)."
+    }
 } finally {
     if (-not $process.HasExited) { Stop-Process -Id $process.Id -Force }
     Start-Sleep -Milliseconds 500
