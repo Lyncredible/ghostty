@@ -72,7 +72,7 @@ function Dialog {
 function SetTitle([string]$title) {
     $W::Key($surface, 0x78, 0x43)   # F9: prompt_surface_title
     $dialog = WaitFor { Dialog } 'the title dialog'
-    $edit = $W::FindWindowExW($dialog, [IntPtr]::Zero, 'Edit', $null)
+    $edit = $W::FindWindowExW($dialog, [IntPtr]::Zero, 'Edit', [NullString]::Value)
     if ($edit -eq [IntPtr]::Zero) { Fail 'the title dialog has no text field' }
     [void]$W::SendMessageW($edit, 0x000C, [IntPtr]::Zero, $title)   # WM_SETTEXT
     $ok = $W::GetDlgItem($dialog, 1)   # IDOK
@@ -83,7 +83,7 @@ function SetTitle([string]$title) {
 
 try {
     $window = WaitFor { $process.Refresh(); if ($process.MainWindowHandle -ne 0) { $process.MainWindowHandle } } 'the window'
-    $surface = WaitFor { $h = $W::FindWindowExW($window, [IntPtr]::Zero, 'GhosttySurface', $null); if ($h -ne [IntPtr]::Zero) { $h } } 'the surface'
+    $surface = WaitFor { $h = $W::FindWindowExW($window, [IntPtr]::Zero, 'GhosttySurface', [NullString]::Value); if ($h -ne [IntPtr]::Zero) { $h } } 'the surface'
     $shell = WaitFor { $t = $W::Text($window); if ($t -and $t -notmatch '^Ghostty') { $t } } "the shell's title"
     Write-Host "The shell's title: '$shell'."
 

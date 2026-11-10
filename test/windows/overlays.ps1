@@ -135,7 +135,7 @@ function Children {
 
 try {
     $window = WaitFor { $process.Refresh(); if ($process.MainWindowHandle -ne 0) { $process.MainWindowHandle } } 'the window'
-    $script:surface = WaitFor { $h = $W::FindWindowExW($window, [IntPtr]::Zero, 'GhosttySurface', $null); if ($h -ne [IntPtr]::Zero) { $h } } 'the surface'
+    $script:surface = WaitFor { $h = $W::FindWindowExW($window, [IntPtr]::Zero, 'GhosttySurface', [NullString]::Value); if ($h -ne [IntPtr]::Zero) { $h } } 'the surface'
     [void](WaitFor { (Children) -contains 'GhosttyScrollbar' } "the surface's scrollbar")
     Start-Sleep -Seconds 1
     if ((Children) | Where-Object { $_ -match '^Ghostty(Badge|SearchBar|CommandPalette|DimOverlay|BellBorder|LinkPreview|DropZone|DragHandle)' }) { Fail "a new surface already has a lazily made overlay window: $((Children) -join ', ')" }
@@ -148,7 +148,7 @@ try {
     $scrollbar = [Array]::IndexOf(@($children | ForEach-Object { $_.TrimEnd('*') }), 'GhosttyScrollbar')
     if ($badge -ne $scrollbar + 1) { Fail "the badge isn't just below the scrollbar: $($children -join ', ')" }
 
-    $h = $W::FindWindowExW($surface, [IntPtr]::Zero, 'GhosttyBadge', $null)
+    $h = $W::FindWindowExW($surface, [IntPtr]::Zero, 'GhosttyBadge', [NullString]::Value)
     $b = New-Object GhosttyBadges.Win32+RECT; [void]$W::GetWindowRect($h, [ref]$b)
     $s = New-Object GhosttyBadges.Win32+RECT; [void]$W::GetWindowRect($surface, [ref]$s)
     if ($b.r -le $b.l -or $b.r -lt $s.r - ($s.r - $s.l) / 3 -or $b.t -gt $s.t + ($s.b - $s.t) / 3) {
@@ -180,13 +180,13 @@ try {
         $children = @(Children)
         if ($children[0] -ne "$($overlay.Class)*") { Fail "$($overlay.Class) isn't on top: $($children -join ', ')" }
 
-        $o = $W::FindWindowExW($surface, [IntPtr]::Zero, $overlay.Class, $null)
-        $list = $W::FindWindowExW($o, [IntPtr]::Zero, 'ListBox', $null)
+        $o = $W::FindWindowExW($surface, [IntPtr]::Zero, $overlay.Class, [NullString]::Value)
+        $list = $W::FindWindowExW($o, [IntPtr]::Zero, 'ListBox', [NullString]::Value)
         $entries = if ($list -ne [IntPtr]::Zero) { [int]$W::SendMessageW($list, 0x018B, [IntPtr]0, [IntPtr]0) } else { 0 }   # LB_GETCOUNT
         if ($overlay.Class -eq 'GhosttyCommandPalette' -and $entries -lt 10) { Fail "the command palette lists $entries commands" }
 
         # Escape in its field closes it.
-        $edit = $W::FindWindowExW($o, [IntPtr]::Zero, 'Edit', $null)
+        $edit = $W::FindWindowExW($o, [IntPtr]::Zero, 'Edit', [NullString]::Value)
         $W::Key($edit, 0x1B, 0x01)
         [void](WaitFor { -not ((Children) -contains "$($overlay.Class)*") } "$($overlay.Class) to close")
         Write-Host "$($overlay.Class) opens on top$(if ($list -ne [IntPtr]::Zero) { " listing $entries entries" }) and closes: $($children -join ', ')"
@@ -207,8 +207,8 @@ try {
     Write-Host "A split dims the first terminal, its overlay just above the bell border: $($children -join ', ')"
 
     $first = $script:surface
-    $second = WaitFor { $h = $W::FindWindowExW($window, $first, 'GhosttySurface', $null); if ($h -ne [IntPtr]::Zero) { $h } } 'the second terminal'
-    $handle = $W::FindWindowExW($first, [IntPtr]::Zero, 'GhosttyDragHandle', $null)
+    $second = WaitFor { $h = $W::FindWindowExW($window, $first, 'GhosttySurface', [NullString]::Value); if ($h -ne [IntPtr]::Zero) { $h } } 'the second terminal'
+    $handle = $W::FindWindowExW($first, [IntPtr]::Zero, 'GhosttyDragHandle', [NullString]::Value)
     if ($handle -eq [IntPtr]::Zero -or -not $W::IsWindowVisible($handle)) { Fail "the first terminal shows no drag handle in a split: $((Children) -join ', ')" }
     $a = New-Object GhosttyBadges.Win32+RECT; [void]$W::GetWindowRect($first, [ref]$a)
     $b = New-Object GhosttyBadges.Win32+RECT; [void]$W::GetWindowRect($second, [ref]$b)

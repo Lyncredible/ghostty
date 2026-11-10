@@ -71,7 +71,7 @@ function Counts {
 # The surfaces (terminals) in the window.
 function Surfaces {
     $list = @(); $h = [IntPtr]::Zero
-    while (($h = $W::FindWindowExW($window, $h, 'GhosttySurface', $null)) -ne [IntPtr]::Zero) { $list += $h }
+    while (($h = $W::FindWindowExW($window, $h, 'GhosttySurface', [NullString]::Value)) -ne [IntPtr]::Zero) { $list += $h }
     $list
 }
 
@@ -110,7 +110,7 @@ function Round([int]$i) {
         [void]$W::SetWindowPos($window, [IntPtr]::Zero, 50, 50, $size + 200, $size, 0x0014)   # SWP_NOZORDER | SWP_NOACTIVATE
     }
     if ($Steps -contains 'hover') {
-        $bar = $W::FindWindowExW($window, [IntPtr]::Zero, 'GhosttyTabBar', $null)
+        $bar = $W::FindWindowExW($window, [IntPtr]::Zero, 'GhosttyTabBar', [NullString]::Value)
         if ($bar -ne [IntPtr]::Zero) { for ($x = 10; $x -lt 400; $x += 30) { $W::Move($bar, $x, 20) } }
     }
     if ($Steps -contains 'fullscreen') {

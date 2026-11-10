@@ -173,7 +173,7 @@ try {
     while ($process.MainWindowHandle -eq 0 -and (Get-Date) -lt $deadline) { Start-Sleep -Milliseconds 200; $process.Refresh() }
     $window = $process.MainWindowHandle
     if ($window -eq 0) { Fail 'no window' }
-    $bar = [GhosttyContrast.Win32]::FindWindowExW($window, [IntPtr]::Zero, 'GhosttyTabBar', $null)
+    $bar = [GhosttyContrast.Win32]::FindWindowExW($window, [IntPtr]::Zero, 'GhosttyTabBar', [NullString]::Value)
     if ($bar -eq [IntPtr]::Zero) { Fail 'no tab bar' }
     [void][GhosttyContrast.Win32]::SetForegroundWindow($window)
 

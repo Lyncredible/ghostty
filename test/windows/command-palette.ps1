@@ -64,7 +64,7 @@ function WaitFor([scriptblock]$condition, [string]$what) {
 # The window's visible terminals.
 function Terminals {
     $list = @(); $h = [IntPtr]::Zero
-    while (($h = $W::FindWindowExW($window, $h, 'GhosttySurface', $null)) -ne [IntPtr]::Zero) {
+    while (($h = $W::FindWindowExW($window, $h, 'GhosttySurface', [NullString]::Value)) -ne [IntPtr]::Zero) {
         if ($W::IsWindowVisible($h)) { $list += $h }
     }
     $script:note = "$($list.Count) terminals"
@@ -73,11 +73,11 @@ function Terminals {
 
 function Open([IntPtr]$surface) {
     $W::Key($surface, 0x78, 0x43)   # F9: toggle_command_palette
-    $palette = WaitFor { $h = $W::FindWindowExW($surface, [IntPtr]::Zero, 'GhosttyCommandPalette', $null); if ($h -ne [IntPtr]::Zero -and $W::IsWindowVisible($h)) { $h } } 'the command palette'
+    $palette = WaitFor { $h = $W::FindWindowExW($surface, [IntPtr]::Zero, 'GhosttyCommandPalette', [NullString]::Value); if ($h -ne [IntPtr]::Zero -and $W::IsWindowVisible($h)) { $h } } 'the command palette'
     @{
         Palette = $palette
-        Edit = $W::FindWindowExW($palette, [IntPtr]::Zero, 'Edit', $null)
-        List = $W::FindWindowExW($palette, [IntPtr]::Zero, 'ListBox', $null)
+        Edit = $W::FindWindowExW($palette, [IntPtr]::Zero, 'Edit', [NullString]::Value)
+        List = $W::FindWindowExW($palette, [IntPtr]::Zero, 'ListBox', [NullString]::Value)
     }
 }
 function Entries($p) { [int]$W::SendMessageW($p.List, 0x018B, [IntPtr]0, [IntPtr]0) }   # LB_GETCOUNT

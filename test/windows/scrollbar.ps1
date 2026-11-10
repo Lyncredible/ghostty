@@ -77,12 +77,12 @@ function Numbers {
 
 try {
     $window = WaitFor { $process.Refresh(); if ($process.MainWindowHandle -ne 0) { $process.MainWindowHandle } } 'the window'
-    $surface = WaitFor { $h = $W::FindWindowExW($window, [IntPtr]::Zero, 'GhosttySurface', $null); if ($h -ne [IntPtr]::Zero) { $h } } 'the surface'
+    $surface = WaitFor { $h = $W::FindWindowExW($window, [IntPtr]::Zero, 'GhosttySurface', [NullString]::Value); if ($h -ne [IntPtr]::Zero) { $h } } 'the surface'
     [void](WaitFor { $script:note = 'no prompt yet'; (ScreenText) -match '>\s*$' } 'the prompt')
 
     $W::Type($surface, "for /L %i in (1000,1,1300) do @echo L%i`r")
     [void](WaitFor { (Numbers) -contains 1300 -and (ScreenText) -match '>\s*$' } 'the last line, L1300, and the prompt')
-    $bar = WaitFor { $h = $W::FindWindowExW($surface, [IntPtr]::Zero, 'GhosttyScrollbar', $null); if ($h -ne [IntPtr]::Zero) { $h } } 'the scrollbar'
+    $bar = WaitFor { $h = $W::FindWindowExW($surface, [IntPtr]::Zero, 'GhosttyScrollbar', [NullString]::Value); if ($h -ne [IntPtr]::Zero) { $h } } 'the scrollbar'
     $rect = New-Object GhosttyScrollbarTest.Win32+RECT
     [void]$W::GetClientRect($bar, [ref]$rect)
     if ($rect.b -lt 100) { Fail "the scrollbar is only $($rect.b) px tall" }

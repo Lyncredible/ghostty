@@ -36,7 +36,7 @@ public struct NOTIFYICONDATAW {
 '@
 $W = [GhosttyNotification.Win32]
 
-if ($W::FindWindowW('Shell_TrayWnd', $null) -eq [IntPtr]::Zero) {
+if ($W::FindWindowW('Shell_TrayWnd', [NullString]::Value) -eq [IntPtr]::Zero) {
     Write-Host '::notice title=notification::No taskbar here, so no notification area; skipped.'
     exit 0
 }

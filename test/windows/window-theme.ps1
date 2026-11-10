@@ -89,7 +89,7 @@ function Expect([bool]$dark, [string]$what) {
 
 try {
     $window = WaitFor { $process.Refresh(); if ($process.MainWindowHandle -ne 0) { $process.MainWindowHandle } } 'the window'
-    $surface = WaitFor { $h = $W::FindWindowExW($window, [IntPtr]::Zero, 'GhosttySurface', $null); if ($h -ne [IntPtr]::Zero) { $h } } 'the surface'
+    $surface = WaitFor { $h = $W::FindWindowExW($window, [IntPtr]::Zero, 'GhosttySurface', [NullString]::Value); if ($h -ne [IntPtr]::Zero) { $h } } 'the surface'
     Expect $systemDark "at startup, following the app mode ($(if ($systemDark) { 'dark' } else { 'light' }))"
 
     # Force the opposite of the app mode first, so the change shows.

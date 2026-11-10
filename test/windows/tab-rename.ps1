@@ -67,7 +67,7 @@ function Tabs {
     $script:note = "tabs: " + (($list | ForEach-Object { $_.Current.Name }) -join ', ')
     , $list
 }
-function Shown { $h = [IntPtr]::Zero; while (($h = $W::FindWindowExW($window, $h, 'GhosttySurface', $null)) -ne [IntPtr]::Zero) { if ($W::IsWindowVisible($h)) { return $h } } }
+function Shown { $h = [IntPtr]::Zero; while (($h = $W::FindWindowExW($window, $h, 'GhosttySurface', [NullString]::Value)) -ne [IntPtr]::Zero) { if ($W::IsWindowVisible($h)) { return $h } } }
 function Dialog {
     $h = [IntPtr]::Zero
     while (($h = $W::FindWindowExW([IntPtr]::Zero, $h, '#32770', 'Change Tab Title')) -ne [IntPtr]::Zero) {
@@ -78,7 +78,7 @@ function Dialog {
 
 try {
     $window = WaitFor { $process.Refresh(); if ($process.MainWindowHandle -ne 0) { $process.MainWindowHandle } } 'the window'
-    $bar = WaitFor { $h = $W::FindWindowExW($window, [IntPtr]::Zero, 'GhosttyTabBar', $null); if ($h -ne [IntPtr]::Zero -and $W::IsWindowVisible($h)) { $h } } 'the tab bar'
+    $bar = WaitFor { $h = $W::FindWindowExW($window, [IntPtr]::Zero, 'GhosttyTabBar', [NullString]::Value); if ($h -ne [IntPtr]::Zero -and $W::IsWindowVisible($h)) { $h } } 'the tab bar'
     $first = WaitFor { Shown } 'the first terminal'
     $W::Key($first, 0x74, 0x3F)   # F5: new_tab
     [void](WaitFor { $s = Shown; $s -and $s -ne $first } 'the second tab')
@@ -99,7 +99,7 @@ try {
     $W::Mouse($bar, 0x0202, 0, $x, $y)   # WM_LBUTTONUP
 
     $dialog = WaitFor { Dialog } 'the Change Tab Title dialog'
-    $edit = $W::FindWindowExW($dialog, [IntPtr]::Zero, 'Edit', $null)
+    $edit = $W::FindWindowExW($dialog, [IntPtr]::Zero, 'Edit', [NullString]::Value)
     if ($edit -eq [IntPtr]::Zero) { Fail 'the dialog has no text field' }
     [void]$W::SendMessageW($edit, 0x000C, [IntPtr]::Zero, 'Renamed Tab')   # WM_SETTEXT
     [void]$W::PostMessageW($W::GetDlgItem($dialog, 1), 0x00F5, [IntPtr]::Zero, [IntPtr]::Zero)   # BM_CLICK on OK
