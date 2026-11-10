@@ -2960,6 +2960,14 @@ Notes:
         When the last window closes because its shell exited, the state
         is cleared. Checked: a split plus a second tab saved and restored
         as three terminals with their directories and focus.
+    - [x] Review (2026-11-10): the state file was written in place, so
+          a save that failed or was cut short (we save while Windows
+          ends the session, when it can end the process too) left half
+          a file, which the next start ignores: the session was lost,
+          the earlier one with it. It's now written to a temporary file
+          that's renamed over it (`replaceFile`, unit tested: it makes
+          the directory, replaces longer contents with shorter, and
+          leaves no temporary file). `session-restore.ps1` passes here.
   - [x] `window-theme = ghostty` colors the title bar with the terminal's
         background and foreground, or `window-titlebar-background` and
         `-foreground` (`DWMWA_CAPTION_COLOR`/`DWMWA_TEXT_COLOR`, Windows

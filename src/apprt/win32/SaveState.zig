@@ -150,12 +150,65 @@ fn write(app: *App) void {
     };
     const json = std.json.Stringify.valueAlloc(alloc, state, .{ .whitespace = .indent_2 }) catch return;
     const file = path(alloc, app.config.class) orelse return;
-    if (std.fs.path.dirname(file)) |dir| std.Io.Dir.cwd().createDirPath(global.io(), dir) catch {};
-    std.Io.Dir.cwd().writeFile(global.io(), .{ .sub_path = file, .data = json }) catch |err| {
+    replaceFile(global.io(), file, json) catch |err| {
         log.warn("error saving window state path={s} err={}", .{ file, err });
         return;
     };
     log.info("saved window state path={s}", .{file});
+}
+
+/// Write the state file by writing a temporary file next to it and
+/// renaming that over it, so the last state survives a write that fails
+/// or is cut short. We save while Windows ends the session, when it can
+/// end the process too, and a state file cut in two would be ignored at
+/// the next start.
+fn replaceFile(io: std.Io, file: []const u8, data: []const u8) !void {
+    const dir_path = std.fs.path.dirname(file) orelse return error.BadPathName;
+    try std.Io.Dir.cwd().createDirPath(io, dir_path);
+    var dir = try std.Io.Dir.cwd().openDir(io, dir_path, .{});
+    defer dir.close(io);
+
+    var atomic = try dir.createFileAtomic(io, std.fs.path.basename(file), .{ .replace = true });
+    defer atomic.deinit(io);
+    var buf: [4096]u8 = undefined;
+    var writer = atomic.file.writer(io, &buf);
+    try writer.interface.writeAll(data);
+    try writer.flush();
+    try atomic.replace(io);
+}
+
+test replaceFile {
+    const testing = std.testing;
+    const io = testing.io;
+    var tmp = testing.tmpDir(.{ .iterate = true });
+    defer tmp.cleanup();
+    const base = try tmp.dir.realPathFileAlloc(io, ".", testing.allocator);
+    defer testing.allocator.free(base);
+    // The directory is made if it's missing, as on a first save.
+    const file = try std.fs.path.join(testing.allocator, &.{ base, "ghostty", "window-state.json" });
+    defer testing.allocator.free(file);
+
+    // Longer than the buffer, then shorter: the new contents replace the
+    // old, with nothing of them left.
+    var long: [10_000]u8 = undefined;
+    for (&long, 0..) |*ch, i| ch.* = "0123456789"[i % 10];
+    for ([_][]const u8{ &long, "{}" }) |data| {
+        try replaceFile(io, file, data);
+        const read = try std.Io.Dir.cwd().readFileAlloc(io, file, testing.allocator, .unlimited);
+        defer testing.allocator.free(read);
+        try testing.expectEqualStrings(data, read);
+    }
+
+    // No temporary files stay behind.
+    var dir = try tmp.dir.openDir(io, "ghostty", .{ .iterate = true });
+    defer dir.close(io);
+    var it = dir.iterate();
+    var count: usize = 0;
+    while (try it.next(io)) |entry| {
+        try testing.expectEqualStrings("window-state.json", entry.name);
+        count += 1;
+    }
+    try testing.expectEqual(1, count);
 }
 
 /// Forget the saved state.
