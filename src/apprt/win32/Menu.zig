@@ -8,6 +8,7 @@
 const std = @import("std");
 const Allocator = std.mem.Allocator;
 const input = @import("../../input.zig");
+const i18n = @import("../../os/main.zig").i18n;
 const Binding = input.Binding;
 
 const util = @import("util.zig");
@@ -202,6 +203,117 @@ const window_items = [_]Item{
     .act("&Equalize Splits", .equalize_splits),
 };
 
+/// For labels that have no translation of their own (they follow the
+/// macOS app's menus, which aren't translated), a message with one that
+/// says the same, from GTK's menus or the command palette. Keyed by the
+/// label without its access key.
+const translated_as: std.StaticStringMap([:0]const u8) = .initComptime(.{
+    .{ "Find Next", "Next Match" },
+    .{ "Find Previous", "Previous Match" },
+    .{ "Float on Top", "Toggle Float on Top" },
+    .{ "Full Screen", "Toggle Fullscreen" },
+    .{ "Hide Find Bar", "End Search" },
+    .{ "Jump to Selection", "Scroll to Selection" },
+    .{ "Open Configuration", "Open Configuration in OS Editor" },
+    .{ "Paste Selection", "Paste from Selection" },
+    .{ "Quit Ghostty", "Quit" },
+    .{ "Reopen Closed Tab", "Undo" },
+    .{ "Return to Default Size", "Reset Window Size" },
+    .{ "Select Next Split", "Focus Split: Next" },
+    .{ "Select Previous Split", "Focus Split: Previous" },
+    .{ "Select Split Above", "Focus Split: Up" },
+    .{ "Select Split Below", "Focus Split: Down" },
+    .{ "Select Split Left", "Focus Split: Left" },
+    .{ "Select Split Right", "Focus Split: Right" },
+    .{ "Terminal Read-only", "Toggle Read-Only Mode" },
+    .{ "Use Selection for Find", "Search Selection" },
+    .{ "Zoom Split", "Toggle Split Zoom" },
+});
+
+/// A label in the user's language, if we have a translation for it;
+/// otherwise as it is, with its access key. Translations come from GTK's
+/// menus, which have no access keys; Windows then takes an item's first
+/// letter.
+fn localized(label: []const u8) []const u8 {
+    var buf: [128]u8 = undefined;
+    var len: usize = 0;
+    for (label) |ch| {
+        if (ch == '&') continue;
+        if (len + 1 == buf.len) return label;
+        buf[len] = ch;
+        len += 1;
+    }
+    buf[len] = 0;
+    const plain = buf[0..len :0];
+    if (i18n.translation(plain)) |v| return v;
+    if (translated_as.get(plain)) |msgid| {
+        if (i18n.translation(msgid)) |v| return v;
+    }
+    return label;
+}
+
+test localized {
+    const testing = std.testing;
+    if (comptime !i18n.embedded) return error.SkipZigTest;
+
+    // English, as written.
+    try testing.expectEqualStrings("&Copy", localized("&Copy"));
+    try testing.expectEqualStrings("Find &Next", localized("Find &Next"));
+
+    try testing.expect(i18n.useEmbeddedLocale("de"));
+    defer _ = i18n.useEmbeddedLocale(null);
+    try testing.expectEqualStrings("Kopieren", localized("&Copy"));
+    try testing.expectEqualStrings("Tabtitel ändern…", localized("Change Tab &Title…"));
+    // By way of another message.
+    try testing.expectEqualStrings("Nächste Übereinstimmung", localized("Find &Next"));
+    // Nothing to translate it with.
+    try testing.expectEqualStrings("&File", localized("&File"));
+    const long: [200]u8 = @splat('a');
+    try testing.expectEqualStrings(&long, localized(&long));
+}
+
+test "menu labels translated by way of another message" {
+    const testing = std.testing;
+    if (comptime !i18n.embedded) return error.SkipZigTest;
+    defer _ = i18n.useEmbeddedLocale(null);
+
+    // Each is the label of an item, and names a message that some locale
+    // translates: upstream renaming one would otherwise go unnoticed.
+    const locales = @import("../../os/i18n_locales.zig").locales;
+    for (translated_as.keys(), translated_as.values()) |label, msgid| {
+        errdefer std.debug.print("label: {s}, message: {s}\n", .{ label, msgid });
+        try testing.expect(hasLabel(&main, label) or hasLabel(&context, label) or hasLabel(&tab, label));
+        const found = for (locales) |locale| {
+            try testing.expect(i18n.useEmbeddedLocale(locale));
+            if (i18n.translation(msgid) != null) break true;
+        } else false;
+        try testing.expect(found);
+    }
+}
+
+/// Whether a menu has an item with the label, not counting access keys.
+fn hasLabel(items: []const Item, plain: []const u8) bool {
+    for (items) |item| {
+        const label = switch (item) {
+            .separator => continue,
+            .action => |a| a.label,
+            .submenu => |s| label: {
+                if (hasLabel(s.items, plain)) return true;
+                break :label s.label;
+            },
+            .shells => |s| s.label,
+        };
+        var it = std.mem.tokenizeScalar(u8, label, '&');
+        var rest = plain;
+        const same = while (it.next()) |part| {
+            if (!std.mem.startsWith(u8, rest, part)) break false;
+            rest = rest[part.len..];
+        } else rest.len == 0;
+        if (same) return true;
+    }
+    return false;
+}
+
 /// The ID of the first item in the system menu. Windows uses the low four
 /// bits of system menu command IDs, and IDs from 0xF000 are its own.
 const sys_id_shift = 4;
@@ -346,13 +458,14 @@ fn build(
         .action => |a| {
             const id = next_id.* << shift;
             next_id.* += 1;
+            const name = localized(a.label);
             const label = if (surface) |s| label: {
                 const trigger = shortcut(&s.app.config.keybind.set, a.action) orelse
-                    break :label a.label;
+                    break :label name;
                 var buf: [64]u8 = undefined;
-                const text = triggerText(&buf, trigger) catch break :label a.label;
-                break :label try std.fmt.allocPrint(alloc, "{s}\t{s}", .{ a.label, text });
-            } else a.label;
+                const text = triggerText(&buf, trigger) catch break :label name;
+                break :label try std.fmt.allocPrint(alloc, "{s}\t{s}", .{ name, text });
+            } else name;
             var flags: c_uint = c.MF_STRING;
             if (surface) |s| if (!enabled(s, a.action)) {
                 flags |= c.MF_GRAYED;
@@ -363,7 +476,7 @@ fn build(
             const submenu = c.CreatePopupMenu() orelse return error.CreateMenuFailed;
             errdefer _ = c.DestroyMenu(submenu);
             try build(alloc, submenu, s.items, surface, list, next_id, shift);
-            try appendSubmenu(alloc, menu, c.MF_POPUP, submenu, s.label);
+            try appendSubmenu(alloc, menu, c.MF_POPUP, submenu, localized(s.label));
         },
         .shells => |s| {
             const submenu = c.CreatePopupMenu() orelse return error.CreateMenuFailed;
@@ -375,7 +488,7 @@ fn build(
             if (surface) |sf| if (!sf.core_initialized) {
                 flags |= c.MF_GRAYED;
             };
-            try appendSubmenu(alloc, menu, flags, submenu, s.label);
+            try appendSubmenu(alloc, menu, flags, submenu, localized(s.label));
         },
     };
 }

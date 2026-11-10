@@ -784,7 +784,7 @@ fn msgWndProc(
 
             WM_GHOSTTY_QUIT => {
                 if (self.core_app.needsConfirmQuit() and
-                    !Window.confirm(null, "Quit Ghostty?", "All terminal sessions will be terminated."))
+                    !Window.confirmClosing(null, .app))
                 {
                     return 0;
                 }
@@ -1142,7 +1142,7 @@ fn quit(self: *App) void {
 /// has a running process (and the config requests it).
 fn closeAllWindows(self: *App) void {
     if (self.core_app.needsConfirmQuit() and
-        !Window.confirm(null, "Close all windows?", "All terminal sessions will be terminated."))
+        !Window.confirmClosing(null, .all_windows))
     {
         return;
     }
@@ -1611,7 +1611,7 @@ fn reloadConfig(
     // Like GTK, tell each window.
     if (config.@"app-notifications".@"config-reload") {
         for (self.windows.items) |window| {
-            if (window.tabs.items.len > 0) window.activeSurface().showToast("Reloaded the configuration");
+            if (window.tabs.items.len > 0) window.activeSurface().showToast(internal_os.i18n.text("Reloaded the configuration"));
         }
     }
 }

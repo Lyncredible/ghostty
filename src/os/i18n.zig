@@ -80,6 +80,35 @@ pub fn _(msgid: [*:0]const u8) [*:0]const u8 {
     return dgettext(build_config.bundle_id, msgid);
 }
 
+/// `_` for Zig strings: the message in the user's language, or as it is
+/// if there's no translation.
+pub fn text(msgid: [:0]const u8) [:0]const u8 {
+    return translation(msgid) orelse msgid;
+}
+
+/// The message in the user's language, if we have a translation for it.
+/// Only the embedded catalog can tell; gettext just returns the message.
+pub fn translation(msgid: [:0]const u8) ?[:0]const u8 {
+    if (comptime !embedded) return null;
+    const current = embedded_catalog orelse return null;
+    return current.get(msgid);
+}
+
+/// Use a locale's messages from the embedded catalog, or none (English)
+/// for null. Returns false if we don't have the locale. For `initEmbedded`,
+/// and for tests of translated text; not safe while other threads
+/// translate.
+pub fn useEmbeddedLocale(locale: ?[]const u8) bool {
+    if (comptime !embedded) return locale == null;
+    const name = locale orelse {
+        embedded_catalog = null;
+        return true;
+    };
+    embedded_catalog = catalog.Catalog.find(@import("i18n_catalog_data").blob, name) orelse
+        return false;
+    return true;
+}
+
 /// Whether translations come from the catalog compiled into the
 /// executable rather than gettext: the Windows app, where there's no
 /// libintl to read `.mo` files or `msgfmt` to make them. The build
@@ -105,10 +134,10 @@ pub fn initEmbedded() void {
         log.debug("no translations for the preferred languages count={}", .{languages.len});
         return;
     };
-    embedded_catalog = catalog.Catalog.find(@import("i18n_catalog_data").blob, locale) orelse {
+    if (!useEmbeddedLocale(locale)) {
         log.warn("the translations for locale={s} are missing or damaged", .{locale});
         return;
-    };
+    }
     log.info("translations locale={s} messages={}", .{ locale, embedded_catalog.?.count });
 }
 
@@ -346,11 +375,17 @@ test "embedded catalog" {
     // Tests run in English.
     try testing.expectEqualStrings("Close Tab", std.mem.span(@"_"("Close Tab")));
 
-    embedded_catalog = catalog.Catalog.find(blob, "de");
-    defer embedded_catalog = null;
+    try testing.expect(translation("Close Tab") == null);
+    try testing.expect(!useEmbeddedLocale("xx"));
+
+    try testing.expect(useEmbeddedLocale("de"));
+    defer _ = useEmbeddedLocale(null);
     try testing.expectEqualStrings("Tab schließen", std.mem.span(@"_"("Close Tab")));
+    try testing.expectEqualStrings("Tab schließen", text("Close Tab"));
     const untranslated = "A message nobody translated";
     try testing.expectEqual(@as([*:0]const u8, untranslated), @"_"(untranslated));
+    try testing.expectEqualStrings(untranslated, text(untranslated));
+    try testing.expect(translation(untranslated) == null);
 }
 
 test "_ returns msgid at comptime" {

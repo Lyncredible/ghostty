@@ -32,6 +32,7 @@ const drop = @import("drop.zig");
 const SplitDrag = @import("SplitDrag.zig");
 const Accessibility = @import("Accessibility.zig");
 const internal_os = @import("../../os/main.zig");
+const i18n = internal_os.i18n;
 const ptypkg = @import("../../pty.zig");
 const windows = internal_os.windows;
 
@@ -466,11 +467,7 @@ fn confirmClose(self: *Surface) void {
     self.close_pending = false;
     const hwnd = self.hwnd;
     const identity = c.GetWindowLongPtrW(hwnd, util.GWLP_USERDATA);
-    if (!Window.confirm(
-        self.window,
-        "Close terminal?",
-        "A process is still running in this terminal. Closing it will kill the process.",
-    )) return;
+    if (!Window.confirmClosing(self.window, .terminal)) return;
 
     // We may have been closed while the dialog was open.
     if (c.GetWindowLongPtrW(hwnd, util.GWLP_USERDATA) != identity) return;
@@ -877,7 +874,7 @@ pub fn toggleCommandPalette(self: *Surface) void {
         if (surface.window.tabOf(surface) == null) continue;
         targets.append(alloc, .{
             .surface = &surface.core_surface,
-            .title = surface.effectiveTitle() orelse "Untitled",
+            .title = surface.effectiveTitle() orelse i18n.text("Untitled"),
             .pwd = surface.core_surface.pwd(alloc) catch null,
         }) catch break;
     }
@@ -1030,9 +1027,9 @@ pub fn commandFinished(self: *Surface, value: apprt.Action.Value(.command_finish
 
 fn notifyCommandFinished(self: *Surface, value: apprt.Action.Value(.command_finished)) void {
     const title = if (value.exit_code) |code|
-        if (code == 0) "Command Succeeded" else "Command Failed"
+        if (code == 0) i18n.text("Command Succeeded") else i18n.text("Command Failed")
     else
-        "Command Finished";
+        i18n.text("Command Finished");
 
     var buf: [128]u8 = undefined;
     const duration = value.duration.round(std.time.ns_per_ms);
@@ -1238,7 +1235,7 @@ pub fn setClipboard(
 fn writeClipboard(self: *Surface, text: [:0]const u8, html: ?[]const u8) !void {
     try writeClipboardText(self.app.core_app.alloc, self.hwnd, text, html);
     if (self.app.config.@"app-notifications".@"clipboard-copy") {
-        self.showToast(if (text.len > 0) "Copied to clipboard" else "Cleared clipboard");
+        self.showToast(i18n.text(if (text.len > 0) "Copied to clipboard" else "Cleared clipboard"));
     }
 }
 
@@ -1285,6 +1282,52 @@ fn queueClipboard(self: *Surface, pending: PendingClipboard) void {
     self.pending_clipboard = pending;
 }
 
+/// The title and message of a clipboard confirmation. In English they end
+/// with the question that OK answers. GTK's messages, which have
+/// translations, are the same without it (its buttons say Paste or
+/// Allow), and are used when both are translated, so that a dialog is in
+/// one language.
+fn clipboardQuestion(kind: std.meta.Tag(@FieldType(PendingClipboard, "kind"))) struct { []const u8, []const u8 } {
+    const title: [:0]const u8, const message: [:0]const u8, const question: []const u8 = switch (kind) {
+        .unsafe_paste => .{
+            "Warning: Potentially Unsafe Paste",
+            "Pasting this text into the terminal may be dangerous as it looks like some commands may be executed.",
+            "Pasting this text into the terminal may be dangerous as it looks like some commands may be executed. Paste anyway?",
+        },
+        .read => .{
+            "Authorize Clipboard Access",
+            "An application is attempting to read from the clipboard. The current clipboard contents are shown below.",
+            "An application is attempting to read from the clipboard. The current clipboard contents are shown below. Allow it?",
+        },
+        .write => .{
+            "Authorize Clipboard Access",
+            "An application is attempting to write to the clipboard. The current clipboard contents are shown below.",
+            "An application is attempting to write to the clipboard. The text it would copy is shown below. Allow it?",
+        },
+    };
+    return .{
+        i18n.translation(title) orelse return .{ title, question },
+        i18n.translation(message) orelse return .{ title, question },
+    };
+}
+
+test clipboardQuestion {
+    const testing = std.testing;
+    {
+        const title, const message = clipboardQuestion(.unsafe_paste);
+        try testing.expectEqualStrings("Warning: Potentially Unsafe Paste", title);
+        try testing.expect(std.mem.endsWith(u8, message, "Paste anyway?"));
+    }
+
+    if (comptime !i18n.embedded) return;
+    defer _ = i18n.useEmbeddedLocale(null);
+    try testing.expect(i18n.useEmbeddedLocale("de"));
+    const title, const message = clipboardQuestion(.read);
+    try testing.expectEqualStrings(i18n.text("Authorize Clipboard Access"), title);
+    try testing.expect(!std.mem.eql(u8, "Authorize Clipboard Access", title));
+    try testing.expect(std.mem.indexOf(u8, message, "Allow it?") == null);
+}
+
 fn confirmClipboard(self: *Surface) void {
     const pending = self.pending_clipboard orelse return;
     self.pending_clipboard = null;
@@ -1292,20 +1335,7 @@ fn confirmClipboard(self: *Surface) void {
     defer pending.deinit(alloc);
 
     // Like GTK, we say what's happening and show the text.
-    const title: []const u8, const message: []const u8 = switch (pending.kind) {
-        .unsafe_paste => .{
-            "Warning: Potentially Unsafe Paste",
-            "Pasting this text into the terminal may be dangerous as it looks like some commands may be executed. Paste anyway?",
-        },
-        .read => .{
-            "Authorize Clipboard Access",
-            "An application is attempting to read from the clipboard. The current clipboard contents are shown below. Allow it?",
-        },
-        .write => .{
-            "Authorize Clipboard Access",
-            "An application is attempting to write to the clipboard. The text it would copy is shown below. Allow it?",
-        },
-    };
+    const title, const message = clipboardQuestion(pending.kind);
     const hwnd = self.hwnd;
     const identity = c.GetWindowLongPtrW(hwnd, util.GWLP_USERDATA);
     const allowed = Window.confirmText(self.window, alloc, title, message, pending.text);

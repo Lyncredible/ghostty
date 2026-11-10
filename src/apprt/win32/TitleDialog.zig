@@ -7,6 +7,7 @@ const Allocator = std.mem.Allocator;
 const apprt = @import("../../apprt.zig");
 
 const util = @import("util.zig");
+const i18n = @import("../../os/main.zig").i18n;
 const c = util.c;
 
 const log = std.log.scoped(.win32);
@@ -33,9 +34,9 @@ pub fn prompt(
     defer alloc.free(initial16);
 
     const caption = switch (kind) {
-        .surface => "Change Terminal Title",
-        .tab => "Change Tab Title",
-        .window => "Change Window Title",
+        .surface => i18n.text("Change Terminal Title"),
+        .tab => i18n.text("Change Tab Title"),
+        .window => i18n.text("Change Window Title"),
     };
     var template: Template = .{};
     template.build(caption);
@@ -58,28 +59,36 @@ pub fn prompt(
 /// An in-memory DLGTEMPLATE with its items. See the "DLGTEMPLATE" and
 /// "DLGITEMTEMPLATE" docs for the layout. Dimensions are in dialog units.
 const Template = struct {
-    buf: [512]u16 align(4) = undefined,
+    buf: [1024]u16 align(4) = undefined,
     len: usize = 0,
 
     const width = 220;
-    const height = 62;
+
+    /// The hint fits one line in English; translations of it can be
+    /// half as long again, and get a second line.
+    const long_hint = 52;
 
     fn build(self: *Template, caption: []const u8) void {
-        self.header(caption);
+        const hint = i18n.text("Leave blank to restore the default title.");
+        // Counted in characters, near enough for a line of text.
+        const more: i16 = if ((std.unicode.utf8CountCodepoints(hint) catch hint.len) > long_hint) 8 else 0;
+        const height = 62 + more;
+
+        self.header(caption, height);
         self.item(
             c.WS_CHILD | c.WS_VISIBLE | c.SS_LEFT,
             7,
             7,
             width - 14,
-            9,
+            9 + more,
             -1, // IDC_STATIC
             0x0082,
-            "Leave blank to restore the default title.",
+            hint,
         );
         self.item(
             c.WS_CHILD | c.WS_VISIBLE | c.WS_BORDER | c.WS_TABSTOP | c.ES_AUTOHSCROLL,
             7,
-            19,
+            19 + more,
             width - 14,
             13,
             id_edit,
@@ -94,7 +103,7 @@ const Template = struct {
             14,
             c.IDOK,
             0x0080,
-            "OK",
+            i18n.text("OK"),
         );
         self.item(
             c.WS_CHILD | c.WS_VISIBLE | c.WS_TABSTOP | c.BS_PUSHBUTTON,
@@ -104,11 +113,11 @@ const Template = struct {
             14,
             c.IDCANCEL,
             0x0080,
-            "Cancel",
+            i18n.text("Cancel"),
         );
     }
 
-    fn header(self: *Template, caption: []const u8) void {
+    fn header(self: *Template, caption: []const u8, height: i16) void {
         const style: u32 = c.DS_SETFONT | c.DS_MODALFRAME | c.DS_CENTER |
             c.WS_POPUP | c.WS_CAPTION | c.WS_SYSMENU;
         self.dword(style);
@@ -117,7 +126,7 @@ const Template = struct {
         self.word(0); // x
         self.word(0); // y
         self.word(width);
-        self.word(height);
+        self.word(@bitCast(height));
         self.word(0); // no menu
         self.word(0); // default dialog class
         self.string(caption);
@@ -219,5 +228,20 @@ fn readText(alloc: Allocator, edit: c.HWND) ![:0]u8 {
 test "title dialog template fits" {
     var template: Template = .{};
     template.build("Change Terminal Title");
-    try std.testing.expect(template.len < template.buf.len);
+    try std.testing.expect(template.len < template.buf.len / 2);
+}
+
+test "title dialog template fits in every language" {
+    if (comptime !i18n.embedded) return error.SkipZigTest;
+    defer _ = i18n.useEmbeddedLocale(null);
+    for (@import("../../os/i18n_locales.zig").locales) |locale| {
+        errdefer std.debug.print("locale: {s}\n", .{locale});
+        try std.testing.expect(i18n.useEmbeddedLocale(locale));
+        for ([_][:0]const u8{ "Change Terminal Title", "Change Tab Title", "Change Window Title" }) |caption| {
+            var template: Template = .{};
+            template.build(i18n.text(caption));
+            // With room to spare for translations that grow.
+            try std.testing.expect(template.len < template.buf.len / 2);
+        }
+    }
 }
