@@ -1460,7 +1460,9 @@ Notes:
         `notification` (its lost icon and click checks as notices there)
         and `uia-ranges` included, and `windows-tip` moved.
   - [x] 2026-11-10: a twentieth sync (2 commits: a GitHub action's version
-        in the color scheme workflow). No conflicts; dates kept.
+        in the color scheme workflow). No conflicts; dates kept (723
+        commits checked). CI run 42754562358 (a31e5149f) passed every
+        job, and `windows-tip` moved.
 - [x] Tip builds, like upstream's `release-tip.yml` (the discussion's
       release workflow item): a rolling prerelease of the latest
       `windows` commit, so people can try it without building. Approved
