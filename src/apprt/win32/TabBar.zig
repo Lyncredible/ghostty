@@ -945,7 +945,7 @@ fn showShellMenu(self: *TabBar) void {
     var pt: c.POINT = .{ .x = rect.left, .y = rect.bottom };
     _ = c.ClientToScreen(hwnd, &pt);
     self.setHover(null);
-    const selected = c.TrackPopupMenu(menu, c.TPM_RETURNCMD | c.TPM_NONOTIFY, pt.x, pt.y, 0, owner, null);
+    const selected = c.TrackPopupMenu(menu, @as(c_uint, c.TPM_RETURNCMD | c.TPM_NONOTIFY) | Menu.layoutFlags(), pt.x, pt.y, 0, owner, null);
     // Never dereference self after the nested loop unless it still owns HWND.
     if (selected == 0 or c.GetWindowLongPtrW(hwnd, util.GWLP_USERDATA) != identity) return;
     _ = self.window.addTabWithShell(
