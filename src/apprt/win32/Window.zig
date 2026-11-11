@@ -285,10 +285,27 @@ const Origin = struct { at: c.POINT, monitor: c.HMONITOR };
 /// from (the active one), by about a title bar. Null if there's no such
 /// window to go by, and Windows chooses.
 fn cascadeOrigin(app: *App) ?Origin {
-    const source = app.activeWindow() orelse return null;
-    if (source.quick or
-        c.IsWindowVisible(source.hwnd) == 0 or
-        c.IsIconic(source.hwnd) != 0) return null;
+    // The active window if it will do, or else the newest that will: the
+    // active one can be the quick terminal, or minimized, or (going by
+    // the focused terminal) a closed window that's kept for undo.
+    const usable = struct {
+        fn usable(window: *const Window) bool {
+            return !window.quick and
+                c.IsWindowVisible(window.hwnd) != 0 and
+                c.IsIconic(window.hwnd) == 0;
+        }
+    }.usable;
+    const source = source: {
+        if (app.activeWindow()) |window| {
+            if (usable(window)) break :source window;
+        }
+        var i = app.windows.items.len;
+        while (i > 0) {
+            i -= 1;
+            if (usable(app.windows.items[i])) break :source app.windows.items[i];
+        }
+        return null;
+    };
 
     var rect: c.RECT = undefined;
     if (c.GetWindowRect(source.hwnd, &rect) == 0) return null;
