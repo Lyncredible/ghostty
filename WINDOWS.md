@@ -2974,9 +2974,25 @@ Notes:
         DT_RTLREADING` in its own drawing). The search bar is mirrored
         (`WS_EX_LAYOUTRTL`) and sits in the top left corner. Both checked
         from captures with `LANGUAGE=he`; `command-palette.ps1` and
-        `search.ps1` still pass. The tab bar is still laid out left to
-        right, and the search bar's "Find" hint has no translation (GTK
-        has no such text). CI run 42987799169 (a412026d2) passed every job, with
+        `search.ps1` still pass. The search bar's "Find" hint has no
+        translation (GTK has no such text). The tab bar is mirrored too
+        (`WS_EX_LAYOUTRTL` on its window): the tabs start at the right,
+        and the new-tab buttons and, with the tabs in the title bar, the
+        caption buttons are on the left, as in a window Windows mirrors.
+        Its layout, painting and mouse handling are in its own
+        coordinates, which Windows flips; the two places that cross to
+        the screen or the window map with `MapWindowPoints` (the
+        rectangles for screen readers, and the window's hit test for
+        the maximize button). `localization.ps1` checks all of it in
+        Hebrew, German and English: the style, the tab's UI Automation
+        rectangle (inside the bar, in its right half only in Hebrew)
+        and where `WM_NCHITTEST` finds the maximize button. With
+        `LANGUAGE=he`, `tabs.ps1` and `tab-reorder.ps1` pass as they
+        are; `titlebar-tabs.ps1`, `tab-close-uia.ps1` and
+        `compact-tabs.ps1` assume English names or left-to-right
+        positions and aren't run that way. Not mirrored: the system's
+        own title bar (without tabs in it), whose buttons stay on the
+        right. CI run 42987799169 (a412026d2) passed every job, with
         the localization test's new dialog check, and run 42994318172
         (9697b9ff6) passed every job with the title dialog's layout.
         Run 43003852589 (5e55f7848, the palette and search bar) passed
