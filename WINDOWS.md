@@ -1771,6 +1771,11 @@ Notes:
         other: before a tab, after a tab, a window's only tab (its
         window closes), out to a new window, and onto a terminal, with
         the tab's picture showing during each drag.
+  - [x] Review (2026-11-11): if the dragged tab closed, or another
+        was selected, during the drag, the drag was dropped but the
+        tab's picture and the other window's mark stayed until the
+        next drag. They're now cleared there too. Not tested: it needs
+        a tab to close in the middle of a drag.
   - [ ] The target window doesn't show its mark when its tab bar is
         hidden (`window-show-tab-bar = never`, or a single tab with
         `auto`).
