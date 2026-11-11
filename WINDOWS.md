@@ -158,6 +158,14 @@ Notes:
             (`syncDpi`: the tab bar's font, each terminal's content
             scale, and its size from the default in points). This
             machine has one monitor, so the second part is by reading.
+      - [x] `new-window-place.ps1` (in CI) checks the first part with
+            real windows: a new window a step from its source, on the
+            same monitor at the same DPI, and from a source near the
+            far corner, back at the work area's top left. Writing it
+            found that after a window was closed the next one went by
+            the closed window (kept for undo, so still the active one)
+            and Windows chose the place again: a new window now goes by
+            the newest window that's shown when the active one isn't.
       - [ ] The owner to check again with two monitors: a new window
             (and a new window with a shell, and a tab moved to a new
             window) opens on Ghostty's monitor at its scale; the log
@@ -2808,7 +2816,9 @@ Notes:
         window it hid (not a hidden quick terminal), as macOS shows a
         hidden app's windows when it's opened. `window-cycle.ps1`
         checks both ways back; it needs a Ghostty window in front, so
-        it only runs to the end in CI.
+        it only runs to the end in CI. Run 42951822857 (bd757bbc0)
+        passed every job with these three changes: `window-cycle`, the
+        menu tests, and the Tabs test on both Windows versions.
 - [x] The pseudoconsole was resized to the size it already had: see
       the twenty-sixth sync's notes. The Windows 2022 job's Tabs test,
       which that broke twice, passed with the fix (run 42950383487,
