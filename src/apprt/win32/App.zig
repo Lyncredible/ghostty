@@ -906,7 +906,7 @@ pub fn newWindow(self: *App, initial: Window.Initial) !*Window {
 }
 
 /// The window that was most recently active, if any.
-fn activeWindow(self: *App) ?*Window {
+pub fn activeWindow(self: *App) ?*Window {
     const fg = c.GetForegroundWindow();
     for (self.windows.items) |window| {
         if (window.hwnd == fg) return window;

@@ -112,6 +112,18 @@ fullscreen: ?struct {
 /// Whether we've applied the initial size. We only apply it once.
 initial_size_applied: bool = false,
 
+/// The DPI our layout and our terminals' fonts were last made for. See
+/// syncDpi.
+dpi: c.UINT = util.USER_DEFAULT_SCREEN_DPI,
+
+/// The monitor a new window was placed on, next to the window it was
+/// opened from, until it's shown. See cascadeOrigin.
+placed_on: ?c.HMONITOR = null,
+
+/// Whether the saved session set our size and position, which the DPI
+/// then mustn't change.
+restored: bool = false,
+
 /// The default terminal size in points, from the initial_size action,
 /// used by reset_window_size.
 default_size: ?struct { width: u32, height: u32 } = null,
@@ -197,6 +209,11 @@ pub fn init(self: *Window, app: *App, initial: Initial) !void {
         .quick = quick,
     };
 
+    // A new window opens by the one it was opened from, on its monitor.
+    // Left to Windows, it can open on another monitor (the primary one),
+    // and with two monitors at different scales it then kept the scale
+    // of the one it didn't open on.
+    const origin: ?Origin = if (quick or initial == .restored) null else cascadeOrigin(app);
     const hwnd = c.CreateWindowExW(
         if (quick) c.WS_EX_TOOLWINDOW | c.WS_EX_TOPMOST else 0,
         App.window_class,
@@ -205,8 +222,8 @@ pub fn init(self: *Window, app: *App, initial: Initial) !void {
             c.WS_POPUP | c.WS_CLIPCHILDREN
         else
             c.WS_OVERLAPPEDWINDOW | c.WS_CLIPCHILDREN,
-        util.CW_USEDEFAULT,
-        util.CW_USEDEFAULT,
+        if (origin) |v| v.at.x else util.CW_USEDEFAULT,
+        if (origin) |v| v.at.y else util.CW_USEDEFAULT,
         util.CW_USEDEFAULT,
         util.CW_USEDEFAULT,
         null,
@@ -219,6 +236,8 @@ pub fn init(self: *Window, app: *App, initial: Initial) !void {
     };
     errdefer _ = c.DestroyWindow(hwnd);
     self.hwnd = hwnd;
+    self.dpi = c.GetDpiForWindow(hwnd);
+    if (origin) |v| self.placed_on = v.monitor;
 
     if (c.GetSystemMenu(hwnd, c.FALSE)) |menu| {
         self.system_menu_base = @max(0, c.GetMenuItemCount(menu));
@@ -250,6 +269,120 @@ pub fn init(self: *Window, app: *App, initial: Initial) !void {
     // the window, so our window procedure (in particular WM_DESTROY)
     // never sees a partially initialized window.
     _ = c.SetWindowLongPtrW(hwnd, util.GWLP_USERDATA, @bitCast(@intFromPtr(self)));
+
+    // Sized now, it may reach past the monitor's edge.
+    if (self.placed_on) |monitor| self.fitOnMonitor(monitor);
+    // Until now our window procedure ignored its messages, a DPI change
+    // among them.
+    self.syncDpi();
+    self.layout();
+}
+
+/// Where a new window goes, and on which monitor.
+const Origin = struct { at: c.POINT, monitor: c.HMONITOR };
+
+/// The place for a new window: down and right of the window it's opened
+/// from (the active one), by about a title bar. Null if there's no such
+/// window to go by, and Windows chooses.
+fn cascadeOrigin(app: *App) ?Origin {
+    const source = app.activeWindow() orelse return null;
+    if (source.quick or
+        c.IsWindowVisible(source.hwnd) == 0 or
+        c.IsIconic(source.hwnd) != 0) return null;
+
+    var rect: c.RECT = undefined;
+    if (c.GetWindowRect(source.hwnd, &rect) == 0) return null;
+    const monitor = c.MonitorFromWindow(source.hwnd, c.MONITOR_DEFAULTTONEAREST) orelse return null;
+    var info: c.MONITORINFO = undefined;
+    info.cbSize = @sizeOf(c.MONITORINFO);
+    if (c.GetMonitorInfoW(monitor, &info) == 0) return null;
+
+    const step = util.scale(32, @intCast(c.GetDpiForWindow(source.hwnd)));
+    return .{ .at = cascade(rect, info.rcWork, step), .monitor = monitor };
+}
+
+/// A window's place a step down and right of another's, inside the
+/// monitor's work area: from a maximized or fullscreen window, or one
+/// near the far edges, it starts over near the work area's corner.
+fn cascade(from: c.RECT, work: c.RECT, step: c_int) c.POINT {
+    var at: c.POINT = .{ .x = from.left + step, .y = from.top + step };
+    // Leave room for a useful part of a window.
+    const room = step * 8;
+    if (at.x < work.left or at.x > work.right - room) at.x = work.left + step;
+    if (at.y < work.top or at.y > work.bottom - room) at.y = work.top + step;
+    return at;
+}
+
+test cascade {
+    const testing = std.testing;
+    const work: c.RECT = .{ .left = 1920, .top = 0, .right = 3840, .bottom = 1040 };
+    // By the window it came from, on the second monitor.
+    try testing.expectEqual(c.POINT{ .x = 2132, .y = 232 }, cascade(.{ .left = 2100, .top = 200, .right = 2900, .bottom = 800 }, work, 32));
+    // From a maximized window (which reaches past the edges): just
+    // inside it. From one at the far corner: near the work area's corner.
+    try testing.expectEqual(c.POINT{ .x = 1944, .y = 24 }, cascade(.{ .left = 1912, .top = -8, .right = 3848, .bottom = 1048 }, work, 32));
+    try testing.expectEqual(c.POINT{ .x = 1952, .y = 32 }, cascade(.{ .left = 3700, .top = 900, .right = 4500, .bottom = 1500 }, work, 32));
+    // Only one of the two.
+    try testing.expectEqual(c.POINT{ .x = 2132, .y = 32 }, cascade(.{ .left = 2100, .top = 900, .right = 2900, .bottom = 1500 }, work, 32));
+}
+
+/// Move the window, without resizing it, so that it doesn't reach past
+/// the right or bottom of the monitor's work area, if it fits.
+fn fitOnMonitor(self: *Window, monitor: c.HMONITOR) void {
+    var info: c.MONITORINFO = undefined;
+    info.cbSize = @sizeOf(c.MONITORINFO);
+    var rect: c.RECT = undefined;
+    if (c.GetMonitorInfoW(monitor, &info) == 0 or c.GetWindowRect(self.hwnd, &rect) == 0) return;
+    const at = fit(rect, info.rcWork);
+    if (at.x == rect.left and at.y == rect.top) return;
+    _ = c.SetWindowPos(self.hwnd, null, at.x, at.y, 0, 0, c.SWP_NOSIZE | c.SWP_NOZORDER | c.SWP_NOACTIVATE);
+}
+
+/// Where a window's top left goes for it to be inside a work area: moved
+/// left and up as far as needed, but never past the area's top left.
+fn fit(rect: c.RECT, work: c.RECT) c.POINT {
+    return .{
+        .x = @max(work.left, rect.left - @max(0, rect.right - work.right)),
+        .y = @max(work.top, rect.top - @max(0, rect.bottom - work.bottom)),
+    };
+}
+
+test fit {
+    const testing = std.testing;
+    const work: c.RECT = .{ .left = 1920, .top = 0, .right = 3840, .bottom = 1040 };
+    // Inside already.
+    try testing.expectEqual(c.POINT{ .x = 2000, .y = 100 }, fit(.{ .left = 2000, .top = 100, .right = 2800, .bottom = 700 }, work));
+    // Past the right and the bottom: moved back by as much.
+    try testing.expectEqual(c.POINT{ .x = 3040, .y = 440 }, fit(.{ .left = 3500, .top = 800, .right = 4300, .bottom = 1400 }, work));
+    // Larger than the area: its top left stays in it.
+    try testing.expectEqual(c.POINT{ .x = 1920, .y = 0 }, fit(.{ .left = 2000, .top = 100, .right = 5000, .bottom = 3000 }, work));
+}
+
+/// Catch up with the window's DPI if it isn't the one we laid out and
+/// made our terminals' fonts for. Windows says when it changes
+/// (WM_DPICHANGED), but a window that's still being made doesn't hear it,
+/// and Windows can move a new window to another monitor before it shows:
+/// one then opened on a monitor with the scale of another (seen with two
+/// monitors at different scales). Called once it's made and once it's
+/// shown.
+fn syncDpi(self: *Window) void {
+    const dpi = c.GetDpiForWindow(self.hwnd);
+    if (dpi == self.dpi or dpi == 0) return;
+    log.info("window dpi changed while it was made from={} to={}", .{ self.dpi, dpi });
+    self.dpi = dpi;
+    self.tab_bar.updateFont();
+    for (self.tabs.items) |tab| {
+        var it = tab.tree.iterator();
+        while (it.next()) |entry| entry.view.refreshContentScale();
+    }
+
+    // Its size was worked out in pixels for a DPI, perhaps the old one:
+    // work it out again from the size in points.
+    if (!self.quick and !self.restored and self.fullscreen == null and c.IsZoomed(self.hwnd) == 0) {
+        if (self.default_size) |size| {
+            self.setTerminalSize(self.pointsToPixels(size.width), self.pointsToPixels(size.height));
+        }
+    }
     self.layout();
 }
 
@@ -285,6 +418,8 @@ pub fn show(self: *Window) void {
     const command = self.app.next_show orelse
         if (maximize) c.SW_SHOWMAXIMIZED else c.SW_SHOWDEFAULT;
     _ = c.ShowWindow(self.hwnd, command);
+    self.placed_on = null;
+    self.syncDpi();
     _ = c.UpdateWindow(self.hwnd);
     if (command == c.SW_SHOWMINNOACTIVE) return;
     if (config.fullscreen != .false and self.fullscreen == null) self.toggleFullscreen();
@@ -1918,6 +2053,7 @@ fn restore(self: *Window, state: *const SaveState.WindowState) !void {
     // terminals start out at their size. The saved size wins over the
     // configured initial size.
     self.initial_size_applied = true;
+    self.restored = true;
     var placement: c.WINDOWPLACEMENT = undefined;
     placement.length = @sizeOf(c.WINDOWPLACEMENT);
     if (c.GetWindowPlacement(self.hwnd, &placement) != 0) {
@@ -2438,6 +2574,7 @@ pub fn wndProc(
             // Windows suggests a new size and position for our window
             // that keeps it at the same physical size on the new monitor.
             const rect: *const c.RECT = @ptrFromInt(@as(usize, @bitCast(lparam)));
+            self.dpi = @as(u16, @bitCast(util.loword(wparam)));
             self.tab_bar.updateFont();
             _ = c.SetWindowPos(
                 hwnd,
