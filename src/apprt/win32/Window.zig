@@ -254,7 +254,7 @@ pub fn init(self: *Window, app: *App, initial: Initial) !void {
 
     switch (initial) {
         .parent => |parent| _ = try self.addTab(parent),
-        .tab => |tab| try self.adoptTab(tab),
+        .tab => |tab| try self.adoptTab(tab, null),
         .overrides => |overrides| _ = try self.addTabWith(null, null, overrides),
         .shell => |shell| _ = try self.addTabWithShell(shell.parent, shell.shell),
         .quick => {
@@ -929,10 +929,12 @@ pub fn addTabWith(
     return tab;
 }
 
-/// Take ownership of a tab from another window and select it. This
-/// reparents its surfaces to this window.
-fn adoptTab(self: *Window, tab: *Tab) !void {
-    try self.tabs.append(self.app.core_app.alloc, tab);
+/// Take ownership of a tab from another window and select it, at a place
+/// among our tabs or (null, or past them) after the last. This reparents
+/// its surfaces to this window.
+fn adoptTab(self: *Window, tab: *Tab, at: ?usize) !void {
+    const idx = @min(at orelse self.tabs.items.len, self.tabs.items.len);
+    try self.tabs.insert(self.app.core_app.alloc, idx, tab);
     tab.window = self;
     var it = tab.tree.iterator();
     while (it.next()) |entry| {
@@ -940,7 +942,7 @@ fn adoptTab(self: *Window, tab: *Tab) !void {
         _ = c.SetParent(entry.view.hwnd, self.hwnd);
         if (entry.view.core_initialized) entry.view.core_surface.setParentWindow(@intFromPtr(self.hwnd));
     }
-    self.selectTab(self.tabs.items.len - 1);
+    self.selectTab(idx);
 }
 
 /// Move the tab containing the given surface to a new window. Like GTK,
@@ -965,9 +967,10 @@ pub fn tearOffTab(self: *Window, tab: *Tab) !?*Window {
     return window;
 }
 
-/// Move a tab to another window and select it there. If it was our only
-/// tab, we close: the caller must not use this window afterwards.
-pub fn moveTabToWindow(self: *Window, tab: *Tab, target: *Window) !bool {
+/// Move a tab to another window and select it there, at a place among
+/// its tabs or (null) after the last. If it was our only tab, we close:
+/// the caller must not use this window afterwards.
+pub fn moveTabToWindow(self: *Window, tab: *Tab, target: *Window, at: ?usize) !bool {
     if (target == self) return false;
     const idx = self.tabIndex(tab) orelse return false;
     try target.tabs.ensureUnusedCapacity(self.app.core_app.alloc, 1);
@@ -975,7 +978,7 @@ pub fn moveTabToWindow(self: *Window, tab: *Tab, target: *Window) !bool {
     if (self.tabs.items.len > 1) {
         self.detachTab(idx);
         // We reserved room for the tab, so this can't fail.
-        target.adoptTab(tab) catch unreachable;
+        target.adoptTab(tab, at) catch unreachable;
         target.present(tab.focused);
         return true;
     }
@@ -985,7 +988,7 @@ pub fn moveTabToWindow(self: *Window, tab: *Tab, target: *Window) !bool {
     _ = c.ShowWindow(self.hwnd, c.SW_HIDE);
     _ = self.tabs.orderedRemove(idx);
     self.forgetReopened(tab);
-    target.adoptTab(tab) catch unreachable;
+    target.adoptTab(tab, at) catch unreachable;
     target.present(tab.focused);
     self.destroy();
     return true;
