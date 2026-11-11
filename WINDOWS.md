@@ -2838,6 +2838,21 @@ Notes:
     the caption buttons' tooltips, the configuration errors and link
     dialogs, and notification bodies. Translating them needs new
     messages upstream (or our own `.po` files next to upstream's).
+  - [ ] Dialogs with their own buttons (found 2026-11-10): the
+        confirmations are message boxes, whose buttons are Windows'
+        Yes/No or OK/Cancel, so the English text has to end with a
+        question ("Paste anyway?") and the configuration errors dialog
+        explains what No does. GTK's dialogs name the action on the
+        button, and those labels have translations: "Paste", "Allow",
+        "Deny", "Cancel", "Close", "Reload Configuration", "Ignore".
+        A task dialog (`TaskDialogIndirect`; the manifest already asks
+        for common controls 6) takes custom buttons, which is also how
+        Windows' own apps ask. It would let the configuration errors
+        dialog use GTK's translated message, the last dialog that
+        can't. To check first: `dialog-race.ps1`, `paste-race.ps1`,
+        `links.ps1` and the config errors test find these dialogs by
+        class (`#32770`, the same for a task dialog) and press buttons
+        by ID, and only run in CI.
   - [ ] Follow a change of the display language while running? Windows
         apps pick it up at start, so probably not.
   - [x] The catalog repeated each message in every locale: now the
