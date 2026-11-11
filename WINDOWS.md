@@ -1781,8 +1781,10 @@ Notes:
   - [x] Review (2026-11-11): if the dragged tab closed, or another
         was selected, during the drag, the drag was dropped but the
         tab's picture and the other window's mark stayed until the
-        next drag. They're now cleared there too. Not tested: it needs
-        a tab to close in the middle of a drag.
+        next drag. They're now cleared there too. `tab-reorder.ps1`
+        selects the other tab with a key in the middle of a drag out
+        of the bar: the picture goes and letting go moves nothing (it
+        fails without the fix).
   - [ ] The target window doesn't show its mark when its tab bar is
         hidden (`window-show-tab-bar = never`, or a single tab with
         `auto`).
