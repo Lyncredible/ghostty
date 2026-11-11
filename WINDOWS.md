@@ -2989,7 +2989,9 @@ Notes:
         its list `WS_EX_LEFTSCROLLBAR`, neither is set in German or
         English, and `--language=en` over `LANGUAGE=he` is English and
         left to right. It also opens the search bar: mirrored and in the
-        terminal's left half in Hebrew, neither otherwise.
+        terminal's left half in Hebrew, neither otherwise. CI run 43016413687
+        (dd3dc8ada) passed every job on its first attempt, with the
+        palette check.
   - [ ] A person who reads one of the languages should look over a
         translated build: the menus mix GTK's wording into macOS's
         layout, and right-to-left languages (Hebrew) aren't laid out
