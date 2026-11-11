@@ -94,6 +94,27 @@ function Prompt([IntPtr]$surface, [string]$what) {
     [void](WaitFor { (ScreenText $surface) -match '>\s*$' } "the prompt in $what")
 }
 
+# Type `echo <marker>` and wait for it on the screen twice (the command
+# and its output). If nothing of it shows for a while, type it again: on
+# a runner the characters, posted right after the prompt showed, once
+# never arrived.
+function Mark([IntPtr]$surface, [string]$marker, [string]$what) {
+    $W::Type($surface, "echo $marker`r")
+    $typed = Get-Date
+    [void](WaitFor {
+        $text = ScreenText $surface
+        $count = ([regex]::Matches($text, [regex]::Escape($marker))).Count
+        $end = ($text.TrimEnd() -replace '\s+', ' ')
+        $script:note = "$count of 2 '$marker' on screen, which ends: '$($end.Substring([Math]::Max(0, $end.Length - 80)))'"
+        if ($count -ge 2) { return $true }
+        if ($count -eq 0 -and ((Get-Date) - $typed).TotalSeconds -gt 8) {
+            Write-Host "::notice title=tabs::typing $marker again: nothing of it showed after 8 s"
+            $W::Type($surface, "echo $marker`r")
+            $typed = Get-Date
+        }
+    } $what)
+}
+
 try {
     $window = WaitFor { $process.Refresh(); if ($process.MainWindowHandle -ne 0) { $process.MainWindowHandle } } 'the window'
     [void](WaitFor { Note; @(Terminals $window).Count -eq 1 } 'the first tab')
@@ -105,8 +126,7 @@ try {
     [void](WaitFor { Note; @(Terminals $window).Count -eq 3 } 'the third tab')
     $third = Shown $window
     Prompt $third 'the third tab'
-    $W::Type($third, "echo KEEP-THIS-TAB`r")
-    [void](WaitFor { ([regex]::Matches((ScreenText $third), 'KEEP-THIS-TAB')).Count -ge 2 } 'the marker')
+    Mark $third 'KEEP-THIS-TAB' 'the marker'
     $W::Key($third, 0x75, 0x40)   # F6: close_tab:other
     [void](WaitFor { Note; @(Terminals $window).Count -eq 1 } 'the other tabs to close')
     if ((Shown $window) -ne $third) { Fail 'close_tab:other kept a different tab' }
@@ -134,8 +154,7 @@ try {
     $W::Key($third, 0x74, 0x3F)   # F5: a second tab, which will move
     $left = WaitFor { Note; $s = Shown $window; if (@(Terminals $window).Count -eq 2 -and $s -and $s -ne $third) { $s } } 'a new tab to move'
     Prompt $left 'the tab to move'
-    $W::Type($left, "echo MOVE-THIS-TAB`r")
-    [void](WaitFor { ([regex]::Matches((ScreenText $left), 'MOVE-THIS-TAB')).Count -ge 2 } 'the move marker')
+    Mark $left 'MOVE-THIS-TAB' 'the move marker'
     $W::Key($left, 0x78, 0x43)   # F9: move_tab_to_new_window
     $new = WaitFor { Note; $list = @(Windows | Where-Object { $_ -ne $window }); if ($list.Count -eq 1) { $list[0] } } 'a new window'
     [void](WaitFor { Note; @(Terminals $window).Count -eq 1 -and @(Terminals $new).Count -eq 1 } 'one tab in each window')
