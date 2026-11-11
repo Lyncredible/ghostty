@@ -166,11 +166,9 @@ Notes:
             the closed window (kept for undo, so still the active one)
             and Windows chose the place again: a new window now goes by
             the newest window that's shown when the active one isn't.
-      - [ ] The owner to check again with two monitors: a new window
-            (and a new window with a shell, and a tab moved to a new
-            window) opens on Ghostty's monitor at its scale; the log
-            says "window dpi changed while it was made" if the second
-            part was needed.
+      - [x] Checked again by the owner with two monitors
+            (2026-11-10): a new window always opens on the monitor
+            Ghostty is on, at its scale.
   - [x] Keyboard: layouts, dead keys, Ctrl/Alt/AltGr handling, and
         physical keys.
     - [x] Alt codes (Alt held while typing a number on the numpad, such
