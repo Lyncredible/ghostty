@@ -23,6 +23,7 @@ const Window = @import("Window.zig");
 const Dialog = @import("Dialog.zig");
 const Accessibility = @import("Accessibility.zig");
 const DimOverlay = @import("DimOverlay.zig");
+const TabGhost = @import("TabGhost.zig");
 const BellBorder = @import("BellBorder.zig");
 const LinkPreview = @import("LinkPreview.zig");
 const Scrollbar = @import("Scrollbar.zig");
@@ -400,6 +401,20 @@ fn registerClasses(hinstance: c.HINSTANCE) !void {
         .{
             .cbSize = @sizeOf(c.WNDCLASSEXW),
             .style = 0,
+            .lpfnWndProc = TabGhost.wndProc,
+            .cbClsExtra = 0,
+            .cbWndExtra = 0,
+            .hInstance = hinstance,
+            .hIcon = null,
+            .hCursor = null,
+            .hbrBackground = null,
+            .lpszMenuName = null,
+            .lpszClassName = TabGhost.class_name,
+            .hIconSm = null,
+        },
+        .{
+            .cbSize = @sizeOf(c.WNDCLASSEXW),
+            .style = 0,
             .lpfnWndProc = BellBorder.wndProc,
             .cbClsExtra = 0,
             .cbWndExtra = 0,
@@ -552,6 +567,7 @@ fn unregisterClasses(hinstance: c.HINSTANCE) void {
     _ = c.UnregisterClassW(surface_class, hinstance);
     _ = c.UnregisterClassW(tab_bar_class, hinstance);
     _ = c.UnregisterClassW(DimOverlay.class_name, hinstance);
+    _ = c.UnregisterClassW(TabGhost.class_name, hinstance);
     _ = c.UnregisterClassW(BellBorder.class_name, hinstance);
     _ = c.UnregisterClassW(LinkPreview.class_name, hinstance);
     _ = c.UnregisterClassW(Scrollbar.class_name, hinstance);

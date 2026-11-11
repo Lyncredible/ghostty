@@ -13,6 +13,7 @@ const Tab = @import("Tab.zig");
 const TabBarAccessibility = @import("TabBarAccessibility.zig");
 const Window = @import("Window.zig");
 const Menu = @import("Menu.zig");
+const TabGhost = @import("TabGhost.zig");
 const shells = @import("shells.zig");
 
 const log = std.log.scoped(.win32);
@@ -53,6 +54,18 @@ drag_tab: ?*Tab = null,
 drag_start_x: c_int = 0,
 drag_start_y: c_int = 0,
 dragging: bool = false,
+/// Where the pointer is during a drag, and how far into the tab it took
+/// hold, so that the tab is drawn following it.
+drag_x: c_int = 0,
+drag_y: c_int = 0,
+drag_grab: c_int = 0,
+/// The tab's picture under the pointer once it has left the bar.
+ghost: TabGhost = .{},
+/// The other window whose tab bar shows that it would take the tab.
+drop_window: ?*Window = null,
+/// Whether a tab dragged from another window would be dropped on us: we
+/// mark where it would go.
+drop_mark: bool = false,
 
 /// The parts of the tab bar the mouse can be over.
 pub const Hit = union(enum) {
@@ -162,6 +175,8 @@ pub fn deinit(self: *TabBar) void {
     if (self.accessibility) |a| a.detach();
     self.accessibility = null;
     if (self.tooltip) |tooltip| _ = c.DestroyWindow(tooltip);
+    self.endDragFeedback();
+    self.ghost.deinit();
     _ = c.SetWindowLongPtrW(self.hwnd, util.GWLP_USERDATA, 0);
     if (self.font) |f| _ = c.DeleteObject(f);
     if (self.icon_font) |f| _ = c.DeleteObject(f);
@@ -343,6 +358,15 @@ const Layout = struct {
         return null;
     }
 
+    /// Where a tab that's dragged along the bar is drawn: its slot, moved
+    /// so that it starts at `left`, but not out of the row of tabs.
+    fn carriedRect(self: Layout, slot: c.RECT, left: c_int, tabs: usize) c.RECT {
+        const first = self.tabRect(0, slot.bottom).left;
+        const last = self.tabRect(tabs -| 1, slot.bottom).left;
+        const x = std.math.clamp(left, first, @max(first, last));
+        return .{ .left = x, .top = slot.top, .right = x + (slot.right - slot.left), .bottom = slot.bottom };
+    }
+
     /// The tab index at an x position, for dragging tabs.
     fn indexAt(self: Layout, x: c_int) usize {
         const step = self.tab_width + self.gap;
@@ -434,6 +458,24 @@ test "Layout: hit testing" {
     try testing.expect(many.compact);
     const spot = many.closeRect(many.tabRect(4, 40));
     try testing.expectEqual(Hit{ .tab = 4 }, many.hit(.{ .x = spot.left + 1, .y = spot.top + 1 }).?);
+}
+
+test "Layout: a dragged tab is drawn where it's carried, within the tabs" {
+    const testing = std.testing;
+    const l: Layout = .compute(1200, 40, 3, 96, false);
+    const first = l.tabRect(0, 40);
+    const last = l.tabRect(2, 40);
+    const slot = l.tabRect(1, 40);
+    const carried = l.carriedRect(slot, first.left + 100, 3);
+    try testing.expectEqual(first.left + 100, carried.left);
+    try testing.expectEqual(slot.right - slot.left, carried.right - carried.left);
+    try testing.expectEqual(slot.top, carried.top);
+    // Not past the first tab's place or the last's.
+    try testing.expectEqual(first.left, l.carriedRect(slot, -500, 3).left);
+    try testing.expectEqual(last.left, l.carriedRect(slot, 5000, 3).left);
+    // A single tab stays put.
+    const one: Layout = .compute(1200, 40, 1, 96, false);
+    try testing.expectEqual(one.tabRect(0, 40).left, one.carriedRect(one.tabRect(0, 40), 300, 1).left);
 }
 
 test "Layout: dragging finds the tab under the pointer" {
@@ -686,8 +728,17 @@ fn paint(self: *TabBar, hdc: c.HDC, client: c.RECT) void {
         fill(hdc, &sep, col.tab_border);
     }
 
-    for (window.tabs.items, 0..) |tab, i| {
-        const rect = l.tabRect(i, client.bottom);
+    // A tab dragged along the bar is drawn where the pointer has it, and
+    // last, over the others. They've already made room: the tab moves to
+    // the place under the pointer as it's dragged.
+    const carried: ?c_int = if (self.dragTarget() == .reorder) self.drag_x - self.drag_grab else null;
+    for (0..n + 1) |k| {
+        const i = if (k < n) k else window.active;
+        if ((carried != null) != (k == n) and i == window.active) continue;
+        if (k == n and carried == null) break;
+        const tab = window.tabs.items[i];
+        const slot = l.tabRect(i, client.bottom);
+        const rect: c.RECT = if (k < n) slot else l.carriedRect(slot, carried.?, n);
         const active = i == window.active;
         const hovered = Hit.eql(self.hover, .{ .tab = i }) or Hit.eql(self.hover, .{ .close = i });
 
@@ -748,6 +799,15 @@ fn paint(self: *TabBar, hdc: c.HDC, client: c.RECT) void {
             const color = if (active) col.text else col.text_inactive;
             if (!self.drawGlyph(hdc, close, 0xE8BB, color)) self.drawCross(hdc, close, color);
         }
+    }
+
+    // Where a tab dragged from another window would go: a line in the
+    // text's color after the last tab.
+    if (self.drop_mark and n > 0) {
+        const last = l.tabRect(n - 1, client.bottom);
+        const w = @max(2, self.scale(3));
+        const mark: c.RECT = .{ .left = last.right, .top = last.top + self.scale(4), .right = last.right + w, .bottom = client.bottom - self.scale(4) };
+        fill(hdc, &mark, col.text);
     }
 
     // The new tab and shell buttons, after the tabs, centered on them.
@@ -1008,6 +1068,78 @@ fn setHover(self: *TabBar, hit: ?Hit) void {
     }
 }
 
+/// Whether a tab dragged to this height has left the bar: well above or
+/// below it, by the bar's own height.
+fn leavesBar(self: *const TabBar, y: c_int) bool {
+    var client: c.RECT = undefined;
+    _ = c.GetClientRect(self.hwnd, &client);
+    const margin = client.bottom - client.top;
+    return y < client.top - margin or y >= client.bottom + margin;
+}
+
+/// What dropping the dragged tab now would do: nothing without a drag,
+/// leave it in the bar where it is, or take it out of the window.
+const DragTarget = enum { none, reorder, detach };
+
+fn dragTarget(self: *const TabBar) DragTarget {
+    if (self.drag_tab == null or !self.dragging) return .none;
+    return if (self.leavesBar(self.drag_y)) .detach else .reorder;
+}
+
+/// Show what dropping the dragged tab now would do. Along the bar, the
+/// tab itself is drawn under the pointer (see paint). Out of it, the
+/// tab's picture follows the pointer, and another Ghostty window under
+/// the pointer marks where it would take the tab; with no such window,
+/// the drop makes a new one.
+fn updateDragFeedback(self: *TabBar) void {
+    const tab = self.drag_tab orelse return self.endDragFeedback();
+    if (self.dragTarget() != .detach) return self.endDragFeedback();
+
+    var pt: c.POINT = .{ .x = self.drag_x, .y = self.drag_y };
+    _ = c.ClientToScreen(self.hwnd, &pt);
+    const l = self.layout();
+    const col = self.colors();
+    self.ghost.show(self.window.app.hinstance, pt, .{
+        .title = tab.title(),
+        .font = self.font orelse null,
+        .background = colorref(col.active),
+        .foreground = colorref(col.text),
+        .border = colorref(col.tab_border),
+        .width = @max(l.tab_width, self.scale(120)),
+        .height = l.height - l.top,
+    });
+
+    const over = self.window.app.windowAt(pt);
+    self.setDropWindow(if (over != self.window) over else null);
+}
+
+/// The drag is over or back in the bar: nothing follows the pointer and
+/// no window is marked.
+fn endDragFeedback(self: *TabBar) void {
+    self.ghost.hide();
+    self.setDropWindow(null);
+}
+
+fn setDropWindow(self: *TabBar, target: ?*Window) void {
+    if (self.drop_window == target) return;
+    // The window we marked may have closed since.
+    if (self.drop_window) |old| {
+        for (self.window.app.windows.items) |window| {
+            if (window == old) old.tab_bar.setDropMark(false);
+        }
+    }
+    self.drop_window = target;
+    if (target) |window| window.tab_bar.setDropMark(true);
+}
+
+/// Mark (or stop marking) where a tab dragged from another window would
+/// go if it's dropped on ours: after our last tab.
+pub fn setDropMark(self: *TabBar, mark: bool) void {
+    if (self.drop_mark == mark) return;
+    self.drop_mark = mark;
+    self.invalidate();
+}
+
 fn dragMove(self: *TabBar, x: c_int, y: c_int) void {
     const tab = self.drag_tab orelse return;
     if (self.window.tabs.items[self.window.active] != tab) {
@@ -1022,6 +1154,10 @@ fn dragMove(self: *TabBar, x: c_int, y: c_int) void {
             @abs(y - self.drag_start_y) < threshold_y) return;
         self.dragging = true;
     }
+    self.drag_x = x;
+    self.drag_y = y;
+    self.invalidate();
+    self.updateDragFeedback();
     const l = self.layout();
     if (l.tab_width <= 0) return;
     const to: usize = @min(l.indexAt(x), self.window.tabs.items.len - 1);
@@ -1037,7 +1173,7 @@ fn dropTab(self: *TabBar, tab: *Tab, x: c_int, y: c_int) void {
     var client: c.RECT = undefined;
     _ = c.GetClientRect(self.hwnd, &client);
     const margin = client.bottom - client.top;
-    if (y >= client.top - margin and y < client.bottom + margin) return;
+    if (!self.leavesBar(y)) return;
 
     var pt: c.POINT = .{ .x = x, .y = y };
     _ = c.ClientToScreen(self.hwnd, &pt);
@@ -1209,6 +1345,7 @@ pub fn wndProc(
                     self.drag_tab = self.window.tabs.items[i];
                     self.drag_start_x = util.loword(lparam);
                     self.drag_start_y = util.hiword(lparam);
+                    self.drag_grab = self.drag_start_x - self.layout().tabRect(i, 0).left;
                     self.dragging = false;
                     _ = c.SetCapture(hwnd);
                 },
@@ -1227,6 +1364,8 @@ pub fn wndProc(
                 const dragged = self.dragging;
                 self.drag_tab = null;
                 self.dragging = false;
+                self.invalidate();
+                self.endDragFeedback();
                 if (c.GetCapture() == hwnd) _ = c.ReleaseCapture();
                 if (dragged) self.dropTab(tab, util.loword(lparam), util.hiword(lparam));
             }
@@ -1236,6 +1375,8 @@ pub fn wndProc(
         c.WM_CAPTURECHANGED => {
             self.drag_tab = null;
             self.dragging = false;
+            self.invalidate();
+            self.endDragFeedback();
             return 0;
         },
 

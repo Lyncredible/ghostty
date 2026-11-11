@@ -1726,17 +1726,36 @@ Notes:
       it) moved another tab into it. A window's only tab can be dropped
       on another window too, which closes the emptied window: checked,
       the target ended up with all three tabs.
-- [ ] Show what a tab drag will do (reported by the owner,
-      2026-11-11): dragging a tab gives no visual indication, neither
+- [x] Show what a tab drag will do (reported by the owner,
+      2026-11-11): dragging a tab gave no visual indication, neither
       while reordering within the window nor while dragging it out of
-      the window or into another one. The tab only moves on the drop.
-  - [ ] Within the tab bar: show where the tab will land while it's
-        dragged (the dragged tab following the pointer with the others
-        making room, or an insertion mark).
-  - [ ] Out of the window: show that the drop will make a new window
-        (for example a preview of the tab following the pointer).
-  - [ ] Into another window: show on the target's tab bar that it will
-        take the tab, and where.
+      the window or into another one.
+  - [x] Within the tab bar: the dragged tab is drawn under the pointer,
+        where it was taken hold of (`Layout.carriedRect`, kept within
+        the row of tabs), over the others, which make room as before
+        (the tab moves to the place under the pointer during the drag).
+        Checked from a capture in the middle of a drag made with posted
+        mouse messages; unit test for the rectangle.
+  - [x] Out of the window: once the pointer is well above or below the
+        bar (where a drop takes the tab out), a see-through picture of
+        the tab with its title follows the pointer (`TabGhost.zig`: a
+        layered, click-through, topmost popup that never takes focus,
+        placed just below the pointer). It goes when the pointer comes
+        back to the bar and on the drop. `tab-reorder.ps1` checks that
+        it shows only outside the bar, goes again, and that a drag out
+        and back leaves the tabs alone.
+  - [x] Into another window: while the picture is over another Ghostty
+        window, that window's tab bar shows a line after its last tab,
+        where the tab would go. Checked from a capture; no test reads
+        it (it's only drawn).
+  - [ ] Check by hand with a real mouse (the owner): the tab following
+        the pointer, the picture outside the bar, and the line on the
+        other window. Here it was only driven with posted messages on a
+        locked desktop.
+  - [ ] The target window doesn't show its mark when its tab bar is
+        hidden (`window-show-tab-bar = never`, or a single tab with
+        `auto`), and the tab always goes after the last one, not where
+        the pointer is.
 - [x] Background opacity/blur (DirectComposition swap chain)
   - [x] `toggle_background_opacity`. Checked with `PrintWindow` captures
         (background `#3060c0`, opacity 0.5, toggled by an F12 keybind):

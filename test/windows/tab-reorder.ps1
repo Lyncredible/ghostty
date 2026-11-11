@@ -26,6 +26,7 @@ Add-Type -Namespace GhosttyTabReorder -Name Win32 -MemberDefinition @'
 [StructLayout(LayoutKind.Sequential)] public struct POINT { public int x, y; }
 [DllImport("user32.dll")] public static extern bool PostMessageW(System.IntPtr h, uint m, System.IntPtr w, System.IntPtr l);
 [DllImport("user32.dll")] public static extern bool IsWindowVisible(System.IntPtr h);
+[DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(System.IntPtr h, out uint pid);
 [DllImport("user32.dll")] public static extern bool ScreenToClient(System.IntPtr h, ref POINT p);
 [DllImport("user32.dll")] public static extern System.IntPtr SetThreadDpiAwarenessContext(System.IntPtr context);
 [DllImport("user32.dll", CharSet = CharSet.Unicode)] public static extern System.IntPtr FindWindowExW(System.IntPtr parent, System.IntPtr after, string cls, string title);
@@ -82,6 +83,15 @@ function Tabs {
     , $list
 }
 function Shown { $h = [IntPtr]::Zero; while (($h = $W::FindWindowExW($window, $h, 'GhosttySurface', [NullString]::Value)) -ne [IntPtr]::Zero) { if ($W::IsWindowVisible($h)) { return $h } } }
+# The picture of a dragged tab that follows the pointer outside the bar,
+# if it's showing.
+function Ghost {
+    $h = [IntPtr]::Zero
+    while (($h = $W::FindWindowExW([IntPtr]::Zero, $h, 'GhosttyTabGhost', [NullString]::Value)) -ne [IntPtr]::Zero) {
+        $id = 0; [void]$W::GetWindowThreadProcessId($h, [ref]$id)
+        if ($id -eq $process.Id -and $W::IsWindowVisible($h)) { return $h }
+    }
+}
 function Center($element) {
     $r = $element.Current.BoundingRectangle
     @{ X = [int]($r.X + $r.Width / 2); Y = [int]($r.Y + $r.Height / 2) }
@@ -113,6 +123,31 @@ try {
     [void](WaitFor { $t = Tabs; $t.Count -eq 2 -and $t[0].Current.Name -match 'SECOND$' } 'SECOND to be the first tab')
     if ((Shown) -ne $second) { Fail 'the dragged tab is no longer the one shown' }
     Write-Host "After dragging the second tab onto the first: $note, and it's still the one shown."
+
+    # Dragged well below the bar, the tab's picture follows the pointer
+    # (dropping there would take the tab out of the window); back in the
+    # bar it goes, and the drop there leaves both tabs where they were.
+    $t = Tabs
+    $from = Center $t[0]
+    $below = $from.Y + 4 * [int]$t[0].Current.BoundingRectangle.Height
+    if (Ghost) { Fail "the dragged tab's picture shows without a drag" }
+    $W::Mouse($bar, 0x0201, 1, $from.X, $from.Y)                 # WM_LBUTTONDOWN
+    $W::Mouse($bar, 0x0200, 1, $from.X, $from.Y + 20)            # WM_MOUSEMOVE, past the drag threshold
+    Start-Sleep -Milliseconds 300
+    if (Ghost) { Fail "the dragged tab's picture shows while the tab is still in the bar" }
+    $W::Mouse($bar, 0x0200, 1, $from.X, $below)
+    $script:note = 'no GhosttyTabGhost window'
+    [void](WaitFor { Ghost } "the dragged tab's picture below the bar")
+    $W::Mouse($bar, 0x0200, 1, $from.X, $from.Y)
+    [void](WaitFor { $script:note = 'still showing'; -not (Ghost) } "the dragged tab's picture to go back in the bar")
+    $W::Mouse($bar, 0x0200, 1, $from.X, $below)
+    [void](WaitFor { $script:note = 'no GhosttyTabGhost window'; Ghost } "the dragged tab's picture below the bar again")
+    $W::Mouse($bar, 0x0200, 1, $from.X, $from.Y)
+    $W::Mouse($bar, 0x0202, 0, $from.X, $from.Y)                 # WM_LBUTTONUP
+    [void](WaitFor { $script:note = 'still showing'; -not (Ghost) } "the dragged tab's picture to go after the drop")
+    $t = Tabs
+    if ($t.Count -ne 2 -or $t[0].Current.Name -notmatch 'SECOND$') { Fail "a drag out of the bar and back changed the tabs: $note" }
+    Write-Host "Dragged below the bar, the tab's picture followed the pointer; back in the bar it went, and the tabs stayed: $note."
 
     $W::Key($second, 0x75, 0x40)   # F6: move_tab:1
     [void](WaitFor { $t = Tabs; $t.Count -eq 2 -and $t[1].Current.Name -match 'SECOND$' } 'move_tab:1 to move SECOND back to second')

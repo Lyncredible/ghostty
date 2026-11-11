@@ -29,6 +29,7 @@ test {
     _ = @import("win32/JumpList.zig");
     _ = @import("win32/util.zig");
     _ = @import("win32/TabBar.zig");
+    _ = @import("win32/TabGhost.zig");
     _ = @import("win32/Tab.zig");
     _ = @import("win32/Scrollbar.zig");
     _ = @import("win32/Badge.zig");
