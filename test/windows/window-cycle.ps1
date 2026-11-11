@@ -3,8 +3,9 @@
 # terminal, and toggle_visibility hides the windows and brings back only
 # the ones that were shown, so the hidden quick terminal stays hidden.
 # Both used to treat the quick terminal as one more window. Last, with
-# the windows hidden again, +new-tab must bring back the window it adds
-# its tab to (and only it). Keys are
+# the windows hidden again, +new-tab and starting Ghostty again must each
+# bring back both: hidden windows have no taskbar button, so without a
+# global keybind there was no other way to get them back. Keys are
 # posted to Ghostty's windows. Hiding the quick terminal and hiding the
 # windows need a Ghostty window in front, which Windows may refuse
 # outside CI; then the test says so and stops, and in CI that fails.
@@ -135,18 +136,30 @@ try {
     if (Visible $quick) { Fail "showing the windows again showed the hidden quick terminal" }
     Write-Host 'toggle_visibility hid both windows and brought back just them; the quick terminal stayed hidden.'
 
-    # Hidden again, +new-tab brings back the window it adds its tab to.
+    # Hidden again, +new-tab brings back both windows.
     $front = WaitFor { $fg = $W::GetForegroundWindow(); if ($fg -eq $a -or $fg -eq $b) { $fg } } 'a window in front' 5
     if (-not $front) { Inconclusive "no window was in front after showing them again" }
     $W::Key((Surface $front), 0x76, 0x41)   # F7: toggle_visibility
     [void](WaitFor { -not (Visible $a) -and -not (Visible $b) } 'the windows to hide again')
     $out = & $cli '+new-tab' "--class=$class" 2>&1 | Out-String
     if ($LASTEXITCODE -ne 0) { Fail "+new-tab exited with $LASTEXITCODE`: $out" }
-    [void](WaitFor { (Visible $a) -or (Visible $b) } 'the window with the new tab to show')
+    [void](WaitFor { (Visible $a) -and (Visible $b) } 'both windows to show after +new-tab')
     Start-Sleep -Milliseconds 500
-    if ((Visible $a) -and (Visible $b)) { Fail "+new-tab brought back both windows" }
     if (Visible $quick) { Fail "+new-tab showed the hidden quick terminal" }
-    Write-Host '+new-tab brought back the hidden window it added its tab to, and only it.'
+    Write-Host '+new-tab brought back both hidden windows, and not the quick terminal.'
+
+    # And so does starting Ghostty again, as from the Start menu: the
+    # running instance opens a window for it.
+    $front = WaitFor { $fg = $W::GetForegroundWindow(); if ($fg -eq $a -or $fg -eq $b) { $fg } } 'a window in front' 5
+    if (-not $front) { Inconclusive "no window was in front after +new-tab" }
+    $W::Key((Surface $front), 0x76, 0x41)   # F7: toggle_visibility
+    [void](WaitFor { -not (Visible $a) -and -not (Visible $b) } 'the windows to hide a third time')
+    $again = Start-Process -FilePath $Exe -PassThru -ArgumentList "--class=$class"
+    [void](WaitFor { (Visible $a) -and (Visible $b) } 'both windows to show after starting Ghostty again')
+    $third = WaitFor { @($W::Windows($process.Id, $false) | Where-Object { $_ -ne $a -and $_ -ne $b -and (Visible $_) })[0] } 'the new window'
+    if (Visible $quick) { Fail "starting Ghostty again showed the hidden quick terminal" }
+    if (-not $again.WaitForExit(10000)) { Stop-Process -Id $again.Id -Force; Fail "the second Ghostty didn't exit after handing its window over" }
+    Write-Host 'Starting Ghostty again brought back both hidden windows, with its new window.'
 } finally {
     if (-not $process.HasExited) { Stop-Process -Id $process.Id -Force }
     Remove-Item -LiteralPath $log -Force -ErrorAction SilentlyContinue
