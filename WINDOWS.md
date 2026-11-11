@@ -1503,7 +1503,9 @@ Notes:
         touches that, so the typed characters most likely went missing
         on a slow runner. The test now types a marker again if nothing
         of it shows for 8 s, and its timeout message says how much of
-        the marker is on screen and how the screen ends.
+        the marker is on screen and how the screen ends. Run
+        42941442318 (cfe358176) passed every job, without needing to
+        type a marker again, and `windows-tip` moved.
 - [x] Tip builds, like upstream's `release-tip.yml` (the discussion's
       release workflow item): a rolling prerelease of the latest
       `windows` commit, so people can try it without building. Approved
