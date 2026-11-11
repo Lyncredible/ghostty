@@ -116,6 +116,28 @@ pub fn useEmbeddedLocale(locale: ?[]const u8) bool {
     return true;
 }
 
+/// Use the language the config asks for (`language`), instead of the
+/// one `initEmbedded` chose: a language name as Windows or POSIX write
+/// it ("de", "pt-BR", "zh_TW.UTF-8"). English means the messages as
+/// they're written. A language we have nothing for changes nothing.
+/// Like `useEmbeddedLocale`, call it before other threads translate.
+pub fn setEmbeddedLanguage(language: []const u8) void {
+    if (comptime !embedded) return;
+    if (catalog.isEnglish(language)) {
+        _ = useEmbeddedLocale(null);
+        return;
+    }
+    const locale = catalog.localeFor(&supported_locales, language) orelse {
+        log.warn("no translations for language={s}", .{language});
+        return;
+    };
+    if (!useEmbeddedLocale(locale)) {
+        log.warn("the translations for locale={s} are missing or damaged", .{locale});
+        return;
+    }
+    log.info("translations locale={s} messages={}", .{ locale, embedded_catalog.?.count });
+}
+
 /// Whether translations come from the catalog compiled into the
 /// executable rather than gettext: the Windows app, where there's no
 /// libintl to read `.mo` files or `msgfmt` to make them. The build
@@ -395,6 +417,17 @@ test "embedded catalog" {
     try testing.expectEqual(@as([*:0]const u8, untranslated), @"_"(untranslated));
     try testing.expectEqualStrings(untranslated, text(untranslated));
     try testing.expect(translation(untranslated) == null);
+
+    // The config's language: one we have, English, and one we don't
+    // have, which keeps what was there.
+    setEmbeddedLanguage("ja-JP");
+    try testing.expectEqualStrings("右に分割", text("Split Right"));
+    setEmbeddedLanguage("tlh");
+    try testing.expectEqualStrings("右に分割", text("Split Right"));
+    setEmbeddedLanguage("en_US.UTF-8");
+    try testing.expect(!translating());
+    setEmbeddedLanguage("pt_BR");
+    try testing.expect(translating());
 }
 
 test "_ returns msgid at comptime" {

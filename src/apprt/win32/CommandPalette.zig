@@ -293,11 +293,15 @@ fn buildEntries(
         else
             "";
         const action_key = try std.fmt.allocPrint(alloc, "{f}", .{command.action});
+        // Translated here rather than when the config is made, which is
+        // before the config's `language` is known. An entry from the
+        // config is shown as written, unless it's one of our messages.
+        const title = i18n.text(command.title);
         try entries.append(alloc, .{
-            .title = try util.utf16Alloc(alloc, command.title),
-            .description = try util.utf16Alloc(alloc, command.description),
+            .title = try util.utf16Alloc(alloc, title),
+            .description = try util.utf16Alloc(alloc, i18n.text(command.description)),
             .shortcut = try util.utf16Alloc(alloc, shortcut),
-            .search = try searchText(alloc, &.{ command.title, action_key }),
+            .search = try searchText(alloc, &.{ title, action_key }),
             .choice = .{ .action = try command.action.clone(alloc) },
         });
     };

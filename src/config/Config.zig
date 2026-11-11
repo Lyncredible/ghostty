@@ -122,7 +122,11 @@ pub const compatibility = std.StaticStringMap(
 /// Warning: This setting cannot be reloaded at runtime. To change the language
 /// you must fully restart Ghostty.
 ///
-/// GTK only.
+/// On Windows, where Ghostty otherwise follows the display languages
+/// set in Windows' settings, the value is a language with an optional
+/// region, such as `de`, `pt_BR` or `zh-TW`, and `en` shows English.
+///
+/// GTK and Windows only.
 /// Available since 1.3.0.
 language: ?[:0]const u8 = null,
 
@@ -9071,12 +9075,11 @@ pub const RepeatableCommand = struct {
         try self.value.ensureUnusedCapacity(alloc, inputpkg.command.defaults.len);
         try self.value_c.ensureUnusedCapacity(alloc, inputpkg.command.defaults.len);
         for (inputpkg.command.defaults) |cmd| {
-            // Translation is currently a GTK and Windows feature. In
-            // particular, translating these shared strings for the embedded
-            // runtime gives the macOS app a localized command palette in an
-            // otherwise unlocalized UI.
-            const localized = if (comptime build_config.app_runtime == .gtk or
-                build_config.app_runtime == .win32)
+            // Translation is currently a GTK-only feature. In particular,
+            // translating these shared strings for the embedded runtime gives
+            // the macOS app a localized command palette in an otherwise
+            // unlocalized UI.
+            const localized = if (comptime build_config.app_runtime == .gtk)
                 cmd.translated()
             else
                 cmd;
