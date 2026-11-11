@@ -2979,6 +2979,11 @@ Notes:
         has no such text). CI run 42987799169 (a412026d2) passed every job, with
         the localization test's new dialog check, and run 42994318172
         (9697b9ff6) passed every job with the title dialog's layout.
+        Run 43003852589 (5e55f7848, the palette and search bar) passed
+        every job on its second attempt: on the first, Zig's build
+        runner itself crashed ("Segmentation fault", before any test
+        ran) in "Test libghostty-vt" and in the ARM64 "Build", while
+        the two x64 jobs passed. Watch whether that comes back.
   - [ ] A person who reads one of the languages should look over a
         translated build: the menus mix GTK's wording into macOS's
         layout, and right-to-left languages (Hebrew) aren't laid out
