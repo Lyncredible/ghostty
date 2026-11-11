@@ -27,6 +27,7 @@ Add-Type -Namespace GhosttyLocalization -Name Win32 -MemberDefinition @'
 [DllImport("user32.dll")] public static extern bool IsWindowVisible(System.IntPtr h);
 [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(System.IntPtr h, out uint pid);
 [DllImport("user32.dll", CharSet = CharSet.Unicode)] public static extern System.IntPtr FindWindowExW(System.IntPtr parent, System.IntPtr after, string cls, string title);
+[DllImport("user32.dll")] public static extern System.IntPtr GetWindowLongPtrW(System.IntPtr h, int index);
 [DllImport("user32.dll")] public static extern int GetMenuItemCount(System.IntPtr menu);
 [DllImport("user32.dll", CharSet = CharSet.Unicode)] public static extern int GetMenuStringW(System.IntPtr menu, uint item, System.Text.StringBuilder s, int max, uint flags);
 [DllImport("user32.dll", CharSet = CharSet.Unicode)] public static extern int GetWindowTextW(System.IntPtr h, System.Text.StringBuilder s, int max);
@@ -114,6 +115,11 @@ function Texts([string]$language, [string[]]$options = @()) {
         $palette = WaitFor { $h = $W::FindWindowExW($surface, [IntPtr]::Zero, 'GhosttyCommandPalette', [NullString]::Value); if ($h -ne [IntPtr]::Zero -and $W::IsWindowVisible($h)) { $h } } 'the command palette'
         $edit = $W::FindWindowExW($palette, [IntPtr]::Zero, 'Edit', [NullString]::Value)
         $list = $W::FindWindowExW($palette, [IntPtr]::Zero, 'ListBox', [NullString]::Value)
+        # Laid out right to left: the field's text at the right
+        # (WS_EX_RIGHT) and the list's scrollbar on the left
+        # (WS_EX_LEFTSCROLLBAR). GWL_EXSTYLE is -20.
+        $fieldRight = ([long]$W::GetWindowLongPtrW($edit, -20) -band 0x1000) -ne 0
+        $barLeft = ([long]$W::GetWindowLongPtrW($list, -20) -band 0x4000) -ne 0
         $all = WaitFor { $n = [int]$W::SendMessageW($list, 0x018B, [IntPtr]0, [IntPtr]0); $script:note = "$n entries"; if ($n -ge 10) { $n } } 'the full list'   # LB_GETCOUNT
         $W::Type($edit, 'new_split:right')
         [void](WaitFor { $n = [int]$W::SendMessageW($list, 0x018B, [IntPtr]0, [IntPtr]0); $script:note = "$n of $all entries"; $n -eq 1 } 'the list to narrow to one entry')
@@ -142,6 +148,7 @@ function Texts([string]$language, [string[]]$options = @()) {
             Title = $title.ToString()
             Item = ($item.ToString() -split "`t")[0]
             ItemCount = $count
+            RightToLeft = "$fieldRight/$barLeft"
         }
     } finally {
         if (-not $script:process.HasExited) { Stop-Process -Id $script:process.Id -Force }
@@ -171,12 +178,27 @@ Expect $english 'en' 'Split Right' '&Copy' ''
 if ($english.ItemCount -ne $german.ItemCount) { Fail "the menu has $($german.ItemCount) items in German and $($english.ItemCount) in English" }
 Expect (Texts 'tlh') 'tlh' 'Split Right' '&Copy' ''
 
+# Hebrew is written right to left, so the palette is laid out that way
+# too; German and English aren't.
+$hebrew = Texts 'he'
+if ($hebrew.Log -notmatch 'translations locale=he ') { Fail "LANGUAGE=he: the log should say locale=he: '$($hebrew.Log)'" }
+if ($hebrew.Title -ceq 'Split Right' -or -not $hebrew.Title) { Fail "LANGUAGE=he: the palette's entry isn't translated: '$($hebrew.Title)'" }
+if ($hebrew.ItemCount -ne $english.ItemCount) { Fail "the menu has $($hebrew.ItemCount) items in Hebrew and $($english.ItemCount) in English" }
+if ($hebrew.RightToLeft -ne 'True/True') { Fail "LANGUAGE=he: the palette should be laid out right to left (field/scrollbar): $($hebrew.RightToLeft)" }
+foreach ($other in @($german, $english)) {
+    if ($other.RightToLeft -ne 'False/False') { Fail "the palette should be laid out left to right outside Hebrew (field/scrollbar): $($other.RightToLeft)" }
+}
+Write-Host "LANGUAGE=he: the palette is translated and laid out right to left."
+
 # The config's `language` wins over the environment's, both ways.
 $forced = Texts 'en' @('--language=de')
 Expect $forced 'en --language=de' 'Nach rechts teilen' 'Kopieren' 'de'
 $forced = Texts 'de' @('--language=en')
 if ($forced.Title -cne 'Split Right' -or $forced.Item -cne '&Copy') { Fail "LANGUAGE=de --language=en should be English: palette '$($forced.Title)', menu '$($forced.Item)'" }
 Write-Host "LANGUAGE=de --language=en: palette '$($forced.Title)', menu '$($forced.Item)'"
+$forced = Texts 'he' @('--language=en')
+if ($forced.Title -cne 'Split Right' -or $forced.RightToLeft -ne 'False/False') { Fail "LANGUAGE=he --language=en should be English, left to right: palette '$($forced.Title)', field/scrollbar $($forced.RightToLeft)" }
+Write-Host "LANGUAGE=he --language=en: palette '$($forced.Title)', laid out left to right"
 
 # A dialog: the configuration errors one, which an option that doesn't
 # exist brings up at start. Its title and both buttons are in the
