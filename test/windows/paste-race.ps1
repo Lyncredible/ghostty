@@ -1,5 +1,5 @@
-# Checks the unsafe paste dialog: Cancel closes it without pasting, and
-# when the shell exits while the dialog is open, Ghostty closes cleanly
+# Checks the unsafe paste dialog: Cancel closes it without pasting, Paste
+# pastes, and when the shell exits while the dialog is open, Ghostty closes cleanly
 # (the dialog's surface is destroyed during its message loop). It posts a
 # key bound to paste_from_clipboard to Ghostty's own window, but it sets
 # the clipboard and shows dialogs, so it only runs in CI.
@@ -106,6 +106,17 @@ try {
     if ((Text $started.Surface).Contains('pasted-one')) { Fail "Cancel still pasted" }
     if ($script:process.HasExited) { Fail "Ghostty exited after Cancel" }
     Write-Host 'Cancel closed the unsafe paste dialog without pasting.'
+    Close
+
+    # Paste (ID 1, the accept button) pastes both lines.
+    $started = StartAndPaste 'cmd.exe /k echo ready-%USERNAME:~0,0%ok' 'ready-ok'
+    [void](WaitFor {
+        [void]$W::PostMessageW($started.Dialog, 0x0466, [IntPtr]1, [IntPtr]::Zero)
+        Start-Sleep -Milliseconds 300
+        -not (Dialog)
+    } 'the dialog to close after Paste')
+    [void](WaitFor { $t = Text $started.Surface; $t.Contains('pasted-one') -and $t.Contains('pasted-two') } 'the pasted text on screen')
+    Write-Host 'Paste closed the unsafe paste dialog and pasted.'
     Close
 
     # The shell exits while the dialog is open.
