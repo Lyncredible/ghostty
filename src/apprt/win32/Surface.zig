@@ -1082,6 +1082,19 @@ pub fn getCursorPos(self: *const Surface) !apprt.CursorPos {
     return self.cursor_pos;
 }
 
+/// Tell the core the scale of the monitor we're on now, if it isn't the
+/// one it has. Windows says when it changes (WM_DPICHANGED_AFTERPARENT);
+/// this is for a window that missed that, see Window.syncDpi.
+pub fn refreshContentScale(self: *Surface) void {
+    const scale = self.queryContentScale();
+    if (scale.x == self.content_scale.x and scale.y == self.content_scale.y) return;
+    self.content_scale = scale;
+    if (!self.core_initialized) return;
+    self.core_surface.contentScaleCallback(scale) catch |err| {
+        log.err("error in content scale callback err={}", .{err});
+    };
+}
+
 fn queryContentScale(self: *const Surface) apprt.ContentScale {
     const dpi: f32 = @floatFromInt(c.GetDpiForWindow(self.hwnd));
     const scale = @max(1, dpi / util.USER_DEFAULT_SCREEN_DPI);
