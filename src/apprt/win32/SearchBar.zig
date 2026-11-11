@@ -12,6 +12,7 @@ const std = @import("std");
 const Config = @import("../../config.zig").Config;
 
 const util = @import("util.zig");
+const i18n = @import("../../os/main.zig").i18n;
 const c = util.c;
 
 const log = std.log.scoped(.win32);
@@ -84,8 +85,11 @@ pub fn init(
 
 fn createWindows(self: *SearchBar) !void {
     if (self.hwnd != null) return;
+    // Mirrored for a right-to-left language; the controls inside
+    // inherit it.
     const hwnd = c.CreateWindowExW(
-        c.WS_EX_LAYERED | c.WS_EX_CONTROLPARENT,
+        @as(c.DWORD, c.WS_EX_LAYERED | c.WS_EX_CONTROLPARENT) |
+            (if (i18n.rightToLeft()) @as(c.DWORD, c.WS_EX_LAYOUTRTL) else 0),
         class_name,
         null,
         c.WS_CHILD | c.WS_CLIPCHILDREN,
@@ -230,7 +234,9 @@ fn layout(self: *SearchBar) void {
     _ = c.SetWindowPos(
         self.hwnd,
         c.HWND_TOP,
-        parent.right - w - self.scale(8),
+        // In the top corner where a line ends: the left one for a
+        // right-to-left language.
+        if (i18n.rightToLeft()) self.scale(8) else parent.right - w - self.scale(8),
         self.scale(8),
         w,
         h,

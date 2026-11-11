@@ -134,8 +134,12 @@ fn createWindows(self: *CommandPalette) !void {
         return error.SetOpacityFailed;
     }
 
+    // For a right-to-left language the field's text starts at the right
+    // and the list's scrollbar is on the left; drawItem lays out the
+    // entries.
+    const rtl = i18n.rightToLeft();
     const edit = c.CreateWindowExW(
-        0,
+        if (rtl) @as(c.DWORD, c.WS_EX_RIGHT | c.WS_EX_RTLREADING) else 0,
         std.unicode.utf8ToUtf16LeStringLiteral("EDIT"),
         null,
         c.WS_CHILD | c.WS_VISIBLE | c.WS_TABSTOP | c.ES_AUTOHSCROLL,
@@ -149,7 +153,7 @@ fn createWindows(self: *CommandPalette) !void {
         null,
     ) orelse return error.CreateWindowFailed;
     const list = c.CreateWindowExW(
-        0,
+        if (rtl) @as(c.DWORD, c.WS_EX_LEFTSCROLLBAR) else 0,
         std.unicode.utf8ToUtf16LeStringLiteral("LISTBOX"),
         null,
         c.WS_CHILD | c.WS_VISIBLE | c.WS_VSCROLL | c.LBS_NOTIFY |
@@ -559,7 +563,12 @@ fn drawItem(self: *CommandPalette, item: *const c.DRAWITEMSTRUCT) void {
     const has_description = entry.description.len > 0;
     const middle = @divTrunc(rect.top + rect.bottom, 2);
 
-    // The shortcut, on the right, and the description are dimmed.
+    // For a right-to-left language the sides swap: the texts start at
+    // the right and the shortcut is on the left.
+    const rtl = i18n.rightToLeft();
+    const text_flags: c_uint = if (rtl) c.DT_RIGHT | c.DT_RTLREADING else 0;
+
+    // The shortcut, at the far side, and the description are dimmed.
     const old_font = c.SelectObject(dc, self.small_font.font);
     defer _ = c.SelectObject(dc, old_font);
     _ = c.SetTextColor(dc, if (selected) col.selected_dim else col.dim);
@@ -567,16 +576,21 @@ fn drawItem(self: *CommandPalette, item: *const c.DRAWITEMSTRUCT) void {
     if (entry.shortcut.len > 0) {
         var size: c.SIZE = undefined;
         _ = c.GetTextExtentPoint32W(dc, entry.shortcut.ptr, @intCast(entry.shortcut.len), &size);
-        shortcut_rect.left = rect.right - size.cx;
-        _ = c.DrawTextW(dc, entry.shortcut.ptr, @intCast(entry.shortcut.len), &shortcut_rect, c.DT_SINGLELINE | c.DT_VCENTER | c.DT_RIGHT | c.DT_NOPREFIX);
-        rect.right = shortcut_rect.left - p;
+        if (rtl) {
+            shortcut_rect.right = rect.left + size.cx;
+            rect.left = shortcut_rect.right + p;
+        } else {
+            shortcut_rect.left = rect.right - size.cx;
+            rect.right = shortcut_rect.left - p;
+        }
+        _ = c.DrawTextW(dc, entry.shortcut.ptr, @intCast(entry.shortcut.len), &shortcut_rect, c.DT_SINGLELINE | c.DT_VCENTER | c.DT_NOPREFIX);
     }
 
     // The description, below the title.
     if (has_description) {
         var description_rect = rect;
         description_rect.top = middle;
-        _ = c.DrawTextW(dc, entry.description.ptr, @intCast(entry.description.len), &description_rect, c.DT_SINGLELINE | c.DT_TOP | c.DT_END_ELLIPSIS | c.DT_NOPREFIX);
+        _ = c.DrawTextW(dc, entry.description.ptr, @intCast(entry.description.len), &description_rect, @as(c_uint, c.DT_SINGLELINE | c.DT_TOP | c.DT_END_ELLIPSIS | c.DT_NOPREFIX) | text_flags);
     }
 
     _ = c.SelectObject(dc, self.font.font);
@@ -588,7 +602,7 @@ fn drawItem(self: *CommandPalette, item: *const c.DRAWITEMSTRUCT) void {
         entry.title.ptr,
         @intCast(entry.title.len),
         &title_rect,
-        @as(c_uint, c.DT_SINGLELINE | c.DT_END_ELLIPSIS | c.DT_NOPREFIX) |
+        @as(c_uint, c.DT_SINGLELINE | c.DT_END_ELLIPSIS | c.DT_NOPREFIX) | text_flags |
             @as(c_uint, if (has_description) c.DT_BOTTOM else c.DT_VCENTER),
     );
 }
