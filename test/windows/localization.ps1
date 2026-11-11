@@ -30,6 +30,8 @@ Add-Type -Namespace GhosttyLocalization -Name Win32 -MemberDefinition @'
 [DllImport("user32.dll")] public static extern System.IntPtr GetWindowLongPtrW(System.IntPtr h, int index);
 [StructLayout(LayoutKind.Sequential)] public struct RECT { public int Left, Top, Right, Bottom; }
 [DllImport("user32.dll")] public static extern bool GetWindowRect(System.IntPtr h, out RECT r);
+[DllImport("user32.dll")] public static extern uint GetDpiForWindow(System.IntPtr h);
+[DllImport("user32.dll")] public static extern bool SetProcessDpiAwarenessContext(System.IntPtr context);
 [DllImport("user32.dll")] public static extern int GetMenuItemCount(System.IntPtr menu);
 [DllImport("user32.dll", CharSet = CharSet.Unicode)] public static extern int GetMenuStringW(System.IntPtr menu, uint item, System.Text.StringBuilder s, int max, uint flags);
 [DllImport("user32.dll", CharSet = CharSet.Unicode)] public static extern int GetWindowTextW(System.IntPtr h, System.Text.StringBuilder s, int max);
@@ -63,6 +65,9 @@ public static void Key(System.IntPtr h, int vk, int scan) {
 }
 '@
 $W = [GhosttyLocalization.Win32]
+# Per-monitor aware (-4), so that rectangles are in real pixels.
+[void]$W::SetProcessDpiAwarenessContext([IntPtr](-4))
+Add-Type -AssemblyName UIAutomationClient, UIAutomationTypes
 
 function Fail([string]$message) {
     Write-Host "::error title=localization::$message"
@@ -144,6 +149,32 @@ function Texts([string]$language, [string[]]$options = @()) {
         $W::Key($surface, 0x76, 0x41)   # F7: end_search
         [void](WaitFor { $script:note = 'still shown'; -not $W::IsWindowVisible($bar) } 'the search bar to close')
 
+        # The tab bar: mirrored for a right-to-left language, so the tab
+        # is in the window's right half and the maximize button (found
+        # by the window's hit test, HTMAXBUTTON, in the middle of the
+        # three 46-wide caption buttons) is near its left edge.
+        $bar = $W::FindWindowExW($window, [IntPtr]::Zero, 'GhosttyTabBar', [NullString]::Value)
+        $tabsMirrored = ([long]$W::GetWindowLongPtrW($bar, -20) -band 0x400000) -ne 0
+        $barRect = New-Object GhosttyLocalization.Win32+RECT; [void]$W::GetWindowRect($bar, [ref]$barRect)
+        $middle = ($barRect.Left + $barRect.Right) / 2
+        $tab = WaitFor {
+            $script:note = 'no tab item'
+            [System.Windows.Automation.AutomationElement]::FromHandle($window).FindFirst(
+                [System.Windows.Automation.TreeScope]::Descendants,
+                (New-Object System.Windows.Automation.PropertyCondition(
+                    [System.Windows.Automation.AutomationElement]::ControlTypeProperty, [System.Windows.Automation.ControlType]::TabItem)))
+        } 'the tab, through UI Automation'
+        $tabRect = $tab.Current.BoundingRectangle
+        if ($tabRect.Width -le 0 -or $tabRect.Left -lt $barRect.Left -or $tabRect.Right -gt $barRect.Right) { Fail "LANGUAGE=$language`: the tab's rectangle $tabRect isn't inside the tab bar ($($barRect.Left)..$($barRect.Right))" }
+        $tabOnRight = ($tabRect.Left + $tabRect.Width / 2) -gt $middle
+        $dpi = $W::GetDpiForWindow($window)
+        $inset = [int](46 * 1.5 * $dpi / 96)
+        $y = $barRect.Top + [int](16 * $dpi / 96)
+        $hits = foreach ($x in @(($barRect.Left + $inset), ($barRect.Right - $inset))) {
+            [int]$W::SendMessageW($window, 0x0084, [IntPtr]0, [IntPtr](($y -shl 16) -bor ($x -band 0xFFFF)))   # WM_NCHITTEST
+        }
+        $maximizeOnLeft = "$($hits[0] -eq 9)/$($hits[1] -eq 9)"   # HTMAXBUTTON
+
         # The context menu's first item, without its shortcut.
         [void]$W::PostMessageW($surface, 0x0204, [IntPtr]2, [IntPtr]((40 -shl 16) -bor 40))   # WM_RBUTTONDOWN, MK_RBUTTON
         [void]$W::PostMessageW($surface, 0x0205, [IntPtr]0, [IntPtr]((40 -shl 16) -bor 40))   # WM_RBUTTONUP
@@ -164,6 +195,7 @@ function Texts([string]$language, [string[]]$options = @()) {
             ItemCount = $count
             RightToLeft = "$fieldRight/$barLeft"
             Search = "$barMirrored/$barOnLeft"
+            Tabs = "$tabsMirrored/$tabOnRight/$maximizeOnLeft"
         }
     } finally {
         if (-not $script:process.HasExited) { Stop-Process -Id $script:process.Id -Force }
@@ -201,11 +233,13 @@ if ($hebrew.Title -ceq 'Split Right' -or -not $hebrew.Title) { Fail "LANGUAGE=he
 if ($hebrew.ItemCount -ne $english.ItemCount) { Fail "the menu has $($hebrew.ItemCount) items in Hebrew and $($english.ItemCount) in English" }
 if ($hebrew.RightToLeft -ne 'True/True') { Fail "LANGUAGE=he: the palette should be laid out right to left (field/scrollbar): $($hebrew.RightToLeft)" }
 if ($hebrew.Search -ne 'True/True') { Fail "LANGUAGE=he: the search bar should be mirrored and on the left (mirrored/left): $($hebrew.Search)" }
+if ($hebrew.Tabs -ne 'True/True/True/False') { Fail "LANGUAGE=he: the tab bar should be mirrored, the tab on the right and the maximize button on the left (mirrored/tab right/maximize left/maximize right): $($hebrew.Tabs)" }
 foreach ($other in @($german, $english)) {
+    if ($other.Tabs -ne 'False/False/False/True') { Fail "the tab bar should be unmirrored outside Hebrew (mirrored/tab right/maximize left/maximize right): $($other.Tabs)" }
     if ($other.Search -ne 'False/False') { Fail "the search bar should be unmirrored and on the right outside Hebrew (mirrored/left): $($other.Search)" }
     if ($other.RightToLeft -ne 'False/False') { Fail "the palette should be laid out left to right outside Hebrew (field/scrollbar): $($other.RightToLeft)" }
 }
-Write-Host "LANGUAGE=he: the palette is translated and laid out right to left, and the search bar is mirrored on the left."
+Write-Host "LANGUAGE=he: the palette is translated and laid out right to left, the search bar is mirrored on the left, and the tab bar is mirrored."
 
 # The config's `language` wins over the environment's, both ways.
 $forced = Texts 'en' @('--language=de')

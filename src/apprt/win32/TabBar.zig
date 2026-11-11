@@ -74,8 +74,13 @@ pub const Hit = union(enum) {
 };
 
 pub fn init(self: *TabBar, window: *Window) !void {
+    // Mirrored for a right-to-left language: the tabs start at the right
+    // and the buttons are on the left, as in a window Windows mirrors.
+    // The layout, the painting and the mouse's positions are all in the
+    // bar's own coordinates, which Windows flips; only what crosses to
+    // the screen or the window has to map (see toScreen).
     const hwnd = c.CreateWindowExW(
-        0,
+        if (i18n.rightToLeft()) @as(c.DWORD, c.WS_EX_LAYOUTRTL) else 0,
         App.tab_bar_class,
         null,
         c.WS_CHILD | c.WS_CLIPSIBLINGS,
@@ -444,7 +449,10 @@ test "Layout: dragging finds the tab under the pointer" {
 /// at the top of) is on the maximize button.
 pub fn isMaximizeButton(self: *const TabBar, pt: c.POINT) bool {
     const caption = self.layout().caption orelse return false;
-    return c.PtInRect(&caption.maximize, pt) != 0;
+    // To the bar's coordinates, which differ when it's mirrored.
+    var bar_pt = pt;
+    _ = c.MapWindowPoints(self.window.hwnd, self.hwnd, &bar_pt, 1);
+    return c.PtInRect(&caption.maximize, bar_pt) != 0;
 }
 
 /// The window tells us when the mouse is over the maximize button.
@@ -548,11 +556,11 @@ fn hitTest(self: *const TabBar, x: c_int, y: c_int) ?Hit {
 
 /// A rectangle in the tab bar, on the screen.
 fn toScreen(self: *const TabBar, rect: c.RECT) c.RECT {
-    var top_left: c.POINT = .{ .x = rect.left, .y = rect.top };
-    var bottom_right: c.POINT = .{ .x = rect.right, .y = rect.bottom };
-    _ = c.ClientToScreen(self.hwnd, &top_left);
-    _ = c.ClientToScreen(self.hwnd, &bottom_right);
-    return .{ .left = top_left.x, .top = top_left.y, .right = bottom_right.x, .bottom = bottom_right.y };
+    // As a rectangle (two points), so that a mirrored bar's comes out
+    // with its left and right the right way round.
+    var screen = rect;
+    _ = c.MapWindowPoints(self.hwnd, null, @ptrCast(&screen), 2);
+    return screen;
 }
 
 //----------------------------------------------------------------------------
