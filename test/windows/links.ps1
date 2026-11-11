@@ -89,7 +89,7 @@ function Dialog([string]$title) {
 
 # Click $button in each of Ghostty's dialogs titled $title until none are
 # left, and return how many there were.
-function CloseDialogs([string]$title, [string]$button) {
+function CloseDialogs([string]$title, [string]$button, [int]$id = 0) {
     $closed = 0
     $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
     while ((Get-Date) -lt $deadline) {
@@ -98,6 +98,17 @@ function CloseDialogs([string]$title, [string]$button) {
             # Wait a moment in case another one is about to appear.
             Start-Sleep -Milliseconds 1000
             if (-not (Dialog $title)) { return $closed }
+            continue
+        }
+        if ($id) {
+            # A task dialog: its buttons are pressed by ID, with
+            # TDM_CLICK_BUTTON, again until it's ready for that and goes.
+            [void](WaitFor {
+                [void]$W::PostMessageW($dialog, 0x0466, [IntPtr]$id, [IntPtr]::Zero)
+                Start-Sleep -Milliseconds 300
+                (Dialog $title) -ne $dialog
+            } "the $title dialog to close")
+            $closed++
             continue
         }
         $b = $W::FindWindowExW($dialog, [IntPtr]::Zero, 'Button', $button)
@@ -213,10 +224,10 @@ try {
     Write-Host 'A link to a script was blocked, and the script did not run.'
     Close
 
-    # Another app's scheme asks first. No (the default) doesn't open it.
+    # Another app's scheme asks first. Cancel (the default) doesn't open it.
     ClickLink 'ms-settings:about'
     $dialog = WaitFor { Dialog 'Open Link' } 'the Open Link dialog'
-    $count = CloseDialogs 'Open Link' '&No'
+    $count = CloseDialogs 'Open Link' 'Cancel' 2
     if ($count -ne 1) { Fail "one click showed $count Open Link dialogs" }
     Write-Host 'A link to ms-settings: asked first.'
     Close

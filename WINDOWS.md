@@ -2933,7 +2933,9 @@ Notes:
         tests have no manifest), with a message box as the fallback.
         A task dialog has the same window class, so the tests find it
         as before, but its buttons aren't its children: `dialog-race.ps1`
-        and `paste-race.ps1` press them by ID with `TDM_CLICK_BUTTON`.
+        and `paste-race.ps1` press them by ID with `TDM_CLICK_BUTTON`
+        (and `links.ps1`, which I missed: it pressed "No" in the Open
+        Link dialog and failed in run 42961060575, the only failure).
         Both pass here, as do the unit tests for each dialog's text;
         checked by eye in English and German. "Link Blocked" only has
         OK, so it stays a message box.
