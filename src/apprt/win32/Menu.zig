@@ -187,20 +187,15 @@ const view_items = [_]Item{
     .act("Re&set", .reset),
 };
 
+/// Only what's about the window. The macOS app's Window menu also has
+/// its split commands (zoom, select, equalize), which are keyboard
+/// commands here (and in the command palette), and "Show/Hide All
+/// Terminals", which on Windows left no window to get them back from:
+/// `toggle_visibility` is for a global keybind.
 const window_items = [_]Item{
     .act("&Full Screen", .toggle_fullscreen),
-    .act("&Show/Hide All Terminals", .toggle_visibility),
     .act("Float on &Top", .toggle_window_float_on_top),
     .act("Return to &Default Size", .reset_window_size),
-    .separator,
-    .act("&Zoom Split", .toggle_split_zoom),
-    .act("Select &Previous Split", .{ .goto_split = .previous }),
-    .act("Select &Next Split", .{ .goto_split = .next }),
-    .act("Select Split &Above", .{ .goto_split = .up }),
-    .act("Select Split &Below", .{ .goto_split = .down }),
-    .act("Select Split &Left", .{ .goto_split = .left }),
-    .act("Select Split &Right", .{ .goto_split = .right }),
-    .act("&Equalize Splits", .equalize_splits),
 };
 
 /// For labels that have no translation of their own (they follow the
@@ -219,15 +214,8 @@ const translated_as: std.StaticStringMap([:0]const u8) = .initComptime(.{
     .{ "Quit Ghostty", "Quit" },
     .{ "Reopen Closed Tab", "Undo" },
     .{ "Return to Default Size", "Reset Window Size" },
-    .{ "Select Next Split", "Focus Split: Next" },
-    .{ "Select Previous Split", "Focus Split: Previous" },
-    .{ "Select Split Above", "Focus Split: Up" },
-    .{ "Select Split Below", "Focus Split: Down" },
-    .{ "Select Split Left", "Focus Split: Left" },
-    .{ "Select Split Right", "Focus Split: Right" },
     .{ "Terminal Read-only", "Toggle Read-Only Mode" },
     .{ "Use Selection for Find", "Search Selection" },
-    .{ "Zoom Split", "Toggle Split Zoom" },
 });
 
 /// A label in the user's language, if we have a translation for it;
