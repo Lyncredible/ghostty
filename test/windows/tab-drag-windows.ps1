@@ -7,6 +7,11 @@
 # with cmd's `title` (the shell integration's titles are off so the names
 # stay), and their order and positions come from UI Automation.
 #
+# Then, started again without window decorations (so that a window with
+# one tab shows no tab bar): a tab dragged over such a window marks it
+# with a line along the top of its terminal, which goes when the pointer
+# leaves the window, and dropped there the tab joins it.
+#
 #     ./tab-drag-windows.ps1 -Exe zig-out/bin/ghostty.exe
 
 param(
@@ -23,6 +28,8 @@ trap {
 Add-Type -AssemblyName UIAutomationClient, UIAutomationTypes
 Add-Type -Namespace GhosttyTabDragWindows -Name Win32 -MemberDefinition @'
 [StructLayout(LayoutKind.Sequential)] public struct POINT { public int x, y; }
+[StructLayout(LayoutKind.Sequential)] public struct RECT { public int left, top, right, bottom; }
+[DllImport("user32.dll")] public static extern bool GetWindowRect(System.IntPtr h, out RECT r);
 [DllImport("user32.dll")] public static extern bool PostMessageW(System.IntPtr h, uint m, System.IntPtr w, System.IntPtr l);
 [DllImport("user32.dll")] public static extern bool IsWindowVisible(System.IntPtr h);
 [DllImport("user32.dll")] public static extern bool ScreenToClient(System.IntPtr h, ref POINT p);
@@ -51,9 +58,12 @@ $W = [GhosttyTabDragWindows.Win32]
 [void]$W::SetThreadDpiAwarenessContext([IntPtr]-4)   # per monitor v2, like Ghostty
 
 $log = Join-Path ([IO.Path]::GetTempPath()) "ghostty-tab-drag-windows-$PID.log"
-$process = Start-Process -FilePath $Exe -PassThru -RedirectStandardError $log -ArgumentList '--command=cmd.exe',
-    '--window-save-state=never', '--shell-integration-features=no-title', '--keybind=f5=new_tab',
-    '--keybind=f8=new_window', "--class=ghostty-tab-drag-windows-$PID"
+function Launch([string[]]$more) {
+    Start-Process -FilePath $Exe -PassThru -RedirectStandardError $log -ArgumentList (@('--command=cmd.exe',
+        '--window-save-state=never', '--shell-integration-features=no-title', '--keybind=f5=new_tab',
+        '--keybind=f8=new_window', "--class=ghostty-tab-drag-windows-$PID") + $more)
+}
+$process = Launch @()
 
 function Fail([string]$message) {
     Write-Host "::error title=tab-drag-windows::$message"
@@ -184,6 +194,55 @@ try {
     Drag $second 'AONE' 500 300
     [void](WaitFor { $script:note = "$(@(TopLevels 'GhosttyWindow').Count) windows, first: $(Names $first)"; @(TopLevels 'GhosttyWindow').Count -eq 1 -and (Names $first) -eq 'BONE ATWO AONE' } 'AONE after the last tab of the first window')
     Write-Host "Dropped on the other window's terminal: first window: $(Names $first)."
+
+    # Again without decorations: a window with one tab shows no tab bar.
+    Stop-Process -Id $process.Id -Force
+    $process.WaitForExit()
+    $process = Launch @('--window-decoration=none')
+    $first = WaitFor { $h = @(TopLevels 'GhosttyWindow'); if ($h.Count -eq 1) { $h[0] } } 'the window without decorations'
+    [void](WaitFor { Shown $first } 'its terminal')
+    Start-Sleep -Seconds 2
+    $one = Shown $first
+    $W::Key($one, 0x74, 0x3F)   # F5: new_tab
+    [void](WaitFor { $s = Shown $first; if ($s -and $s -ne $one) { $s } } 'its second tab')
+    Start-Sleep -Seconds 2
+    Name $first 'ATWO'
+    $W::Key((Shown $first), 0x77, 0x42)   # F8: new_window
+    $second = WaitFor { $h = @(TopLevels 'GhosttyWindow' | Where-Object { $_ -ne $first }); if ($h.Count -eq 1) { $h[0] } } 'the second window without decorations'
+    [void](WaitFor { Shown $second } "the second window's terminal")
+    Start-Sleep -Seconds 2
+    [void]$W::SetWindowPos($first, [IntPtr]::Zero, 20, 20, 1000, 420, 0x0014)
+    [void]$W::SetWindowPos($second, [IntPtr]::Zero, 20, 460, 1000, 420, 0x0014)
+    Start-Sleep -Seconds 1
+    if ($W::IsWindowVisible((Bar $second))) { Fail 'the second window shows a tab bar with one tab and no decorations' }
+
+    $tab = (Tabs $first) | Where-Object { $_.Current.Name -match 'ATWO$' } | Select-Object -First 1
+    if (-not $tab) { Fail 'no tab named ATWO to drag' }
+    $r = $tab.Current.BoundingRectangle
+    $fromX = [int]($r.X + $r.Width / 2); $fromY = [int]($r.Y + $r.Height / 2)
+    $bar = Bar $first
+    $W::Mouse($bar, 0x0201, 1, $fromX, $fromY)          # WM_LBUTTONDOWN
+    Start-Sleep -Milliseconds 300
+    $W::Mouse($bar, 0x0200, 1, $fromX, $fromY + 20)     # WM_MOUSEMOVE, past the drag threshold
+    # Over the second window: the tab's picture, and the line on the window.
+    $W::Mouse($bar, 0x0200, 1, 500, 650)
+    $script:note = 'not two GhosttyTabGhost windows'
+    [void](WaitFor { @(TopLevels 'GhosttyTabGhost').Count -eq 2 } 'the picture of ATWO and the mark on the window without a tab bar')
+    $area = New-Object GhosttyTabDragWindows.Win32+RECT; [void]$W::GetWindowRect((Shown $second), [ref]$area)
+    $marks = @(TopLevels 'GhosttyTabGhost' | Where-Object {
+        $m = New-Object GhosttyTabDragWindows.Win32+RECT; [void]$W::GetWindowRect($_, [ref]$m)
+        $m.left -eq $area.left -and $m.top -eq $area.top -and $m.right -eq $area.right -and ($m.bottom - $m.top) -lt 20
+    })
+    if ($marks.Count -ne 1) { Fail "no thin mark along the top of the second window's terminal" }
+    # Over our own terminal: nothing to mark.
+    $W::Mouse($bar, 0x0200, 1, 500, 300)
+    [void](WaitFor { $script:note = 'the mark still shows'; @(TopLevels 'GhosttyTabGhost').Count -eq 1 } 'the mark to go when the pointer leaves the window')
+    $W::Mouse($bar, 0x0200, 1, 500, 650)
+    [void](WaitFor { $script:note = 'no mark'; @(TopLevels 'GhosttyTabGhost').Count -eq 2 } 'the mark again over the window')
+    $W::Mouse($bar, 0x0202, 0, 500, 650)                # WM_LBUTTONUP
+    [void](WaitFor { $script:note = 'still showing'; @(TopLevels 'GhosttyTabGhost').Count -eq 0 } 'the picture and the mark to go after the drop')
+    [void](WaitFor { $script:note = "second window: $(Names $second)"; $W::IsWindowVisible((Bar $second)) -and (Tabs $second).Count -eq 2 -and (Names $second) -match 'ATWO$' } 'ATWO after the tab of the second window')
+    Write-Host "Without decorations, a window with no tab bar was marked along its top while the tab was over it, and took the tab: $note."
 } finally {
     if (-not $process.HasExited) { Stop-Process -Id $process.Id -Force }
     Remove-Item -LiteralPath $log -Force -ErrorAction SilentlyContinue

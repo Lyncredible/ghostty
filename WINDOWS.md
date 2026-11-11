@@ -1796,9 +1796,16 @@ Notes:
         selects the other tab with a key in the middle of a drag out
         of the bar: the picture goes and letting go moves nothing (it
         fails without the fix).
-  - [ ] The target window doesn't show its mark when its tab bar is
-        hidden (`window-show-tab-bar = never`, or a single tab with
-        `auto`).
+  - [x] A target window whose tab bar is hidden (a single tab where
+        the tabs aren't in the title bar: no decorations, fullscreen,
+        the quick terminal, high contrast) had nowhere to show its
+        mark. A line along the top of its terminal marks it now, drawn
+        by the dragging tab bar in a second click-through popup of the
+        picture's class. `tab-drag-windows.ps1` checks it in a second
+        run with `window-decoration = none`: the line shows over the
+        window, goes when the pointer leaves, and the dropped tab
+        joins the window. (With `window-show-tab-bar = never` there's
+        no bar to drag from.)
 - [x] Background opacity/blur (DirectComposition swap chain)
   - [x] `toggle_background_opacity`. Checked with `PrintWindow` captures
         (background `#3060c0`, opacity 0.5, toggled by an F12 keybind):
