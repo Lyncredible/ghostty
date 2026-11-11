@@ -2968,8 +2968,15 @@ Notes:
         on the left, submenus opening leftward. And the title dialog
         (`WS_EX_LAYOUTRTL` in its template, which its controls
         inherit): the hint and the text right-aligned, OK and Cancel on
-        the left. The tab bar, command palette and search bar are still
-        laid out left to right. CI run 42987799169 (a412026d2) passed every job, with
+        the left. The command palette puts the field's text and the
+        entries at the right, the shortcuts and the scrollbar at the left
+        (`WS_EX_RIGHT`, `WS_EX_LEFTSCROLLBAR` and `DT_RIGHT |
+        DT_RTLREADING` in its own drawing). The search bar is mirrored
+        (`WS_EX_LAYOUTRTL`) and sits in the top left corner. Both checked
+        from captures with `LANGUAGE=he`; `command-palette.ps1` and
+        `search.ps1` still pass. The tab bar is still laid out left to
+        right, and the search bar's "Find" hint has no translation (GTK
+        has no such text). CI run 42987799169 (a412026d2) passed every job, with
         the localization test's new dialog check, and run 42994318172
         (9697b9ff6) passed every job with the title dialog's layout.
   - [ ] A person who reads one of the languages should look over a
