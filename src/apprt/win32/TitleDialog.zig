@@ -121,7 +121,9 @@ const Template = struct {
         const style: u32 = c.DS_SETFONT | c.DS_MODALFRAME | c.DS_CENTER |
             c.WS_POPUP | c.WS_CAPTION | c.WS_SYSMENU;
         self.dword(style);
-        self.dword(0); // extended style
+        // Extended style: mirrored for a right-to-left language, which
+        // the controls inherit.
+        self.dword(if (i18n.rightToLeft()) c.WS_EX_LAYOUTRTL else 0);
         self.word(4); // number of items
         self.word(0); // x
         self.word(0); // y
@@ -148,7 +150,9 @@ const Template = struct {
         // Each item starts on a DWORD boundary.
         if (self.len % 2 != 0) self.word(0);
         self.dword(style);
-        self.dword(0); // extended style
+        // Extended style: mirrored for a right-to-left language, which
+        // the controls inherit.
+        self.dword(if (i18n.rightToLeft()) c.WS_EX_LAYOUTRTL else 0);
         self.word(@bitCast(x));
         self.word(@bitCast(y));
         self.word(@bitCast(cx));
