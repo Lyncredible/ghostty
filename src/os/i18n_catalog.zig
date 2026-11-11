@@ -410,6 +410,26 @@ fn exact(locales: []const [:0]const u8, name: []const u8) ?[:0]const u8 {
     return null;
 }
 
+/// Whether a locale's language is written right to left.
+pub fn isRightToLeft(locale: []const u8) bool {
+    const end = std.mem.indexOfAny(u8, locale, "_-.@") orelse locale.len;
+    for ([_][]const u8{ "he", "ar", "fa", "ur", "yi" }) |language| {
+        if (std.ascii.eqlIgnoreCase(locale[0..end], language)) return true;
+    }
+    return false;
+}
+
+test isRightToLeft {
+    const testing = std.testing;
+    try testing.expect(isRightToLeft("he"));
+    try testing.expect(isRightToLeft("ar_EG.UTF-8"));
+    try testing.expect(isRightToLeft("fa-IR"));
+    try testing.expect(!isRightToLeft("de"));
+    try testing.expect(!isRightToLeft("hr"));
+    try testing.expect(!isRightToLeft("heb"));
+    try testing.expect(!isRightToLeft(""));
+}
+
 /// Whether a language name is English, which the messages are written
 /// in: a user who prefers it wants them as they are, not the next
 /// language in their list.

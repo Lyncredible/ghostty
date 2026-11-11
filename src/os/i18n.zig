@@ -109,11 +109,20 @@ pub fn useEmbeddedLocale(locale: ?[]const u8) bool {
     if (comptime !embedded) return locale == null;
     const name = locale orelse {
         embedded_catalog = null;
+        embedded_rtl = false;
         return true;
     };
     embedded_catalog = catalog.Catalog.find(@import("i18n_catalog_data").blob, name) orelse
         return false;
+    embedded_rtl = catalog.isRightToLeft(name);
     return true;
+}
+
+/// Whether the language being translated to is written right to left
+/// (Hebrew), for the windows that can lay themselves out that way.
+pub fn rightToLeft() bool {
+    if (comptime !embedded) return false;
+    return embedded_rtl;
 }
 
 /// Use the language the config asks for (`language`), instead of the
@@ -148,6 +157,7 @@ pub const embedded = builtin.target.os.tag == .windows and
 /// The messages of the user's language, if we have it. Set once by
 /// `initEmbedded`, before any other thread starts.
 var embedded_catalog: ?catalog.Catalog = null;
+var embedded_rtl: bool = false;
 
 /// Choose the language of the embedded catalog: the first we have of
 /// `LANGUAGE` (as for gettext, "de" or "pt_BR:es"), or else of the
