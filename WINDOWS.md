@@ -1506,6 +1506,22 @@ Notes:
         the marker is on screen and how the screen ends. Run
         42941442318 (cfe358176) passed every job, without needing to
         type a marker again, and `windows-tip` moved.
+  - [x] It failed there again in run 42948447833 (098593a94), now
+        saying what was on screen: the command had run (its output was
+        there), but the typed line read `echo M`, a line break,
+        `OVE-THIS-TAB`. So the characters weren't lost: the console host
+        broke the line being typed in two. A debug log of a new tab
+        showed why it might: every terminal sent the pseudoconsole two
+        resizes right after starting, at the size it already had, and
+        console hosts repaint the screen for each (Windows Server
+        2022's is an old one). `Pty.setSize` now tells the console
+        nothing when the columns and rows are the same (a size in
+        pixels means nothing to it), which also spares every shell a
+        redraw at start. Unit test: "windows: adopted console" (the
+        same size again, and with other pixels, writes no resize
+        packet; adopting still sends the first). Here the tabs, splits,
+        session restore and handoff tests pass (handoff resizes a
+        console for real: 45 columns, then 24).
 - [x] Tip builds, like upstream's `release-tip.yml` (the discussion's
       release workflow item): a rolling prerelease of the latest
       `windows` commit, so people can try it without building. Approved
