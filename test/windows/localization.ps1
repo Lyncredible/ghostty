@@ -28,6 +28,8 @@ Add-Type -Namespace GhosttyLocalization -Name Win32 -MemberDefinition @'
 [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(System.IntPtr h, out uint pid);
 [DllImport("user32.dll", CharSet = CharSet.Unicode)] public static extern System.IntPtr FindWindowExW(System.IntPtr parent, System.IntPtr after, string cls, string title);
 [DllImport("user32.dll")] public static extern System.IntPtr GetWindowLongPtrW(System.IntPtr h, int index);
+[StructLayout(LayoutKind.Sequential)] public struct RECT { public int Left, Top, Right, Bottom; }
+[DllImport("user32.dll")] public static extern bool GetWindowRect(System.IntPtr h, out RECT r);
 [DllImport("user32.dll")] public static extern int GetMenuItemCount(System.IntPtr menu);
 [DllImport("user32.dll", CharSet = CharSet.Unicode)] public static extern int GetMenuStringW(System.IntPtr menu, uint item, System.Text.StringBuilder s, int max, uint flags);
 [DllImport("user32.dll", CharSet = CharSet.Unicode)] public static extern int GetWindowTextW(System.IntPtr h, System.Text.StringBuilder s, int max);
@@ -100,7 +102,7 @@ function Texts([string]$language, [string[]]$options = @()) {
     $script:log = Join-Path ([IO.Path]::GetTempPath()) "ghostty-localization-$PID.log"
     try {
         $script:process = Start-Process -FilePath $Exe -PassThru -RedirectStandardError $script:log -ArgumentList (@('--command=cmd.exe') +
-            (@('--window-save-state=never', '--keybind=f9=toggle_command_palette', "--class=ghostty-localization-$PID") + $options))
+            (@('--window-save-state=never', '--keybind=f9=toggle_command_palette', '--keybind=f8=start_search', '--keybind=f7=end_search', "--class=ghostty-localization-$PID") + $options))
     } finally { $env:LANGUAGE = $old }
 
     try {
@@ -130,6 +132,18 @@ function Texts([string]$language, [string[]]$options = @()) {
         $W::Key($edit, 0x1B, 0x01)   # Escape
         [void](WaitFor { $script:note = 'still shown'; -not $W::IsWindowVisible($palette) } 'the palette to close')
 
+        # The search bar: mirrored (WS_EX_LAYOUTRTL) and in the terminal's
+        # left half for a right-to-left language, in the right half
+        # otherwise.
+        $W::Key($surface, 0x77, 0x42)   # F8: start_search
+        $bar = WaitFor { $script:note = 'no search bar'; $h = $W::FindWindowExW($surface, [IntPtr]::Zero, 'GhosttySearchBar', [NullString]::Value); if ($h -ne [IntPtr]::Zero -and $W::IsWindowVisible($h)) { $h } } 'the search bar'
+        $barRect = New-Object GhosttyLocalization.Win32+RECT; [void]$W::GetWindowRect($bar, [ref]$barRect)
+        $surfaceRect = New-Object GhosttyLocalization.Win32+RECT; [void]$W::GetWindowRect($surface, [ref]$surfaceRect)
+        $barMirrored = ([long]$W::GetWindowLongPtrW($bar, -20) -band 0x400000) -ne 0
+        $barOnLeft = ($barRect.Left + $barRect.Right) -lt ($surfaceRect.Left + $surfaceRect.Right)
+        $W::Key($surface, 0x76, 0x41)   # F7: end_search
+        [void](WaitFor { $script:note = 'still shown'; -not $W::IsWindowVisible($bar) } 'the search bar to close')
+
         # The context menu's first item, without its shortcut.
         [void]$W::PostMessageW($surface, 0x0204, [IntPtr]2, [IntPtr]((40 -shl 16) -bor 40))   # WM_RBUTTONDOWN, MK_RBUTTON
         [void]$W::PostMessageW($surface, 0x0205, [IntPtr]0, [IntPtr]((40 -shl 16) -bor 40))   # WM_RBUTTONUP
@@ -149,6 +163,7 @@ function Texts([string]$language, [string[]]$options = @()) {
             Item = ($item.ToString() -split "`t")[0]
             ItemCount = $count
             RightToLeft = "$fieldRight/$barLeft"
+            Search = "$barMirrored/$barOnLeft"
         }
     } finally {
         if (-not $script:process.HasExited) { Stop-Process -Id $script:process.Id -Force }
@@ -185,10 +200,12 @@ if ($hebrew.Log -notmatch 'translations locale=he ') { Fail "LANGUAGE=he: the lo
 if ($hebrew.Title -ceq 'Split Right' -or -not $hebrew.Title) { Fail "LANGUAGE=he: the palette's entry isn't translated: '$($hebrew.Title)'" }
 if ($hebrew.ItemCount -ne $english.ItemCount) { Fail "the menu has $($hebrew.ItemCount) items in Hebrew and $($english.ItemCount) in English" }
 if ($hebrew.RightToLeft -ne 'True/True') { Fail "LANGUAGE=he: the palette should be laid out right to left (field/scrollbar): $($hebrew.RightToLeft)" }
+if ($hebrew.Search -ne 'True/True') { Fail "LANGUAGE=he: the search bar should be mirrored and on the left (mirrored/left): $($hebrew.Search)" }
 foreach ($other in @($german, $english)) {
+    if ($other.Search -ne 'False/False') { Fail "the search bar should be unmirrored and on the right outside Hebrew (mirrored/left): $($other.Search)" }
     if ($other.RightToLeft -ne 'False/False') { Fail "the palette should be laid out left to right outside Hebrew (field/scrollbar): $($other.RightToLeft)" }
 }
-Write-Host "LANGUAGE=he: the palette is translated and laid out right to left."
+Write-Host "LANGUAGE=he: the palette is translated and laid out right to left, and the search bar is mirrored on the left."
 
 # The config's `language` wins over the environment's, both ways.
 $forced = Texts 'en' @('--language=de')

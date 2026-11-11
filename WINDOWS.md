@@ -2988,7 +2988,8 @@ Notes:
         palette's entry is translated, its field has `WS_EX_RIGHT` and
         its list `WS_EX_LEFTSCROLLBAR`, neither is set in German or
         English, and `--language=en` over `LANGUAGE=he` is English and
-        left to right. No test looks at the search bar's mirroring yet.
+        left to right. It also opens the search bar: mirrored and in the
+        terminal's left half in Hebrew, neither otherwise.
   - [ ] A person who reads one of the languages should look over a
         translated build: the menus mix GTK's wording into macOS's
         layout, and right-to-left languages (Hebrew) aren't laid out
