@@ -3022,7 +3022,8 @@ Notes:
         `compact-tabs.ps1` assume English names or left-to-right
         positions and aren't run that way. Not mirrored: the system's
         own title bar (without tabs in it), whose buttons stay on the
-        right. CI run 42987799169 (a412026d2) passed every job, with
+        right. CI run 43037205555 (3675d94f0) passed every job on its
+        first attempt. CI run 42987799169 (a412026d2) passed every job, with
         the localization test's new dialog check, and run 42994318172
         (9697b9ff6) passed every job with the title dialog's layout.
         Run 43003852589 (5e55f7848, the palette and search bar) passed
