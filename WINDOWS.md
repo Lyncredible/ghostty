@@ -1565,6 +1565,14 @@ Notes:
         43071605639 (1eaa5636b, the drag that ends because its tab
         closed) passed every job. Pushed as 1e2990ff0; CI run
         43083455155 passed every job, and `windows-tip` moved.
+  - [x] 2026-11-11: a thirtieth sync (5 commits: the search thread's
+        test no longer crashes on a timeout, libghostty-vt's version
+        set to 1.0.1-dev, and fixes to the snap CI). No conflicts;
+        dates kept (817 commits checked). The app builds, and the
+        search tests (160) and libghostty-vt's version tests (101)
+        pass. Before it, CI run 43092748864 (119e11442: the test of a
+        drag ended by selecting another tab, and the dragged tab's
+        picture mirrored in right-to-left languages) passed every job.
   - [x] It failed there again in run 42948447833 (098593a94), now
         saying what was on screen: the command had run (its output was
         there), but the typed line read `echo M`, a line break,
