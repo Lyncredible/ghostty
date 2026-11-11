@@ -2818,6 +2818,20 @@ Notes:
       names ("Close Tab", "New Tab", "Close"), "Untitled", the
       read-only badge, the inspector's export dialog's title, and the
       jump list's "New Window" task.
+  - [x] Review (2026-11-10): the `language` config option (GTK only
+        upstream) did nothing here, so someone with a German Windows
+        who wants Ghostty in English had only the `LANGUAGE`
+        environment variable, which is awkward for an app started from
+        the Start menu. The app now applies it when it starts
+        (`language = en`, `de`, `pt_BR`, `zh-TW`; a language we have
+        nothing for is logged and changes nothing), over `LANGUAGE` and
+        the display languages. For that, the command palette translates
+        its entries when it opens rather than when the config is made
+        (which is before its `language` is known), so the core's config
+        is as upstream has it again. Unit test: the language switches
+        in "embedded catalog"; `localization.ps1` runs `--language=de`
+        with `LANGUAGE=en`, and the reverse. Like GTK's, it only
+        applies at start.
   - Still English everywhere, since upstream has no messages for them:
     the File, Edit and View submenus' names, the shell submenus, "Quick
     Terminal", "Show/Hide All Terminals", the search bar's match count,
