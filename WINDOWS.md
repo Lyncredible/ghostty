@@ -1546,6 +1546,8 @@ Notes:
         terminal snapshot keeps its last page's capacity, in the core's
         page list). No conflicts; dates kept (789 commits checked). The
         app builds and the snapshot and page list tests pass (573).
+        CI run 42969477748 (6459b9ac8) passed every job, and
+        `windows-tip` moved.
   - [x] It failed there again in run 42948447833 (098593a94), now
         saying what was on screen: the command had run (its output was
         there), but the typed line read `echo M`, a line break,
