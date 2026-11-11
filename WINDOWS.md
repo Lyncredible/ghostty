@@ -2970,7 +2970,8 @@ Notes:
         inherit): the hint and the text right-aligned, OK and Cancel on
         the left. The tab bar, command palette and search bar are still
         laid out left to right. CI run 42987799169 (a412026d2) passed every job, with
-        the localization test's new dialog check.
+        the localization test's new dialog check, and run 42994318172
+        (9697b9ff6) passed every job with the title dialog's layout.
   - [ ] A person who reads one of the languages should look over a
         translated build: the menus mix GTK's wording into macOS's
         layout, and right-to-left languages (Hebrew) aren't laid out
