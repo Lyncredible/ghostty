@@ -1563,7 +1563,8 @@ Notes:
         kept (813 commits checked). The app builds and the page list
         and resize tests pass (412 and 278). Before it, CI run
         43071605639 (1eaa5636b, the drag that ends because its tab
-        closed) passed every job.
+        closed) passed every job. Pushed as 1e2990ff0; CI run
+        43083455155 passed every job, and `windows-tip` moved.
   - [x] It failed there again in run 42948447833 (098593a94), now
         saying what was on screen: the command had run (its output was
         there), but the typed line read `echo M`, a line break,
