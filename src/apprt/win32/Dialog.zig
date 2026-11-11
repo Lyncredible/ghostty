@@ -62,6 +62,7 @@ pub fn ask(
         const config: Config = .{
             .hwndParent = owner,
             .dwFlags = TDF_ALLOW_DIALOG_CANCELLATION |
+                @as(c_int, if (i18n.rightToLeft()) TDF_RTL_LAYOUT else 0) |
                 @as(c_int, if (owner != null) TDF_POSITION_RELATIVE_TO_WINDOW else 0),
             .pszWindowTitle = title16.ptr,
             .pszMainIcon = TD_WARNING_ICON,
@@ -82,9 +83,10 @@ pub fn ask(
     // Without version 6 of the common controls (our manifest asks for
     // it, so this is a build without the manifest) there's no task
     // dialog: OK and Cancel stand for the two buttons.
-    const flags: c.UINT = switch (default) {
-        .accept => c.MB_OKCANCEL | c.MB_ICONWARNING,
-        .reject => c.MB_OKCANCEL | c.MB_ICONWARNING | c.MB_DEFBUTTON2,
+    const direction: c.UINT = if (i18n.rightToLeft()) c.MB_RTLREADING | c.MB_RIGHT else 0;
+    const flags: c.UINT = direction | switch (default) {
+        .accept => @as(c.UINT, c.MB_OKCANCEL | c.MB_ICONWARNING),
+        .reject => @as(c.UINT, c.MB_OKCANCEL | c.MB_ICONWARNING | c.MB_DEFBUTTON2),
     };
     return c.MessageBoxW(owner, message, title16.ptr, flags) == c.IDOK;
 }
@@ -132,6 +134,7 @@ test "Text: translated" {
 
 const TDF_ALLOW_DIALOG_CANCELLATION = 0x0008;
 const TDF_POSITION_RELATIVE_TO_WINDOW = 0x1000;
+const TDF_RTL_LAYOUT = 0x2000;
 
 /// `TD_WARNING_ICON`: `MAKEINTRESOURCEW(-1)`.
 const TD_WARNING_ICON: ?[*:0]align(1) const u16 = @ptrFromInt(0xFFFF);

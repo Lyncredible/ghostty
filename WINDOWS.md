@@ -2959,6 +2959,12 @@ Notes:
         translations of them. 460 KB, from 778. The unit tests (which
         also change every byte of a small catalog in turn, and cut it
         at every length) and `localization.ps1` pass.
+  - [x] The dialogs are laid out right to left for a right-to-left
+        language (Hebrew is the one we have): `TDF_RTL_LAYOUT`, by
+        `i18n.rightToLeft()`. Seen here with `LANGUAGE=he`: the icon on
+        the right, the buttons on the left, the text right-aligned. The
+        menus, tab bar, command palette and title dialog are still laid
+        out left to right.
   - [ ] A person who reads one of the languages should look over a
         translated build: the menus mix GTK's wording into macOS's
         layout, and right-to-left languages (Hebrew) aren't laid out
