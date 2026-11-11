@@ -939,6 +939,16 @@ fn handleIpc(self: *App, data: []const u8) bool {
         .none;
     log.debug("IPC request kind={} surface={}", .{ request.kind, request.surface_id });
 
+    // Hidden windows have no taskbar button, so without a global keybind
+    // for toggle_visibility there was no way to get them back: starting
+    // Ghostty again (which sends us this) only added a window. Like
+    // macOS showing a hidden app's windows when it's opened again, it
+    // now brings them back too.
+    if (request.kind != .toggle_quick_terminal and self.showHiddenWindows()) {
+        log.info("showing the windows toggle_visibility hid", .{});
+        self.hidden_active = null;
+    }
+
     switch (request.kind) {
         .new_window => {
             const window = self.newWindow(.{ .overrides = overrides }) catch |err| {
@@ -1082,12 +1092,7 @@ fn toggleVisibility(self: *App) void {
         return;
     }
 
-    // Only the windows we hid come back: a quick terminal that was hidden
-    // stays hidden.
-    for (self.windows.items) |w| if (w.hidden_by_toggle) {
-        w.hidden_by_toggle = false;
-        _ = c.ShowWindow(w.hwnd, c.SW_SHOWNA);
-    };
+    _ = self.showHiddenWindows();
     const target = if (self.hidden_active) |hidden|
         if (std.mem.indexOfScalar(*Window, self.windows.items, hidden) != null) hidden else null
     else
@@ -1095,6 +1100,19 @@ fn toggleVisibility(self: *App) void {
     self.hidden_active = null;
     const window = target orelse self.activeWindow() orelse return;
     window.present(window.activeSurface());
+}
+
+/// Show the windows toggle_visibility hid, without activating any. Only
+/// those come back: a quick terminal that was hidden stays hidden.
+/// Returns whether there were any.
+fn showHiddenWindows(self: *App) bool {
+    var any = false;
+    for (self.windows.items) |w| if (w.hidden_by_toggle) {
+        w.hidden_by_toggle = false;
+        _ = c.ShowWindow(w.hwnd, c.SW_SHOWNA);
+        any = true;
+    };
+    return any;
 }
 
 /// Called by a window when it's destroyed, to remove it from our list.
