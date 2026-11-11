@@ -1,7 +1,8 @@
 # Checks the app's translations: with `LANGUAGE=de` the command palette's
 # entries and the terminal's context menu are German, with `LANGUAGE=en`
 # (and for a language we have nothing for) they're English, whatever the
-# display language of the machine. The texts are read from the palette's
+# display language of the machine, and the config's `language` wins over
+# both. The texts are read from the palette's
 # list box and the popup menu, and keys and clicks are posted to Ghostty's
 # windows, so it runs on a locked desktop.
 #
@@ -73,13 +74,13 @@ function TopLevel([string]$class) {
 # Start Ghostty with LANGUAGE set (or unset, for null), and read: the log's
 # line about translations, the title of the palette's entry for
 # `new_split:right`, and the context menu's first item.
-function Texts([string]$language) {
+function Texts([string]$language, [string[]]$options = @()) {
     $old = $env:LANGUAGE
     $env:LANGUAGE = $language
     $script:log = Join-Path ([IO.Path]::GetTempPath()) "ghostty-localization-$PID.log"
     try {
-        $script:process = Start-Process -FilePath $Exe -PassThru -RedirectStandardError $script:log -ArgumentList '--command=cmd.exe',
-            '--window-save-state=never', '--keybind=f9=toggle_command_palette', "--class=ghostty-localization-$PID"
+        $script:process = Start-Process -FilePath $Exe -PassThru -RedirectStandardError $script:log -ArgumentList (@('--command=cmd.exe') +
+            (@('--window-save-state=never', '--keybind=f9=toggle_command_palette', "--class=ghostty-localization-$PID") + $options))
     } finally { $env:LANGUAGE = $old }
 
     try {
@@ -115,7 +116,8 @@ function Texts([string]$language) {
         [void]$W::GetMenuStringW($menu, 0, $item, $item.Capacity, 0x400)   # MF_BYPOSITION
         [void]$W::PostMessageW($popup, 0x0100, [IntPtr]0x1B, [IntPtr]0x00010001)   # Escape closes the menu
 
-        $line = Get-Content $script:log -ErrorAction SilentlyContinue | Where-Object { $_ -match 'translations locale=' } | Select-Object -First 1
+        # The last: the config's language is applied after the system's.
+        $line = Get-Content $script:log -ErrorAction SilentlyContinue | Where-Object { $_ -match 'translations locale=' } | Select-Object -Last 1
         @{
             Log = "$line"
             Title = $title.ToString()
@@ -149,4 +151,11 @@ $english = Texts 'en'
 Expect $english 'en' 'Split Right' '&Copy' ''
 if ($english.ItemCount -ne $german.ItemCount) { Fail "the menu has $($german.ItemCount) items in German and $($english.ItemCount) in English" }
 Expect (Texts 'tlh') 'tlh' 'Split Right' '&Copy' ''
+
+# The config's `language` wins over the environment's, both ways.
+$forced = Texts 'en' @('--language=de')
+Expect $forced 'en --language=de' 'Nach rechts teilen' 'Kopieren' 'de'
+$forced = Texts 'de' @('--language=en')
+if ($forced.Title -cne 'Split Right' -or $forced.Item -cne '&Copy') { Fail "LANGUAGE=de --language=en should be English: palette '$($forced.Title)', menu '$($forced.Item)'" }
+Write-Host "LANGUAGE=de --language=en: palette '$($forced.Title)', menu '$($forced.Item)'"
 exit 0

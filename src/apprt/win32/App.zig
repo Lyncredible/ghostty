@@ -180,6 +180,10 @@ pub fn init(
         log.err("error loading config, using default err={}", .{err});
         break :err try Config.default(alloc);
     };
+
+    // The config's language wins over the system's. Nothing has been
+    // shown yet, and no other thread runs.
+    if (config.language) |language| internal_os.i18n.setEmbeddedLanguage(language);
     errdefer config.deinit();
 
     // If we had configuration errors, log them.
