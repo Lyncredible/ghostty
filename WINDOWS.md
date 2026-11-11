@@ -2967,7 +2967,8 @@ Notes:
         new tab menu: `TPM_LAYOUTRTL`): labels on the right, shortcuts
         on the left, submenus opening leftward. The tab bar, command
         palette, search bar and title dialog are still laid out left
-        to right.
+        to right. CI run 42987799169 (a412026d2) passed every job, with
+        the localization test's new dialog check.
   - [ ] A person who reads one of the languages should look over a
         translated build: the menus mix GTK's wording into macOS's
         layout, and right-to-left languages (Hebrew) aren't laid out
