@@ -137,8 +137,32 @@ Notes:
           grew with the DPI, and the window took the size `WM_DPICHANGED`
           suggested, which the window now logs (run 41317959654). For a
           scale change Windows suggests the same size in pixels.
-    - [ ] Manual check with two monitors at different scales: moving a
-          window between them, where Windows suggests a scaled size
+    - [x] Manual check with two monitors at different scales: moving a
+          window between them, where Windows suggests a scaled size.
+          Checked by the owner (2026-11-10): dragging windows between
+          the monitors works well.
+      - [x] Found by it: with Ghostty on the secondary monitor, a new
+            window opened on the primary one, with the secondary's
+            scale; moving it to the secondary monitor and back put it
+            right. Two things. Windows chose where a new window went
+            (`CW_USEDEFAULT`): now it opens a step down and right of
+            the active window, inside that monitor's work area, moved
+            back in if it would reach past the right or bottom edge
+            (`cascade` and `fit`, unit tested; here, at 200%, a new
+            window opened 64 pixels down and right of its source). And
+            a window that's still being made doesn't hear
+            `WM_DPICHANGED` (its window procedure is only attached at
+            the end of `init`), so a DPI change before it showed left
+            its tab bar and terminals at the old scale: it now compares
+            its DPI when it's made and when it's shown, and catches up
+            (`syncDpi`: the tab bar's font, each terminal's content
+            scale, and its size from the default in points). This
+            machine has one monitor, so the second part is by reading.
+      - [ ] The owner to check again with two monitors: a new window
+            (and a new window with a shell, and a tab moved to a new
+            window) opens on Ghostty's monitor at its scale; the log
+            says "window dpi changed while it was made" if the second
+            part was needed.
   - [x] Keyboard: layouts, dead keys, Ctrl/Alt/AltGr handling, and
         physical keys.
     - [x] Alt codes (Alt held while typing a number on the numpad, such
@@ -2766,6 +2790,29 @@ Notes:
     option only applies to new terminals, as documented): in CI run
     42772338175 (every job green) the new terminal's left padding went
     from 2 to 53 pixels.
+- [x] The Window menu (the owner, 2026-11-10): "Show/Hide All
+      Terminals" made the window disappear with its shells still
+      running, and most of the menu wasn't needed.
+  - [x] It now has what's about the window: Full Screen, Float on Top
+        and Return to Default Size. The macOS app's split commands
+        (zoom, select previous/next/above/below/left/right, equalize)
+        are left to their keys and the command palette, and the
+        Show/Hide item is gone. The menu tests pass (access keys, and
+        the labels translated by way of another message, seven fewer).
+  - [x] `toggle_visibility` itself did what it says, but on Windows a
+        hidden window has no taskbar button, so unless the action is
+        bound to a `global:` key there was no way to get the windows
+        back: starting Ghostty again only added a window (and
+        `+new-tab` brought back just the window it used). Starting
+        Ghostty again, `+new-window` and `+new-tab` now show every
+        window it hid (not a hidden quick terminal), as macOS shows a
+        hidden app's windows when it's opened. `window-cycle.ps1`
+        checks both ways back; it needs a Ghostty window in front, so
+        it only runs to the end in CI.
+- [x] The pseudoconsole was resized to the size it already had: see
+      the twenty-sixth sync's notes. The Windows 2022 job's Tabs test,
+      which that broke twice, passed with the fix (run 42950383487,
+      4a40f3d8f; the rest of that run was cancelled by the next push).
 - [x] A `PATH` entry that isn't a valid path (found 2026-11-10: one
       with a stray `"` made `zig build` itself panic with
       `OBJECT_NAME_INVALID`, in the standard library's file access, as
