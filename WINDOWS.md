@@ -2907,25 +2907,32 @@ Notes:
         applies at start.
   - Still English everywhere, since upstream has no messages for them:
     the File, Edit and View submenus' names, the shell submenus, "Quick
-    Terminal", "Show/Hide All Terminals", the search bar's match count,
-    the caption buttons' tooltips, the configuration errors and link
-    dialogs, and notification bodies. Translating them needs new
+    Terminal", the search bar's match count, the caption buttons'
+    tooltips, the link dialogs, the list in the configuration errors
+    dialog, and notification bodies. Translating them needs new
     messages upstream (or our own `.po` files next to upstream's).
-  - [ ] Dialogs with their own buttons (found 2026-11-10): the
-        confirmations are message boxes, whose buttons are Windows'
-        Yes/No or OK/Cancel, so the English text has to end with a
+  - [x] Dialogs with their own buttons (found 2026-11-10): the
+        confirmations were message boxes, whose buttons are Windows'
+        Yes/No or OK/Cancel, so the English text had to end with a
         question ("Paste anyway?") and the configuration errors dialog
-        explains what No does. GTK's dialogs name the action on the
-        button, and those labels have translations: "Paste", "Allow",
-        "Deny", "Cancel", "Close", "Reload Configuration", "Ignore".
-        A task dialog (`TaskDialogIndirect`; the manifest already asks
-        for common controls 6) takes custom buttons, which is also how
-        Windows' own apps ask. It would let the configuration errors
-        dialog use GTK's translated message, the last dialog that
-        can't. To check first: `dialog-race.ps1`, `paste-race.ps1`,
-        `links.ps1` and the config errors test find these dialogs by
-        class (`#32770`, the same for a task dialog) and press buttons
-        by ID, and only run in CI.
+        explained what No does. They're now task dialogs
+        (`TaskDialogIndirect`, in `Dialog.zig`) with the action on the
+        button, as GTK has it, and GTK's labels have translations:
+        Close or Quit / Cancel for the close confirmations, Paste /
+        Cancel for an unsafe paste, Allow / Deny for clipboard access,
+        Reload Configuration / Ignore for configuration errors (which
+        now uses GTK's translated message too), and Open Link / Cancel
+        (English only) for a link. A dialog is still in one language:
+        translated only if its title, message and both buttons are.
+        The function is looked up in comctl32 rather than imported
+        (only version 6 has it, which our manifest asks for; the unit
+        tests have no manifest), with a message box as the fallback.
+        A task dialog has the same window class, so the tests find it
+        as before, but its buttons aren't its children: `dialog-race.ps1`
+        and `paste-race.ps1` press them by ID with `TDM_CLICK_BUTTON`.
+        Both pass here, as do the unit tests for each dialog's text;
+        checked by eye in English and German. "Link Blocked" only has
+        OK, so it stays a message box.
   - [ ] Follow a change of the display language while running? Windows
         apps pick it up at start, so probably not.
   - [x] The catalog repeated each message in every locale: now the

@@ -2,7 +2,7 @@
 # close_surface while a program runs), "Change Terminal Title" (from
 # prompt_surface_title) and "Quit Ghostty?" (from quit while a program
 # runs), and "Configuration Errors" (from reload_config after the config
-# file gained an error). OK in the first closes the terminal, and when the shell exits
+# file gained an error). Close in the first closes the terminal, and when the shell exits
 # while any of them is open, Ghostty closes cleanly (the
 # terminal is destroyed during the dialog's message loop). It posts keys
 # to Ghostty's own window, but it shows dialogs, so it only runs in CI.
@@ -127,13 +127,18 @@ Set-Content -LiteralPath $configFile '# no errors yet'
 $env:XDG_CONFIG_HOME = $configHome
 
 try {
-    # OK closes the terminal.
+    # Close closes the terminal.
     $dialog = StartAndPress $long 0x77 $closeTitle
-    # The dialog can be found before its controls are made.
-    $ok = WaitFor { $b = $W::FindWindowExW($dialog, [IntPtr]::Zero, 'Button', 'OK'); if ($b -ne [IntPtr]::Zero) { $b } } "the close dialog's OK button"
-    [void]$W::PostMessageW($ok, 0x00F5, [IntPtr]::Zero, [IntPtr]::Zero)   # BM_CLICK
-    [void](WaitFor { $script:process.HasExited -or -not (SurfaceElement) } 'the terminal to close after OK')
-    Write-Host 'OK in "Close terminal?" closed the terminal.'
+    # A task dialog's buttons are pressed by ID (1 is the accept button,
+    # "Close"), with TDM_CLICK_BUTTON. The dialog can be found before
+    # it's ready for that, so say it again until something happens.
+    [void](WaitFor {
+        [void]$W::PostMessageW($dialog, 0x0466, [IntPtr]1, [IntPtr]::Zero)
+        Start-Sleep -Milliseconds 300
+        $script:process.HasExited -or -not (Dialog $closeTitle)
+    } 'the close dialog to go after Close')
+    [void](WaitFor { $script:process.HasExited -or -not (SurfaceElement) } 'the terminal to close after Close')
+    Write-Host 'Close in "Close terminal?" closed the terminal.'
     Close
 
     # The shell exits while each dialog is open.

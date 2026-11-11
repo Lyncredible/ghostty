@@ -94,10 +94,14 @@ Set-Clipboard -Value "echo pasted-one`r`necho pasted-two"
 try {
     # Cancel closes the dialog and pastes nothing.
     $started = StartAndPaste 'cmd.exe /k echo ready-%USERNAME:~0,0%ok' 'ready-ok'
-    $cancel = $W::FindWindowExW($started.Dialog, [IntPtr]::Zero, 'Button', 'Cancel')
-    if ($cancel -eq [IntPtr]::Zero) { Fail "the dialog has no Cancel button" }
-    [void]$W::PostMessageW($cancel, 0x00F5, [IntPtr]::Zero, [IntPtr]::Zero)   # BM_CLICK
-    [void](WaitFor { -not (Dialog) } 'the dialog to close after Cancel')
+    # A task dialog's buttons are pressed by ID (2 is the reject button,
+    # "Cancel"), with TDM_CLICK_BUTTON; again until the dialog is ready
+    # for it and goes.
+    [void](WaitFor {
+        [void]$W::PostMessageW($started.Dialog, 0x0466, [IntPtr]2, [IntPtr]::Zero)
+        Start-Sleep -Milliseconds 300
+        -not (Dialog)
+    } 'the dialog to close after Cancel')
     Start-Sleep 1
     if ((Text $started.Surface).Contains('pasted-one')) { Fail "Cancel still pasted" }
     if ($script:process.HasExited) { Fail "Ghostty exited after Cancel" }

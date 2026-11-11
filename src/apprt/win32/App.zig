@@ -20,6 +20,7 @@ const c = util.c;
 const Surface = @import("Surface.zig");
 const TabBar = @import("TabBar.zig");
 const Window = @import("Window.zig");
+const Dialog = @import("Dialog.zig");
 const Accessibility = @import("Accessibility.zig");
 const DimOverlay = @import("DimOverlay.zig");
 const BellBorder = @import("BellBorder.zig");
@@ -1638,13 +1639,24 @@ fn reloadConfig(
     }
 }
 
+/// What GTK's configuration errors dialog says, which has translations.
+fn configErrorsText() Dialog.Text {
+    const msgids: Dialog.Text = .{
+        .title = "Configuration Errors",
+        .message = "One or more configuration errors were found. Please review the errors below, and either reload your configuration or ignore these errors.",
+        .accept = "Reload Configuration",
+        .reject = "Ignore",
+    };
+    return msgids.translated() orelse msgids;
+}
+
 /// Like GTK, list configuration errors and offer to reload the
 /// configuration, for example after fixing them.
 fn configErrorsMessage(alloc: Allocator, config: *const Config) ![:0]u16 {
     var text: std.Io.Writer.Allocating = .init(alloc);
     defer text.deinit();
     const writer = &text.writer;
-    try writer.writeAll("One or more configuration errors were found:\n\n");
+    try writer.print("{s}\n\n", .{configErrorsText().message});
 
     // Long lists don't fit a message box.
     const max_shown = 15;
@@ -1655,7 +1667,6 @@ fn configErrorsMessage(alloc: Allocator, config: *const Config) ![:0]u16 {
     if (diagnostics.len > max_shown) {
         try writer.print("...and {d} more\n", .{diagnostics.len - max_shown});
     }
-    try writer.writeAll("\nReload the configuration now? Choose No to ignore these errors.");
     return try util.utf16Alloc(alloc, text.written());
 }
 
@@ -1674,25 +1685,19 @@ test configErrorsMessage {
     const text = try std.unicode.utf16LeToUtf8Alloc(testing.allocator, message);
     defer testing.allocator.free(text);
 
-    // The first 15 are listed, then how many more there are, and the
-    // question the message box asks.
-    try testing.expect(std.mem.startsWith(u8, text, "One or more configuration errors were found:\n\n"));
+    // What to do about them, the first 15, then how many more there are.
+    try testing.expect(std.mem.startsWith(u8, text, "One or more configuration errors were found. "));
+    try testing.expect(std.mem.indexOf(u8, text, "ignore these errors.\n\nkey-0") != null);
     try testing.expect(std.mem.indexOf(u8, text, "key-0") != null);
     try testing.expect(std.mem.indexOf(u8, text, "key-14") != null);
     try testing.expect(std.mem.indexOf(u8, text, "key-15") == null);
-    try testing.expect(std.mem.indexOf(u8, text, "...and 2 more\n") != null);
-    try testing.expect(std.mem.endsWith(u8, text, "Reload the configuration now? Choose No to ignore these errors."));
+    try testing.expect(std.mem.endsWith(u8, text, "...and 2 more\n"));
 }
 
 fn askAboutConfigErrors(self: *App, message: [:0]const u16) void {
     const owner = if (self.activeWindow()) |window| window.hwnd else null;
-    const choice = c.MessageBoxW(
-        owner,
-        message.ptr,
-        std.unicode.utf8ToUtf16LeStringLiteral("Configuration Errors"),
-        c.MB_YESNO | c.MB_ICONWARNING,
-    );
-    if (choice == c.IDYES) {
+    const text = configErrorsText();
+    if (Dialog.ask(owner, text.title, message.ptr, text.accept, text.reject, .accept)) {
         self.reloadConfig(.app, .{ .soft = false }) catch |err| {
             log.err("error reloading config err={}", .{err});
         };
@@ -1832,12 +1837,8 @@ fn confirmLink(self: *App, owner: c.HWND, url: []const u8) bool {
     defer alloc.free(text);
     const text16 = util.utf16Alloc(alloc, text) catch return false;
     defer alloc.free(text16);
-    return c.MessageBoxW(
-        owner,
-        text16.ptr,
-        std.unicode.utf8ToUtf16LeStringLiteral("Open Link"),
-        c.MB_YESNO | c.MB_DEFBUTTON2 | c.MB_ICONWARNING,
-    ) == c.IDYES;
+    // No translations for this one's text, so its buttons are English too.
+    return Dialog.ask(owner, "Open Link", text16.ptr, "Open Link", "Cancel", .reject);
 }
 
 fn showBlockedLink(self: *App, owner: c.HWND, url: []const u8, reason: link.Reason) void {
