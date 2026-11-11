@@ -2785,7 +2785,9 @@ Notes:
     - `test/windows/localization.ps1` (in CI) starts Ghostty with
       `LANGUAGE` set and reads the palette's entry and the context
       menu's first item: German for `de` and `tlh:de_DE.UTF-8`, English
-      for `en` and for a language we have nothing for. Passes here.
+      for `en` and for a language we have nothing for. Passes here,
+      and in CI run 42920416838 (f744e0c79), where every job passed
+      (the ARM64 and Windows 2022 builds too) and `windows-tip` moved.
       The full unit test suite: 4,313 passed, 87 skipped, 0 failed.
     - Close confirmations: GTK's questions when both the title and the
       message have a translation, so a dialog is never half English;
