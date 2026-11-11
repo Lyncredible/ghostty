@@ -1548,6 +1548,15 @@ Notes:
         app builds and the snapshot and page list tests pass (573).
         CI run 42969477748 (6459b9ac8) passed every job, and
         `windows-tip` moved.
+  - [x] 2026-11-11: a twenty-eighth sync (4 commits: a macOS fix for
+        the mouse activating a split, and the build accepting
+        `-Demit-lib-vt` together with `-Demit-exe`). No conflicts;
+        dates kept (811 commits checked). The app builds, and
+        `tab-drag-windows.ps1` and `smoke.ps1` pass (the latter with
+        `powershell.exe`: this machine has no `pwsh.exe`, its default).
+        Pushed as e57ff99e3; CI run 43061917401 passed every job,
+        with the new test of dragging tabs between windows, and
+        `windows-tip` moved.
   - [x] It failed there again in run 42948447833 (098593a94), now
         saying what was on screen: the command had run (its output was
         there), but the typed line read `echo M`, a line break,
