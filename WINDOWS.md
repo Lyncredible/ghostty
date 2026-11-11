@@ -1575,6 +1575,11 @@ Notes:
         picture mirrored in right-to-left languages) passed every job.
         Pushed as 7ba5245a7; CI run 43101440579 passed every job, and
         `windows-tip` moved.
+  - [x] 2026-11-11: a thirty-first sync (2 commits: libghostty's tree
+        moved to 1.0.2-dev, and its release notes in the doxygen
+        pages). No conflicts; dates kept (820 commits checked). The
+        app builds, and libghostty-vt's version tests (101) and the
+        tab bar's layout tests (87) pass.
   - [x] It failed there again in run 42948447833 (098593a94), now
         saying what was on screen: the command had run (its output was
         there), but the typed line read `echo M`, a line break,
