@@ -1743,7 +1743,8 @@ Notes:
         placed just below the pointer). It goes when the pointer comes
         back to the bar and on the drop. `tab-reorder.ps1` checks that
         it shows only outside the bar, goes again, and that a drag out
-        and back leaves the tabs alone.
+        and back leaves the tabs alone. CI run 43049619307 (b3f1dad52)
+        passed every job with it.
   - [x] Into another window: while the picture is over another Ghostty
         window, that window's tab bar shows a line after its last tab,
         where the tab would go. Checked from a capture; no test reads
