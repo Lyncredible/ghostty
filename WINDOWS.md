@@ -2984,6 +2984,11 @@ Notes:
         runner itself crashed ("Segmentation fault", before any test
         ran) in "Test libghostty-vt" and in the ARM64 "Build", while
         the two x64 jobs passed. Watch whether that comes back.
+        `localization.ps1` now starts with `LANGUAGE=he` too: the
+        palette's entry is translated, its field has `WS_EX_RIGHT` and
+        its list `WS_EX_LEFTSCROLLBAR`, neither is set in German or
+        English, and `--language=en` over `LANGUAGE=he` is English and
+        left to right. No test looks at the search bar's mirroring yet.
   - [ ] A person who reads one of the languages should look over a
         translated build: the menus mix GTK's wording into macOS's
         layout, and right-to-left languages (Hebrew) aren't laid out
