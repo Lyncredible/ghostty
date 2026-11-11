@@ -1752,10 +1752,18 @@ Notes:
         the pointer, the picture outside the bar, and the line on the
         other window. Here it was only driven with posted messages on a
         locked desktop.
+  - [x] The tab goes where it's dropped: on the other window's tab
+        bar, before the first tab whose middle is past the pointer
+        (`Layout.insertIndex`, unit test), and the line marks that
+        place; on its terminal, after the last tab as before.
+        `test/windows/tab-drag-windows.ps1` (CI step "Tab drag between
+        windows test") drags between two windows placed one above the
+        other: before a tab, after a tab, a window's only tab (its
+        window closes), out to a new window, and onto a terminal, with
+        the tab's picture showing during each drag.
   - [ ] The target window doesn't show its mark when its tab bar is
         hidden (`window-show-tab-bar = never`, or a single tab with
-        `auto`), and the tab always goes after the last one, not where
-        the pointer is.
+        `auto`).
 - [x] Background opacity/blur (DirectComposition swap chain)
   - [x] `toggle_background_opacity`. Checked with `PrintWindow` captures
         (background `#3060c0`, opacity 0.5, toggled by an F12 keybind):

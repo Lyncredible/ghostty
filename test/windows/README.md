@@ -515,7 +515,20 @@ first with posted mouse messages, and UI Automation then lists it first,
 still shown. Then `move_tab:1` moves it back to second, and again wraps it
 around to first, and `copy_title_to_clipboard` puts its title on the
 clipboard. The tabs' positions come from UI Automation, so the test
-follows the tab bar's layout.
+follows the tab bar's layout. In between, a drag well below the bar shows
+the tab's picture under the pointer (a `GhosttyTabGhost` window), which
+goes when the pointer comes back to the bar, and letting go there leaves
+the tabs as they were.
+
+## tab-drag-windows.ps1
+
+Checks dragging a tab to another window, with posted mouse messages. Two
+windows are placed one above the other, with tabs named by cmd's `title`.
+A tab dropped on the first half of the other window's tab goes before it,
+on the second half after it; a window's only tab can go too, and its
+window closes; a tab dropped on nothing of ours gets a new window; and one
+dropped on the other window's terminal goes after its last tab. During
+each drag the tab's picture shows, and it's gone after the drop.
 
 ## compact-tabs.ps1
 

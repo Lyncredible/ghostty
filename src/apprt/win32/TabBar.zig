@@ -63,9 +63,9 @@ drag_grab: c_int = 0,
 ghost: TabGhost = .{},
 /// The other window whose tab bar shows that it would take the tab.
 drop_window: ?*Window = null,
-/// Whether a tab dragged from another window would be dropped on us: we
-/// mark where it would go.
-drop_mark: bool = false,
+/// Where among our tabs a tab dragged from another window would go if
+/// it's dropped now: we mark the place.
+drop_mark: ?usize = null,
 
 /// The parts of the tab bar the mouse can be over.
 pub const Hit = union(enum) {
@@ -367,6 +367,16 @@ const Layout = struct {
         return .{ .left = x, .top = slot.top, .right = x + (slot.right - slot.left), .bottom = slot.bottom };
     }
 
+    /// Where among the tabs one dropped at an x position goes: before
+    /// the first tab whose middle is past it, or after the last.
+    fn insertIndex(self: Layout, x: c_int, tabs: usize) usize {
+        for (0..tabs) |i| {
+            const rect = self.tabRect(i, self.height);
+            if (x < @divTrunc(rect.left + rect.right, 2)) return i;
+        }
+        return tabs;
+    }
+
     /// The tab index at an x position, for dragging tabs.
     fn indexAt(self: Layout, x: c_int) usize {
         const step = self.tab_width + self.gap;
@@ -476,6 +486,21 @@ test "Layout: a dragged tab is drawn where it's carried, within the tabs" {
     // A single tab stays put.
     const one: Layout = .compute(1200, 40, 1, 96, false);
     try testing.expectEqual(one.tabRect(0, 40).left, one.carriedRect(one.tabRect(0, 40), 300, 1).left);
+}
+
+test "Layout: a tab dropped on the bar goes where the pointer is" {
+    const testing = std.testing;
+    const l: Layout = .compute(1200, 40, 3, 96, false);
+    const second = l.tabRect(1, 40);
+    try testing.expectEqual(@as(usize, 0), l.insertIndex(-50, 3));
+    try testing.expectEqual(@as(usize, 0), l.insertIndex(l.tabRect(0, 40).left + 1, 3));
+    // Either side of the second tab's middle.
+    try testing.expectEqual(@as(usize, 1), l.insertIndex(second.left + 1, 3));
+    try testing.expectEqual(@as(usize, 2), l.insertIndex(second.right - 1, 3));
+    // Past the last tab's middle, and far past the tabs: after the last.
+    try testing.expectEqual(@as(usize, 3), l.insertIndex(l.tabRect(2, 40).right - 1, 3));
+    try testing.expectEqual(@as(usize, 3), l.insertIndex(1100, 3));
+    try testing.expectEqual(@as(usize, 0), l.insertIndex(500, 0));
 }
 
 test "Layout: dragging finds the tab under the pointer" {
@@ -803,12 +828,14 @@ fn paint(self: *TabBar, hdc: c.HDC, client: c.RECT) void {
 
     // Where a tab dragged from another window would go: a line in the
     // text's color after the last tab.
-    if (self.drop_mark and n > 0) {
+    if (self.drop_mark) |at| if (n > 0) {
+        const w: c_int = @max(2, self.scale(3));
         const last = l.tabRect(n - 1, client.bottom);
-        const w = @max(2, self.scale(3));
-        const mark: c.RECT = .{ .left = last.right, .top = last.top + self.scale(4), .right = last.right + w, .bottom = client.bottom - self.scale(4) };
+        // Before a tab, in the gap; after the last, at its end.
+        const x = @max(0, if (at < n) l.tabRect(at, client.bottom).left - @divTrunc(l.gap + w, 2) else last.right);
+        const mark: c.RECT = .{ .left = x, .top = last.top + self.scale(4), .right = x + w, .bottom = client.bottom - self.scale(4) };
         fill(hdc, &mark, col.text);
-    }
+    };
 
     // The new tab and shell buttons, after the tabs, centered on them.
     const button_top = l.top + @divTrunc(client.bottom - l.top - self.scale(tab_button_height), 2);
@@ -1110,34 +1137,50 @@ fn updateDragFeedback(self: *TabBar) void {
     });
 
     const over = self.window.app.windowAt(pt);
-    self.setDropWindow(if (over != self.window) over else null);
+    const target = if (over != self.window) over else null;
+    self.setDropWindow(target, if (target) |window| window.tab_bar.dropIndex(pt) else 0);
 }
 
 /// The drag is over or back in the bar: nothing follows the pointer and
 /// no window is marked.
 fn endDragFeedback(self: *TabBar) void {
     self.ghost.hide();
-    self.setDropWindow(null);
+    self.setDropWindow(null, 0);
 }
 
-fn setDropWindow(self: *TabBar, target: ?*Window) void {
-    if (self.drop_window == target) return;
-    // The window we marked may have closed since.
-    if (self.drop_window) |old| {
-        for (self.window.app.windows.items) |window| {
-            if (window == old) old.tab_bar.setDropMark(false);
+fn setDropWindow(self: *TabBar, target: ?*Window, at: usize) void {
+    if (self.drop_window != target) {
+        // The window we marked may have closed since.
+        if (self.drop_window) |old| {
+            for (self.window.app.windows.items) |window| {
+                if (window == old) old.tab_bar.setDropMark(null);
+            }
         }
+        self.drop_window = target;
     }
-    self.drop_window = target;
-    if (target) |window| window.tab_bar.setDropMark(true);
+    if (target) |window| window.tab_bar.setDropMark(at);
 }
 
 /// Mark (or stop marking) where a tab dragged from another window would
-/// go if it's dropped on ours: after our last tab.
-pub fn setDropMark(self: *TabBar, mark: bool) void {
+/// go if it's dropped on ours.
+pub fn setDropMark(self: *TabBar, mark: ?usize) void {
     if (self.drop_mark == mark) return;
     self.drop_mark = mark;
     self.invalidate();
+}
+
+/// Where among our tabs a tab dropped at a point of the screen goes: on
+/// the tab bar, the place under the pointer; anywhere else in the window,
+/// after the last tab.
+pub fn dropIndex(self: *const TabBar, pt: c.POINT) usize {
+    const n = self.window.tabs.items.len;
+    if (c.IsWindowVisible(self.hwnd) == 0) return n;
+    var client_pt = pt;
+    _ = c.ScreenToClient(self.hwnd, &client_pt);
+    var client: c.RECT = undefined;
+    _ = c.GetClientRect(self.hwnd, &client);
+    if (c.PtInRect(&client, client_pt) == 0) return n;
+    return self.layout().insertIndex(client_pt.x, n);
 }
 
 fn dragMove(self: *TabBar, x: c_int, y: c_int) void {
@@ -1180,7 +1223,7 @@ fn dropTab(self: *TabBar, tab: *Tab, x: c_int, y: c_int) void {
     const window = self.window;
     if (window.app.windowAt(pt)) |target| {
         if (target != window) {
-            _ = window.moveTabToWindow(tab, target) catch |err| {
+            _ = window.moveTabToWindow(tab, target, target.tab_bar.dropIndex(pt)) catch |err| {
                 log.warn("error moving tab to window err={}", .{err});
             };
             return;
