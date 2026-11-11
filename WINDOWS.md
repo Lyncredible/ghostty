@@ -1542,6 +1542,10 @@ Notes:
         the marker is on screen and how the screen ends. Run
         42941442318 (cfe358176) passed every job, without needing to
         type a marker again, and `windows-tip` moved.
+  - [x] 2026-11-10: a twenty-seventh sync (2 commits: a restored
+        terminal snapshot keeps its last page's capacity, in the core's
+        page list). No conflicts; dates kept (789 commits checked). The
+        app builds and the snapshot and page list tests pass (573).
   - [x] It failed there again in run 42948447833 (098593a94), now
         saying what was on screen: the command had run (its output was
         there), but the typed line read `echo M`, a line break,
