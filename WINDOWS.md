@@ -1489,6 +1489,13 @@ Notes:
         it). No conflicts; dates kept (754 commits checked). The app
         builds for x64. CI run 42903245029 (9e283ff61) passed every
         job.
+  - [x] 2026-11-10: a twenty-sixth sync (2 commits: glibc's own
+        `memset`, `memcpy` and `memmove` when linked dynamically, which
+        doesn't touch Windows). No conflicts; dates kept (769 commits
+        checked). The app and libghostty-vt build, and
+        `localization.ps1` passes. CI run 42928661515 (8b3285aa3: the
+        smaller catalog, the `PATH` fix and the last translated
+        strings) passed every job before it, and `windows-tip` moved.
 - [x] Tip builds, like upstream's `release-tip.yml` (the discussion's
       release workflow item): a rolling prerelease of the latest
       `windows` commit, so people can try it without building. Approved
