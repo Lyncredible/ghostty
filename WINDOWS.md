@@ -1573,6 +1573,8 @@ Notes:
         pass. Before it, CI run 43092748864 (119e11442: the test of a
         drag ended by selecting another tab, and the dragged tab's
         picture mirrored in right-to-left languages) passed every job.
+        Pushed as 7ba5245a7; CI run 43101440579 passed every job, and
+        `windows-tip` moved.
   - [x] It failed there again in run 42948447833 (098593a94), now
         saying what was on screen: the command had run (its output was
         there), but the typed line read `echo M`, a line break,
