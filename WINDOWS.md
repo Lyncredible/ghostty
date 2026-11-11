@@ -1726,6 +1726,17 @@ Notes:
       it) moved another tab into it. A window's only tab can be dropped
       on another window too, which closes the emptied window: checked,
       the target ended up with all three tabs.
+- [ ] Show what a tab drag will do (reported by the owner,
+      2026-11-11): dragging a tab gives no visual indication, neither
+      while reordering within the window nor while dragging it out of
+      the window or into another one. The tab only moves on the drop.
+  - [ ] Within the tab bar: show where the tab will land while it's
+        dragged (the dragged tab following the pointer with the others
+        making room, or an insertion mark).
+  - [ ] Out of the window: show that the drop will make a new window
+        (for example a preview of the tab following the pointer).
+  - [ ] Into another window: show on the target's tab bar that it will
+        take the tab, and where.
 - [x] Background opacity/blur (DirectComposition swap chain)
   - [x] `toggle_background_opacity`. Checked with `PrintWindow` captures
         (background `#3060c0`, opacity 0.5, toggled by an F12 keybind):
