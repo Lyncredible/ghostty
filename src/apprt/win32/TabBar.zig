@@ -1186,7 +1186,11 @@ pub fn dropIndex(self: *const TabBar, pt: c.POINT) usize {
 fn dragMove(self: *TabBar, x: c_int, y: c_int) void {
     const tab = self.drag_tab orelse return;
     if (self.window.tabs.items[self.window.active] != tab) {
+        // The tab closed, or another was selected, under the drag.
         self.drag_tab = null;
+        self.dragging = false;
+        self.invalidate();
+        self.endDragFeedback();
         return;
     }
     if (!self.dragging) {
