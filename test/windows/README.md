@@ -461,6 +461,14 @@ then a POSIX locale) the command palette's entry for `new_split:right` is
 "Kopieren"; with `LANGUAGE=en`, and with only a language we have nothing
 for, they're "Split Right" and "&Copy". The log names the locale it loaded.
 
+## new-window-place.ps1
+
+Checks where a new window opens: a step (32 pixels at 100%) down and right
+of the window it was opened from, on its monitor and at its DPI, and from
+a window near the far corner of the work area, back near its top left.
+The first window is moved with `SetWindowPos`, and `new_window` is a key
+posted to its terminal.
+
 ## tabs.ps1
 
 Checks tab operations, one terminal per tab: `close_tab:other` keeps only

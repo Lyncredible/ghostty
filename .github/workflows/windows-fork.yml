@@ -306,6 +306,11 @@ jobs:
         shell: pwsh
         run: ./test/windows/localization.ps1 -Exe zig-out/bin/ghostty.exe
 
+      - name: New window placement test
+        timeout-minutes: 5
+        shell: pwsh
+        run: ./test/windows/new-window-place.ps1 -Exe zig-out/bin/ghostty.exe
+
       - name: Tabs test
         timeout-minutes: 5
         shell: pwsh
