@@ -2,8 +2,9 @@
 # entries and the terminal's context menu are German, with `LANGUAGE=en`
 # (and for a language we have nothing for) they're English, whatever the
 # display language of the machine, and the config's `language` wins over
-# both. The texts are read from the palette's
-# list box and the popup menu, and keys and clicks are posted to Ghostty's
+# both. A dialog's title and buttons follow too (the configuration errors
+# one). The texts are read from the palette's
+# list box, the popup menu and the dialog's windows, and keys and clicks are posted to Ghostty's
 # windows, so it runs on a locked desktop.
 #
 #     ./localization.ps1 -Exe zig-out/bin/ghostty.exe
@@ -28,6 +29,24 @@ Add-Type -Namespace GhosttyLocalization -Name Win32 -MemberDefinition @'
 [DllImport("user32.dll", CharSet = CharSet.Unicode)] public static extern System.IntPtr FindWindowExW(System.IntPtr parent, System.IntPtr after, string cls, string title);
 [DllImport("user32.dll")] public static extern int GetMenuItemCount(System.IntPtr menu);
 [DllImport("user32.dll", CharSet = CharSet.Unicode)] public static extern int GetMenuStringW(System.IntPtr menu, uint item, System.Text.StringBuilder s, int max, uint flags);
+[DllImport("user32.dll", CharSet = CharSet.Unicode)] public static extern int GetWindowTextW(System.IntPtr h, System.Text.StringBuilder s, int max);
+[DllImport("user32.dll", CharSet = CharSet.Unicode)] public static extern int GetClassNameW(System.IntPtr h, System.Text.StringBuilder s, int max);
+public delegate bool EnumProc(System.IntPtr h, System.IntPtr l);
+[DllImport("user32.dll")] public static extern bool EnumChildWindows(System.IntPtr parent, EnumProc f, System.IntPtr l);
+public static string Title(System.IntPtr h) {
+  var s = new System.Text.StringBuilder(256); GetWindowTextW(h, s, s.Capacity); return s.ToString();
+}
+// The labels of a dialog's buttons, at any depth (a task dialog's are
+// inside other windows).
+public static string[] Buttons(System.IntPtr dialog) {
+  var found = new System.Collections.Generic.List<string>();
+  EnumChildWindows(dialog, (h, l) => {
+    var cls = new System.Text.StringBuilder(64); GetClassNameW(h, cls, cls.Capacity);
+    if (cls.ToString() == "Button" && IsWindowVisible(h)) found.Add(Title(h));
+    return true;
+  }, System.IntPtr.Zero);
+  return found.ToArray();
+}
 // Characters, as WM_CHAR.
 public static void Type(System.IntPtr h, string s) {
   foreach (char ch in s) { PostMessageW(h, 0x0102, (System.IntPtr)ch, (System.IntPtr)1); System.Threading.Thread.Sleep(5); }
@@ -158,4 +177,38 @@ Expect $forced 'en --language=de' 'Nach rechts teilen' 'Kopieren' 'de'
 $forced = Texts 'de' @('--language=en')
 if ($forced.Title -cne 'Split Right' -or $forced.Item -cne '&Copy') { Fail "LANGUAGE=de --language=en should be English: palette '$($forced.Title)', menu '$($forced.Item)'" }
 Write-Host "LANGUAGE=de --language=en: palette '$($forced.Title)', menu '$($forced.Item)'"
+
+# A dialog: the configuration errors one, which an option that doesn't
+# exist brings up at start. Its title and both buttons are in the
+# language (they're GTK's messages), or all English.
+function DialogTexts([string]$language) {
+    $old = $env:LANGUAGE
+    $env:LANGUAGE = $language
+    $script:log = Join-Path ([IO.Path]::GetTempPath()) "ghostty-localization-$PID.log"
+    try {
+        $script:process = Start-Process -FilePath $Exe -PassThru -RedirectStandardError $script:log -ArgumentList '--command=cmd.exe',
+            '--window-save-state=never', '--not-a-real-option=1', "--class=ghostty-localization-$PID"
+    } finally { $env:LANGUAGE = $old }
+    try {
+        $dialog = WaitFor { $script:note = 'no dialog'; $h = TopLevel '#32770'; if ($h -ne [IntPtr]::Zero) { $h } } 'the configuration errors dialog'
+        $buttons = WaitFor { $b = @($W::Buttons($dialog) | Where-Object { $_ }); $script:note = "$($b.Count) buttons"; if ($b.Count -ge 2) { , $b } } "the dialog's buttons"
+        $title = $W::Title($dialog)
+        # The reject button (ID 2), by TDM_CLICK_BUTTON, until it goes.
+        [void](WaitFor {
+            [void]$W::PostMessageW($dialog, 0x0466, [IntPtr]2, [IntPtr]::Zero)
+            Start-Sleep -Milliseconds 300
+            $script:note = 'still open'
+            (TopLevel '#32770') -eq [IntPtr]::Zero
+        } 'the dialog to close')
+        "$title`: $($buttons -join ' / ')"
+    } finally {
+        if (-not $script:process.HasExited) { Stop-Process -Id $script:process.Id -Force }
+        Remove-Item -LiteralPath $script:log -Force -ErrorAction SilentlyContinue
+    }
+}
+foreach ($case in @(@('de', 'Konfigurationsfehler: Konfiguration neu laden / Ignorieren'), @('en', 'Configuration Errors: Reload Configuration / Ignore'))) {
+    $got = DialogTexts $case[0]
+    if ($got -cne $case[1]) { Fail "LANGUAGE=$($case[0]): the configuration errors dialog should read '$($case[1])': '$got'" }
+    Write-Host "LANGUAGE=$($case[0]): dialog '$got'"
+}
 exit 0

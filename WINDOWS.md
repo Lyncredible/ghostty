@@ -2946,6 +2946,9 @@ Notes:
         tests, `new-window-place.ps1` and the localization test.
         `paste-race.ps1` then gained a case that presses Paste and
         sees both lines arrive (run 42977394136, da8a8ac9d, passed).
+        `localization.ps1` reads a dialog too: the configuration errors
+        one's title and button labels, in German and in English (a
+        task dialog's buttons are windows, a few levels down).
         Both pass here, as do the unit tests for each dialog's text;
         checked by eye in English and German. "Link Blocked" only has
         OK, so it stays a message box.
