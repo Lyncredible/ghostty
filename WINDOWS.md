@@ -305,6 +305,12 @@ Notes:
     build: the Windows runner's native target is MSVC, which isn't what
     the app is built and tested with (upstream's CI matrix also leaves
     `x86_64-windows-msvc` commented out).
+  - [x] Upstream's daily Clean Artifacts workflow failed in this fork
+        every night (reported 2026-11-10; it runs here because the
+        fork's default branch is this one): each delete got "403:
+        Resource not accessible by integration", since a fork's
+        workflow token is read-only unless a job asks for more. The
+        job now asks for `actions: write`.
   - [x] Forks get no CI from it: the Test workflow runs on Namespace
         runners, which only ghostty-org/ghostty has, so on this fork every
         run stayed queued or was cancelled by the next push. A fork-only

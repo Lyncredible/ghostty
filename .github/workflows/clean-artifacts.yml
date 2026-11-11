@@ -8,6 +8,10 @@ jobs:
   remove-old-artifacts:
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    # Deleting an artifact needs this, and in a fork the token is
+    # read-only unless a job asks for more.
+    permissions:
+      actions: write
     steps:
       - name: Remove old artifacts
         uses: c-hive/gha-remove-artifacts@62c2fbea931baa7dd4a6b73ea5a799984a818f61 # v1.8.0
