@@ -306,6 +306,13 @@ fn hasLabel(items: []const Item, plain: []const u8) bool {
 /// bits of system menu command IDs, and IDs from 0xF000 are its own.
 const sys_id_shift = 4;
 
+/// The `TrackPopupMenu` flag that lays a menu out right to left, when
+/// the language it's in is written that way: labels on the right, their
+/// shortcuts on the left, submenus opening leftward.
+pub fn layoutFlags() c_uint {
+    return if (i18n.rightToLeft()) c.TPM_LAYOUTRTL else 0;
+}
+
 /// Show a popup menu at a screen position and run the chosen item on the
 /// surface.
 ///
@@ -333,7 +340,7 @@ pub fn track(
     const identity = c.GetWindowLongPtrW(hwnd, util.GWLP_USERDATA);
     const selected = c.TrackPopupMenu(
         menu,
-        @as(c_uint, c.TPM_RETURNCMD | c.TPM_NONOTIFY | c.TPM_RIGHTBUTTON) | flags,
+        @as(c_uint, c.TPM_RETURNCMD | c.TPM_NONOTIFY | c.TPM_RIGHTBUTTON) | flags | layoutFlags(),
         pt.x,
         pt.y,
         0,
