@@ -19,6 +19,7 @@ const Tab = @import("Tab.zig");
 const TabBar = @import("TabBar.zig");
 const Overrides = @import("Overrides.zig");
 const Menu = @import("Menu.zig");
+const Dialog = @import("Dialog.zig");
 const shells = @import("shells.zig");
 const SaveState = @import("SaveState.zig");
 const SplitDrag = @import("SplitDrag.zig");
@@ -2149,19 +2150,18 @@ test configuredPosition {
     try testing.expectEqual(c.POINT{ .x = -50, .y = 48 }, configuredPosition(work, 96, -50, 0));
 }
 
-/// Show a yes/no confirmation dialog. Returns true if the user confirmed.
-pub fn confirm(window: ?*Window, title: []const u8, message: []const u8) bool {
-    var title_buf: [256]u16 = undefined;
+/// Ask a question with a button for each answer (see Dialog.zig). Returns
+/// true if the user chose the accept button.
+pub fn confirm(window: ?*Window, text: Dialog.Text) bool {
     var message_buf: [1024]u16 = undefined;
-    const title16 = util.utf16TruncateZ(&title_buf, title).ptr;
-    const message16 = util.utf16TruncateZ(&message_buf, message).ptr;
-    const result = c.MessageBoxW(
+    return Dialog.ask(
         if (window) |w| w.hwnd else null,
-        message16,
-        title16,
-        c.MB_OKCANCEL | c.MB_ICONWARNING,
+        text.title,
+        util.utf16TruncateZ(&message_buf, text.message).ptr,
+        text.accept,
+        text.reject,
+        .accept,
     );
-    return result == c.IDOK;
 }
 
 /// What a close confirmation asks about, for its text in the user's
@@ -2173,7 +2173,7 @@ pub const Closing = enum {
     all_windows,
     app,
 
-    const Text = struct { title: [:0]const u8, message: [:0]const u8 };
+    const Text = Dialog.Text;
 
     /// Our wording, which says what closing does to the processes.
     fn english(self: Closing) Text {
@@ -2181,22 +2181,27 @@ pub const Closing = enum {
             .terminal => .{
                 .title = "Close terminal?",
                 .message = "A process is still running in this terminal. Closing it will kill the process.",
+                .accept = "Close",
             },
             .tabs => .{
                 .title = "Close tabs?",
                 .message = "A process is still running in at least one of the terminals. Closing them will kill the processes.",
+                .accept = "Close",
             },
             .window => .{
                 .title = "Close window?",
                 .message = "A process is still running in at least one of the terminals. Closing the window will kill the processes.",
+                .accept = "Close",
             },
             .all_windows => .{
                 .title = "Close all windows?",
                 .message = "All terminal sessions will be terminated.",
+                .accept = "Close",
             },
             .app => .{
                 .title = "Quit Ghostty?",
                 .message = "All terminal sessions will be terminated.",
+                .accept = "Quit",
             },
         };
     }
@@ -2208,54 +2213,60 @@ pub const Closing = enum {
             .terminal => .{
                 .title = "Close Split?",
                 .message = "The currently running process in this split will be terminated.",
+                .accept = "Close",
             },
             .tabs => .{
                 .title = "Close Tab?",
                 .message = "All terminal sessions in this tab will be terminated.",
+                .accept = "Close",
             },
             .window => .{
                 .title = "Close Window?",
                 .message = "All terminal sessions in this window will be terminated.",
+                .accept = "Close",
             },
             .all_windows => .{
                 .title = "Close All Windows",
                 .message = "All terminal sessions will be terminated.",
+                .accept = "Close",
             },
             .app => .{
                 .title = "Quit Ghostty?",
                 .message = "All terminal sessions will be terminated.",
+                .accept = "Quit",
             },
         };
     }
 
-    /// The title and message to show: translated if both are, so that
-    /// a dialog is in one language.
+    /// What to show: translated if all of it is, so that a dialog is in
+    /// one language.
     fn text(self: Closing) Text {
-        const msgids = self.translatable();
-        return .{
-            .title = i18n.translation(msgids.title) orelse return self.english(),
-            .message = i18n.translation(msgids.message) orelse return self.english(),
-        };
+        return self.translatable().translated() orelse self.english();
     }
 };
 
 /// Ask whether to close something with processes still running. Returns
 /// true if the user confirmed.
 pub fn confirmClosing(window: ?*Window, what: Closing) bool {
-    const text = what.text();
-    return confirm(window, text.title, text.message);
+    return confirm(window, what.text());
 }
 
 test "Closing: text" {
     const testing = std.testing;
     try testing.expectEqualStrings("Close terminal?", Closing.terminal.text().title);
     try testing.expectEqualStrings("Quit Ghostty?", Closing.app.text().title);
+    try testing.expectEqualStrings("Quit", Closing.app.text().accept);
+    try testing.expectEqualStrings("Close", Closing.tabs.text().accept);
+    try testing.expectEqualStrings("Cancel", Closing.tabs.text().reject);
 
     if (comptime !i18n.embedded) return;
     defer _ = i18n.useEmbeddedLocale(null);
     try testing.expect(i18n.useEmbeddedLocale("de"));
     try testing.expectEqualStrings("Ghostty schließen?", Closing.app.text().title);
     try testing.expectEqualStrings("Alle Terminalsitzungen werden beendet.", Closing.app.text().message);
+    try testing.expectEqualStrings("Beenden", Closing.app.text().accept);
+    try testing.expectEqualStrings("Schließen", Closing.window.text().accept);
+    try testing.expectEqualStrings("Abbrechen", Closing.window.text().reject);
 
     // Every question's messages have translations somewhere, and each
     // language shows a dialog in one language.
@@ -2278,25 +2289,24 @@ test "Closing: text" {
 pub fn confirmText(
     window: ?*Window,
     alloc: Allocator,
-    title: []const u8,
-    message: []const u8,
+    question: Dialog.Text,
     text: []const u8,
 ) bool {
     var body: std.Io.Writer.Allocating = .init(alloc);
     defer body.deinit();
-    writePreview(&body.writer, message, text) catch
-        return confirm(window, title, message);
+    writePreview(&body.writer, question.message, text) catch
+        return confirm(window, question);
     const body16 = util.utf16Alloc(alloc, body.written()) catch
-        return confirm(window, title, message);
+        return confirm(window, question);
     defer alloc.free(body16);
-    var title_buf: [256]u16 = undefined;
-    const result = c.MessageBoxW(
+    return Dialog.ask(
         if (window) |w| w.hwnd else null,
-        body16,
-        util.utf16TruncateZ(&title_buf, title).ptr,
-        c.MB_OKCANCEL | c.MB_ICONWARNING,
+        question.title,
+        body16.ptr,
+        question.accept,
+        question.reject,
+        .accept,
     );
-    return result == c.IDOK;
 }
 
 /// The message, then the start of the text: a dialog only has room for a

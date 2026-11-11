@@ -17,6 +17,7 @@ const c = util.c;
 const key = @import("key.zig");
 const App = @import("App.zig");
 const Window = @import("Window.zig");
+const Dialog = @import("Dialog.zig");
 const DimOverlay = @import("DimOverlay.zig");
 const BellBorder = @import("BellBorder.zig");
 const TitleDialog = @import("TitleDialog.zig");
@@ -1296,50 +1297,56 @@ fn queueClipboard(self: *Surface, pending: PendingClipboard) void {
     self.pending_clipboard = pending;
 }
 
-/// The title and message of a clipboard confirmation. In English they end
-/// with the question that OK answers. GTK's messages, which have
-/// translations, are the same without it (its buttons say Paste or
-/// Allow), and are used when both are translated, so that a dialog is in
-/// one language.
-fn clipboardQuestion(kind: std.meta.Tag(@FieldType(PendingClipboard, "kind"))) struct { []const u8, []const u8 } {
-    const title: [:0]const u8, const message: [:0]const u8, const question: []const u8 = switch (kind) {
+/// What a clipboard confirmation says. GTK's messages, which have
+/// translations, are used when all of them are translated, so that a
+/// dialog is in one language.
+fn clipboardQuestion(kind: std.meta.Tag(@FieldType(PendingClipboard, "kind"))) Dialog.Text {
+    const msgids: Dialog.Text = switch (kind) {
         .unsafe_paste => .{
-            "Warning: Potentially Unsafe Paste",
-            "Pasting this text into the terminal may be dangerous as it looks like some commands may be executed.",
-            "Pasting this text into the terminal may be dangerous as it looks like some commands may be executed. Paste anyway?",
+            .title = "Warning: Potentially Unsafe Paste",
+            .message = "Pasting this text into the terminal may be dangerous as it looks like some commands may be executed.",
+            .accept = "Paste",
         },
         .read => .{
-            "Authorize Clipboard Access",
-            "An application is attempting to read from the clipboard. The current clipboard contents are shown below.",
-            "An application is attempting to read from the clipboard. The current clipboard contents are shown below. Allow it?",
+            .title = "Authorize Clipboard Access",
+            .message = "An application is attempting to read from the clipboard. The current clipboard contents are shown below.",
+            .accept = "Allow",
+            .reject = "Deny",
         },
         .write => .{
-            "Authorize Clipboard Access",
-            "An application is attempting to write to the clipboard. The current clipboard contents are shown below.",
-            "An application is attempting to write to the clipboard. The text it would copy is shown below. Allow it?",
+            .title = "Authorize Clipboard Access",
+            .message = "An application is attempting to write to the clipboard. The current clipboard contents are shown below.",
+            .accept = "Allow",
+            .reject = "Deny",
         },
     };
-    return .{
-        i18n.translation(title) orelse return .{ title, question },
-        i18n.translation(message) orelse return .{ title, question },
-    };
+    if (msgids.translated()) |text| return text;
+    var english = msgids;
+    // What's shown is what it would copy, not what the clipboard has.
+    if (kind == .write) english.message = "An application is attempting to write to the clipboard. The text it would copy is shown below.";
+    return english;
 }
 
 test clipboardQuestion {
     const testing = std.testing;
     {
-        const title, const message = clipboardQuestion(.unsafe_paste);
-        try testing.expectEqualStrings("Warning: Potentially Unsafe Paste", title);
-        try testing.expect(std.mem.endsWith(u8, message, "Paste anyway?"));
+        const text = clipboardQuestion(.unsafe_paste);
+        try testing.expectEqualStrings("Warning: Potentially Unsafe Paste", text.title);
+        try testing.expectEqualStrings("Paste", text.accept);
+        try testing.expectEqualStrings("Cancel", text.reject);
+        try testing.expect(std.mem.indexOf(u8, clipboardQuestion(.write).message, "would copy") != null);
+        try testing.expectEqualStrings("Deny", clipboardQuestion(.write).reject);
     }
 
     if (comptime !i18n.embedded) return;
     defer _ = i18n.useEmbeddedLocale(null);
     try testing.expect(i18n.useEmbeddedLocale("de"));
-    const title, const message = clipboardQuestion(.read);
-    try testing.expectEqualStrings(i18n.text("Authorize Clipboard Access"), title);
-    try testing.expect(!std.mem.eql(u8, "Authorize Clipboard Access", title));
-    try testing.expect(std.mem.indexOf(u8, message, "Allow it?") == null);
+    const text = clipboardQuestion(.read);
+    try testing.expectEqualStrings(i18n.text("Authorize Clipboard Access"), text.title);
+    try testing.expect(!std.mem.eql(u8, "Authorize Clipboard Access", text.title));
+    try testing.expectEqualStrings("Erlauben", text.accept);
+    try testing.expectEqualStrings("Nicht erlauben", text.reject);
+    try testing.expectEqualStrings("Einfügen", clipboardQuestion(.unsafe_paste).accept);
 }
 
 fn confirmClipboard(self: *Surface) void {
@@ -1349,10 +1356,9 @@ fn confirmClipboard(self: *Surface) void {
     defer pending.deinit(alloc);
 
     // Like GTK, we say what's happening and show the text.
-    const title, const message = clipboardQuestion(pending.kind);
     const hwnd = self.hwnd;
     const identity = c.GetWindowLongPtrW(hwnd, util.GWLP_USERDATA);
-    const allowed = Window.confirmText(self.window, alloc, title, message, pending.text);
+    const allowed = Window.confirmText(self.window, alloc, clipboardQuestion(pending.kind), pending.text);
 
     // The process can exit and destroy this surface while the dialog pumps
     // messages.
