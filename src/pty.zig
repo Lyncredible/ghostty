@@ -491,7 +491,8 @@ const WindowsPty = struct {
             .in_pipe = handoff.in_pipe,
             .pseudo_console = undefined,
             .conpty = .inbox,
-            .size = size,
+            // Not ours yet, so that setSize below sends it.
+            .size = std.mem.zeroes(winsize),
             .handoff = handoff.console,
         };
         // The console host has its own size until we tell it ours.
@@ -646,6 +647,21 @@ const WindowsPty = struct {
         if (self.console_closed) {
             self.size = size;
             return;
+        }
+
+        // A console only has columns and rows. When they're the same
+        // (only the size in pixels changed, or a resize was sent twice,
+        // as when a terminal starts), there's nothing to tell it, and
+        // telling it anyway costs: console hosts repaint the screen for
+        // every resize, and older ones (Windows Server 2022's) can break
+        // a line being typed in two while they do.
+        {
+            const old = coord(self.size);
+            const new = coord(size);
+            if (old.X == new.X and old.Y == new.Y) {
+                self.size = size;
+                return;
+            }
         }
 
         if (self.handoff) |console| {
@@ -807,6 +823,12 @@ test "windows: adopted console" {
     try testing.expectEqual(@sizeOf(@TypeOf(packets)), read);
     try testing.expectEqualSlices(u16, &.{ 8, 80, 24, 8, 100, 30 }, &packets);
     try testing.expectEqual(@as(u16, 30), (try pty.getSize()).ws_row);
+
+    // The same columns and rows again, or with another size in pixels,
+    // tell it nothing: the next packet read is the one after.
+    try pty.setSize(.{ .ws_row = 30, .ws_col = 100, .ws_xpixel = 1, .ws_ypixel = 1 });
+    try pty.setSize(.{ .ws_row = 30, .ws_col = 100, .ws_xpixel = 1900, .ws_ypixel = 1260 });
+    try testing.expectEqual(@as(u16, 1900), (try pty.getSize()).ws_xpixel);
 
     // Giving it a parent window sends PTY_SIGNAL_REPARENT_WINDOW (3) and
     // the window, packed.
