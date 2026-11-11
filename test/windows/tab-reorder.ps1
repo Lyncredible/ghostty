@@ -53,7 +53,7 @@ $W = [GhosttyTabReorder.Win32]
 $log = Join-Path ([IO.Path]::GetTempPath()) "ghostty-tab-reorder-$PID.log"
 $process = Start-Process -FilePath $Exe -PassThru -RedirectStandardError $log -ArgumentList '--command=cmd.exe',
     '--window-save-state=never', '--shell-integration-features=no-title', '--keybind=f5=new_tab',
-    '--keybind=f6=move_tab:1', '--keybind=f7=copy_title_to_clipboard'
+    '--keybind=f6=move_tab:1', '--keybind=f7=copy_title_to_clipboard', '--keybind=f8=next_tab'
 
 function Fail([string]$message) {
     Write-Host "::error title=tab-reorder::$message"
@@ -148,6 +148,27 @@ try {
     $t = Tabs
     if ($t.Count -ne 2 -or $t[0].Current.Name -notmatch 'SECOND$') { Fail "a drag out of the bar and back changed the tabs: $note" }
     Write-Host "Dragged below the bar, the tab's picture followed the pointer; back in the bar it went, and the tabs stayed: $note."
+
+    # Another tab selected (by a key) while the tab is carried out of
+    # the bar ends the drag: its picture goes at the next move, and
+    # letting go moves nothing.
+    $W::Mouse($bar, 0x0201, 1, $from.X, $from.Y)                 # WM_LBUTTONDOWN
+    $W::Mouse($bar, 0x0200, 1, $from.X, $from.Y + 20)            # WM_MOUSEMOVE, past the drag threshold
+    $W::Mouse($bar, 0x0200, 1, $from.X, $below)
+    [void](WaitFor { $script:note = 'no GhosttyTabGhost window'; Ghost } "the dragged tab's picture below the bar a third time")
+    $W::Key($second, 0x77, 0x42)   # F8: next_tab
+    [void](WaitFor { $script:note = 'SECOND still shown'; (Shown) -eq $first } 'next_tab to select the other tab during the drag')
+    $W::Mouse($bar, 0x0200, 1, $from.X, $below + 5)
+    [void](WaitFor { $script:note = 'still showing'; -not (Ghost) } "the dragged tab's picture to go once another tab is selected")
+    $W::Mouse($bar, 0x0202, 0, $from.X, $below + 5)              # WM_LBUTTONUP
+    Start-Sleep -Milliseconds 500
+    $t = Tabs
+    if ($t.Count -ne 2 -or $t[0].Current.Name -notmatch 'SECOND$') { Fail "letting go after the drag had ended changed the tabs: $note" }
+    if ((Shown) -ne $first) { Fail 'letting go after the drag had ended changed the tab shown' }
+    $W::Key($first, 0x77, 0x42)    # F8: next_tab, around to SECOND again
+    [void](WaitFor { $script:note = 'the other tab still shown'; (Shown) -eq $second } 'next_tab to select SECOND again')
+    $t = Tabs
+    Write-Host "Another tab selected during a drag out of the bar ended it: the picture went, and letting go left the tabs: $note."
 
     $W::Key($second, 0x75, 0x40)   # F6: move_tab:1
     [void](WaitFor { $t = Tabs; $t.Count -eq 2 -and $t[1].Current.Name -match 'SECOND$' } 'move_tab:1 to move SECOND back to second')
