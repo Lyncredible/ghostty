@@ -6,6 +6,7 @@
 const TabGhost = @This();
 
 const std = @import("std");
+const i18n = @import("../../os/main.zig").i18n;
 const util = @import("util.zig");
 const c = util.c;
 
@@ -38,7 +39,10 @@ pub const Look = struct {
 pub fn show(self: *TabGhost, instance: c.HINSTANCE, pt: c.POINT, look: Look) void {
     if (self.hwnd == null) {
         self.hwnd = c.CreateWindowExW(
-            c.WS_EX_LAYERED | c.WS_EX_TRANSPARENT | c.WS_EX_NOACTIVATE | c.WS_EX_TOOLWINDOW | c.WS_EX_TOPMOST,
+            // Mirrored like the tab bar it comes from, so the title starts
+            // on the same side.
+            @as(c.DWORD, c.WS_EX_LAYERED | c.WS_EX_TRANSPARENT | c.WS_EX_NOACTIVATE | c.WS_EX_TOOLWINDOW | c.WS_EX_TOPMOST) |
+                if (i18n.rightToLeft()) @as(c.DWORD, c.WS_EX_LAYOUTRTL) else 0,
             class_name,
             null,
             c.WS_POPUP,
