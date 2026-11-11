@@ -2944,6 +2944,8 @@ Notes:
         Link dialog and failed in run 42961060575, the only failure).
         Run 42963488596 (afaa95085) passed every job: the three dialog
         tests, `new-window-place.ps1` and the localization test.
+        `paste-race.ps1` then gained a case that presses Paste and
+        sees both lines arrive (run 42977394136, da8a8ac9d, passed).
         Both pass here, as do the unit tests for each dialog's text;
         checked by eye in English and German. "Link Blocked" only has
         OK, so it stays a message box.
