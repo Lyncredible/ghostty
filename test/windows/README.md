@@ -530,6 +530,11 @@ window closes; a tab dropped on nothing of ours gets a new window; and one
 dropped on the other window's terminal goes after its last tab. During
 each drag the tab's picture shows, and it's gone after the drop.
 
+Then Ghostty is started again with `window-decoration = none`, where a
+window with one tab shows no tab bar: a tab dragged over such a window
+marks it with a line along the top of its terminal, the line goes when
+the pointer leaves the window, and dropped there the tab joins it.
+
 ## compact-tabs.ps1
 
 Checks compact tabs: with 12 tabs in a narrow window, each tab shows only

@@ -66,6 +66,10 @@ drop_window: ?*Window = null,
 /// Where among our tabs a tab dragged from another window would go if
 /// it's dropped now: we mark the place.
 drop_mark: ?usize = null,
+/// The mark on a window we're dragging a tab over when its tab bar isn't
+/// showing (a single tab without the tabs in the title bar): a line along
+/// the top of it.
+drop_strip: TabGhost = .{},
 
 /// The parts of the tab bar the mouse can be over.
 pub const Hit = union(enum) {
@@ -177,6 +181,7 @@ pub fn deinit(self: *TabBar) void {
     if (self.tooltip) |tooltip| _ = c.DestroyWindow(tooltip);
     self.endDragFeedback();
     self.ghost.deinit();
+    self.drop_strip.deinit();
     _ = c.SetWindowLongPtrW(self.hwnd, util.GWLP_USERDATA, 0);
     if (self.font) |f| _ = c.DeleteObject(f);
     if (self.icon_font) |f| _ = c.DeleteObject(f);
@@ -1139,12 +1144,31 @@ fn updateDragFeedback(self: *TabBar) void {
     const over = self.window.app.windowAt(pt);
     const target = if (over != self.window) over else null;
     self.setDropWindow(target, if (target) |window| window.tab_bar.dropIndex(pt) else 0);
+
+    // A window with no tab bar showing can't mark the place: mark the
+    // top of where its terminal is instead.
+    const bare = if (target) |window| if (c.IsWindowVisible(window.tab_bar.hwnd) == 0) window else null else null;
+    if (bare) |window| {
+        var area = window.surfaceArea();
+        _ = c.MapWindowPoints(window.hwnd, null, @ptrCast(&area), 2);
+        self.drop_strip.show(self.window.app.hinstance, .{ .x = area.left, .y = area.top }, .{
+            .title = "",
+            .font = null,
+            .background = colorref(col.text),
+            .foreground = colorref(col.text),
+            .border = colorref(col.text),
+            .width = area.right - area.left,
+            .height = @max(2, self.scale(3)),
+            .fixed = true,
+        });
+    } else self.drop_strip.hide();
 }
 
 /// The drag is over or back in the bar: nothing follows the pointer and
 /// no window is marked.
 fn endDragFeedback(self: *TabBar) void {
     self.ghost.hide();
+    self.drop_strip.hide();
     self.setDropWindow(null, 0);
 }
 

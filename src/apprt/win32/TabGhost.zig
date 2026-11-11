@@ -33,9 +33,12 @@ pub const Look = struct {
     border: c.COLORREF,
     width: c_int,
     height: c_int,
+    /// The point is its top left corner rather than the pointer: for the
+    /// mark on a window that has no tab bar showing (see TabBar).
+    fixed: bool = false,
 };
 
-/// Show it centered on a point of the screen, or move it there.
+/// Show it by a point of the screen (the pointer), or move it there.
 pub fn show(self: *TabGhost, instance: c.HINSTANCE, pt: c.POINT, look: Look) void {
     if (self.hwnd == null) {
         self.hwnd = c.CreateWindowExW(
@@ -66,7 +69,12 @@ pub fn show(self: *TabGhost, instance: c.HINSTANCE, pt: c.POINT, look: Look) voi
     self.foreground = look.foreground;
     self.border = look.border;
     _ = util.utf16TruncateZ(&self.title, look.title);
-    const place = rect(pt, look.width, look.height);
+    const place = if (look.fixed) c.RECT{
+        .left = pt.x,
+        .top = pt.y,
+        .right = pt.x + look.width,
+        .bottom = pt.y + look.height,
+    } else rect(pt, look.width, look.height);
     _ = util.SetWindowPos(
         self.hwnd,
         util.HWND_TOPMOST,
