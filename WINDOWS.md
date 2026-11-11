@@ -1496,6 +1496,14 @@ Notes:
         `localization.ps1` passes. CI run 42928661515 (8b3285aa3: the
         smaller catalog, the `PATH` fix and the last translated
         strings) passed every job before it, and `windows-tip` moved.
+        After it, run 42937776233 failed in the Windows 2022 job's
+        Tabs test (new there since fd11b16be, and passing four times):
+        the `echo` of its marker, typed as soon as the third tab's
+        prompt showed, never appeared within 30 s. Nothing in the sync
+        touches that, so the typed characters most likely went missing
+        on a slow runner. The test now types a marker again if nothing
+        of it shows for 8 s, and its timeout message says how much of
+        the marker is on screen and how the screen ends.
 - [x] Tip builds, like upstream's `release-tip.yml` (the discussion's
       release workflow item): a rolling prerelease of the latest
       `windows` commit, so people can try it without building. Approved
