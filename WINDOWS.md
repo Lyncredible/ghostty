@@ -2991,7 +2991,8 @@ Notes:
         left to right. It also opens the search bar: mirrored and in the
         terminal's left half in Hebrew, neither otherwise. CI run 43016413687
         (dd3dc8ada) passed every job on its first attempt, with the
-        palette check.
+        palette check, and run 43024876833 (e2138db68) with the search
+        bar's.
   - [ ] A person who reads one of the languages should look over a
         translated build: the menus mix GTK's wording into macOS's
         layout, and right-to-left languages (Hebrew) aren't laid out
