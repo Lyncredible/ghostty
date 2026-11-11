@@ -1557,6 +1557,13 @@ Notes:
         Pushed as e57ff99e3; CI run 43061917401 passed every job,
         with the new test of dragging tabs between windows, and
         `windows-tip` moved.
+  - [x] 2026-11-11: a twenty-ninth sync (2 commits: redrawing the
+        prompt on a resize no longer leaves stale prompts, in the
+        core's page list, screen and terminal). No conflicts; dates
+        kept (813 commits checked). The app builds and the page list
+        and resize tests pass (412 and 278). Before it, CI run
+        43071605639 (1eaa5636b, the drag that ends because its tab
+        closed) passed every job.
   - [x] It failed there again in run 42948447833 (098593a94), now
         saying what was on screen: the command had run (its output was
         there), but the typed line read `echo M`, a line break,
