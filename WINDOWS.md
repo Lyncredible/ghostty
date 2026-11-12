@@ -3344,7 +3344,8 @@ Notes:
       The hot key for a trigger was only tested for its modifiers and
       the catch-all; unit tests now cover keys by position (function,
       editing and extended keys, and one with no scan code) and by
-      character (a digit, the space, characters no key types).
+      character (a digit, the space, characters no key types). CI run
+      43229577315 passed on all five jobs.
 - [x] Unimplemented apprt actions (as of 2026-10-25)
   - [x] `show_on_screen_keyboard`: toggles the touch keyboard through the
         shell's (undocumented) `ITipInvocation`, starting TabTip.exe if
