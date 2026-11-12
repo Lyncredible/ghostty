@@ -3325,7 +3325,8 @@ Notes:
       resolved theirs.) Unit test; `cli-ipc.ps1` starts a second
       `ghostty.exe` in a temporary directory with
       `--working-directory=sub` and looks for the prompt there, which
-      fails without the change.
+      fails without the change. CI run 43210556879 passed on all
+      five jobs.
 - [x] Unimplemented apprt actions (as of 2026-10-25)
   - [x] `show_on_screen_keyboard`: toggles the touch keyboard through the
         shell's (undocumented) `ITipInvocation`, starting TabTip.exe if
