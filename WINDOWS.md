@@ -3399,7 +3399,8 @@ Notes:
       before we had them (reopening a closed tab or split). They're
       listed now (unit test `supported`); `command-palette.ps1` closes a
       split, then reopens it and closes it again from the palette, and
-      fails without the change (checked here).
+      fails without the change (checked here). CI run 43305480155
+      passed on all five jobs, with the new check in `build-windows`.
 - [x] Unimplemented apprt actions (as of 2026-10-25)
   - [x] `show_on_screen_keyboard`: toggles the touch keyboard through the
         shell's (undocumented) `ITipInvocation`, starting TabTip.exe if
