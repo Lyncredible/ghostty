@@ -2,8 +2,9 @@
 //! so a panic's message and stack trace go to a standard error that
 //! nobody sees, and the window just disappears. Before the default panic
 //! handler runs, we write a report to
-//! `%LOCALAPPDATA%\ghostty\crash\crash-<time>.txt` and, when there's no
-//! console to see the message in, tell the user where it is.
+//! `%LOCALAPPDATA%\ghostty\crash\crash-<date>-<time>-<pid>.txt` (UTC) and,
+//! when there's no console to see the message in, tell the user where it
+//! is.
 //!
 //! This runs while panicking, so it doesn't allocate: it only uses fixed
 //! buffers and the Win32 API.
@@ -109,8 +110,10 @@ fn writeReport(path_buf: []u16, contents: []const u8) ?[:0]const u16 {
     _ = CreateDirectoryW(path.slice(), null);
 
     var name_buf: [64]u8 = undefined;
-    const name = std.fmt.bufPrint(&name_buf, "\\crash-{d}.txt", .{GetTickCount64()}) catch return null;
-    path.append(name);
+    var now: SYSTEMTIME = undefined;
+    GetSystemTime(&now);
+    path.append("\\");
+    path.append(reportName(&name_buf, now, GetCurrentProcessId()) orelse return null);
     if (path.overflowed) return null;
 
     const GENERIC_WRITE: DWORD = 0x40000000;
@@ -123,6 +126,62 @@ fn writeReport(path_buf: []u16, contents: []const u8) ?[:0]const u16 {
     if (WriteFile(file, contents.ptr, @intCast(contents.len), &written, null) == .FALSE) return null;
     return path.slice();
 }
+
+/// A report's file name: when it was written (UTC) and by which process.
+/// It was the time since Windows started, which comes around again after
+/// a restart, and a later crash then wrote over an earlier report. The
+/// names sort by time.
+fn reportName(buf: []u8, now: SYSTEMTIME, pid: DWORD) ?[]const u8 {
+    return std.fmt.bufPrint(
+        buf,
+        "crash-{d:0>4}{d:0>2}{d:0>2}-{d:0>2}{d:0>2}{d:0>2}-{d}.txt",
+        .{ now.year, now.month, now.day, now.hour, now.minute, now.second, pid },
+    ) catch null;
+}
+
+test reportName {
+    const testing = std.testing;
+    var buf: [64]u8 = undefined;
+    const time: SYSTEMTIME = .{
+        .year = 2026,
+        .month = 3,
+        .day_of_week = 0,
+        .day = 9,
+        .hour = 7,
+        .minute = 5,
+        .second = 1,
+        .milliseconds = 999,
+    };
+    try testing.expectEqualStrings("crash-20260309-070501-4321.txt", reportName(&buf, time, 4321).?);
+    // The longest it gets fits, and a buffer too small is no name.
+    const last: SYSTEMTIME = .{
+        .year = 30827,
+        .month = 12,
+        .day_of_week = 0,
+        .day = 31,
+        .hour = 23,
+        .minute = 59,
+        .second = 59,
+        .milliseconds = 0,
+    };
+    try testing.expectEqualStrings(
+        "crash-308271231-235959-4294967295.txt",
+        reportName(&buf, last, std.math.maxInt(DWORD)).?,
+    );
+    var small: [16]u8 = undefined;
+    try testing.expect(reportName(&small, time, 1) == null);
+}
+
+const SYSTEMTIME = extern struct {
+    year: u16,
+    month: u16,
+    day_of_week: u16,
+    day: u16,
+    hour: u16,
+    minute: u16,
+    second: u16,
+    milliseconds: u16,
+};
 
 /// A NUL-terminated UTF-16 string in a fixed buffer, truncated if it
 /// doesn't fit.
@@ -209,7 +268,8 @@ extern "kernel32" fn GetStdHandle(which: DWORD) callconv(.winapi) ?HANDLE;
 const STD_ERROR_HANDLE: DWORD = @bitCast(@as(i32, -12));
 extern "kernel32" fn GetEnvironmentVariableW(name: [*:0]const u16, buf: [*]u16, size: DWORD) callconv(.winapi) DWORD;
 extern "kernel32" fn CreateDirectoryW(path: [*:0]const u16, security: ?*anyopaque) callconv(.winapi) BOOL;
-extern "kernel32" fn GetTickCount64() callconv(.winapi) u64;
+extern "kernel32" fn GetSystemTime(time: *SYSTEMTIME) callconv(.winapi) void;
+extern "kernel32" fn GetCurrentProcessId() callconv(.winapi) DWORD;
 extern "kernel32" fn CreateFileW(
     name: [*:0]const u16,
     access: DWORD,
