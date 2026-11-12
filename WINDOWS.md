@@ -3075,8 +3075,9 @@ Notes:
   - [x] A unit test of whether a file's type has an app to open it
         (which decides between that app and Notepad for the
         configuration file).
-  - [x] CI run 43130919863 (c6c1f9ecd: the bell volume and the file
-        type test) passed every job.
+  - [x] CI runs 43130919863 (c6c1f9ecd: the bell volume and the file
+        type test) and 43137740992 (1dd37683b: the palette's search)
+        passed every job.
   - [x] The catalog repeated each message in every locale: now the
         messages are stored once, with each locale's offsets to its
         translations of them. 460 KB, from 778. The unit tests (which
