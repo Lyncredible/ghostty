@@ -3093,6 +3093,11 @@ Notes:
         found ignoring case, not found when the case must match, the
         first and the last match apart, and nothing for text that
         isn't there.
+  - [x] The menus' translations audited (2026-11-11): in German,
+        every label is translated except the menu bar's names that
+        GTK doesn't have (File, Edit, View, the app's), "Quick
+        Terminal" and the "With Shell" submenus. The catalog has no
+        message for any of them.
   - [x] The catalog repeated each message in every locale: now the
         messages are stored once, with each locale's offsets to its
         translations of them. 460 KB, from 778. The unit tests (which
@@ -3223,6 +3228,19 @@ Notes:
         `draft_release`). Its first run, 42867669539 (896a374f6), built
         and checked both packages (x64 in 12 minutes, ARM64 in 13) and
         kept them as artifacts; the fork's CI passed the same commit.
+- [x] Review of the console launcher (2026-11-11): `ghostty --version`
+      and `ghostty --help` printed nothing from a shell, and neither
+      did an action after another argument (`ghostty --config-file=x
+      +validate-config`). `ghostty.com` only took a `+` at the start of
+      its first argument for a CLI action, so it started these without
+      the console and didn't wait, while `ghostty.exe` runs an action
+      for a `+` argument anywhere, `--version`, `--help` and `-h`
+      (unless `-e` comes first). The launcher follows the same rules
+      now, reading its arguments as Windows splits them. It also
+      passes on the whole exit code (it kept one byte, so 256 would
+      have been success). Unit tests of the rules; CI's "Test CLI
+      actions" runs `--version`, `--help`, an action after another
+      argument and an unknown action.
 - [x] Unimplemented apprt actions (as of 2026-10-25)
   - [x] `show_on_screen_keyboard`: toggles the touch keyboard through the
         shell's (undocumented) `ITipInvocation`, starting TabTip.exe if

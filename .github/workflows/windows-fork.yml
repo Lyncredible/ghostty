@@ -71,6 +71,16 @@ jobs:
         run: |
           $version = ./zig-out/bin/ghostty.com +version | Out-String
           if ($LASTEXITCODE -ne 0 -or $version -notmatch 'Ghostty') { throw "+version failed: $version" }
+          # The actions without a plus, and one after another argument:
+          # the launcher must wait for these too.
+          $version = ./zig-out/bin/ghostty.com --version | Out-String
+          if ($LASTEXITCODE -ne 0 -or $version -notmatch 'Ghostty') { throw "--version failed: $version" }
+          $help = ./zig-out/bin/ghostty.com --help | Out-String
+          if ($LASTEXITCODE -ne 0 -or $help -notmatch 'Usage: ghostty') { throw "--help failed: $help" }
+          $version = ./zig-out/bin/ghostty.com --config-default-files=false +version | Out-String
+          if ($LASTEXITCODE -ne 0 -or $version -notmatch 'Ghostty') { throw "+version after another argument failed: $version" }
+          $out = ./zig-out/bin/ghostty.com +no-such-action 2>&1 | Out-String
+          if ($LASTEXITCODE -ne 1) { throw "an unknown action exited with $LASTEXITCODE`: $out" }
           Set-Content valid.conf 'font-size = 13'
           ./zig-out/bin/ghostty.com +validate-config --config-file=valid.conf
           if ($LASTEXITCODE -ne 0) { throw "+validate-config failed for a valid config" }
