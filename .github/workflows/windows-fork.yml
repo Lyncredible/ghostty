@@ -146,6 +146,9 @@ jobs:
           } finally { Pop-Location }
           Write-Host "+edit-config and +ssh from a directory with its own cmd.exe and ssh.exe: ok"
           Remove-Item Env:EDITOR -ErrorAction SilentlyContinue
+          # The step ends with the last program's exit code, which was the
+          # 127 we looked for.
+          $global:LASTEXITCODE = 0
 
       # The actions that talk to a running instance.
       - name: Test CLI actions with a running instance
