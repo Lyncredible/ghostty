@@ -7,6 +7,8 @@ const std = @import("std");
 const Allocator = std.mem.Allocator;
 const cli = @import("../../cli.zig");
 const configpkg = @import("../../config.zig");
+const global = @import("../../global.zig");
+const internal_os = @import("../../os/main.zig");
 
 const log = std.log.scoped(.win32);
 
@@ -58,7 +60,24 @@ pub fn parse(arena: Allocator, arguments: []const []const u8) Allocator.Error!Ov
             };
             result.shell_integration = parsed.@"shell-integration";
         } else if (std.mem.cutPrefix(u8, arg, "--working-directory=")) |v| {
-            result.working_directory = try arena.dupeSentinel(u8, std.mem.trim(u8, v, &std.ascii.whitespace), 0);
+            // As the config reads it: `home` and `inherit` are not
+            // directories of those names (the CLI passes them on as they
+            // are), and a `~` is the home directory.
+            var wd: configpkg.Config.WorkingDirectory = .inherit;
+            wd.parseCLI(arena, v) catch |err| switch (err) {
+                error.OutOfMemory => return error.OutOfMemory,
+                else => {
+                    log.warn("unable to parse working directory {s}: {}", .{ v, err });
+                    continue;
+                },
+            };
+            try wd.finalize(arena);
+            result.working_directory = switch (wd) {
+                .path => |path| try arena.dupeSentinel(u8, path, 0),
+                .home => try homeDirectory(arena),
+                // What a new window or tab does without the option.
+                .inherit => null,
+            };
         } else if (std.mem.cutPrefix(u8, arg, "--title=")) |v| {
             result.title = try arena.dupeSentinel(u8, std.mem.trim(u8, v, &std.ascii.whitespace), 0);
         } else {
@@ -68,6 +87,15 @@ pub fn parse(arena: Allocator, arguments: []const []const u8) Allocator.Error!Ov
 
     if (command.items.len > 0) result.command = .{ .direct = command.items };
     return result;
+}
+
+/// The user's home directory, if it's known.
+fn homeDirectory(arena: Allocator) Allocator.Error!?[:0]const u8 {
+    var env = global.environMap() catch return null;
+    defer env.deinit();
+    var buf: [std.Io.Dir.max_path_bytes]u8 = undefined;
+    const home = (internal_os.home(global.io(), &env, &buf) catch return null) orelse return null;
+    return try arena.dupeSentinel(u8, home, 0);
 }
 
 /// Apply the overrides to a surface's config. Strings must outlive it.
@@ -104,6 +132,21 @@ test parse {
     try testing.expectEqual(3, command.len);
     try testing.expectEqualStrings("pwsh", command[0]);
     try testing.expectEqualStrings("--title=not an option", command[2]);
+
+    // The words the config has for a working directory, and a quoted one.
+    const home = try parse(alloc, &.{"--working-directory= home "});
+    const home_dir = (try homeDirectory(alloc)).?;
+    try testing.expect(std.fs.path.isAbsolute(home_dir));
+    try testing.expectEqualStrings(home_dir, home.working_directory.?);
+    const inherit = try parse(alloc, &.{ "--working-directory=C:\\x", "--working-directory=inherit" });
+    try testing.expect(inherit.working_directory == null);
+    const quoted = try parse(alloc, &.{"--working-directory=\"C:\\a b\""});
+    try testing.expectEqualStrings("C:\\a b", quoted.working_directory.?);
+    const tilde = try parse(alloc, &.{"--working-directory=~/src"});
+    try testing.expect(std.mem.startsWith(u8, tilde.working_directory.?, home_dir));
+    try testing.expect(std.mem.endsWith(u8, tilde.working_directory.?, "src"));
+    const empty = try parse(alloc, &.{"--working-directory="});
+    try testing.expect(empty.working_directory == null);
 
     const none_result = try parse(alloc, &.{});
     try testing.expect(none_result.command == null);

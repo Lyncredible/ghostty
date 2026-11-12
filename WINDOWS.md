@@ -3327,6 +3327,15 @@ Notes:
       `--working-directory=sub` and looks for the prompt there, which
       fails without the change. CI run 43210556879 passed on all
       five jobs.
+  - [x] `+new-window` and `+new-tab` pass `--working-directory=home`
+        and `=inherit` on as they are, for the instance to read, and
+        `Overrides.zig` took any value for a path: `home` opened in a
+        directory named "home" (so nowhere), and a quoted path or a `~`
+        weren't read as the config reads them. It parses the value as
+        the config does now: `home` is the home directory, `inherit`
+        leaves the new tab or window to its default. Unit tests;
+        `cli-ipc.ps1` opens a tab with `--working-directory=home` and
+        looks for the prompt there (fails without the change).
 - [x] Unimplemented apprt actions (as of 2026-10-25)
   - [x] `show_on_screen_keyboard`: toggles the touch keyboard through the
         shell's (undocumented) `ITipInvocation`, starting TabTip.exe if
