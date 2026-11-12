@@ -874,10 +874,31 @@ fn rangeEnclosingElement(iface: *Interface, out: *?*anyopaque) callconv(.winapi)
 
 fn rangeText(iface: *Interface, max_length: i32, out: *?[*:0]u16) callconv(.winapi) HRESULT {
     const self = RangeObject.from(iface);
-    var text = self.range.snapshot.text[self.range.start..self.range.end];
-    if (max_length >= 0 and text.len > max_length) text = text[0..@intCast(max_length)];
+    const text = limitText(self.range.snapshot.text[self.range.start..self.range.end], max_length);
     out.* = SysAllocStringLen(text.ptr, @intCast(text.len));
     return S_OK;
+}
+
+/// At most `max_length` code units of the text (all of it for -1),
+/// without the first half of a character that doesn't fit (an emoji's
+/// surrogate pair).
+fn limitText(text: []const u16, max_length: i32) []const u16 {
+    if (max_length < 0 or text.len <= max_length) return text;
+    var len: usize = @intCast(max_length);
+    if (len > 0 and std.unicode.utf16IsHighSurrogate(text[len - 1])) len -= 1;
+    return text[0..len];
+}
+
+test limitText {
+    const testing = std.testing;
+    const L = std.unicode.utf8ToUtf16LeStringLiteral;
+    const text = L("a\u{1F600}b");
+    try testing.expectEqualSlices(u16, text, limitText(text, -1));
+    try testing.expectEqualSlices(u16, text, limitText(text, 10));
+    try testing.expectEqualSlices(u16, L("a\u{1F600}"), limitText(text, 3));
+    // Half of the emoji doesn't fit, so none of it does.
+    try testing.expectEqualSlices(u16, L("a"), limitText(text, 2));
+    try testing.expectEqualSlices(u16, L(""), limitText(text, 0));
 }
 
 fn rangeMove(iface: *Interface, unit: i32, count: i32, out: *i32) callconv(.winapi) HRESULT {
