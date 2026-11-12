@@ -3065,6 +3065,16 @@ Notes:
         at the first bell. It's silence now (`mciVolume`, with a test
         of out-of-range, infinite and NaN volumes). The other
         conversions of configured numbers were already guarded.
+  - [x] Review of the command palette's search (2026-11-11): it
+        ignored case for ASCII letters only, so with a translation
+        "öffnen" didn't find "Öffnen", nor a lowercase Cyrillic word
+        its capitalized title. The search text and what's typed are
+        both made lowercase by Windows now (`CharLowerBuffW`, on
+        UTF-16), with unit tests in German, Russian and Japanese.
+        `command-palette.ps1` and `localization.ps1` pass.
+  - [x] A unit test of whether a file's type has an app to open it
+        (which decides between that app and Notepad for the
+        configuration file).
   - [x] The catalog repeated each message in every locale: now the
         messages are stored once, with each locale's offsets to its
         translations of them. 460 KB, from 778. The unit tests (which
