@@ -8,6 +8,7 @@ const Allocator = std.mem.Allocator;
 const Config = @import("../../config.zig").Config;
 
 const util = @import("util.zig");
+const link = @import("link.zig");
 const c = util.c;
 
 const log = std.log.scoped(.win32);
@@ -90,17 +91,50 @@ pub fn updateConfig(self: *LinkPreview, config: *const Config) void {
     if (self.hwnd != null) _ = c.InvalidateRect(self.hwnd, null, c.FALSE);
 }
 
-/// Show the given URL, or hide the preview if it's empty.
+/// Show the given URL, or hide the preview if it's empty. The URL comes
+/// from the terminal's output (OSC 8), so characters that would reorder
+/// or hide part of it (a right-to-left override, a line break) are shown
+/// escaped, as the dialog that confirms opening it shows them.
 pub fn setUrl(self: *LinkPreview, alloc: Allocator, url: []const u8, cursor: c.POINT) void {
     if (self.text) |v| alloc.free(v);
     self.text = null;
-    if (url.len > 0) self.text = util.utf16Alloc(alloc, url) catch null;
+    if (url.len > 0) self.text = shownText(alloc, url) catch null;
     self.layout(cursor);
     // The URL is only drawn, so also make it the window's text, which
     // screen readers (and tests) see as its name.
     if (self.hwnd != null) {
         if (self.text) |text| _ = c.SetWindowTextW(self.hwnd, text.ptr);
     }
+}
+
+fn shownText(alloc: Allocator, url: []const u8) ![:0]u16 {
+    const shown = try link.display(alloc, url);
+    defer alloc.free(shown);
+    return try util.utf16Alloc(alloc, shown);
+}
+
+test shownText {
+    const testing = std.testing;
+    const alloc = testing.allocator;
+    const L = std.unicode.utf8ToUtf16LeStringLiteral;
+
+    const plain = try shownText(alloc, "https://example.com/a?b=c");
+    defer alloc.free(plain);
+    try testing.expectEqualSlices(u16, L("https://example.com/a?b=c"), plain);
+
+    // Reversed, broken and invisible: none of it can change what's seen.
+    const spoof = try shownText(alloc, "https://example.com/\u{202E}fdp.exe\n\u{200B}x\xff");
+    defer alloc.free(spoof);
+    try testing.expectEqualSlices(
+        u16,
+        L("https://example.com/\\u{202E}fdp.exe\\u{A}\\u{200B}x\\xFF"),
+        spoof,
+    );
+
+    // Letters of other scripts are left alone.
+    const intl = try shownText(alloc, "https://例え.jp/パス");
+    defer alloc.free(intl);
+    try testing.expectEqualSlices(u16, L("https://例え.jp/パス"), intl);
 }
 
 /// Called when the mouse moves, to get out of its way.
