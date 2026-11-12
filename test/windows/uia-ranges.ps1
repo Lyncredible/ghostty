@@ -68,6 +68,19 @@ try {
     if ($process.HasExited) { Fail 'Ghostty exited after the range was read' }
     if ($read.Length -gt $before.Length) { Fail "the old range read $($read.Length) characters, more than its $($before.Length)" }
     Write-Host "Moving the old range to the newer selection's end and reading it gave $($read.Length) characters, and Ghostty is fine."
+
+    # Finding text in the screen: with and without regard to case, and
+    # from either end.
+    $all = $text.DocumentRange
+    $found = $all.FindText('rangemark LINE 30', $false, $true)
+    if (-not $found -or $found.GetText(-1) -cne 'RANGEMARK line 30') { Fail "FindText ignoring case didn't find 'RANGEMARK line 30'" }
+    if ($all.FindText('rangemark LINE 30', $false, $false)) { Fail 'FindText found text in the wrong case when asked to match it' }
+    $first = $all.FindText('RANGEMARK', $false, $false)
+    $last = $all.FindText('RANGEMARK', $true, $false)
+    if (-not $first -or -not $last) { Fail "FindText didn't find RANGEMARK" }
+    if ($first.CompareEndpoints($Start, $last, $Start) -ge 0) { Fail 'FindText backward found nothing later than the first RANGEMARK' }
+    if ($all.FindText('NO-SUCH-TEXT-HERE', $false, $true)) { Fail "FindText found text that isn't there" }
+    Write-Host "FindText found 'RANGEMARK line 30' ignoring case and not when matching it, and the first and last RANGEMARK apart."
 } finally {
     if (-not $process.HasExited) { Stop-Process -Id $process.Id -Force }
     Start-Sleep -Milliseconds 500

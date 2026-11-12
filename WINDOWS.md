@@ -1589,6 +1589,9 @@ Notes:
         The app builds. Pushed as f5c66b188 with the search bar's
         review; CI run 43125220133 passed every job, and `windows-tip`
         moved.
+  - [x] 2026-11-11: a thirty-third sync (2 commits: a formatting fix
+        in libghostty's release notes). No conflicts; dates kept (831
+        commits checked). The app builds.
   - [x] It failed there again in run 42948447833 (098593a94), now
         saying what was on screen: the command had run (its output was
         there), but the typed line read `echo M`, a line break,
@@ -3083,7 +3086,11 @@ Notes:
         only. The search is a function of its own now (`findText`),
         lowercasing each UTF-16 unit as Windows does, with unit tests
         (forward, backward, with and without case, German and
-        Russian). `uia-ranges.ps1` passes; it doesn't call FindText.
+        Russian). CI run 43146408324 (a82ff368e) passed every job.
+        `uia-ranges.ps1` calls FindText through UI Automation since:
+        found ignoring case, not found when the case must match, the
+        first and the last match apart, and nothing for text that
+        isn't there.
   - [x] The catalog repeated each message in every locale: now the
         messages are stored once, with each locale's offsets to its
         translations of them. 460 KB, from 778. The unit tests (which
