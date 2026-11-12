@@ -1579,7 +1579,11 @@ Notes:
         moved to 1.0.2-dev, and its release notes in the doxygen
         pages). No conflicts; dates kept (820 commits checked). The
         app builds, and libghostty-vt's version tests (101) and the
-        tab bar's layout tests (87) pass.
+        tab bar's layout tests (87) pass. Pushed as 68dad1204 with
+        the mark on a window with no tab bar; in CI run 43112319802
+        `build-windows` first failed fetching a dependency (connection
+        reset, after four tries), and passed when re-run, as did every
+        other job; `windows-tip` moved.
   - [x] It failed there again in run 42948447833 (098593a94), now
         saying what was on screen: the command had run (its output was
         there), but the typed line read `echo M`, a line break,
