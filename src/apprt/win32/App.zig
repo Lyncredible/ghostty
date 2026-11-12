@@ -322,9 +322,11 @@ fn forwardLaunch(alloc: Allocator, config: *const Config, class: []const u8) boo
         }
     }
 
-    // Open the window where this launch would have.
+    // Open the window where this launch would have. As a whole path: the
+    // running instance has its own current directory, and a relative one
+    // (`--working-directory=src`) would be looked for there.
     const working_directory: ?[]const u8 = if (config.@"working-directory") |wd| switch (wd) {
-        .path => |path| path,
+        .path => |path| std.Io.Dir.cwd().realPathFileAlloc(global.io(), path, arena_alloc) catch path,
         .inherit => std.Io.Dir.cwd().realPathFileAlloc(global.io(), ".", arena_alloc) catch null,
         .home => null,
     } else null;
