@@ -3382,7 +3382,7 @@ Notes:
       Opening such a link was already refused, and its dialog shows the
       URL escaped (`link.display`); the preview now shows it the same
       way. Unit test (`shownText`); `links.ps1`, which hovers a plain
-      URL, is unchanged.
+      URL, is unchanged. CI run 43280758593 passed on all five jobs.
 - [x] Unimplemented apprt actions (as of 2026-10-25)
   - [x] `show_on_screen_keyboard`: toggles the touch keyboard through the
         shell's (undocumented) `ITipInvocation`, starting TabTip.exe if
