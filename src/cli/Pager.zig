@@ -70,8 +70,19 @@ fn initPager() ?std.process.Child {
 
     if (cmd == null) return null;
 
+    // On Windows we find a pager named alone ourselves: spawning looks in
+    // the current directory before PATH, and a less.exe in whatever
+    // directory this is run from isn't the one that's meant. No pager if
+    // it's nowhere else.
+    var arena: std.heap.ArenaAllocator = .init(std.heap.page_allocator);
+    defer arena.deinit();
+    const program: []const u8 = if (comptime builtin.os.tag == .windows)
+        (internal_os.windows.resolveProgram(arena.allocator(), cmd.?) catch return null) orelse cmd.?
+    else
+        cmd.?;
+
     return std.process.spawn(global.io(), .{
-        .argv = &.{cmd.?},
+        .argv = &.{program},
         .stdin = .pipe,
         .stdout = .inherit,
         .stderr = .inherit,

@@ -252,6 +252,24 @@ pub fn run(alloc_gpa: Allocator) !u8 {
         return 2;
     }
 
+    // On Windows we find an `ssh` named alone ourselves: spawning looks
+    // in the current directory before PATH, and an ssh.exe in whatever
+    // directory this is run from isn't the one that's meant.
+    var ssh_arena = ArenaAllocator.init(alloc_gpa);
+    defer ssh_arena.deinit();
+    if (comptime builtin.os.tag == .windows) {
+        if (internal_os.windows.resolveProgram(ssh_arena.allocator(), opts.ssh)) |found| {
+            if (found) |path| opts.ssh = path;
+        } else |err| switch (err) {
+            error.FileNotFound => {
+                stderr.print("Error: `{s}` was not found.\n", .{opts.ssh}) catch {};
+                stderr.flush() catch {};
+                return 127;
+            },
+            error.OutOfMemory => return err,
+        }
+    }
+
     const result = runInner(alloc_gpa, &opts, stderr);
 
     stderr.flush() catch {};

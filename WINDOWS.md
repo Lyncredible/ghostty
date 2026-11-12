@@ -3267,6 +3267,22 @@ Notes:
         `test/windows/shell-search.ps1` (in CI) starts Ghostty in a
         directory with a stand-in `powershell.exe`; it fails without
         the change.
+  - [x] And for the CLI's helpers, `+ssh`'s `ssh` and the pager
+        (`$PAGER` or `less`). They start through Zig's
+        `std.process.spawn`, which does its own search and tries the
+        current directory before PATH (whatever the variable below
+        says), so `ghostty +ssh host` in a directory with an `ssh.exe`
+        ran that one. Both use the same resolver now, moved to
+        `os/windows.zig` (`resolveProgram`); an `ssh` that is nowhere
+        else is an error (exit code 127), a pager that is nowhere else
+        means no pager. CI runs `+ssh -- -V` from a directory with a
+        stand-in `ssh.exe`. The pager only starts with a console to
+        write to, so it has no automated check.
+  - [x] Looked at with these: the one library loaded by name,
+        `conpty.dll`, is already loaded from our own directory only
+        (`LOAD_LIBRARY_SEARCH_APPLICATION_DIR`); links open through
+        `ShellExecuteW` after `link.check`, and the generic opener's
+        `rundll32` isn't reached on Windows.
   - [x] A trap in checking this: with `NoDefaultCurrentDirectoryInExePath`
         in the environment Windows doesn't look in the current
         directory at all, so a check passes whatever the code does. The

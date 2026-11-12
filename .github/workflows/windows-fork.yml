@@ -134,9 +134,18 @@ jobs:
             $env:EDITOR = 'exit 256 &'
             & $exe +edit-config 2>&1 | Out-Null
             if ($LASTEXITCODE -ne 1) { throw "+edit-config: an editor's exit code 256 became $LASTEXITCODE" }
+            # +ssh runs the ssh on PATH (Windows' OpenSSH), not the
+            # stand-in here, and a program that is only here isn't found.
+            Remove-Item Env:EDITOR
+            Copy-Item "$env:SystemRoot\System32\whoami.exe" (Join-Path $plant 'ssh.exe')
+            Copy-Item "$env:SystemRoot\System32\whoami.exe" (Join-Path $plant 'only-here.exe')
+            $out = & $exe +ssh --terminfo=false --forward-env=false '--' -V 2>&1 | Out-String
+            if ($out -notmatch 'OpenSSH') { throw "+ssh ran the wrong ssh: $out" }
+            $out = & $exe +ssh --ssh=only-here --terminfo=false '--' -V 2>&1 | Out-String
+            if ($LASTEXITCODE -ne 127 -or $out -notmatch 'not found') { throw "+ssh ran a program from the current directory ($LASTEXITCODE): $out" }
           } finally { Pop-Location }
-          Write-Host "+edit-config from a directory with its own cmd.exe: ok"
-          Remove-Item Env:EDITOR
+          Write-Host "+edit-config and +ssh from a directory with its own cmd.exe and ssh.exe: ok"
+          Remove-Item Env:EDITOR -ErrorAction SilentlyContinue
 
       # The actions that talk to a running instance.
       - name: Test CLI actions with a running instance
