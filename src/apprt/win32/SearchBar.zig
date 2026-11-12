@@ -122,8 +122,11 @@ fn createWindows(self: *SearchBar) !void {
         null,
     ) orelse return error.CreateWindowFailed;
     _ = c.SendMessageW(edit, c.EM_SETLIMITTEXT, max_needle, 0);
+    // The hint in the empty field, which GTK's has too (and so has
+    // translations).
+    var hint: [64:0]u16 = undefined;
     _ = c.SendMessageW(edit, c.EM_SETCUEBANNER, c.TRUE, @bitCast(@intFromPtr(
-        std.unicode.utf8ToUtf16LeStringLiteral("Find").ptr,
+        util.utf16TruncateZ(&hint, i18n.text("Find…")).ptr,
     )));
 
     // Subclass the edit control for Enter and Escape.
@@ -194,27 +197,62 @@ pub fn hide(self: *SearchBar) void {
 /// Update the match count, like GTK: "selected/total" counting from one.
 pub fn setCount(self: *SearchBar, selected: ?usize, total: ?usize) void {
     var buf: [32]u8 = undefined;
-    const text = if (total) |t|
-        std.fmt.bufPrint(&buf, "{d}/{d}", .{ if (selected) |s| s + 1 else 0, t }) catch ""
-    else
-        "";
-    self.count_len = std.unicode.utf8ToUtf16Le(&self.count, text) catch 0;
+    self.count_len = std.unicode.utf8ToUtf16Le(&self.count, countText(&buf, selected, total)) catch 0;
     if (self.hwnd == null) return;
     _ = c.InvalidateRect(self.hwnd, null, c.FALSE);
 
     // The count is only drawn, so also make it the window's text, which
     // screen readers (and tests, through UI Automation) see as its name.
     var name_buf: [64]u8 = undefined;
-    const name = if (total) |t| (if (t == 0)
-        "No matches"
-    else if (selected) |s|
-        std.fmt.bufPrint(&name_buf, "Match {d} of {d}", .{ s + 1, t }) catch ""
-    else
-        std.fmt.bufPrint(&name_buf, "{d} matches", .{t}) catch "") else "Search";
+    const name = countName(&name_buf, selected, total);
     var name_w: [64:0]u16 = undefined;
     const n = std.unicode.utf8ToUtf16Le(&name_w, name) catch 0;
     name_w[n] = 0;
     _ = c.SetWindowTextW(self.hwnd, &name_w);
+}
+
+/// The match count as drawn: "selected/total" counting from one, with 0
+/// for no match selected, and nothing before a search has a total.
+fn countText(buf: []u8, selected: ?usize, total: ?usize) []const u8 {
+    const t = total orelse return "";
+    return std.fmt.bufPrint(buf, "{d}/{d}", .{ if (selected) |s| s +| 1 else 0, t }) catch "";
+}
+
+/// The match count as a screen reader says it.
+fn countName(buf: []u8, selected: ?usize, total: ?usize) []const u8 {
+    const t = total orelse return "Search";
+    if (t == 0) return "No matches";
+    const s = selected orelse return std.fmt.bufPrint(buf, "{d} matches", .{t}) catch "";
+    return std.fmt.bufPrint(buf, "Match {d} of {d}", .{ s +| 1, t }) catch "";
+}
+
+test countText {
+    const testing = std.testing;
+    var buf: [32]u8 = undefined;
+    try testing.expectEqualStrings("", countText(&buf, null, null));
+    try testing.expectEqualStrings("", countText(&buf, 3, null));
+    try testing.expectEqualStrings("0/0", countText(&buf, null, 0));
+    try testing.expectEqualStrings("0/10", countText(&buf, null, 10));
+    try testing.expectEqualStrings("1/10", countText(&buf, 0, 10));
+    try testing.expectEqualStrings("10/10", countText(&buf, 9, 10));
+    // The largest counts fit what we draw from, or show nothing.
+    var small: [32]u8 = undefined;
+    const most = std.math.maxInt(usize);
+    const text = countText(&small, most, most);
+    try testing.expect(text.len == 0 or std.mem.indexOfScalar(u8, text, '/') != null);
+}
+
+test countName {
+    const testing = std.testing;
+    var buf: [64]u8 = undefined;
+    try testing.expectEqualStrings("Search", countName(&buf, null, null));
+    try testing.expectEqualStrings("No matches", countName(&buf, null, 0));
+    try testing.expectEqualStrings("No matches", countName(&buf, 0, 0));
+    try testing.expectEqualStrings("10 matches", countName(&buf, null, 10));
+    try testing.expectEqualStrings("Match 1 of 10", countName(&buf, 0, 10));
+    try testing.expectEqualStrings("Match 10 of 10", countName(&buf, 9, 10));
+    const most = std.math.maxInt(usize);
+    try testing.expect(countName(&buf, most, most).len > 0);
 }
 
 /// Called when the parent surface is resized.
@@ -246,7 +284,8 @@ fn layout(self: *SearchBar) void {
     self.updateFont();
     const p = self.scale(pad);
     const edit_right = w - 3 * self.scale(button) - self.scale(count_width) - 2 * p;
-    _ = c.MoveWindow(self.edit, p + self.scale(4), p + self.scale(3), edit_right - p - self.scale(4), h - 2 * p - self.scale(6), c.TRUE);
+    // In a surface narrower than the buttons and the count, no field.
+    _ = c.MoveWindow(self.edit, p + self.scale(4), p + self.scale(3), @max(0, edit_right - p - self.scale(4)), h - 2 * p - self.scale(6), c.TRUE);
     _ = c.InvalidateRect(self.hwnd, null, c.TRUE);
 }
 

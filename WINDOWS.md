@@ -1584,6 +1584,9 @@ Notes:
         `build-windows` first failed fetching a dependency (connection
         reset, after four tries), and passed when re-run, as did every
         other job; `windows-tip` moved.
+  - [x] 2026-11-11: a thirty-second sync (2 commits, both to the
+        vouch list). No conflicts; dates kept (822 commits checked).
+        The app builds.
   - [x] It failed there again in run 42948447833 (098593a94), now
         saying what was on screen: the command had run (its output was
         there), but the typed line read `echo M`, a line break,
@@ -3041,8 +3044,19 @@ Notes:
         Both pass here, as do the unit tests for each dialog's text;
         checked by eye in English and German. "Link Blocked" only has
         OK, so it stays a message box.
-  - [ ] Follow a change of the display language while running? Windows
-        apps pick it up at start, so probably not.
+  - [x] Follow a change of the display language while running? No:
+        Windows' own apps pick it up at start too (decided 2026-11-11).
+  - [x] Review of the search bar (2026-11-11): the hint in its empty
+        field was "Find" in every language, while the catalog has
+        GTK's "Find…"; it's translated now (seen in German:
+        "Suchen…"). The match count's text and its name for screen
+        readers moved into two functions with unit tests (the file had
+        none, and wasn't in the list of files whose tests run), and
+        the field's width no longer goes negative in a surface
+        narrower than the buttons. `search.ps1` and
+        `localization.ps1` pass. The names a screen reader hears
+        ("Match 2 of 10", "No matches") stay English: the catalog has
+        no such messages.
   - [x] The catalog repeated each message in every locale: now the
         messages are stored once, with each locale's offsets to its
         translations of them. 460 KB, from 778. The unit tests (which
