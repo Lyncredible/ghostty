@@ -87,11 +87,46 @@ pub fn openFile(alloc: Allocator, path: []const u8) void {
     defer alloc.free(params);
     const params16 = util.utf16Alloc(alloc, params) catch return;
     defer alloc.free(params16);
-    const notepad = std.unicode.utf8ToUtf16LeStringLiteral("notepad.exe");
+    var notepad_buf: [c.MAX_PATH + 16]u16 = undefined;
+    const notepad = systemProgram(
+        &notepad_buf,
+        std.unicode.utf8ToUtf16LeStringLiteral("notepad.exe"),
+    );
     const result = c.ShellExecuteW(null, open, notepad, params16, null, c.SW_SHOWNORMAL);
     if (@intFromPtr(result) <= 32) {
         log.warn("failed to open file in notepad path={s} result={}", .{ path, @intFromPtr(result) });
     }
+}
+
+/// A program that comes with Windows by its whole path, in the system
+/// directory. Named alone it would be looked for in the current directory
+/// first, and that can be anyone's (wherever we were started from). The
+/// name alone if the directory can't be had.
+fn systemProgram(buf: []u16, name: [:0]const u16) [*:0]const u16 {
+    const n = c.GetSystemDirectoryW(buf.ptr, @intCast(buf.len));
+    if (n == 0 or n + 1 + name.len + 1 > buf.len) return name.ptr;
+    var len: usize = n;
+    if (buf[len - 1] != '\\') {
+        buf[len] = '\\';
+        len += 1;
+    }
+    @memcpy(buf[len..][0..name.len], name);
+    buf[len + name.len] = 0;
+    return buf[0 .. len + name.len :0].ptr;
+}
+
+test systemProgram {
+    const testing = std.testing;
+    const L = std.unicode.utf8ToUtf16LeStringLiteral;
+    var buf: [c.MAX_PATH + 16]u16 = undefined;
+    const path = std.mem.span(systemProgram(&buf, L("notepad.exe")));
+    try testing.expect(std.mem.endsWith(u16, path, L("\\notepad.exe")));
+    try testing.expect(path.len > 14 and path[1] == ':');
+    try testing.expect(c.GetFileAttributesW(path.ptr) != c.INVALID_FILE_ATTRIBUTES);
+
+    // No room for the directory: the name as it was.
+    var small: [8]u16 = undefined;
+    try testing.expectEqualSlices(u16, L("notepad.exe"), std.mem.span(systemProgram(&small, L("notepad.exe"))));
 }
 
 /// Whether the file's type (its extension) has an app to open it with.

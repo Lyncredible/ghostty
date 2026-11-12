@@ -3240,7 +3240,19 @@ Notes:
       passes on the whole exit code (it kept one byte, so 256 would
       have been success). Unit tests of the rules; CI's "Test CLI
       actions" runs `--version`, `--help`, an action after another
-      argument and an unknown action.
+      argument and an unknown action. CI run 43162131381 passed on all
+      five jobs with them.
+- [x] Review of `+edit-config` and opening the config file (2026-11-11):
+      `cmd.exe` and `notepad.exe` were named alone, and Windows looks
+      for a program named that way in the current directory before its
+      own. `ghostty +edit-config` in a directory holding a `cmd.exe`
+      (a downloaded project, say) would have run that one; the same for
+      Notepad when the app opens the config. Both are run by their
+      whole path in the system directory now (`GetSystemDirectoryW`).
+      An editor's exit code is also no longer cut to a byte without a
+      look: a failure whose low byte is zero (256) is reported as 1.
+      Unit tests; CI runs `+edit-config` from a directory with a
+      stand-in `cmd.exe`, and with an editor that exits with 256.
 - [x] Unimplemented apprt actions (as of 2026-10-25)
   - [x] `show_on_screen_keyboard`: toggles the touch keyboard through the
         shell's (undocumented) `ITipInvocation`, starting TabTip.exe if

@@ -169,7 +169,18 @@ fn runWindows(alloc: Allocator, stderr: *std.Io.Writer, path: []const u8) !u8 {
     };
     defer if (editor) |v| alloc.free(v);
 
-    const command_line = try editCommandLine(alloc, editor, path);
+    // Where cmd and Notepad are. Named alone, a program is looked for in
+    // the current directory before Windows' own, and that directory can
+    // be anyone's (a downloaded project, say).
+    var system_buf: [windows.MAX_PATH]u16 = undefined;
+    const system_len = GetSystemDirectoryW(&system_buf, system_buf.len);
+    const system_dir: ?[]u8 = if (system_len == 0 or system_len >= system_buf.len)
+        null
+    else
+        try std.unicode.utf16LeToUtf8Alloc(alloc, system_buf[0..system_len]);
+    defer if (system_dir) |v| alloc.free(v);
+
+    const command_line = try editCommandLine(alloc, system_dir, editor, path);
     defer alloc.free(command_line);
     const command_line_w = try std.unicode.utf8ToUtf16LeAllocZ(alloc, command_line);
     defer alloc.free(command_line_w);
@@ -212,17 +223,45 @@ fn runWindows(alloc: Allocator, stderr: *std.Io.Writer, path: []const u8) !u8 {
     _ = windows.exp.kernel32.WaitForSingleObject(process_information.hProcess, windows.INFINITE);
     var code: windows.DWORD = 1;
     _ = windows.exp.kernel32.GetExitCodeProcess(process_information.hProcess, &code);
-    return @truncate(code);
+    return exitCode(code);
+}
+
+/// An editor's exit code as ours, which is a byte: a failure stays one
+/// (256 isn't success).
+fn exitCode(code: u32) u8 {
+    const byte: u8 = @truncate(code);
+    return if (code != 0 and byte == 0) 1 else byte;
+}
+
+test exitCode {
+    const testing = std.testing;
+    try testing.expectEqual(0, exitCode(0));
+    try testing.expectEqual(3, exitCode(3));
+    try testing.expectEqual(1, exitCode(256));
+    try testing.expectEqual(1, exitCode(0xC0000100));
+    try testing.expectEqual(0x3A, exitCode(0xC000013A));
 }
 
 /// The command line that edits the config at `path` on Windows: the editor
 /// (`$VISUAL` or `$EDITOR`, a command that may have arguments) through cmd,
 /// or Notepad. With /s, cmd removes only the outermost quotes and runs the
 /// rest as it is, so neither the editor nor the quoted path needs more
-/// escaping.
-fn editCommandLine(alloc: Allocator, editor: ?[]const u8, path: []const u8) ![]u8 {
-    if (editor) |v| return std.fmt.allocPrint(alloc, "cmd.exe /d /s /c \"{s} \"{s}\"\"", .{ v, path });
-    return std.fmt.allocPrint(alloc, "notepad.exe \"{s}\"", .{path});
+/// escaping. cmd and Notepad are the ones in `system_dir` (Windows' system
+/// directory), or whichever is found if that's unknown.
+fn editCommandLine(
+    alloc: Allocator,
+    system_dir: ?[]const u8,
+    editor: ?[]const u8,
+    path: []const u8,
+) ![]u8 {
+    const program = if (editor != null) "cmd.exe" else "notepad.exe";
+    const exe = if (system_dir) |dir|
+        try std.fmt.allocPrint(alloc, "\"{s}\\{s}\"", .{ std.mem.trimEnd(u8, dir, "\\"), program })
+    else
+        try alloc.dupe(u8, program);
+    defer alloc.free(exe);
+    if (editor) |v| return std.fmt.allocPrint(alloc, "{s} /d /s /c \"{s} \"{s}\"\"", .{ exe, v, path });
+    return std.fmt.allocPrint(alloc, "{s} \"{s}\"", .{ exe, path });
 }
 
 test editCommandLine {
@@ -230,16 +269,28 @@ test editCommandLine {
     const alloc = testing.allocator;
     const path = "C:\\Users\\Jane Doe\\AppData\\Local\\ghostty\\config.ghostty";
 
-    const notepad = try editCommandLine(alloc, null, path);
+    const notepad = try editCommandLine(alloc, null, null, path);
     defer alloc.free(notepad);
     try testing.expectEqualStrings("notepad.exe \"" ++ path ++ "\"", notepad);
 
+    // The programs by their whole path when the system directory is known.
+    const sys = "C:\\WINDOWS\\system32";
+    const sys_notepad = try editCommandLine(alloc, sys, null, path);
+    defer alloc.free(sys_notepad);
+    try testing.expectEqualStrings("\"" ++ sys ++ "\\notepad.exe\" \"" ++ path ++ "\"", sys_notepad);
+    const sys_cmd = try editCommandLine(alloc, sys ++ "\\", "vim", path);
+    defer alloc.free(sys_cmd);
+    try testing.expectEqualStrings(
+        "\"" ++ sys ++ "\\cmd.exe\" /d /s /c \"vim \"" ++ path ++ "\"\"",
+        sys_cmd,
+    );
+
     // An editor with arguments, and one whose quoted path has spaces: cmd
     // drops only the outer quotes, leaving `"C:\...\code.cmd" --wait "..."`.
-    const code = try editCommandLine(alloc, "code --wait", path);
+    const code = try editCommandLine(alloc, null, "code --wait", path);
     defer alloc.free(code);
     try testing.expectEqualStrings("cmd.exe /d /s /c \"code --wait \"" ++ path ++ "\"\"", code);
-    const quoted = try editCommandLine(alloc, "\"C:\\Program Files\\VS Code\\bin\\code.cmd\" --wait", path);
+    const quoted = try editCommandLine(alloc, null, "\"C:\\Program Files\\VS Code\\bin\\code.cmd\" --wait", path);
     defer alloc.free(quoted);
     try testing.expectEqualStrings(
         "cmd.exe /d /s /c \"\"C:\\Program Files\\VS Code\\bin\\code.cmd\" --wait \"" ++ path ++ "\"\"",
@@ -248,3 +299,4 @@ test editCommandLine {
 }
 
 extern "kernel32" fn GetStdHandle(std_handle: u32) callconv(.winapi) ?*anyopaque;
+extern "kernel32" fn GetSystemDirectoryW(buf: [*]u16, len: u32) callconv(.winapi) u32;
