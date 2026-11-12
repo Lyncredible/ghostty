@@ -238,6 +238,14 @@ pub fn init(self: *Window, app: *App, initial: Initial) !void {
     errdefer _ = c.DestroyWindow(hwnd);
     self.hwnd = hwnd;
     self.dpi = c.GetDpiForWindow(hwnd);
+
+    // Explorer runs without elevation, and an elevated Ghostty ("Run as
+    // administrator") would never get its TaskbarButtonCreated: Windows
+    // drops messages from a less trusted process unless the window lets
+    // them in. Without it the taskbar button never shows progress.
+    if (ChangeWindowMessageFilterEx(hwnd, app.taskbar_button_created, MSGFLT_ALLOW, null) == 0) {
+        log.warn("unable to let TaskbarButtonCreated through err={}", .{c.GetLastError()});
+    }
     if (origin) |v| self.placed_on = v.monitor;
 
     if (c.GetSystemMenu(hwnd, c.FALSE)) |menu| {
@@ -2686,3 +2694,6 @@ pub fn wndProc(
 
     return c.DefWindowProcW(hwnd, msg, wparam, lparam);
 }
+
+const MSGFLT_ALLOW: c.DWORD = 1;
+extern "user32" fn ChangeWindowMessageFilterEx(hwnd: c.HWND, msg: c.UINT, action: c.DWORD, info: ?*anyopaque) callconv(.winapi) c.BOOL;
