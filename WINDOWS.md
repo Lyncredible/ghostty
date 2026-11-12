@@ -3383,6 +3383,12 @@ Notes:
       URL escaped (`link.display`); the preview now shows it the same
       way. Unit test (`shownText`); `links.ps1`, which hovers a plain
       URL, is unchanged. CI run 43280758593 passed on all five jobs.
+- [x] Review of key translation, the screen reader's text ranges and the
+      WSL helpers (`key.zig`, `TextRange.zig`, `os/wsl.zig`, 2026-11-12).
+      A dead key's character (for the key's unshifted codepoint, which
+      bindings match) was cut to a byte, so a caron (U+02C7) on a Czech
+      keyboard came out as Ç (U+00C7); it's now kept whole (`mappedChar`,
+      unit test). Nothing to change in the others.
 - [x] Unimplemented apprt actions (as of 2026-10-25)
   - [x] `show_on_screen_keyboard`: toggles the touch keyboard through the
         shell's (undocumented) `ITipInvocation`, starting TabTip.exe if

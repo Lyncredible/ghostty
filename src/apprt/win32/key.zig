@@ -123,10 +123,18 @@ pub fn unshiftedCodepoint(vk: c.UINT, scancode: c.UINT) u21 {
     const units = translate(vk, scancode, &state, &buf) orelse {
         // Dead keys produce no text, but we still want to know what
         // the key is, which MapVirtualKey gives us.
-        const ch = c.MapVirtualKeyW(vk, c.MAPVK_VK_TO_CHAR) & 0x7FFF;
-        return std.math.cast(u21, std.ascii.toLower(@truncate(ch))) orelse 0;
+        return mappedChar(c.MapVirtualKeyW(vk, c.MAPVK_VK_TO_CHAR));
     };
     return firstCodepoint(units);
+}
+
+/// The character in a MAPVK_VK_TO_CHAR result: the top bit marks a dead
+/// key (older Windows used bit 15), and letters come back in upper case.
+/// A dead key's character can be past U+00FF (a caron, U+02C7, on a
+/// Czech keyboard), so it's kept whole rather than cut to a byte.
+fn mappedChar(mapped: c.UINT) u21 {
+    const ch: u21 = @intCast(mapped & 0x7FFF);
+    return if (ch < 0x80) std.ascii.toLower(@intCast(ch)) else ch;
 }
 
 /// Returns the text the key produces with the current modifiers except
@@ -195,6 +203,15 @@ test "utf16ToUtf8Buf" {
     // Truncates at a codepoint boundary
     var small: [4]u8 = undefined;
     try testing.expectEqualStrings("\u{1F600}", utf16ToUtf8Buf(&.{ 0xD83D, 0xDE00, 0xD83D, 0xDE00 }, &small));
+}
+
+test mappedChar {
+    const testing = std.testing;
+    try testing.expectEqual(@as(u21, 'a'), mappedChar('A'));
+    try testing.expectEqual(@as(u21, '^'), mappedChar(0x8000_0000 | '^'));
+    try testing.expectEqual(@as(u21, 0xB4), mappedChar(0x8000_0000 | 0xB4));
+    try testing.expectEqual(@as(u21, 0x2C7), mappedChar(0x8000_0000 | 0x2C7));
+    try testing.expectEqual(@as(u21, 0), mappedChar(0));
 }
 
 test "isControl" {
