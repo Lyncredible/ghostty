@@ -3296,6 +3296,13 @@ Notes:
         the 127 the last check looks for. The step sets it back to 0.
         Run 43182238787 then passed on all five jobs, the shell search
         test included.
+- [x] Review of the crash reporter (2026-11-12): a report was named by
+      the time since Windows started (`crash-<ticks>.txt`), which comes
+      around again after a restart, so a later crash could write over
+      an earlier report, and the names said nothing of when. It is
+      `crash-<date>-<time>-<pid>.txt` now, in UTC, and the names sort
+      by time. Unit test of the name; `crash-report.ps1` passes
+      (it saved `crash-20261112-093433-17320.txt`).
 - [x] Unimplemented apprt actions (as of 2026-10-25)
   - [x] `show_on_screen_keyboard`: toggles the touch keyboard through the
         shell's (undocumented) `ITipInvocation`, starting TabTip.exe if
