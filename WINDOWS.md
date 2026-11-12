@@ -3335,7 +3335,10 @@ Notes:
         the config does now: `home` is the home directory, `inherit`
         leaves the new tab or window to its default. Unit tests;
         `cli-ipc.ps1` opens a tab with `--working-directory=home` and
-        looks for the prompt there (fails without the change).
+        looks for the prompt there (fails without the change). CI run
+        43220360306 passed on all five jobs.
+  - [x] The jump list (`JumpList.zig`) was read with these: nothing
+        to change.
 - [x] Unimplemented apprt actions (as of 2026-10-25)
   - [x] `show_on_screen_keyboard`: toggles the touch keyboard through the
         shell's (undocumented) `ITipInvocation`, starting TabTip.exe if
