@@ -3374,6 +3374,15 @@ Notes:
       arrives through the message loop; on any failure every handle
       taken so far is closed; a title that isn't valid UTF-16 is
       dropped, not passed on).
+- [x] Review of the scrollbar and the link preview (`Scrollbar.zig`,
+      `LinkPreview.zig`, 2026-11-12). The scrollbar: nothing to change.
+      The preview showed a hovered link's URL as the terminal's output
+      gave it, so a right-to-left override could make
+      `https://example.com/<RLO>fdp.exe` read as ending in `exe.pdf`.
+      Opening such a link was already refused, and its dialog shows the
+      URL escaped (`link.display`); the preview now shows it the same
+      way. Unit test (`shownText`); `links.ps1`, which hovers a plain
+      URL, is unchanged.
 - [x] Unimplemented apprt actions (as of 2026-10-25)
   - [x] `show_on_screen_keyboard`: toggles the touch keyboard through the
         shell's (undocumented) `ITipInvocation`, starting TabTip.exe if
