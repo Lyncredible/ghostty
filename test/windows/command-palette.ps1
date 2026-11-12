@@ -1,7 +1,8 @@
 # Checks the command palette: `toggle_command_palette` opens it with many
 # entries, typing `new_split:right` narrows the list, Enter runs the entry
 # (the terminal splits left and right) and closes the palette, and Escape
-# closes it again without doing anything. Keys and characters are posted to
+# closes it again without doing anything. Then `close_surface`, `undo` and
+# `redo` from the palette close the split, reopen it and close it again. Keys and characters are posted to
 # Ghostty's windows, so it runs on a locked desktop.
 #
 #     ./command-palette.ps1 -Exe zig-out/bin/ghostty.exe
@@ -40,7 +41,8 @@ $W = [GhosttyPalette.Win32]
 
 $log = Join-Path ([IO.Path]::GetTempPath()) "ghostty-palette-$PID.log"
 $process = Start-Process -FilePath $Exe -PassThru -RedirectStandardError $log -ArgumentList '--command=cmd.exe',
-    '--window-save-state=never', '--keybind=f9=toggle_command_palette'
+    '--window-save-state=never', '--keybind=f9=toggle_command_palette',
+    '--confirm-close-surface=false', '--undo-timeout=60s'
 
 function Fail([string]$message) {
     Write-Host "::error title=command-palette::$message"
@@ -116,6 +118,22 @@ try {
     Start-Sleep -Milliseconds 500
     if ((Terminals).Count -ne 2) { Fail "Escape ran something: $note" }
     Write-Host 'Escape closes it without running anything.'
+
+    # Undo and redo are listed: close a split, reopen it, close it again.
+    function Run([IntPtr]$surface, [string]$query) {
+        $p = Open $surface
+        $W::Type($p.Edit, $query)
+        [void](WaitFor { $n = Entries $p; $script:note = "$n entries for $query"; if ($n -ge 1 -and $n -lt $all) { $n } } "matches for $query")
+        $W::Key($p.Edit, 0x0D, 0x1C)   # Enter
+        [void](WaitFor { $script:note = 'still shown'; -not $W::IsWindowVisible($p.Palette) } 'the palette to close')
+    }
+    Run $split[1] 'close_surface'
+    $one = WaitFor { $t = Terminals; if ($t.Count -eq 1) { $t } } 'the split to close'
+    Run $one[0] 'undo'
+    $two = WaitFor { $t = Terminals; if ($t.Count -eq 2) { $t } } 'undo to reopen the split'
+    Run $two[0] 'redo'
+    [void](WaitFor { $t = Terminals; if ($t.Count -eq 1) { $t } } 'redo to close the split again')
+    Write-Host 'Undo from the palette reopened a closed split, and redo closed it again.'
 } finally {
     if (-not $process.HasExited) { Stop-Process -Id $process.Id -Force }
     Remove-Item -LiteralPath $log -Force -ErrorAction SilentlyContinue

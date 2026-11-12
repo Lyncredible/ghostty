@@ -3395,6 +3395,11 @@ Notes:
       `InspectorWindow.zig`, `os/windows.zig`, 2026-11-12): nothing to
       change. No translation has an `&` that would turn into an access
       key; the split tree carries the zoom through splits and removals.
+- [x] The command palette left out Undo and Redo, as GTK's does, from
+      before we had them (reopening a closed tab or split). They're
+      listed now (unit test `supported`); `command-palette.ps1` closes a
+      split, then reopens it and closes it again from the palette, and
+      fails without the change (checked here).
 - [x] Unimplemented apprt actions (as of 2026-10-25)
   - [x] `show_on_screen_keyboard`: toggles the touch keyboard through the
         shell's (undocumented) `ITipInvocation`, starting TabTip.exe if
