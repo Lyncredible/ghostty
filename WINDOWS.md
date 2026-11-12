@@ -3346,6 +3346,9 @@ Notes:
       editing and extended keys, and one with no scan code) and by
       character (a digit, the space, characters no key types). CI run
       43229577315 passed on all five jobs.
+- [x] Sync 34 (2026-11-12): upstream's vouched list. 848 commits
+      rebased with their dates; CI run 43244807017 passed on all five
+      jobs.
 - [x] Review of taskbar progress and notifications (`Taskbar.zig`,
       `Notifier.zig`, 2026-11-12). Run as administrator, Ghostty never
       got Explorer's `TaskbarButtonCreated` (Windows drops messages from
