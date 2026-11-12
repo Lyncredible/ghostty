@@ -149,3 +149,43 @@ test hotKeyMods {
 test "hotKey catch_all" {
     try std.testing.expect(hotKey(.{ .key = .catch_all }) == null);
 }
+
+test "hotKey physical keys" {
+    const testing = std.testing;
+    // Keys that are the same on every keyboard layout.
+    const cases = [_]struct { input.Key, c.UINT }{
+        .{ .f5, c.VK_F5 },
+        .{ .enter, c.VK_RETURN },
+        .{ .space, c.VK_SPACE },
+        .{ .escape, c.VK_ESCAPE },
+        .{ .tab, c.VK_TAB },
+        // Extended keys: their scan codes have a prefix.
+        .{ .arrow_left, c.VK_LEFT },
+        .{ .home, c.VK_HOME },
+        .{ .delete, c.VK_DELETE },
+    };
+    for (cases) |case| {
+        const hotkey = hotKey(.{ .key = .{ .physical = case[0] }, .mods = .{ .ctrl = true } }).?;
+        try testing.expectEqual(case[1], hotkey.vk);
+        try testing.expectEqual(@as(c.UINT, c.MOD_CONTROL), hotkey.mods);
+    }
+    // A key no keyboard has a scan code for.
+    try testing.expect(hotKey(.{ .key = .{ .physical = .unidentified } }) == null);
+}
+
+test "hotKey characters" {
+    const testing = std.testing;
+    // A digit is its own key on the layouts that have it unshifted, and
+    // comes with Shift on those that don't (French): either way the key
+    // is the digit's, and no other modifier is added.
+    const one = hotKey(.{ .key = .{ .unicode = '1' }, .mods = .{ .alt = true } }).?;
+    try testing.expectEqual(@as(c.UINT, '1'), one.vk);
+    try testing.expectEqual(@as(c.UINT, c.MOD_ALT), one.mods & ~@as(c.UINT, c.MOD_SHIFT));
+    // A space is a space everywhere.
+    const space = hotKey(.{ .key = .{ .unicode = ' ' }, .mods = .{ .super = true } }).?;
+    try testing.expectEqual(@as(c.UINT, c.VK_SPACE), space.vk);
+    try testing.expectEqual(@as(c.UINT, c.MOD_WIN), space.mods);
+    // Characters no key types: outside the BMP, and a private use one.
+    try testing.expect(hotKey(.{ .key = .{ .unicode = 0x1F600 } }) == null);
+    try testing.expect(hotKey(.{ .key = .{ .unicode = 0xE000 } }) == null);
+}

@@ -3339,6 +3339,12 @@ Notes:
         43220360306 passed on all five jobs.
   - [x] The jump list (`JumpList.zig`) was read with these: nothing
         to change.
+- [x] Review of dropped files' quoting and the global keybinds
+      (`drop.zig`, `GlobalKeys.zig`, 2026-11-12): nothing to change.
+      The hot key for a trigger was only tested for its modifiers and
+      the catch-all; unit tests now cover keys by position (function,
+      editing and extended keys, and one with no scan code) and by
+      character (a digit, the space, characters no key types).
 - [x] Unimplemented apprt actions (as of 2026-10-25)
   - [x] `show_on_screen_keyboard`: toggles the touch keyboard through the
         shell's (undocumented) `ITipInvocation`, starting TabTip.exe if
