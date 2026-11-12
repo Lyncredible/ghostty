@@ -3367,6 +3367,13 @@ Notes:
       for sizes that aren't square, points outside the terminal (the
       capture reports them), ties and a terminal with no size. CI run
       43267366363 passed on all five jobs.
+- [x] Reviews with nothing to change (2026-11-12): `Badge.zig` (its
+      placement is well tested), `TitleDialog.zig` (the template's
+      buffer is checked against every translation), and `Handoff.zig`
+      (the class registers on the UI thread's apartment, so a handoff
+      arrives through the message loop; on any failure every handle
+      taken so far is closed; a title that isn't valid UTF-16 is
+      dropped, not passed on).
 - [x] Unimplemented apprt actions (as of 2026-10-25)
   - [x] `show_on_screen_keyboard`: toggles the touch keyboard through the
         shell's (undocumented) `ITipInvocation`, starting TabTip.exe if
