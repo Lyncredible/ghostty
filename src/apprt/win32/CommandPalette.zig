@@ -55,7 +55,7 @@ const Entry = struct {
     shortcut: [:0]const u16,
 
     /// Lowercase text that the search matches.
-    search: []const u8,
+    search: [:0]const u16,
     choice: Choice,
 };
 
@@ -358,45 +358,61 @@ fn supported(action: input.Binding.Action) bool {
 }
 
 /// The lowercase text the search matches, from the parts joined by spaces.
-fn searchText(alloc: Allocator, parts: []const []const u8) ![]const u8 {
-    const text = try std.mem.join(alloc, " ", parts);
-    for (text) |*ch| ch.* = std.ascii.toLower(ch.*);
+/// Lowercase as Windows has it, so that a translated title is found
+/// whatever the case typed ("öffnen" finds "Öffnen").
+fn searchText(alloc: Allocator, parts: []const []const u8) ![:0]const u16 {
+    const joined = try std.mem.join(alloc, " ", parts);
+    defer alloc.free(joined);
+    const text = try util.utf16Alloc(alloc, joined);
+    lower(text);
     return text;
 }
 
-/// Whether every word of the query is in the (lowercase) search text,
-/// ignoring case.
-fn matches(search: []const u8, query: []const u8) bool {
-    var words = std.mem.tokenizeAny(u8, query, &std.ascii.whitespace);
+fn lower(text: []u16) void {
+    if (text.len > 0) _ = c.CharLowerBuffW(text.ptr, @intCast(text.len));
+}
+
+/// Whether every word of the query is in the (lowercase) search text.
+/// The query is made lowercase in place.
+fn matches(search: []const u16, query: []u16) bool {
+    lower(query);
+    var words = std.mem.tokenizeAny(u16, query, &.{ ' ', '\t', '\r', '\n', 0xA0, 0x3000 });
     while (words.next()) |word| {
-        if (!containsIgnoreCase(search, word)) return false;
+        if (std.mem.indexOf(u16, search, word) == null) return false;
     }
     return true;
 }
 
-fn containsIgnoreCase(haystack: []const u8, needle: []const u8) bool {
-    if (needle.len > haystack.len) return false;
-    for (0..haystack.len - needle.len + 1) |i| {
-        if (std.ascii.startsWithIgnoreCase(haystack[i..], needle)) return true;
-    }
-    return false;
-}
-
 test matches {
     const testing = std.testing;
-    try testing.expect(matches("new tab new_tab", ""));
-    try testing.expect(matches("new tab new_tab", "TAB"));
-    try testing.expect(matches("split right new_split:right", "split rig"));
-    try testing.expect(matches("split right new_split:right", "new_split"));
-    try testing.expect(!matches("split right new_split:right", "split left"));
+    const alloc = testing.allocator;
+    const check = struct {
+        fn check(parts: []const []const u8, query: []const u8) !bool {
+            const search = try searchText(alloc, parts);
+            defer alloc.free(search);
+            const query16 = try std.unicode.utf8ToUtf16LeAlloc(alloc, query);
+            defer alloc.free(query16);
+            return matches(search, query16);
+        }
+    }.check;
+    try testing.expect(try check(&.{ "New Tab", "new_tab" }, ""));
+    try testing.expect(try check(&.{ "New Tab", "new_tab" }, "TAB"));
+    try testing.expect(try check(&.{ "Split Right", "new_split:right" }, "split rig"));
+    try testing.expect(try check(&.{ "Split Right", "new_split:right" }, "  RIGHT\tsplit "));
+    try testing.expect(try check(&.{ "Split Right", "new_split:right" }, "new_split"));
+    try testing.expect(!try check(&.{ "Split Right", "new_split:right" }, "split left"));
+    // Translated titles, in either case.
+    try testing.expect(try check(&.{ "Öffnen", "open_config" }, "öffnen"));
+    try testing.expect(try check(&.{ "Öffnen", "open_config" }, "ÖFFNEN"));
+    try testing.expect(try check(&.{ "Новая вкладка", "new_tab" }, "новая ВКЛАДКА"));
+    try testing.expect(!try check(&.{ "Новая вкладка", "new_tab" }, "окно"));
+    try testing.expect(try check(&.{ "新しいタブ", "new_tab" }, "タブ"));
 }
 
 /// Show the entries that match the field, selecting the first.
 fn filter(self: *CommandPalette) void {
     var buf: [max_query + 1]u16 = undefined;
     const len: usize = @intCast(@max(0, c.GetWindowTextW(self.edit, &buf, buf.len)));
-    var query: [3 * buf.len]u8 = undefined;
-    const n = std.unicode.wtf16LeToWtf8(&query, buf[0..len]);
 
     _ = c.SendMessageW(self.list, c.WM_SETREDRAW, c.FALSE, 0);
     defer {
@@ -405,7 +421,7 @@ fn filter(self: *CommandPalette) void {
     }
     _ = c.SendMessageW(self.list, c.LB_RESETCONTENT, 0, 0);
     for (self.entries, 0..) |entry, i| {
-        if (!matches(entry.search, query[0..n])) continue;
+        if (!matches(entry.search, buf[0..len])) continue;
         // We draw the items ourselves, but give them their titles as text
         // so that screen readers (through the list box's UI Automation
         // proxy) can read them. The data is the entry's index.
