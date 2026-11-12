@@ -115,6 +115,24 @@ jobs:
           $out = ./zig-out/bin/ghostty.com +edit-config 2>&1 | Out-String
           if ($LASTEXITCODE -ne 0 -or $out -notmatch 'ghostty\\config') { throw "+edit-config didn't open the config: $out" }
           Write-Host "+edit-config: ok ($($out.Trim()))"
+          # The cmd it runs the editor through is Windows' own, not one in
+          # the current directory (here a stand-in that prints who we are),
+          # and an editor's exit code that is a multiple of 256 is still a
+          # failure.
+          $exe = (Resolve-Path ./zig-out/bin/ghostty.com).Path
+          $plant = Join-Path $env:RUNNER_TEMP 'edit-config-plant'
+          New-Item -ItemType Directory -Force $plant | Out-Null
+          Copy-Item "$env:SystemRoot\System32\whoami.exe" (Join-Path $plant 'cmd.exe')
+          Push-Location $plant
+          try {
+            $env:EDITOR = 'echo edited'
+            $out = & $exe +edit-config 2>&1 | Out-String
+            if ($LASTEXITCODE -ne 0 -or $out -notmatch 'edited .*ghostty\\config') { throw "+edit-config ran the wrong cmd: $out" }
+            $env:EDITOR = 'exit 256 &'
+            & $exe +edit-config 2>&1 | Out-Null
+            if ($LASTEXITCODE -ne 1) { throw "+edit-config: an editor's exit code 256 became $LASTEXITCODE" }
+          } finally { Pop-Location }
+          Write-Host "+edit-config from a directory with its own cmd.exe: ok"
           Remove-Item Env:EDITOR
 
       # The actions that talk to a running instance.
