@@ -3365,7 +3365,8 @@ Notes:
       change (the dim opacity is clamped by the config, NaN included;
       pointer positions are read signed). `dropDirection` gained tests
       for sizes that aren't square, points outside the terminal (the
-      capture reports them), ties and a terminal with no size.
+      capture reports them), ties and a terminal with no size. CI run
+      43267366363 passed on all five jobs.
 - [x] Unimplemented apprt actions (as of 2026-10-25)
   - [x] `show_on_screen_keyboard`: toggles the touch keyboard through the
         shell's (undocumented) `ITipInvocation`, starting TabTip.exe if
