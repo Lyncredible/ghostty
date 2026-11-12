@@ -572,8 +572,11 @@ to its window and `+new-window` opens another window, through the console
 launcher (`ghostty.com`) with the instance's `--class`. Then `+new-tab` with
 `--title` and `-e` must open a tab with that title running that command.
 The overrides are parsed into memory that's freed once the request is
-handled, so this also checks nothing keeps pointing into it. Tabs and
-windows are counted with UI Automation.
+handled, so this also checks nothing keeps pointing into it. Last,
+`ghostty.exe` is started again with the class and a relative
+`--working-directory`: it must exit, and the running instance must open a
+window whose prompt is in that directory of the second launch (not one
+under its own). Tabs and windows are counted with UI Automation.
 
 ## tab-close-uia.ps1
 

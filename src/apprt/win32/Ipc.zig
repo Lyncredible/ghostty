@@ -182,8 +182,11 @@ pub fn claim(class: []const u8) Claim {
 /// running instance can't apply to a new window (such as --font-size), in
 /// which case it should run as its own instance.
 ///
-/// The working directory, if any, comes first so that an explicit
-/// --working-directory argument takes precedence.
+/// `working_directory` is the launch's, as its config has it and as a
+/// whole path. The --working-directory arguments themselves aren't passed
+/// on: the config has taken them in, and the running instance would read
+/// them differently (a relative one against its own directory, `home` and
+/// `inherit` as directories of that name, `~` not at all).
 pub fn launchArguments(
     alloc: Allocator,
     args: []const []const u8,
@@ -209,6 +212,7 @@ pub fn launchArguments(
 
         // The class selects the instance.
         if (std.mem.startsWith(u8, arg, "--class=")) continue;
+        if (std.mem.startsWith(u8, arg, "--working-directory=")) continue;
 
         for (supported) |prefix| {
             if (std.mem.startsWith(u8, arg, prefix)) break;
@@ -242,6 +246,28 @@ test launchArguments {
         try testing.expectEqualStrings("--title=hi", args[0]);
         try testing.expectEqualStrings("-e", args[1]);
         try testing.expectEqualStrings("--font-size=20", args[3]);
+    }
+
+    // The directory is the config's, not the arguments'.
+    {
+        const args = (try launchArguments(alloc, &.{
+            "--working-directory=sub",
+            "--title=hi",
+            "--working-directory=home",
+        }, "C:\\src\\sub")).?;
+        try testing.expectEqual(2, args.len);
+        try testing.expectEqualStrings("--working-directory=C:\\src\\sub", args[0]);
+        try testing.expectEqualStrings("--title=hi", args[1]);
+    }
+    {
+        const args = (try launchArguments(alloc, &.{"--working-directory=home"}, null)).?;
+        try testing.expectEqual(0, args.len);
+    }
+    // After -e they are the command's.
+    {
+        const args = (try launchArguments(alloc, &.{ "-e", "tool", "--working-directory=x" }, null)).?;
+        try testing.expectEqual(3, args.len);
+        try testing.expectEqualStrings("--working-directory=x", args[2]);
     }
 
     try testing.expect(try launchArguments(alloc, &.{"--font-size=20"}, null) == null);

@@ -3314,6 +3314,18 @@ Notes:
       workflow (`paths-ignore`), so a recorded result can be pushed at
       once instead of waiting for the next change to the code. Run
       43202573587, the first with it, passed on all five jobs.
+- [x] Review of the single instance's hand-over (`Ipc.zig`, 2026-11-12):
+      a second launch passed its `--working-directory` argument on as
+      written, after the directory from its config, and the running
+      instance read it its own way: a relative one
+      (`ghostty --working-directory=src`) against its own current
+      directory, `home` and `inherit` as directories of those names,
+      `~` not expanded. The argument isn't passed on now; the config's
+      value is, as a whole path. (`+new-window` and `+new-tab` already
+      resolved theirs.) Unit test; `cli-ipc.ps1` starts a second
+      `ghostty.exe` in a temporary directory with
+      `--working-directory=sub` and looks for the prompt there, which
+      fails without the change.
 - [x] Unimplemented apprt actions (as of 2026-10-25)
   - [x] `show_on_screen_keyboard`: toggles the touch keyboard through the
         shell's (undocumented) `ITipInvocation`, starting TabTip.exe if
