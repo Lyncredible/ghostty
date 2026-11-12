@@ -3401,6 +3401,14 @@ Notes:
       split, then reopens it and closes it again from the palette, and
       fails without the change (checked here). CI run 43305480155
       passed on all five jobs, with the new check in `build-windows`.
+- [x] Review of the tab bar's UI Automation (`TabBarAccessibility.zig`,
+      2026-11-12). Two elements could stand for something that isn't
+      there: with no tabs (a closing window), the selected tab was the
+      New Tab button; and a caption button (Minimize, say) kept from
+      when the tabs were in the title bar stayed available, with an
+      empty rectangle, and could still be invoked. Both are now
+      unavailable. No unit test (it needs a tab bar); `tab-close-uia`,
+      `titlebar-tabs` and `tabs` pass here.
 - [x] Unimplemented apprt actions (as of 2026-10-25)
   - [x] `show_on_screen_keyboard`: toggles the touch keyboard through the
         shell's (undocumented) `ITipInvocation`, starting TabTip.exe if

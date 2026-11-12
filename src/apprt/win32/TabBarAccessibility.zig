@@ -302,7 +302,9 @@ const root_selection_vtbl = SelectionVtbl{
             const self = fromIface("selection", i);
             out.* = null;
             const bar = self.bar orelse return UIA_E_ELEMENTNOTAVAILABLE;
-            // The tabs come first, so a tab's position is its index.
+            // The tabs come first, so a tab's position is its index. With
+            // no tabs (the window is closing), that position is a button's.
+            if (bar.window.active >= bar.window.tabs.items.len) return S_OK;
             const item = self.childAt(bar.window.active) orelse return S_OK;
             defer _ = item.release();
             const array = SafeArrayCreateVector(VT_UNKNOWN, 0, 1) orelse return E_OUTOFMEMORY;
@@ -380,12 +382,16 @@ const Item = struct {
     }
 
     /// The position among the tab bar's children (for a close button, its
-    /// tab's), if the element and the tab bar still exist.
+    /// tab's), if the element and the tab bar still exist. The caption
+    /// buttons are gone when the tabs leave the title bar.
     fn position(self: *const Item) ?usize {
         const bar = self.root.bar orelse return null;
         return switch (self.kind) {
             .tab, .close => |tab| bar.window.tabIndex(tab),
-            .button => |button| bar.window.tabs.items.len + @backingInt(button),
+            .button => |button| if (@backingInt(button) < bar.buttonCount())
+                bar.window.tabs.items.len + @backingInt(button)
+            else
+                null,
         };
     }
 
@@ -635,7 +641,10 @@ const item_invoke_vtbl = InvokeVtbl{
             const self = Item.fromIface("invoke", i);
             const bar = self.root.bar orelse return UIA_E_ELEMENTNOTAVAILABLE;
             switch (self.kind) {
-                .button => |button| bar.pressButton(button),
+                .button => |button| {
+                    if (self.position() == null) return UIA_E_ELEMENTNOTAVAILABLE;
+                    bar.pressButton(button);
+                },
                 .close => |tab| {
                     if (bar.window.tabIndex(tab) == null) return UIA_E_ELEMENTNOTAVAILABLE;
                     bar.closeTabLater(tab);
