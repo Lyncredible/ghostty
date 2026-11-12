@@ -3312,7 +3312,8 @@ Notes:
       which the new program search finds in the system directory.
 - [x] CI: a push that changes only this file no longer starts the fork's
       workflow (`paths-ignore`), so a recorded result can be pushed at
-      once instead of waiting for the next change to the code.
+      once instead of waiting for the next change to the code. Run
+      43202573587, the first with it, passed on all five jobs.
 - [x] Unimplemented apprt actions (as of 2026-10-25)
   - [x] `show_on_screen_keyboard`: toggles the touch keyboard through the
         shell's (undocumented) `ITipInvocation`, starting TabTip.exe if
