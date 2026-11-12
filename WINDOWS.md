@@ -3346,6 +3346,16 @@ Notes:
       editing and extended keys, and one with no scan code) and by
       character (a digit, the space, characters no key types). CI run
       43229577315 passed on all five jobs.
+- [x] Review of taskbar progress and notifications (`Taskbar.zig`,
+      `Notifier.zig`, 2026-11-12). Run as administrator, Ghostty never
+      got Explorer's `TaskbarButtonCreated` (Windows drops messages from
+      a less trusted process unless the window lets them in), so its
+      taskbar button never showed progress. Each window now lets that
+      message in (`ChangeWindowMessageFilterEx`). Checked without
+      elevation (the log still has "taskbar button created"); the
+      elevated case needs UAC, which this desktop can't click through
+      and CI's runners don't have (everything there is elevated), so it
+      is untested. Notifications: nothing to change.
 - [x] Unimplemented apprt actions (as of 2026-10-25)
   - [x] `show_on_screen_keyboard`: toggles the touch keyboard through the
         shell's (undocumented) `ITipInvocation`, starting TabTip.exe if
