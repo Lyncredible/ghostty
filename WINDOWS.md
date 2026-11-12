@@ -1586,7 +1586,9 @@ Notes:
         other job; `windows-tip` moved.
   - [x] 2026-11-11: a thirty-second sync (2 commits, both to the
         vouch list). No conflicts; dates kept (822 commits checked).
-        The app builds.
+        The app builds. Pushed as f5c66b188 with the search bar's
+        review; CI run 43125220133 passed every job, and `windows-tip`
+        moved.
   - [x] It failed there again in run 42948447833 (098593a94), now
         saying what was on screen: the command had run (its output was
         there), but the typed line read `echo M`, a line break,
