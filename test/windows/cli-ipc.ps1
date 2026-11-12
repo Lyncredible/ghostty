@@ -3,6 +3,7 @@
 # console launcher (ghostty.com) with the instance's `--class`. Then
 # `+new-tab --title=... -e cmd.exe ...` must open a tab with that title,
 # running that command, which last after the request's memory is freed.
+# `+new-tab --working-directory=home` must open in the home directory.
 # Last, a second launch of ghostty.exe with the class and a relative
 # `--working-directory` must open its window, in that directory, in the
 # running instance.
@@ -23,7 +24,8 @@ $cli = Join-Path (Split-Path $Exe) 'ghostty.com'
 $class = "com.example.ghostty-cli-ipc-$PID"
 $log = Join-Path ([IO.Path]::GetTempPath()) "ghostty-cli-ipc-$PID.log"
 $process = Start-Process -FilePath $Exe -PassThru -RedirectStandardError $log -ArgumentList "--class=$class",
-    '--window-save-state=never', '--command=cmd.exe', '--confirm-close-surface=false'
+    '--window-save-state=never', '--command=cmd.exe', '--confirm-close-surface=false',
+    "--working-directory=$env:SystemRoot"
 
 function Fail([string]$message) {
     Write-Host "::error title=cli-ipc::$message"
@@ -72,6 +74,22 @@ function TabNames {
     }
 }
 
+# Whether one of the instance's terminals comes to show text matching
+# the pattern.
+function WaitForText([string]$pattern) {
+    $surfaces = New-Object System.Windows.Automation.PropertyCondition($AE::ClassNameProperty, 'GhosttySurface')
+    $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
+    while ((Get-Date) -lt $deadline) {
+        foreach ($s in @($AE::RootElement.FindAll([System.Windows.Automation.TreeScope]::Descendants, $surfaces))) {
+            if ($s.Current.ProcessId -ne $process.Id) { continue }
+            $value = $(try { $s.GetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern).Current.Value } catch { '' })
+            if ($value -match $pattern) { return $true }
+        }
+        Start-Sleep -Milliseconds 250
+    }
+    $false
+}
+
 try {
     WaitFor '1/1' 'the first window'
     Run '+new-tab'
@@ -105,6 +123,15 @@ try {
     Write-Host "+new-tab with --title and -e opened a tab titled 'IPC override title' running the command."
     if ($process.HasExited) { Fail "Ghostty exited" }
 
+    # `home` is the home directory, not a directory of that name (the
+    # instance's own tabs start in the Windows directory).
+    Run '+new-tab' @('--working-directory=home', '--command=cmd.exe')
+    WaitFor '2/5' '+new-tab with --working-directory=home to add a tab'
+    if (-not (WaitForText ([regex]::Escape("$env:USERPROFILE>")))) {
+        Fail "+new-tab --working-directory=home didn't open in $env:USERPROFILE"
+    }
+    Write-Host "+new-tab --working-directory=home opened a tab in the home directory."
+
     # Starting Ghostty again with the class opens its window in the
     # running instance. A relative --working-directory is this launch's,
     # not one under the running instance's own directory.
@@ -116,19 +143,8 @@ try {
         Stop-Process -Id $second.Id -Force
         Fail "a second launch with the class kept running instead of handing its window over"
     }
-    WaitFor '3/5' 'the second launch to open a window in the instance'
-    $prompt = [regex]::Escape("\gi$PID\sub>")
-    $found = $false
-    $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
-    while ((Get-Date) -lt $deadline -and -not $found) {
-        foreach ($s in @($AE::RootElement.FindAll([System.Windows.Automation.TreeScope]::Descendants, $condition))) {
-            if ($s.Current.ProcessId -ne $process.Id) { continue }
-            $value = $(try { $s.GetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern).Current.Value } catch { '' })
-            if ($value -match $prompt) { $found = $true }
-        }
-        if (-not $found) { Start-Sleep -Milliseconds 250 }
-    }
-    if (-not $found) { Fail "the second launch's window isn't in its --working-directory (no prompt ends with \gi$PID\sub>)" }
+    WaitFor '3/6' 'the second launch to open a window in the instance'
+    if (-not (WaitForText ([regex]::Escape("\gi$PID\sub>")))) { Fail "the second launch's window isn't in its --working-directory (no prompt ends with \gi$PID\sub>)" }
     Write-Host "A second launch with a relative --working-directory opened its window there."
 } finally {
     if (-not $process.HasExited) { Stop-Process -Id $process.Id -Force }
