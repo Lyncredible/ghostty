@@ -3360,6 +3360,12 @@ Notes:
       and CI's runners don't have (everything there is elevated), so it
       is untested. Notifications: nothing to change. CI run
       43256227665 passed on all five jobs.
+- [x] Review of the overlays and split dragging (`DimOverlay.zig`,
+      `BellBorder.zig`, `SplitDrag.zig`, 2026-11-12): nothing to
+      change (the dim opacity is clamped by the config, NaN included;
+      pointer positions are read signed). `dropDirection` gained tests
+      for sizes that aren't square, points outside the terminal (the
+      capture reports them), ties and a terminal with no size.
 - [x] Unimplemented apprt actions (as of 2026-10-25)
   - [x] `show_on_screen_keyboard`: toggles the touch keyboard through the
         shell's (undocumented) `ITipInvocation`, starting TabTip.exe if

@@ -330,4 +330,29 @@ test dropDirection {
     try testing.expectEqual(Direction.right, dropDirection(rect, .{ .x = 490, .y = 200 }));
     try testing.expectEqual(Direction.up, dropDirection(rect, .{ .x = 300, .y = 105 }));
     try testing.expectEqual(Direction.down, dropDirection(rect, .{ .x = 300, .y = 295 }));
+
+    // Nearness is relative to the size: in a wide rectangle, a point a
+    // fifth of the way from the left is nearer the left than the top is
+    // to a point a quarter of the way down.
+    try testing.expectEqual(Direction.left, dropDirection(rect, .{ .x = 180, .y = 150 }));
+    try testing.expectEqual(Direction.up, dropDirection(rect, .{ .x = 220, .y = 140 }));
+
+    // Outside the rectangle (the capture keeps reporting the pointer
+    // there), the side it's beyond.
+    try testing.expectEqual(Direction.left, dropDirection(rect, .{ .x = -50, .y = 200 }));
+    try testing.expectEqual(Direction.right, dropDirection(rect, .{ .x = 900, .y = 200 }));
+    try testing.expectEqual(Direction.up, dropDirection(rect, .{ .x = 300, .y = -10 }));
+    try testing.expectEqual(Direction.down, dropDirection(rect, .{ .x = 300, .y = 1000 }));
+
+    // The center and the corners are ties, settled in a fixed order
+    // (left, right, up, down), not by chance.
+    try testing.expectEqual(Direction.left, dropDirection(rect, .{ .x = 300, .y = 200 }));
+    try testing.expectEqual(Direction.left, dropDirection(rect, .{ .x = 100, .y = 100 }));
+    try testing.expectEqual(Direction.right, dropDirection(rect, .{ .x = 500, .y = 300 }));
+
+    // A rectangle with no size (a terminal shrunk to nothing) doesn't
+    // divide by zero.
+    const empty: c.RECT = .{ .left = 10, .top = 10, .right = 10, .bottom = 10 };
+    _ = dropDirection(empty, .{ .x = 10, .y = 10 });
+    try testing.expectEqual(Direction.right, dropDirection(empty, .{ .x = 30, .y = 10 }));
 }
