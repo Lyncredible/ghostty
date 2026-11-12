@@ -3302,7 +3302,8 @@ Notes:
       an earlier report, and the names said nothing of when. It is
       `crash-<date>-<time>-<pid>.txt` now, in UTC, and the names sort
       by time. Unit test of the name; `crash-report.ps1` passes
-      (it saved `crash-20261112-093433-17320.txt`).
+      (it saved `crash-20261112-093433-17320.txt`). CI run 43192690689
+      passed on all five jobs.
 - [x] Unimplemented apprt actions (as of 2026-10-25)
   - [x] `show_on_screen_keyboard`: toggles the touch keyboard through the
         shell's (undocumented) `ITipInvocation`, starting TabTip.exe if
