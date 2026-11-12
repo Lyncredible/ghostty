@@ -124,6 +124,9 @@ jobs:
           New-Item -ItemType Directory -Force $plant | Out-Null
           Copy-Item "$env:SystemRoot\System32\whoami.exe" (Join-Path $plant 'cmd.exe')
           Push-Location $plant
+          # Set, this stops Windows looking in the current directory at
+          # all, and the check would pass whatever we did.
+          Remove-Item Env:NoDefaultCurrentDirectoryInExePath -ErrorAction SilentlyContinue
           try {
             $env:EDITOR = 'echo edited'
             $out = & $exe +edit-config 2>&1 | Out-String
@@ -318,6 +321,12 @@ jobs:
         timeout-minutes: 3
         shell: pwsh
         run: ./test/windows/crash-report.ps1 -Exe zig-out/bin/ghostty.exe
+
+      # A shell named alone isn't taken from the directory we start in.
+      - name: Shell search test
+        timeout-minutes: 5
+        shell: pwsh
+        run: ./test/windows/shell-search.ps1 -Exe zig-out/bin/ghostty.exe
 
       - name: Windows key defaults report
         timeout-minutes: 2

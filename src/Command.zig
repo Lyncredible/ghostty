@@ -312,10 +312,21 @@ fn startWindows(self: *Command, arena: Allocator) !void {
     // users expect for bare commands like `wsl ~` or `pwsh.exe`.
     // It also preserves the child's argv[0] as written by the caller
     // rather than replacing it with the resolved absolute path.
-    const command_line = if (self.args.len > 0)
-        try windowsCreateCommandLine(arena, self.args)
+    //
+    // One exception: a program named alone (`pwsh`, `wsl.exe`) is found
+    // by us first, in the same places but for the current directory.
+    // That directory is wherever we were started from, such as a folder
+    // opened from Explorer's menu, and a program there shouldn't stand in
+    // for the user's shell.
+    const argv: []const []const u8 = if (self.args.len > 0)
+        self.args
     else
-        try windowsCreateCommandLine(arena, &.{self.path});
+        &.{self.path};
+    const command_line = if (try windowsResolveProgram(arena, argv[0])) |program| line: {
+        const resolved = try arena.dupe([]const u8, argv);
+        resolved[0] = program;
+        break :line try windowsCreateCommandLine(arena, resolved);
+    } else try windowsCreateCommandLine(arena, argv);
     const command_line_w = try std.unicode.utf8ToUtf16LeAllocZ(arena, command_line);
     const env_w = if (self.env) |env_map| try createWindowsEnvBlock(arena, env_map) else null;
 
@@ -619,6 +630,163 @@ fn createWindowsEnvBlock(allocator: mem.Allocator, env_map: *const EnvMap) ![]u1
     result[i] = 0;
     i += 1;
     return try allocator.realloc(result, i);
+}
+
+/// The whole path of a program that is named alone, searched for where
+/// CreateProcessW would search except for the current directory. Null for
+/// a program named with a directory, which is for CreateProcessW to find;
+/// error.FileNotFound for a name that's in none of the places.
+fn windowsResolveProgram(arena: Allocator, program: []const u8) !?[]const u8 {
+    if (!windowsIsBareName(program)) return null;
+    const L = std.unicode.utf8ToUtf16LeStringLiteral;
+    const k32 = struct {
+        extern "kernel32" fn GetModuleFileNameW(module: ?*anyopaque, buf: [*]u16, len: u32) callconv(.winapi) u32;
+        extern "kernel32" fn GetSystemDirectoryW(buf: [*]u16, len: u32) callconv(.winapi) u32;
+        extern "kernel32" fn GetWindowsDirectoryW(buf: [*]u16, len: u32) callconv(.winapi) u32;
+        extern "kernel32" fn GetEnvironmentVariableW(name: [*:0]const u16, buf: ?[*]u16, len: u32) callconv(.winapi) u32;
+        extern "kernel32" fn SearchPathW(
+            path: [*:0]const u16,
+            name: [*:0]const u16,
+            ext: [*:0]const u16,
+            len: u32,
+            buf: [*]u16,
+            file_part: ?*?[*:0]u16,
+        ) callconv(.winapi) u32;
+    };
+
+    // Our own directory, the system's, and Windows'.
+    const max = 32767;
+    const exe = try arena.alloc(u16, max);
+    const exe_len = k32.GetModuleFileNameW(null, exe.ptr, max);
+    const exe_dir: []const u16 = if (exe_len == 0 or exe_len >= max)
+        &.{}
+    else if (std.mem.lastIndexOfScalar(u16, exe[0..exe_len], '\\')) |i|
+        exe[0..i]
+    else
+        &.{};
+    var system: [windows.MAX_PATH]u16 = undefined;
+    const system_len = k32.GetSystemDirectoryW(&system, system.len);
+    var windir: [windows.MAX_PATH]u16 = undefined;
+    const windir_len = k32.GetWindowsDirectoryW(&windir, windir.len);
+
+    // And PATH.
+    const path_len = k32.GetEnvironmentVariableW(L("PATH"), null, 0);
+    const path = try arena.alloc(u16, path_len + 1);
+    const path_got = k32.GetEnvironmentVariableW(L("PATH"), path.ptr, @intCast(path.len));
+
+    const dirs = try windowsSearchDirs(arena, &.{
+        exe_dir,
+        if (system_len < system.len) system[0..system_len] else &.{},
+        if (windir_len < windir.len) windir[0..windir_len] else &.{},
+    }, if (path_got < path.len) path[0..path_got] else &.{});
+
+    const name = try std.unicode.wtf8ToWtf16LeAllocZ(arena, program);
+    const found = try arena.alloc(u16, max);
+    const n = k32.SearchPathW(dirs.ptr, name.ptr, L(".exe"), max, found.ptr, null);
+    if (n == 0 or n >= max) return error.FileNotFound;
+    return try std.unicode.wtf16LeToWtf8Alloc(arena, found[0..n]);
+}
+
+/// Whether a program is named alone, with no directory or drive.
+fn windowsIsBareName(program: []const u8) bool {
+    return program.len > 0 and std.mem.indexOfAny(u8, program, "\\/:") == null;
+}
+
+/// The directories to search for a program, joined as SearchPathW takes
+/// them: `fixed` and then PATH's, leaving out any that isn't a whole path
+/// (an empty one or `.` is the current directory, which is what we mean to
+/// skip).
+fn windowsSearchDirs(
+    arena: Allocator,
+    fixed: []const []const u16,
+    path: []const u16,
+) ![:0]u16 {
+    var result: std.ArrayList(u16) = .empty;
+    for (fixed) |dir| {
+        if (!windowsIsWholePath(dir)) continue;
+        if (result.items.len > 0) try result.append(arena, ';');
+        try result.appendSlice(arena, dir);
+    }
+    var it = std.mem.splitScalar(u16, path, ';');
+    while (it.next()) |entry| {
+        const dir = std.mem.trim(u16, entry, &.{ ' ', '"' });
+        if (!windowsIsWholePath(dir)) continue;
+        if (result.items.len > 0) try result.append(arena, ';');
+        try result.appendSlice(arena, dir);
+    }
+    return try result.toOwnedSliceSentinel(arena, 0);
+}
+
+/// `C:\dir` or `\\server\share`, not `dir`, `.`, `\dir` or `C:dir`.
+fn windowsIsWholePath(dir: []const u16) bool {
+    if (dir.len >= 3 and dir[1] == ':' and (dir[2] == '\\' or dir[2] == '/')) return true;
+    return dir.len >= 3 and dir[0] == '\\' and dir[1] == '\\';
+}
+
+test windowsIsBareName {
+    try testing.expect(windowsIsBareName("pwsh"));
+    try testing.expect(windowsIsBareName("wsl.exe"));
+    try testing.expect(!windowsIsBareName(""));
+    try testing.expect(!windowsIsBareName(".\\tool.exe"));
+    try testing.expect(!windowsIsBareName("bin/tool"));
+    try testing.expect(!windowsIsBareName("C:\\Windows\\System32\\cmd.exe"));
+    try testing.expect(!windowsIsBareName("C:tool.exe"));
+}
+
+test windowsSearchDirs {
+    var arena_state: std.heap.ArenaAllocator = .init(testing.allocator);
+    defer arena_state.deinit();
+    const arena = arena_state.allocator();
+    const L = std.unicode.utf8ToUtf16LeStringLiteral;
+
+    // The current directory, however PATH spells it, is left out, and so
+    // is a directory we couldn't get.
+    const dirs = try windowsSearchDirs(
+        arena,
+        &.{ L("C:\\Program Files\\App"), L(""), L("C:\\Windows") },
+        L(".;;C:\\tools; \"D:\\a b\\bin\" ;bin;..\\x;\\rooted;C:relative;\\\\server\\share\\bin;./"),
+    );
+    try testing.expectEqualSlices(
+        u16,
+        L("C:\\Program Files\\App;C:\\Windows;C:\\tools;D:\\a b\\bin;\\\\server\\share\\bin"),
+        dirs,
+    );
+    try testing.expectEqual(0, (try windowsSearchDirs(arena, &.{}, L(""))).len);
+}
+
+test windowsResolveProgram {
+    if (builtin.os.tag != .windows) return error.SkipZigTest;
+    var arena_state: std.heap.ArenaAllocator = .init(testing.allocator);
+    defer arena_state.deinit();
+    const arena = arena_state.allocator();
+
+    // With and without the extension, from the system directory.
+    for ([_][]const u8{ "cmd.exe", "cmd", "CMD.EXE" }) |name| {
+        const path = (try windowsResolveProgram(arena, name)).?;
+        try testing.expect(std.ascii.endsWithIgnoreCase(path, "\\system32\\cmd.exe"));
+        try testing.expect(path[1] == ':');
+    }
+    // Named with a directory: not ours to find.
+    try testing.expect(try windowsResolveProgram(arena, "C:\\Windows\\System32\\cmd.exe") == null);
+    try testing.expect(try windowsResolveProgram(arena, ".\\cmd.exe") == null);
+    try testing.expectError(
+        error.FileNotFound,
+        windowsResolveProgram(arena, "ghostty-test-no-such-program"),
+    );
+
+    // A program only in the current directory isn't found: the test
+    // runs with a file of that name there.
+    var tmp = testing.tmpDir(.{});
+    defer tmp.cleanup();
+    const io = testing.io;
+    try tmp.dir.writeFile(io, .{ .sub_path = "ghostty-test-planted.exe", .data = "MZ" });
+    const old = try std.process.currentPathAlloc(io, arena);
+    try std.process.setCurrentDir(io, tmp.dir);
+    defer std.process.setCurrentPath(io, old) catch {};
+    try testing.expectError(
+        error.FileNotFound,
+        windowsResolveProgram(arena, "ghostty-test-planted.exe"),
+    );
 }
 
 /// Copied from Zig. This function could be made public in child_process.zig instead.

@@ -3253,6 +3253,26 @@ Notes:
       look: a failure whose low byte is zero (256) is reported as 1.
       Unit tests; CI runs `+edit-config` from a directory with a
       stand-in `cmd.exe`, and with an editor that exits with 256.
+  - [x] The same for the terminal's shell. A `command` named alone
+        (`pwsh`, `powershell.exe`, `wsl.exe -d x`) went to
+        `CreateProcessW` as written, which looks in the current
+        directory second, after our own. That directory is wherever
+        Ghostty was started: a folder opened from Explorer's menu, or
+        the directory of the shell it was typed in. `Command.zig` now
+        finds a program named alone itself (`SearchPathW` over our
+        directory, the system's, Windows' and PATH's whole paths) and
+        starts it by its whole path; one that is only in the current
+        directory isn't found, and `.\name` still runs it. A name with
+        a directory is left to `CreateProcessW` as before.
+        `test/windows/shell-search.ps1` (in CI) starts Ghostty in a
+        directory with a stand-in `powershell.exe`; it fails without
+        the change.
+  - [x] A trap in checking this: with `NoDefaultCurrentDirectoryInExePath`
+        in the environment Windows doesn't look in the current
+        directory at all, so a check passes whatever the code does. The
+        script and the CI step clear it. (The first hand check of
+        `+edit-config` was made with it set and showed nothing; it was
+        repeated without.)
 - [x] Unimplemented apprt actions (as of 2026-10-25)
   - [x] `show_on_screen_keyboard`: toggles the touch keyboard through the
         shell's (undocumented) `ITipInvocation`, starting TabTip.exe if

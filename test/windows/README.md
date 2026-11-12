@@ -445,6 +445,17 @@ then never passes to Ghostty: it tries to register each with
 the combination is taken. On a clean runner that's what Windows' shell
 takes; a free combination can still be caught by a keyboard hook.
 
+## shell-search.ps1
+
+Checks that a shell named alone (`command = powershell.exe`) is never
+taken from the directory Ghostty was started in, where Windows looks
+before its own directories and PATH. Ghostty is started in a directory
+holding a stand-in `powershell.exe` and must start the real one; a
+program that is only in that directory must not start, and does when it
+is named with the directory (`.\name.exe`). The script clears
+`NoDefaultCurrentDirectoryInExePath`, which would hide the problem. It
+runs on a locked desktop.
+
 ## command-palette.ps1
 
 Checks the command palette: `toggle_command_palette` opens it with many
