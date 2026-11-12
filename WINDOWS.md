@@ -1591,7 +1591,9 @@ Notes:
         moved.
   - [x] 2026-11-11: a thirty-third sync (2 commits: a formatting fix
         in libghostty's release notes). No conflicts; dates kept (831
-        commits checked). The app builds.
+        commits checked). The app builds. Pushed as 0043c2e1f with
+        the FindText checks in `uia-ranges.ps1`; CI run 43154589789
+        passed every job, and `windows-tip` moved.
   - [x] It failed there again in run 42948447833 (098593a94), now
         saying what was on screen: the command had run (its output was
         there), but the typed line read `echo M`, a line break,
