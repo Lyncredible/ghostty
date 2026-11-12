@@ -757,6 +757,54 @@ fn rangeFindAttribute(_: *Interface, _: i32, _: VARIANT, _: c.BOOL, out: *?*anyo
     return S_OK;
 }
 
+/// Where a text is in another: its first place, or its last when
+/// searching backward. Ignoring case is by Windows' lowercase of each
+/// UTF-16 unit, so it holds for the letters of any language.
+fn findText(hay: []const u16, needle: []const u16, backward: bool, ignore_case: bool) ?usize {
+    if (needle.len == 0 or needle.len > hay.len) return null;
+    const lower = struct {
+        fn f(ch: u16) u16 {
+            if (ch < 128) return std.ascii.toLower(@intCast(ch));
+            var one = [1]u16{ch};
+            _ = c.CharLowerBuffW(&one, 1);
+            return one[0];
+        }
+    }.f;
+    var found: ?usize = null;
+    var i: usize = 0;
+    while (i + needle.len <= hay.len) : (i += 1) {
+        const match = for (needle, hay[i .. i + needle.len]) |x, y| {
+            if (if (ignore_case) lower(x) != lower(y) else x != y) break false;
+        } else true;
+        if (match) {
+            found = i;
+            if (!backward) break;
+        }
+    }
+    return found;
+}
+
+test findText {
+    const testing = std.testing;
+    const L = std.unicode.utf8ToUtf16LeStringLiteral;
+    const hay = L("echo Tab tab; Öffnen öffnen Вкладка");
+    try testing.expectEqual(@as(?usize, 5), findText(hay, L("Tab"), false, false));
+    try testing.expectEqual(@as(?usize, 9), findText(hay, L("tab"), false, false));
+    try testing.expectEqual(@as(?usize, 5), findText(hay, L("tab"), false, true));
+    try testing.expectEqual(@as(?usize, 9), findText(hay, L("TAB"), true, true));
+    try testing.expectEqual(@as(?usize, null), findText(hay, L("TAB"), false, false));
+    // Letters outside ASCII.
+    try testing.expectEqual(@as(?usize, 21), findText(hay, L("öffnen"), false, false));
+    try testing.expectEqual(@as(?usize, 14), findText(hay, L("öffnen"), false, true));
+    try testing.expectEqual(@as(?usize, 21), findText(hay, L("ÖFFNEN"), true, true));
+    try testing.expectEqual(@as(?usize, 28), findText(hay, L("вкладка"), false, true));
+    try testing.expectEqual(@as(?usize, null), findText(hay, L("вкладка"), false, false));
+    // Nothing to find, and more than there is.
+    try testing.expectEqual(@as(?usize, null), findText(hay, L(""), false, true));
+    try testing.expectEqual(@as(?usize, null), findText(L("ab"), L("abc"), false, true));
+    try testing.expectEqual(@as(?usize, 0), findText(L("ab"), L("AB"), true, true));
+}
+
 fn rangeFindText(iface: *Interface, needle: ?[*:0]const u16, backward: c.BOOL, ignore_case: c.BOOL, out: *?*anyopaque) callconv(.winapi) HRESULT {
     const self = RangeObject.from(iface);
     out.* = null;
@@ -765,22 +813,7 @@ fn rangeFindText(iface: *Interface, needle: ?[*:0]const u16, backward: c.BOOL, i
     const hay = self.range.snapshot.text[self.range.start..self.range.end];
     if (n.len > hay.len) return S_OK;
 
-    const lower = struct {
-        fn f(ch: u16) u16 {
-            return if (ch < 128) std.ascii.toLower(@intCast(ch)) else ch;
-        }
-    }.f;
-    var i: usize = 0;
-    var found: ?usize = null;
-    while (i + n.len <= hay.len) : (i += 1) {
-        const match = for (n, hay[i .. i + n.len]) |x, y| {
-            if (if (ignore_case != 0) lower(x) != lower(y) else x != y) break false;
-        } else true;
-        if (match) {
-            found = i;
-            if (backward == 0) break;
-        }
-    }
+    const found = findText(hay, n, backward != 0, ignore_case != 0);
     const at = found orelse return S_OK;
     const start: u32 = self.range.start + @as(u32, @intCast(at));
     const range = self.owner.newRange(self.range.snapshot, start, start + @as(u32, @intCast(n.len))) catch return E_OUTOFMEMORY;

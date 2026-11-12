@@ -3078,6 +3078,12 @@ Notes:
   - [x] CI runs 43130919863 (c6c1f9ecd: the bell volume and the file
         type test) and 43137740992 (1dd37683b: the palette's search)
         passed every job.
+  - [x] The same in the terminal's text for screen readers
+        (2026-11-11): a text range's FindText ignored case for ASCII
+        only. The search is a function of its own now (`findText`),
+        lowercasing each UTF-16 unit as Windows does, with unit tests
+        (forward, backward, with and without case, German and
+        Russian). `uia-ranges.ps1` passes; it doesn't call FindText.
   - [x] The catalog repeated each message in every locale: now the
         messages are stored once, with each locale's offsets to its
         translations of them. 460 KB, from 778. The unit tests (which
