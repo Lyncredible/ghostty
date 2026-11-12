@@ -3289,6 +3289,13 @@ Notes:
         script and the CI step clear it. (The first hand check of
         `+edit-config` was made with it set and showed nothing; it was
         repeated without.)
+  - [x] CI: the run on the push with all three (43173112627) first
+        lost two jobs that never got a runner, and on the re-run its
+        "Test CLI actions" step failed with every check passing: a
+        PowerShell step ends with the last program's exit code, here
+        the 127 the last check looks for. The step sets it back to 0.
+        Run 43182238787 then passed on all five jobs, the shell search
+        test included.
 - [x] Unimplemented apprt actions (as of 2026-10-25)
   - [x] `show_on_screen_keyboard`: toggles the touch keyboard through the
         shell's (undocumented) `ITipInvocation`, starting TabTip.exe if
