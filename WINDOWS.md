@@ -3388,7 +3388,13 @@ Notes:
       A dead key's character (for the key's unshifted codepoint, which
       bindings match) was cut to a byte, so a caron (U+02C7) on a Czech
       keyboard came out as Ç (U+00C7); it's now kept whole (`mappedChar`,
-      unit test). Nothing to change in the others.
+      unit test). Nothing to change in the others. CI run 43293511102
+      passed on all five jobs.
+- [x] Review of the menus, the tab's split tree, the inspector window and
+      the process tree helpers (`Menu.zig`, `Tab.zig`,
+      `InspectorWindow.zig`, `os/windows.zig`, 2026-11-12): nothing to
+      change. No translation has an `&` that would turn into an access
+      key; the split tree carries the zoom through splits and removals.
 - [x] Unimplemented apprt actions (as of 2026-10-25)
   - [x] `show_on_screen_keyboard`: toggles the touch keyboard through the
         shell's (undocumented) `ITipInvocation`, starting TabTip.exe if
