@@ -3057,6 +3057,12 @@ Notes:
         `localization.ps1` pass. The names a screen reader hears
         ("Match 2 of 10", "No matches") stay English: the catalog has
         no such messages.
+  - [x] Review of the files without unit tests (2026-11-11), bell
+        audio: `bell-audio-volume = nan` (the configuration takes any
+        number) reached `@intFromFloat` and would have aborted the app
+        at the first bell. It's silence now (`mciVolume`, with a test
+        of out-of-range, infinite and NaN volumes). The other
+        conversions of configured numbers were already guarded.
   - [x] The catalog repeated each message in every locale: now the
         messages are stored once, with each locale's offsets to its
         translations of them. 460 KB, from 778. The unit tests (which

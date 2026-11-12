@@ -49,10 +49,29 @@ pub fn play(
         };
     }
 
-    const level: u32 = @intFromFloat(@round(std.math.clamp(volume, 0, 1) * 1000));
+    const level = mciVolume(volume);
     command(alloc, "setaudio " ++ alias ++ " volume to {d}", .{level}) catch {};
     command(alloc, "play " ++ alias ++ " from 0", .{}) catch return;
     log.debug("playing bell audio path={s} volume={d}", .{ path, level });
+}
+
+/// A volume from 0 to 1 as MCI's 0 to 1000. The configuration takes any
+/// number, "nan" too, which is silence here rather than a crash.
+fn mciVolume(volume: f64) u32 {
+    if (std.math.isNan(volume)) return 0;
+    return @intFromFloat(@round(std.math.clamp(volume, 0, 1) * 1000));
+}
+
+test mciVolume {
+    const testing = std.testing;
+    try testing.expectEqual(@as(u32, 0), mciVolume(0));
+    try testing.expectEqual(@as(u32, 500), mciVolume(0.5));
+    try testing.expectEqual(@as(u32, 1000), mciVolume(1));
+    try testing.expectEqual(@as(u32, 1000), mciVolume(7));
+    try testing.expectEqual(@as(u32, 0), mciVolume(-1));
+    try testing.expectEqual(@as(u32, 1000), mciVolume(std.math.inf(f64)));
+    try testing.expectEqual(@as(u32, 0), mciVolume(-std.math.inf(f64)));
+    try testing.expectEqual(@as(u32, 0), mciVolume(std.math.nan(f64)));
 }
 
 fn close(self: *BellAudio, alloc: Allocator) void {
