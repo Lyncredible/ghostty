@@ -3358,7 +3358,8 @@ Notes:
       elevation (the log still has "taskbar button created"); the
       elevated case needs UAC, which this desktop can't click through
       and CI's runners don't have (everything there is elevated), so it
-      is untested. Notifications: nothing to change.
+      is untested. Notifications: nothing to change. CI run
+      43256227665 passed on all five jobs.
 - [x] Unimplemented apprt actions (as of 2026-10-25)
   - [x] `show_on_screen_keyboard`: toggles the touch keyboard through the
         shell's (undocumented) `ITipInvocation`, starting TabTip.exe if
