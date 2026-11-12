@@ -3408,7 +3408,8 @@ Notes:
       when the tabs were in the title bar stayed available, with an
       empty rectangle, and could still be invoked. Both are now
       unavailable. No unit test (it needs a tab bar); `tab-close-uia`,
-      `titlebar-tabs` and `tabs` pass here.
+      `titlebar-tabs` and `tabs` pass here. CI run 43314594625 passed on
+      all five jobs.
 - [x] Unimplemented apprt actions (as of 2026-10-25)
   - [x] `show_on_screen_keyboard`: toggles the touch keyboard through the
         shell's (undocumented) `ITipInvocation`, starting TabTip.exe if
