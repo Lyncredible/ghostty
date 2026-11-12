@@ -343,18 +343,26 @@ fn buildEntries(
     return try entries.toOwnedSlice(alloc);
 }
 
-/// Whether we implement an action, so that it's worth listing.
+/// Whether we implement an action, so that it's worth listing. Unlike
+/// GTK, we have undo and redo (reopening a closed tab or split).
 fn supported(action: input.Binding.Action) bool {
     return switch (action) {
         .toggle_secure_input,
         .check_for_updates,
-        .redo,
-        .undo,
         .toggle_command_palette,
         => false,
 
         else => true,
     };
+}
+
+test supported {
+    const testing = std.testing;
+    try testing.expect(supported(.undo));
+    try testing.expect(supported(.redo));
+    try testing.expect(supported(.new_tab));
+    try testing.expect(!supported(.toggle_command_palette));
+    try testing.expect(!supported(.check_for_updates));
 }
 
 /// The lowercase text the search matches, from the parts joined by spaces.
