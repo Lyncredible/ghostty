@@ -119,6 +119,18 @@ fn hasAssociation(path: []const u8) bool {
     return hr == S_FALSE or hr == 0;
 }
 
+test hasAssociation {
+    const testing = std.testing;
+    // Windows comes with an app for text files.
+    try testing.expect(hasAssociation("C:\\notes\\read me.txt"));
+    // No extension, one nobody registers (as our config file's usually
+    // is), and one too long to be one.
+    try testing.expect(!hasAssociation("C:\\Users\\someone\\config"));
+    try testing.expect(!hasAssociation("config.ghostty-test-no-such-type"));
+    try testing.expect(!hasAssociation("config." ++ @as([80]u8, @splat('x'))));
+    try testing.expect(!hasAssociation(""));
+}
+
 extern "shlwapi" fn AssocQueryStringW(
     flags: u32,
     str: i32,
