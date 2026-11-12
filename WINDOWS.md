@@ -3304,6 +3304,15 @@ Notes:
       by time. Unit test of the name; `crash-report.ps1` passes
       (it saved `crash-20261112-093433-17320.txt`). CI run 43192690689
       passed on all five jobs.
+- [x] Reviews with nothing to change (2026-11-12): the Windows pty
+      (`pty.zig`: the pipes' handles on each failure path, the pipe's
+      name and single instance, sizes cut to a console's 16 bits), and
+      `Exec.zig`'s program quoting and the commands it builds itself
+      (`wsl.exe` for a WSL directory, `cmd.exe` when out of memory),
+      which the new program search finds in the system directory.
+- [x] CI: a push that changes only this file no longer starts the fork's
+      workflow (`paths-ignore`), so a recorded result can be pushed at
+      once instead of waiting for the next change to the code.
 - [x] Unimplemented apprt actions (as of 2026-10-25)
   - [x] `show_on_screen_keyboard`: toggles the touch keyboard through the
         shell's (undocumented) `ITipInvocation`, starting TabTip.exe if

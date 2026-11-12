@@ -1,6 +1,9 @@
 on:
   push:
     branches: [windows, 'windows-*']
+    # A push that only records progress has nothing to build, and would
+    # cancel a run still in progress.
+    paths-ignore: [WINDOWS.md]
   workflow_dispatch: {}
 
 name: Windows (fork)
