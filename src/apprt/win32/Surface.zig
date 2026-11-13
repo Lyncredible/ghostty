@@ -606,6 +606,40 @@ fn updateKeyBadge(self: *Surface) void {
     self.key_badge.set(alloc, text.written());
 }
 
+/// The smallest size, in pixels, this terminal is laid out at in a split:
+/// one cell and the window padding, like GTK, so that resizing a split
+/// never hides a terminal.
+pub fn splitMinSize(self: *const Surface) struct { width: c_int, height: c_int } {
+    if (!self.core_initialized) return .{ .width = 1, .height = 1 };
+    const cell = self.core_surface.size.cell;
+    const config = &self.app.config;
+    const dpi: f64 = @floatFromInt(c.GetDpiForWindow(self.hwnd));
+    return .{
+        .width = minSide(cell.width, config.@"window-padding-x".top_left, config.@"window-padding-x".bottom_right, dpi),
+        .height = minSide(cell.height, config.@"window-padding-y".top_left, config.@"window-padding-y".bottom_right, dpi),
+    };
+}
+
+/// A cell and the padding on both sides (in points, rounded down to
+/// pixels like the core's padding), saturated.
+fn minSide(cell: u32, before: u32, after: u32, dpi: f64) c_int {
+    const scale = dpi / 72;
+    const pixels = @as(f64, @floatFromInt(@max(cell, 1))) +
+        @floor(@as(f64, @floatFromInt(before)) * scale) +
+        @floor(@as(f64, @floatFromInt(after)) * scale);
+    return util.saturate(c_int, pixels);
+}
+
+test minSide {
+    const testing = std.testing;
+    // A 19 pixel cell with 2 points each side at 192 DPI (5.33 pixels).
+    try testing.expectEqual(@as(c_int, 19 + 5 + 5), minSide(19, 2, 2, 192));
+    try testing.expectEqual(@as(c_int, 10), minSide(10, 0, 0, 96));
+    // No cell yet, and padding too large for a window.
+    try testing.expectEqual(@as(c_int, 1), minSide(0, 0, 0, 96));
+    try testing.expectEqual(std.math.maxInt(c_int), minSide(10, std.math.maxInt(u32), 0, 96));
+}
+
 /// Show the search bar, for the start_search action.
 pub fn startSearch(self: *Surface, needle: []const u8) void {
     self.search_bar.show(needle);

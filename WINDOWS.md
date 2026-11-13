@@ -3539,6 +3539,26 @@ Notes:
       while their surfaces are made; menus' actions are constants), and
       code after a modal loop (close confirmations, Save As) checks its
       window is still there.
+- [x] A split never smaller than one cell (found 2026-11-13, checking
+      upstream's recent GTK changes: "never resize a split smaller than
+      one cell", "keep split ratios on window resize and sync on
+      min-position"): `resize_split` past an edge set the ratio to 0 or
+      1, and that terminal got no pixels at all (it was there, focused,
+      and invisible); dragging kept 5% of the split, more than a cell in
+      a big window and less in a small one. Now each side of a split
+      gets at least its minimum (`Surface.splitMinSize`: one cell and
+      `window-padding-x`/`-y`, as GTK has it; a split's is its sides'
+      and the divider, or the larger side across), shared by the
+      minimums when there's no room for both. A keyboard resize or a
+      drag keeps the ratio where the split is shown, so resizing back
+      moves at once; a window resize keeps the ratios.
+  - Tests: `clampPos`, `minSide` (a huge padding saturates), an edge
+    case of `SplitRects`, `dragRatio`; `splits.ps1` resizes 10000
+    pixels past each edge (the terminal stays 29 pixels wide here, a
+    19 pixel cell and 5 of padding each side) and back by 200, which
+    moves 200. Without the change the terminal shrank to nothing and
+    the test failed. It passed here, with session-restore,
+    command-palette and overlays.
 - [x] Unimplemented apprt actions (as of 2026-10-25)
   - [x] `show_on_screen_keyboard`: toggles the touch keyboard through the
         shell's (undocumented) `ITipInvocation`, starting TabTip.exe if
