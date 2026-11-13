@@ -1,6 +1,6 @@
 # Checks the overlays a surface makes only when they first show: a new
 # terminal has no badge, search bar, command palette, dim overlay, bell
-# border, link preview, drop zone or drag handle window. Toggling read-only
+# border, link preview, progress bar, drop zone or drag handle window. Toggling read-only
 # mode (a posted F9 bound to `toggle_readonly`) must show one in the top
 # right, in the order it would have been made in: just below the
 # scrollbar. The search bar and command palette are made when they first
@@ -138,8 +138,8 @@ try {
     $script:surface = WaitFor { $h = $W::FindWindowExW($window, [IntPtr]::Zero, 'GhosttySurface', [NullString]::Value); if ($h -ne [IntPtr]::Zero) { $h } } 'the surface'
     [void](WaitFor { (Children) -contains 'GhosttyScrollbar' } "the surface's scrollbar")
     Start-Sleep -Seconds 1
-    if ((Children) | Where-Object { $_ -match '^Ghostty(Badge|SearchBar|CommandPalette|DimOverlay|BellBorder|LinkPreview|DropZone|DragHandle)' }) { Fail "a new surface already has a lazily made overlay window: $((Children) -join ', ')" }
-    Write-Host "A new surface has no badge, search bar, command palette, dim overlay, bell border, link preview, drop zone or drag handle windows: $((Children) -join ', ')"
+    if ((Children) | Where-Object { $_ -match '^Ghostty(Badge|SearchBar|CommandPalette|DimOverlay|BellBorder|LinkPreview|ProgressBar|DropZone|DragHandle)' }) { Fail "a new surface already has a lazily made overlay window: $((Children) -join ', ')" }
+    Write-Host "A new surface has no badge, search bar, command palette, dim overlay, bell border, link preview, progress bar, drop zone or drag handle windows: $((Children) -join ', ')"
 
     $W::Key($surface, 0x78, 0x43)   # F9: toggle_readonly
     [void](WaitFor { (Children) -contains 'GhosttyBadge*' } 'the read-only badge to show')

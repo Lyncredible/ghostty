@@ -2161,6 +2161,28 @@ Notes:
       system sound is now opt-in via `system`
 - [x] Desktop notifications and progress reports (taskbar)
   - [x] OSC 9;4 progress on the active surface's taskbar button
+  - [x] A progress bar along the top of each terminal (found
+        2026-11-13, from upstream's GTK "stop progress bar pulse
+        animation"): GTK and macOS show one in every terminal, ours
+        only showed the focused terminal's on the taskbar button, so a
+        background split or tab's progress was nowhere. Now
+        (`ProgressBar.zig`) a bar 3 pixels high (at 96 DPI) along the
+        top: the part done in the accent color (the highlight color in
+        high contrast), red for an error, a fifth of the width sliding
+        across for an unknown amount (GTK's pulse), the last percentage
+        for a pause without one. Its window is only the bar, so it
+        covers nothing else. As GTK's fix makes sure, nothing animates
+        unseen: the piece only moves while the terminal is shown and
+        its window not minimized (and with Windows' animation effects
+        on), else it waits in the middle. A report that stops coming
+        goes after 15 seconds, as the taskbar's does;
+        `progress-style = false` hides it.
+    - Tests: `Look` (each state, a pause keeping the last value) and
+      `place` (DPI, clamping, the slide and its wrap), and
+      `progress.ps1` (new, in CI): from an unfocused split, 50% is half
+      its width along its top, an unknown amount slides, and waits in
+      the middle while hidden by the other split's zoom, an error at
+      30% is 30% wide, and removing hides it. It passed here.
   - [x] Desktop notifications (OSC 9 and OSC 777) as toasts
 - [x] Command-finished notifications
   - [x] Configured bell action and duration/focus filtering

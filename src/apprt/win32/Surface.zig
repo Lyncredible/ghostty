@@ -22,6 +22,7 @@ const DimOverlay = @import("DimOverlay.zig");
 const BellBorder = @import("BellBorder.zig");
 const TitleDialog = @import("TitleDialog.zig");
 const LinkPreview = @import("LinkPreview.zig");
+const ProgressBar = @import("ProgressBar.zig");
 const Scrollbar = @import("Scrollbar.zig");
 const Badge = @import("Badge.zig");
 const SearchBar = @import("SearchBar.zig");
@@ -110,6 +111,12 @@ progress_style: bool = true,
 progress_report: ?terminal.osc.Command.ProgressReport = null,
 progress_value: ?u8 = null,
 progress_expires_at: u64 = 0,
+/// The bar along our top that shows it, as GTK and macOS have.
+progress_bar: ProgressBar = .{},
+
+/// Whether anyone can see this surface: shown (in the active tab, not
+/// hidden by a zoomed split) and its window not minimized.
+seen: bool = true,
 
 dim_overlay: DimOverlay = .{},
 bell_border: BellBorder = .{},
@@ -337,6 +344,8 @@ pub fn init(self: *Surface, app: *App, window: *Window, opts: Options) !void {
     errdefer self.toast_badge.deinit(alloc);
     self.resize_badge.init(hwnd, app.hinstance, &config, .center, self.scrollbar.hwnd);
     errdefer self.resize_badge.deinit(alloc);
+    self.progress_bar.init(hwnd, app.hinstance, self.scrollbar.hwnd);
+    errdefer self.progress_bar.deinit();
     self.drop_zone.init(hwnd, app.hinstance, &config);
     errdefer self.drop_zone.deinit();
     self.drag_handle.init(self, app.hinstance, &config);
@@ -404,6 +413,8 @@ pub fn deinit(self: *Surface) void {
     _ = c.KillTimer(self.hwnd, resize_timer_id);
     _ = c.KillTimer(self.hwnd, accessibility_timer_id);
     self.resize_badge.deinit(alloc);
+    _ = c.KillTimer(self.hwnd, progress_timer_id);
+    self.progress_bar.deinit();
     self.drag_handle.deinit();
     self.drop_zone.deinit();
     if (self.accessibility) |a| a.detach();
@@ -1053,6 +1064,7 @@ pub fn configChanged(self: *Surface, config: *const configpkg.Config) void {
     self.notify_on_command_finish_after = config.@"notify-on-command-finish-after";
     self.progress_style = config.@"progress-style";
     self.window.updateTaskbarProgress();
+    self.updateProgressBar();
     self.link_preview.updateConfig(config);
     self.scrollbar.updateConfig(config);
     self.readonly_badge.updateConfig(config);
@@ -1137,14 +1149,38 @@ pub fn setProgressReport(self: *Surface, report: terminal.osc.Command.ProgressRe
         if (report.progress) |value| self.progress_value = value;
         self.progress_expires_at = c.GetTickCount64() + 15_000;
     }
+    self.updateProgressBar();
     if (self.window.tabs.items.len > 0 and self.window.activeSurface() == self) {
         self.window.updateTaskbarProgress();
     }
 }
 
+/// Show our progress report on our bar, and keep it going: the sliding
+/// piece moves only while anyone can see it (and Windows animates), and a
+/// report that stops coming goes after 15 seconds, as the taskbar's does.
+fn updateProgressBar(self: *Surface) void {
+    _ = c.KillTimer(self.hwnd, progress_timer_id);
+    const now = c.GetTickCount64();
+    if (self.progress_report != null and self.progress_expires_at <= now) {
+        log.debug("progress report expired", .{});
+        self.progress_report = null;
+        self.progress_value = null;
+    }
+    const look: ProgressBar.Look = if (self.progress_style) .of(self.progress_report, self.progress_value) else .none;
+    const moving = look == .sliding and self.seen and util.animations();
+    const dpi: c_int = @intCast(c.GetDpiForWindow(self.hwnd));
+    const rect = ProgressBar.place(look, @intCast(self.size.width), dpi, if (moving) now else ProgressBar.slide_ms / 2);
+    self.progress_bar.set(rect, ProgressBar.color(look));
+    if (look == .none) return;
+    const wait: u64 = if (moving) progress_frame_ms else self.progress_expires_at - now;
+    _ = c.SetTimer(self.hwnd, progress_timer_id, @intCast(@max(1, @min(wait, 15_000))), null);
+}
+
 /// Called by the window when this surface is shown or hidden, such as
 /// when switching tabs.
 pub fn setVisible(self: *Surface, visible: bool) void {
+    self.seen = visible;
+    self.updateProgressBar();
     if (!self.core_initialized) return;
     self.core_surface.occlusionCallback(visible) catch |err| {
         log.err("error in occlusion callback err={}", .{err});
@@ -1720,6 +1756,9 @@ fn confirmClipboard(self: *Surface) void {
 const toast_timer_id = 1;
 const resize_timer_id = 2;
 const accessibility_timer_id = 3;
+const progress_timer_id = 4;
+/// How often the progress bar's sliding piece moves.
+const progress_frame_ms = 33;
 
 /// Posted to the surface when its selection changes.
 pub const WM_GHOSTTY_SELECTION_CHANGED = c.WM_APP + 10;
@@ -2060,6 +2099,7 @@ pub fn wndProc(
                 self.size = size;
                 self.dim_overlay.resize(@intCast(size.width), @intCast(size.height));
                 self.bell_border.resize(@intCast(size.width), @intCast(size.height));
+                self.updateProgressBar();
                 self.link_preview.parentResized();
                 self.scrollbar.parentResized();
                 self.readonly_badge.parentResized();
@@ -2189,7 +2229,10 @@ pub fn wndProc(
             return 0;
         },
 
-        c.WM_TIMER => if (wparam == toast_timer_id) {
+        c.WM_TIMER => if (wparam == progress_timer_id) {
+            self.updateProgressBar();
+            return 0;
+        } else if (wparam == toast_timer_id) {
             _ = c.KillTimer(hwnd, toast_timer_id);
             self.toast_badge.set(self.app.core_app.alloc, null);
             return 0;

@@ -87,20 +87,10 @@ pub fn setVisible(self: *BellBorder, visible: bool) void {
     _ = c.ShowWindow(self.hwnd, if (visible) c.SW_SHOWNA else c.SW_HIDE);
 }
 
-/// The system accent color, falling back to a Windows blue, or a high
-/// contrast theme's highlight color.
+/// The accent color (`util.accentColor`), avoiding our transparent color
+/// key.
 fn accentColor() c.COLORREF {
-    const color = if (util.highContrast()) c.GetSysColor(c.COLOR_HIGHLIGHT) else color: {
-        var argb: c.DWORD = 0;
-        var opaque_blend: c.BOOL = 0;
-        if (c.DwmGetColorizationColor(&argb, &opaque_blend) < 0) return util.rgb(0, 120, 215);
-        break :color util.rgb(
-            @truncate(argb >> 16),
-            @truncate(argb >> 8),
-            @truncate(argb),
-        );
-    };
-    // Avoid our transparent color key.
+    const color = util.accentColor();
     return if (color == transparent_key) util.rgb(0xFE, 0, 0xFF) else color;
 }
 

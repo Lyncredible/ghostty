@@ -307,6 +307,11 @@ jobs:
         shell: pwsh
         run: ./test/windows/splits.ps1 -Exe zig-out/bin/ghostty.exe
 
+      - name: Progress bar test
+        timeout-minutes: 5
+        shell: pwsh
+        run: ./test/windows/progress.ps1 -Exe zig-out/bin/ghostty.exe
+
       - name: Window actions test
         timeout-minutes: 5
         shell: pwsh

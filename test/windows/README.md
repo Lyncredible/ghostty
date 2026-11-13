@@ -294,7 +294,7 @@ UI Automation.
 ## overlays.ps1
 
 Checks that a new surface has no badge, search bar, command palette, dim
-overlay, bell border, link preview, drop zone or drag handle windows
+overlay, bell border, link preview, progress bar, drop zone or drag handle windows
 (they're made when they first show), then toggles read-only mode with a posted key: the read-only badge
 must show in the top right, just below the scrollbar in the surface's child
 windows (where it was when badges were made up front), and hide again. A
@@ -357,6 +357,18 @@ another, `:previous` goes back, and `end_search` closes it. Those three keys
 go to the field, which passes keys it has no use for to the terminal's
 keybindings. The count is read from the bar's window text ("Match 2 of 6"),
 which is also what screen readers see.
+
+## progress.ps1
+
+Checks the progress bar along the top of a terminal (ConEmu's OSC 9;4), as
+GTK and macOS have. The left of two splits reports progress while the
+right one has the focus (the taskbar button only shows the focused one's):
+50% makes a bar half its width along its top, an unknown amount a piece a
+fifth of its width that slides across, an error at 30% a bar 30% wide, and
+removing it hides it. While the terminal is hidden (the other split
+zoomed) the piece waits in the middle, so nothing animates unseen, and
+moves again once shown. Windows are read with `GetWindowRect`, so it runs
+on a locked desktop.
 
 ## splits.ps1
 

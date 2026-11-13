@@ -41,6 +41,7 @@ const Ipc = @import("Ipc.zig");
 const Overrides = @import("Overrides.zig");
 const Taskbar = @import("Taskbar.zig");
 const Notifier = @import("Notifier.zig");
+const ProgressBar = @import("ProgressBar.zig");
 const BellAudio = @import("BellAudio.zig");
 const GlobalKeys = @import("GlobalKeys.zig");
 
@@ -417,6 +418,20 @@ fn registerClasses(hinstance: c.HINSTANCE) !void {
         .{
             .cbSize = @sizeOf(c.WNDCLASSEXW),
             .style = 0,
+            .lpfnWndProc = ProgressBar.wndProc,
+            .cbClsExtra = 0,
+            .cbWndExtra = 0,
+            .hInstance = hinstance,
+            .hIcon = null,
+            .hCursor = null,
+            .hbrBackground = null,
+            .lpszMenuName = null,
+            .lpszClassName = ProgressBar.class_name,
+            .hIconSm = null,
+        },
+        .{
+            .cbSize = @sizeOf(c.WNDCLASSEXW),
+            .style = 0,
             .lpfnWndProc = BellBorder.wndProc,
             .cbClsExtra = 0,
             .cbWndExtra = 0,
@@ -571,6 +586,7 @@ fn unregisterClasses(hinstance: c.HINSTANCE) void {
     _ = c.UnregisterClassW(DimOverlay.class_name, hinstance);
     _ = c.UnregisterClassW(TabGhost.class_name, hinstance);
     _ = c.UnregisterClassW(BellBorder.class_name, hinstance);
+    _ = c.UnregisterClassW(ProgressBar.class_name, hinstance);
     _ = c.UnregisterClassW(LinkPreview.class_name, hinstance);
     _ = c.UnregisterClassW(Scrollbar.class_name, hinstance);
     _ = c.UnregisterClassW(Badge.class_name, hinstance);
