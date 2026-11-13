@@ -579,8 +579,12 @@ the types there, and turns on paste events (mode 5522), after which a
 paste (a key bound to `paste_from_clipboard`) sends the listing rather
 than the text. In CI it runs again with `clipboard-write` and
 `clipboard-read` set to `ask`: allowing the write writes, and denying the
-read answers `EPERM`. Like `color-query.ps1` it needs `conpty.dll` next to
-`ghostty.exe`; without it the test only reports that nothing came back.
+read answers `EPERM`. A third run checks the question's "Remember choice"
+box (with `TDM_CLICK_VERIFICATION`): after a write with a password (and a
+name) is allowed and remembered, the same write isn't asked about again,
+and nor is an OSC 52 read after one that was; a question that came back
+would go unanswered and leave its reply empty. Like `color-query.ps1` it
+needs `conpty.dll` next to `ghostty.exe`; without it the test only reports that nothing came back.
 It replaces what's on the clipboard.
 
 ## cli-ipc.ps1
