@@ -230,7 +230,48 @@ pub fn load(arena: Allocator, app: *const App) ?State {
         return null;
     };
     if (state.version != 1 or state.windows.len == 0) return null;
+    if (!withinLimits(state)) {
+        log.warn("ignoring window state with too many tabs path={s}", .{file});
+        return null;
+    }
     return state;
+}
+
+/// The most nodes (terminals and splits) all saved tabs can have. Each
+/// terminal starts a shell, and a damaged file, which can be 16 MB, could
+/// otherwise ask for hundreds of thousands of them; a real session has
+/// far fewer.
+pub const max_total_nodes = 2048;
+
+/// Whether restoring the state would start a reasonable number of
+/// terminals.
+fn withinLimits(state: State) bool {
+    var total: usize = 0;
+    for (state.windows) |window| {
+        // A tab is at least one node, even an invalid one, which is then
+        // replaced with a new tab.
+        for (window.tabs) |tab| total += @max(1, tab.nodes.len);
+        total += @intFromBool(window.tabs.len == 0);
+        if (total > max_total_nodes) return false;
+    }
+    return true;
+}
+
+test withinLimits {
+    const testing = std.testing;
+    const one_tab: []const TabState = &.{.{ .nodes = &.{.{}} }};
+    const window: WindowState = .{ .left = 0, .top = 0, .right = 1, .bottom = 1, .tabs = one_tab };
+    try testing.expect(withinLimits(.{ .windows = &.{ window, window } }));
+
+    var windows: [max_total_nodes + 1]WindowState = @splat(window);
+    try testing.expect(withinLimits(.{ .windows = windows[0..max_total_nodes] }));
+    try testing.expect(!withinLimits(.{ .windows = &windows }));
+    // Windows without tabs get one each.
+    windows = @splat(.{ .left = 0, .top = 0, .right = 1, .bottom = 1, .tabs = &.{} });
+    try testing.expect(!withinLimits(.{ .windows = &windows }));
+    // Nor can tabs with no nodes add up for free.
+    const empty_tabs: [max_total_nodes + 1]TabState = @splat(.{ .nodes = &.{} });
+    try testing.expect(!withinLimits(.{ .windows = &.{.{ .left = 0, .top = 0, .right = 1, .bottom = 1, .tabs = &empty_tabs }} }));
 }
 
 /// The state file. Each custom class has its own, like its own instance.

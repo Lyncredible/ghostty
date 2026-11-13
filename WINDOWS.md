@@ -3416,6 +3416,13 @@ Notes:
       pair; it now stops before the character (`limitText`, unit test).
       `uia-ranges` passes here. CI run 43323758757 passed on all five
       jobs.
+- [x] Review of saving and restoring windows (`SaveState.zig`,
+      2026-11-12). Each saved tab's tree was limited (255 nodes), but not
+      how many tabs and windows there were: a damaged state file (up to
+      16 MB) could ask for hundreds of thousands of terminals, each with
+      a shell. A state with more than 2048 nodes in all is now ignored,
+      with a warning (`withinLimits`, unit test). `session-restore`
+      passes here.
 - [x] Unimplemented apprt actions (as of 2026-10-25)
   - [x] `show_on_screen_keyboard`: toggles the touch keyboard through the
         shell's (undocumented) `ITipInvocation`, starting TabTip.exe if
