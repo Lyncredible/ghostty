@@ -17,6 +17,7 @@ const App = @import("App.zig");
 const Surface = @import("Surface.zig");
 const Tab = @import("Tab.zig");
 const TabBar = @import("TabBar.zig");
+const Taskbar = @import("Taskbar.zig");
 const Overrides = @import("Overrides.zig");
 const Menu = @import("Menu.zig");
 const Dialog = @import("Dialog.zig");
@@ -1446,32 +1447,13 @@ pub fn updateTaskbarProgress(self: *Window) void {
 
     const surface = self.activeSurface();
     const now = c.GetTickCount64();
-    if (!surface.progress_style or surface.progress_report == null) {
+    const report = (if (surface.progress_style) surface.progressReport(now) else null) orelse {
         taskbar.clear(self.hwnd);
         return;
-    }
-    if (surface.progress_expires_at <= now) {
-        log.debug("progress report expired", .{});
-        surface.progress_report = null;
-        surface.progress_value = null;
-        taskbar.clear(self.hwnd);
-        return;
-    }
-
-    const report = surface.progress_report.?;
-    const state: c.TBPFLAG = switch (report.state) {
-        .remove => c.TBPF_NOPROGRESS,
-        .set => if (report.progress == null) c.TBPF_INDETERMINATE else c.TBPF_NORMAL,
-        .@"error" => c.TBPF_ERROR,
-        .indeterminate => c.TBPF_INDETERMINATE,
-        .pause => c.TBPF_PAUSED,
     };
-    taskbar.setState(self.hwnd, state);
-    if (state != c.TBPF_INDETERMINATE and state != c.TBPF_NOPROGRESS) {
-        // A pause without a percentage retains the previous fraction.
-        // Error without one similarly keeps the last known value.
-        taskbar.setValue(self.hwnd, report.progress orelse surface.progress_value orelse 100);
-    }
+    const progress = Taskbar.Progress.of(report, surface.progress_value);
+    taskbar.setState(self.hwnd, progress.state);
+    if (progress.value) |value| taskbar.setValue(self.hwnd, value);
 
     const remaining: c.UINT = @intCast(@min(surface.progress_expires_at - now, 15_000));
     _ = c.SetTimer(self.hwnd, progress_timer_id, @max(remaining, 1), null);

@@ -2213,6 +2213,13 @@ Notes:
       checks that there, then turns them on for the rest. CI run
       43443391888 passed: the piece waited at 201 of 501 pixels, then
       moved, waited while hidden and moved once shown.
+    - Review (2026-11-13): the bar and the taskbar each checked the
+      15-second expiry (from macOS) themselves; `Surface.progressReport`
+      does it for both now. The taskbar's state for a report, which no
+      test covered (a button's progress can't be read back), is
+      `Taskbar.Progress.of`, with a unit test: an error or pause keeps
+      the last percentage (a button can't slide in red, as the bar and
+      GTK's do), and over 100 is 100.
   - [x] Desktop notifications (OSC 9 and OSC 777) as toasts
 - [x] Command-finished notifications
   - [x] Configured bell action and duration/focus filtering
