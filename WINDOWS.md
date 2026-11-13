@@ -3531,7 +3531,14 @@ Notes:
       their vtable), and `GetText` lengths (an emoji isn't cut in half).
       References are atomic, a detached provider answers
       `UIA_E_ELEMENTNOTAVAILABLE`, and the text is read under the
-      renderer mutex.
+      renderer mutex. Also reviewed, with nothing to change: dropped
+      files' quoting (`drop.zig`; a name with a newline, possible only
+      for Linux files, would still go through the unsafe-paste check,
+      as drops are pastes), what the palette's arena bug could have in
+      common elsewhere (IPC overrides and restored state are only used
+      while their surfaces are made; menus' actions are constants), and
+      code after a modal loop (close confirmations, Save As) checks its
+      window is still there.
 - [x] Unimplemented apprt actions (as of 2026-10-25)
   - [x] `show_on_screen_keyboard`: toggles the touch keyboard through the
         shell's (undocumented) `ITipInvocation`, starting TabTip.exe if
