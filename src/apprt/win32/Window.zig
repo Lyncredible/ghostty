@@ -1804,12 +1804,7 @@ fn updateBackdrop(self: *Window) void {
 fn updateTheme(self: *Window) void {
     const config = &self.app.config;
     const theme = self.app.windowTheme();
-    const dark = switch (theme) {
-        .auto, .ghostty => config.background.toTerminalRGB().perceivedLuminance() <= 0.5,
-        .system => systemUsesDarkTheme(),
-        .dark => true,
-        .light => false,
-    };
+    const dark = darkTitleBar(theme, config.background, systemUsesDarkTheme());
 
     const DWMWA_USE_IMMERSIVE_DARK_MODE = 20;
     const value: c.BOOL = @intFromBool(dark);
@@ -1835,6 +1830,33 @@ fn updateTheme(self: *Window) void {
     const text: c.COLORREF = if (ghostty) util.rgb(foreground.r, foreground.g, foreground.b) else DWMWA_COLOR_DEFAULT;
     _ = c.DwmSetWindowAttribute(self.hwnd, DWMWA_CAPTION_COLOR, &caption, @sizeOf(c.COLORREF));
     _ = c.DwmSetWindowAttribute(self.hwnd, DWMWA_TEXT_COLOR, &text, @sizeOf(c.COLORREF));
+}
+
+/// Whether a window theme gives a dark title bar (and menus), as GTK's: by
+/// the terminal's background for `auto` and `ghostty`, by the app mode for
+/// `system`.
+fn darkTitleBar(theme: configpkg.Config.WindowTheme, background: configpkg.Config.Color, system_dark: bool) bool {
+    return switch (theme) {
+        .auto, .ghostty => background.toTerminalRGB().perceivedLuminance() <= 0.5,
+        .system => system_dark,
+        .dark => true,
+        .light => false,
+    };
+}
+
+test darkTitleBar {
+    const testing = std.testing;
+    const white: configpkg.Config.Color = .{ .r = 0xFF, .g = 0xFF, .b = 0xFF };
+    const black: configpkg.Config.Color = .{ .r = 0, .g = 0, .b = 0 };
+    for ([_]bool{ false, true }) |system_dark| {
+        for ([_]configpkg.Config.WindowTheme{ .auto, .ghostty }) |theme| {
+            try testing.expect(!darkTitleBar(theme, white, system_dark));
+            try testing.expect(darkTitleBar(theme, black, system_dark));
+        }
+        try testing.expectEqual(system_dark, darkTitleBar(.system, white, system_dark));
+        try testing.expect(darkTitleBar(.dark, white, system_dark));
+        try testing.expect(!darkTitleBar(.light, black, system_dark));
+    }
 }
 
 /// Whether the user chose the dark app mode in the Windows settings.

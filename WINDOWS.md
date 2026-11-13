@@ -3796,6 +3796,9 @@ Notes:
         theme, then `set_window_theme:system` the app mode's. Without
         the change it timed out on the first. It passed here, and in CI
         run 43488738233 (c51af03b8), which passed every job.
+  - [x] The title bar's choice of dark (`Window.darkTitleBar`: the
+        background's luminance for `auto` and `ghostty`, the app mode
+        for `system`) has a unit test too, as `colorScheme` has.
   - [x] The other actions Win32 doesn't handle (found 2026-11-06), left
         unhandled on purpose: `show_child_exited` (unhandled, the core
         prints "Process exited. Press any key to close the terminal." in
