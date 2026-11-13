@@ -34,6 +34,10 @@ const closed_window_timer_id = 4;
 /// Posted to update the title bar and tab bar after title changes.
 const WM_GHOSTTY_TITLE_CHANGED = c.WM_APP + 20;
 
+/// Posted to lay out the window again, after a terminal's cell size
+/// changed (which sets the minimum size of its side of a split).
+const WM_GHOSTTY_LAYOUT = c.WM_APP + 21;
+
 /// A closed tab or split that `undo` can reopen until it expires.
 const Closed = struct {
     what: What,
@@ -148,6 +152,9 @@ taskbar_ready: bool = false,
 
 /// True while a WM_GHOSTTY_TITLE_CHANGED is posted and not yet handled.
 title_change_posted: bool = false,
+
+/// True while a WM_GHOSTTY_LAYOUT is posted and not yet handled.
+layout_posted: bool = false,
 
 /// Whether the window is minimized, while which its surfaces don't draw.
 minimized: bool = false,
@@ -1486,6 +1493,15 @@ pub fn surfaceTitleChanged(self: *Window, surface: *Surface) void {
     } else self.titleChanged();
 }
 
+/// A terminal's cell size changed (its font size, say). A split keeps
+/// each side at least a cell wide, so a terminal in one is laid out
+/// again, later: the core is still changing its font.
+pub fn cellSizeChanged(self: *Window, surface: *const Surface) void {
+    const tab = self.tabOf(surface) orelse return;
+    if (tab.isSingle() or self.layout_posted) return;
+    if (c.PostMessageW(self.hwnd, WM_GHOSTTY_LAYOUT, 0, 0) != 0) self.layout_posted = true;
+}
+
 fn titleChanged(self: *Window) void {
     self.title_change_posted = false;
     self.tab_bar.invalidate();
@@ -2461,6 +2477,12 @@ pub fn wndProc(
 
         WM_GHOSTTY_TITLE_CHANGED => {
             self.titleChanged();
+            return 0;
+        },
+
+        WM_GHOSTTY_LAYOUT => {
+            self.layout_posted = false;
+            self.layout();
             return 0;
         },
 

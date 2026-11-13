@@ -3559,6 +3559,14 @@ Notes:
     moves 200. Without the change the terminal shrank to nothing and
     the test failed. It passed here, with session-restore,
     command-palette and overlays.
+  - [x] The minimum follows the font (upstream's "update the split
+        minimum when the config changes"): a terminal's cell size
+        changing (`cell_size`, from a font size change) lays its window
+        out again, from a posted `WM_GHOSTTY_LAYOUT` (the core is still
+        changing the font). A config reload already did. `splits.ps1`
+        makes a terminal at its minimum use a larger font
+        (`increase_font_size:12`): 29 pixels became 48. Without the
+        change it stayed 29 and the test failed.
 - [x] Unimplemented apprt actions (as of 2026-10-25)
   - [x] `show_on_screen_keyboard`: toggles the touch keyboard through the
         shell's (undocumented) `ITipInvocation`, starting TabTip.exe if
