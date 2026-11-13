@@ -3566,7 +3566,8 @@ Notes:
         changing the font). A config reload already did. `splits.ps1`
         makes a terminal at its minimum use a larger font
         (`increase_font_size:12`): 29 pixels became 48. Without the
-        change it stayed 29 and the test failed.
+        change it stayed 29 and the test failed. CI run 43416763025
+        passed (14 pixels became 23 there).
   - CI run 43407598927 (the one-cell minimum) passed; its log has the
     resize steps (14 pixels there, a smaller cell).
 - [x] A clipboard question showed only the text of a Kitty request with
