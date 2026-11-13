@@ -2185,7 +2185,9 @@ Notes:
       30% is 30% wide, and removing hides it. It passed here. Its first
       CI run (43437893650) found the runners have animation effects off,
       so the piece waited in the middle, as it should; the test now
-      checks that there, then turns them on for the rest.
+      checks that there, then turns them on for the rest. CI run
+      43443391888 passed: the piece waited at 201 of 501 pixels, then
+      moved, waited while hidden and moved once shown.
   - [x] Desktop notifications (OSC 9 and OSC 777) as toasts
 - [x] Command-finished notifications
   - [x] Configured bell action and duration/focus filtering
