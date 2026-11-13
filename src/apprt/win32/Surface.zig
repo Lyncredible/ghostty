@@ -1393,18 +1393,29 @@ fn kittyWrite(self: *Surface, state: apprt.ClipboardRequest) void {
     };
 }
 
-/// What a confirmation shows of clipboard contents: the text, or else
-/// each representation's type and size.
+/// What a confirmation shows of clipboard contents: every representation,
+/// so nothing is allowed unseen (as GTK does). The text alone is shown as
+/// it is; with others, each one's type and size come first (the preview
+/// is cut short after a few lines) and the text last, under its type.
 fn clipboardPreview(alloc: Allocator, contents: anytype) ![:0]u8 {
-    for (contents) |content| {
-        if (terminal.clipboard.isTextMime(content.mime)) return alloc.dupeSentinel(u8, content.data, 0);
-    }
+    const shown: ?usize = for (contents, 0..) |content, i| {
+        if (terminal.clipboard.isTextMime(content.mime)) break i;
+    } else null;
+    if (shown) |i| if (contents.len == 1) return alloc.dupeSentinel(u8, contents[i].data, 0);
     var text: std.Io.Writer.Allocating = .init(alloc);
     defer text.deinit();
+    var first = true;
     for (contents, 0..) |content, i| {
-        if (i > 0) try text.writer.writeByte('\n');
+        if (shown == i) continue;
+        if (!first) try text.writer.writeByte('\n');
+        first = false;
         try text.writer.print("{s} ({d} bytes)", .{ content.mime, content.data.len });
     }
+    if (shown) |i| try text.writer.print("\n{s} ({d} bytes):\n{s}", .{
+        contents[i].mime,
+        contents[i].data.len,
+        contents[i].data,
+    });
     return text.toOwnedSliceSentinel(0);
 }
 
@@ -1413,11 +1424,18 @@ test clipboardPreview {
     const alloc = testing.allocator;
     const Content = terminal.clipboard.Content;
     const text = try clipboardPreview(alloc, &[_]Content{
-        .{ .mime = "image/png", .data = "PNG" },
         .{ .mime = "text/plain", .data = "hello" },
     });
     defer alloc.free(text);
     try testing.expectEqualStrings("hello", text);
+    // Nothing else is allowed unseen: the image is listed, and the HTML.
+    const both = try clipboardPreview(alloc, &[_]Content{
+        .{ .mime = "image/png", .data = "PNG" },
+        .{ .mime = "text/plain", .data = "hello" },
+        .{ .mime = "text/html", .data = "<b>" },
+    });
+    defer alloc.free(both);
+    try testing.expectEqualStrings("image/png (3 bytes)\ntext/html (3 bytes)\ntext/plain (5 bytes):\nhello", both);
     const types = try clipboardPreview(alloc, &[_]Content{
         .{ .mime = "image/png", .data = "1234" },
         .{ .mime = "text/html", .data = "<b>" },

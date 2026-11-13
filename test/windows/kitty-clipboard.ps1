@@ -4,7 +4,8 @@
 # (mode 5522), after which a paste sends the listing instead of the text.
 # The clipboard then has the text for other programs too. In CI, a second
 # run asks first (`clipboard-write` and `clipboard-read` = ask): allowing
-# the write writes, and denying the read answers EPERM. A third checks the
+# the write writes (its question lists the type of its own along with the
+# text), and denying the read answers EPERM. A third checks the
 # question's "Remember choice" box: a write with a password, allowed and
 # remembered, isn't asked about again, and nor is an OSC 52 read after one
 # that was.
@@ -43,6 +44,7 @@ public static void Key(System.IntPtr h, int vk, int scan) {
 }
 '@
 $W = [GhosttyKittyClipboard.Win32]
+Add-Type -AssemblyName UIAutomationClient, UIAutomationTypes
 
 $work = Join-Path ([IO.Path]::GetTempPath()) "ghostty-kitty-clipboard-$PID"
 New-Item -ItemType Directory -Force $work | Out-Null
@@ -174,11 +176,23 @@ function Dialog {
     }
 }
 
+# The text in a dialog (its message and preview), by UI Automation.
+function DialogText($dialog) {
+    $element = [System.Windows.Automation.AutomationElement]::FromHandle($dialog)
+    $all = $element.FindAll([System.Windows.Automation.TreeScope]::Descendants, [System.Windows.Automation.Condition]::TrueCondition)
+    (@($all) | ForEach-Object { $_.Current.Name }) -join "`n"
+}
+
 # Answer the question: 1 is the accept button (Allow), 2 the reject one
 # (Deny), pressed with TDM_CLICK_BUTTON until the dialog is ready and goes
-# (the next question can follow at once, with the same title).
-function Answer([int]$button, [string]$what, [switch]$Remember) {
+# (the next question can follow at once, with the same title). With
+# -Shows, the question's text must have that in it.
+function Answer([int]$button, [string]$what, [switch]$Remember, [string]$Shows) {
     $dialog = WaitFor { Dialog } "the question about the $what"
+    if ($Shows) {
+        $shown = WaitFor { $t = DialogText $dialog; if ($t.Contains($Shows)) { $t } } "the question about the $what to show '$Shows'"
+        Write-Host "The question about the $what showed: $($shown -replace "`r?`n", ' | ')"
+    }
     # TDM_CLICK_VERIFICATION: check the "Remember choice" box.
     if ($Remember) { [void]$W::SendMessageW($dialog, 0x0471, [IntPtr]1, [IntPtr]::Zero) }
     [void](WaitFor {
@@ -238,7 +252,8 @@ try {
     if ($env:CI -eq 'true') {
         Set-Clipboard -Value 'before the question'
         Launch @('--clipboard-read=ask', '--clipboard-write=ask') 'ask'
-        Answer 1 'write'
+        # It shows both: the type of its own isn't allowed unseen.
+        Answer 1 'write' -Shows "application/x-ghostty-test (12 bytes)"
         Answer 2 'read'
         $replies = Replies
         Close
