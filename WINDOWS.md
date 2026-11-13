@@ -2674,6 +2674,10 @@ Notes:
     pseudoconsole, pipes, threads and a process): over 25 rounds they
     fell by 11, and 40 rounds of only tabs and splits (80 terminals
     opened and closed) left them at -3. No handle leak.
+    Since 2026-11-13 each round also shows the progress bar at a
+    percentage, sliding, as an error and removed (it paints with a new
+    brush each time). No growth here over 25 rounds; with the brush's
+    `DeleteObject` taken out, the test failed (344 GDI objects).
   - Memory leaks (2026-11-09): Debug builds use Zig's debug allocator,
     which reports what's still allocated when Ghostty exits normally,
     but every UI test ended it with `Stop-Process`. The new

@@ -3,8 +3,9 @@
 # paint and never deleted would make drawing fail after a long session.
 # After a warm-up round, it repeats a round of UI work (the search bar,
 # the command palette, a new tab and closing it, a split and closing it,
-# resizing the window, hovering the tab bar, fullscreen and back, and a
-# split zoomed and back) and checks that the
+# resizing the window, hovering the tab bar, fullscreen and back, a
+# split zoomed and back, and the progress bar shown at a percentage,
+# sliding, as an error and removed) and checks that the
 # counts (GetGuiResources) stay about where they were. Input is posted
 # to Ghostty's windows, so it runs on a locked desktop.
 #
@@ -16,7 +17,7 @@ param(
     # Objects a round may add on average before it counts as a leak.
     [double]$PerRound = 0.5,
     # Which steps a round does (all by default), to find a leak.
-    [string[]]$Steps = @('search', 'palette', 'tab', 'split', 'resize', 'hover', 'fullscreen', 'zoom'),
+    [string[]]$Steps = @('search', 'palette', 'tab', 'split', 'resize', 'hover', 'fullscreen', 'zoom', 'progress'),
     [int]$TimeoutSeconds = 30
 )
 
@@ -32,6 +33,10 @@ public static void Key(System.IntPtr h, int vk, int scan) {
   uint up = 1u | ((uint)scan << 16) | (3u << 30);
   PostMessageW(h, 0x0101, (System.IntPtr)vk, (System.IntPtr)unchecked((int)up));
 }
+public static void Type(System.IntPtr h, string s) {
+  foreach (char ch in s) { PostMessageW(h, 0x0102, (System.IntPtr)ch, (System.IntPtr)1); System.Threading.Thread.Sleep(5); }
+}
+[DllImport("user32.dll")] public static extern bool IsWindowVisible(System.IntPtr h);
 public static void Move(System.IntPtr h, int x, int y) {
   PostMessageW(h, 0x0200, System.IntPtr.Zero, (System.IntPtr)((y << 16) | (x & 0xFFFF)));
 }
@@ -130,7 +135,29 @@ function Round([int]$i) {
         $W::Key($split, 0x7A, 0x57)   # F11: close_surface
         [void](WaitFor { @(Surfaces).Count -eq $tabs } 'the zoomed split to close')
     }
+    if ($Steps -contains 'progress') {
+        # cmd's prompt sends each report ($E is ESC), so the bar is made,
+        # placed, painted and hidden.
+        $surface = @(Surfaces)[0]
+        $percent = 10 + ($i * 7) % 80
+        foreach ($report in @("1;$percent", '3', "2;$percent", '0')) {
+            $W::Type($surface, 'prompt $E]9;4;' + $report + '$E\$G' + "`r")
+            if ($report -eq '0') {
+                [void](WaitFor { -not (ProgressShown $surface) } 'the progress bar to go')
+            } elseif ($report -like '1;*') {
+                [void](WaitFor { ProgressShown $surface } "the progress bar at $percent%")
+            } else {
+                Start-Sleep -Milliseconds 150
+            }
+        }
+    }
     Start-Sleep -Milliseconds 200
+}
+
+# Whether a terminal's progress bar shows.
+function ProgressShown($surface) {
+    $bar = $W::FindWindowExW($surface, [IntPtr]::Zero, 'GhosttyProgressBar', [NullString]::Value)
+    $bar -ne [IntPtr]::Zero -and $W::IsWindowVisible($bar)
 }
 
 try {
