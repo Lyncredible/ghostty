@@ -3,8 +3,10 @@
 # Explorer restarts while a notification is up (the icon stays only
 # while one shows, so Ghostty thought it was still there and every later
 # notification failed). The test deletes the icon itself, as Explorer's
-# restart would. Last, clicking the notification (its message, posted to
-# Ghostty) brings back the minimized window it came from. It shows
+# restart would. Then clicking the notification (its message, posted to
+# Ghostty) brings back the minimized window it came from. Last, as on GTK
+# and macOS, a notification is withdrawn once its terminal is focused (a
+# split sends one while the other has the focus) or closes. It shows
 # notifications, so it only runs in CI (or with $env:CI = 'true').
 #
 #     ./notification.ps1 -Exe zig-out/bin/ghostty.exe
@@ -33,6 +35,24 @@ public struct NOTIFYICONDATAW {
 [DllImport("user32.dll")] public static extern bool PostMessageW(System.IntPtr h, uint m, System.IntPtr w, System.IntPtr l);
 [DllImport("user32.dll")] public static extern bool ShowWindow(System.IntPtr h, int cmd);
 [DllImport("user32.dll")] public static extern bool IsIconic(System.IntPtr h);
+[DllImport("user32.dll", CharSet = CharSet.Unicode)] public static extern System.IntPtr FindWindowExW(System.IntPtr parent, System.IntPtr after, string cls, string title);
+[DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(System.IntPtr h, out uint pid);
+[StructLayout(LayoutKind.Sequential)] public struct RECT { public int l, t, r, b; }
+[StructLayout(LayoutKind.Sequential)] public struct GUITHREADINFO {
+  public int size; public uint flags; public System.IntPtr active, focus, capture, menuOwner, moveSize, caret; public RECT caretRect; }
+[DllImport("user32.dll")] public static extern bool GetGUIThreadInfo(uint thread, ref GUITHREADINFO info);
+public static void Key(System.IntPtr h, int vk, int scan) {
+  PostMessageW(h, 0x0100, (System.IntPtr)vk, (System.IntPtr)(1 | (scan << 16)));
+  System.Threading.Thread.Sleep(30);
+  uint up = 1u | ((uint)scan << 16) | (3u << 30);
+  PostMessageW(h, 0x0101, (System.IntPtr)vk, (System.IntPtr)unchecked((int)up));
+}
+// The window with the keyboard focus on the thread of `window`.
+public static System.IntPtr Focus(System.IntPtr window) {
+  uint pid; uint thread = GetWindowThreadProcessId(window, out pid);
+  var info = new GUITHREADINFO(); info.size = Marshal.SizeOf(info);
+  return GetGUIThreadInfo(thread, ref info) ? info.focus : System.IntPtr.Zero;
+}
 '@
 $W = [GhosttyNotification.Win32]
 
@@ -53,6 +73,16 @@ while (-not (Test-Path $Go)) { Start-Sleep -Milliseconds 100 }
 [Console]::Out.Write("$e]9;second notification$b")
 Start-Sleep -Seconds 600
 '@
+# The left of two splits sends a notification each time the test says so,
+# and exits when it says so after the second.
+Set-Content -Encoding utf8 (Join-Path $dir 'split.ps1') @'
+param([string]$Dir)
+$e = [char]27; $b = [char]7
+foreach ($n in 1, 2, 3) {
+    while (-not (Test-Path "$Dir\go$n")) { Start-Sleep -Milliseconds 100 }
+    if ($n -lt 3) { [Console]::Out.Write("$e]9;notification $n from the left split$b") }
+}
+'@
 
 $class = "com.example.ghostty-notification-$PID"
 $log = Join-Path $dir 'ghostty.log'
@@ -67,8 +97,19 @@ function Fail([string]$message) {
     throw $message
 }
 
-# How many notifications Ghostty showed, from its log.
+# How many notifications Ghostty showed, and withdrew, from its log.
 function Shown { @(Select-String -Path $log -Pattern 'showing notification' -ErrorAction SilentlyContinue).Count }
+function Withdrawn { @(Select-String -Path $log -Pattern 'withdrawing notification' -ErrorAction SilentlyContinue).Count }
+
+# Whether the last notification shown timed out or was hidden
+# (NIN_BALLOONTIMEOUT, NIN_BALLOONHIDE): then it can't be clicked or
+# withdrawn, and CI's Explorer times them out at once.
+function TimedOut {
+    $lines = @(Get-Content $log)
+    $last = 0
+    for ($i = 0; $i -lt $lines.Count; $i++) { if ($lines[$i] -match 'showing notification') { $last = $i } }
+    @($lines[$last..($lines.Count - 1)] | Where-Object { $_ -match 'notification icon event=0x40[34]' }).Count -gt 0
+}
 
 function WaitFor([scriptblock]$condition, [string]$what) {
     $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
@@ -108,24 +149,68 @@ try {
     Get-Content $log | Select-String '(win32).*notification' | ForEach-Object { Write-Host "  $($_.Line)" }
 
     # A click on it brings back its window. The click comes as the icon's
-    # message (WM_APP + 2) with NIN_BALLOONUSERCLICK. A notification that
-    # timed out or was hidden (NIN_BALLOONTIMEOUT, NIN_BALLOONHIDE) can't
-    # be clicked, and CI's Explorer times them out at once.
+    # message (WM_APP + 2) with NIN_BALLOONUSERCLICK.
     Start-Sleep -Milliseconds 500
-    $lines = @(Get-Content $log)
-    $last = 0
-    for ($i = 0; $i -lt $lines.Count; $i++) { if ($lines[$i] -match 'showing notification') { $last = $i } }
-    if (@($lines[$last..($lines.Count - 1)] | Where-Object { $_ -match 'notification icon event=0x40[34]' }).Count -gt 0) {
+    if (TimedOut) {
         Write-Host '::notice title=notification::The notification timed out at once, so its click isn''t checked here.'
+    } else {
+        $process.Refresh()
+        $window = $process.MainWindowHandle
+        [void]$W::ShowWindow($window, 6)   # SW_MINIMIZE
+        [void](WaitFor { $W::IsIconic($window) } 'the window to minimize')
+        [void]$W::PostMessageW($messages, 0x8002, [IntPtr]::Zero, [IntPtr]0x405)
+        [void](WaitFor { -not $W::IsIconic($window) } 'the click to bring back the window')
+        Write-Host 'Clicking the notification brought back its minimized window.'
+    }
+    Stop-Process -Id $process.Id -Force
+    Start-Sleep -Milliseconds 500
+
+    # Withdrawn: the left split sends a notification while the right one
+    # has the focus, and it goes once the left one is focused; then
+    # another, which goes when the left one closes.
+    $log = Join-Path $dir 'split.log'
+    $process = Start-Process -FilePath $Exe -PassThru -RedirectStandardError $log -ArgumentList "--class=$class-split",
+        '--window-save-state=never', '--confirm-close-surface=false', '--command=cmd.exe',
+        "`"--initial-command=powershell.exe -NoProfile -ExecutionPolicy Bypass -File $dir\split.ps1 -Dir $dir`"",
+        '--keybind=f5=new_split:right', '--keybind=f6=goto_split:left', '--keybind=f7=goto_split:right'
+    $window = WaitFor { $process.Refresh(); if ($process.MainWindowHandle -ne 0) { $process.MainWindowHandle } } 'the window'
+    $left = WaitFor { $h = $W::FindWindowExW($window, [IntPtr]::Zero, 'GhosttySurface', [NullString]::Value); if ($h -ne [IntPtr]::Zero) { $h } } 'the terminal'
+    Start-Sleep -Seconds 1
+    $W::Key($left, 0x74, 0x3F)   # F5: new_split:right
+    $right = WaitFor {
+        $h = [IntPtr]::Zero
+        while (($h = $W::FindWindowExW($window, $h, 'GhosttySurface', [NullString]::Value)) -ne [IntPtr]::Zero) { if ($h -ne $left) { return $h } }
+    } 'the split'
+    [void](WaitFor { $W::Focus($window) -eq $right } 'the new split to have the focus')
+
+    # A notification that already timed out has nothing to withdraw (CI's
+    # Explorer times them out at once); one still showing must go, not
+    # time out later.
+    Set-Content (Join-Path $dir 'go1') 'go'
+    [void](WaitFor { (Shown) -ge 1 } "the left split's notification")
+    Start-Sleep -Milliseconds 500
+    if (TimedOut) {
+        Write-Host '::notice title=notification::The notification timed out at once, so withdrawing it isn''t checked here.'
         exit 0
     }
-    $process.Refresh()
-    $window = $process.MainWindowHandle
-    [void]$W::ShowWindow($window, 6)   # SW_MINIMIZE
-    [void](WaitFor { $W::IsIconic($window) } 'the window to minimize')
-    [void]$W::PostMessageW($messages, 0x8002, [IntPtr]::Zero, [IntPtr]0x405)
-    [void](WaitFor { -not $W::IsIconic($window) } 'the click to bring back the window')
-    Write-Host 'Clicking the notification brought back its minimized window.'
+    $W::Key($right, 0x75, 0x40)   # F6: goto_split:left
+    [void](WaitFor { $W::Focus($window) -eq $left } 'goto_split:left to focus the left terminal')
+    [void](WaitFor { (Withdrawn) -ge 1 } 'focusing the left split to withdraw its notification')
+    Write-Host 'Focusing the left split withdrew its notification.'
+
+    $W::Key($left, 0x76, 0x41)    # F7: goto_split:right
+    [void](WaitFor { $W::Focus($window) -eq $right } 'goto_split:right to focus the right terminal')
+    Start-Sleep -Seconds 2        # notifications more often than once a second are dropped
+    Set-Content (Join-Path $dir 'go2') 'go'
+    [void](WaitFor { (Shown) -ge 2 } "the left split's second notification")
+    Start-Sleep -Milliseconds 500
+    if (TimedOut) {
+        Write-Host '::notice title=notification::The second notification timed out at once, so withdrawing it on close isn''t checked here.'
+        exit 0
+    }
+    Set-Content (Join-Path $dir 'go3') 'go'   # the left split's shell exits
+    [void](WaitFor { (Withdrawn) -ge 2 } 'closing the left split to withdraw its notification')
+    Write-Host 'The left split closing withdrew its second notification.'
 } finally {
     if (-not $process.HasExited) { Stop-Process -Id $process.Id -Force }
     Start-Sleep -Milliseconds 500

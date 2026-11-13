@@ -629,10 +629,14 @@ Checks desktop notifications (OSC 9): one shows from the notification area
 icon, and another still shows after the icon is deleted, as Explorer's
 restart would delete it while a notification is up. (CI's Explorer times
 notifications out at once, taking the icon, so there those two checks are
-notices and only the second notification is checked.) Last, clicking the
+notices and only the second notification is checked.) Then clicking the
 notification (its message, posted to Ghostty) brings back the minimized
-window it came from. It shows notifications, so it only runs in CI (or with
-`$env:CI = 'true'`).
+window it came from. Last, as on GTK and macOS, a notification is
+withdrawn once its terminal is focused or closes: the left of two splits
+sends one while the right has the focus, and `goto_split:left` must
+withdraw it (from Ghostty's log), then another, which its shell exiting
+must withdraw. One that timed out already is a notice (as in CI). It
+shows notifications, so it only runs in CI (or with `$env:CI = 'true'`).
 
 ## uia-ranges.ps1
 

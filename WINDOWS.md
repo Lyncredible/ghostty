@@ -3583,6 +3583,31 @@ Notes:
     Automation, which must list `application/x-ghostty-test (12
     bytes)`. Without the change it showed only the text and the test
     failed. It passed here, all three runs.
+- [x] A notification stayed up after its terminal was focused or closed
+      (found 2026-11-13, from upstream's GTK "clear surface
+      notifications on focus and close", which macOS does too): the
+      toast stayed, and once its terminal closed a click did nothing.
+      Now `Notifier.withdraw` takes it down when the terminal that sent
+      it gets the focus or is destroyed (a notification from the app
+      itself stays). GTK also lets a notification sent while its
+      terminal is focused expire after three seconds; a balloon times
+      out by itself, so that isn't here.
+  - Tests: `withdraw` (only the sender's notification goes), and
+    `notification.ps1` with two splits: the left one's notification,
+    sent while the right one had the focus, went once `goto_split:left`
+    focused it, and its second went when its shell exited. Without the
+    change the first stayed and the test failed. It passed here. In
+    CI's Explorer notifications time out at once, so there these are
+    notices.
+  - Also from upstream's GTK changes, nothing to do on Windows: moving
+    a split between windows (Windows moves splits only within a tab),
+    the close button position (`gtk-tabs-close-button-position`, a GTK
+    option), the jumps when resizing by keybind (`GtkPaned`'s), the
+    mouse cursor while selecting (GTK looked it up on the wrong widget;
+    Windows sets it on the terminal's window, and capture keeps it),
+    the IME's position during preedit (already moved on every
+    composition change, over the whole cell), and the palette's colors
+    with `window-theme=ghostty` (ours always uses the terminal's).
 - [x] Unimplemented apprt actions (as of 2026-10-25)
   - [x] `show_on_screen_keyboard`: toggles the touch keyboard through the
         shell's (undocumented) `ITipInvocation`, starting TabTip.exe if
