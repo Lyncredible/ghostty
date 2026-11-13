@@ -1617,6 +1617,15 @@ Notes:
         packet; adopting still sends the first). Here the tabs, splits,
         session restore and handoff tests pass (handoff resizes a
         console for real: 45 columns, then 24).
+  - [x] It happened again in run 43455876603 (11e64e563, the
+        thirty-fourth sync), in a tab made after others had closed:
+        `echo MOVE-THIS-TA`, a line break, `B` in a 75-column terminal,
+        and the output below it, whole. So cmd got the line; only its
+        echo on the screen broke, on the old console host alone. The
+        test needs the output, not the echo: `Mark` now types a caret
+        in the word (`echo M^OVE-THIS-TAB`, which cmd's echo prints
+        without it) and waits for the word once, which only the output
+        can match. `tabs.ps1` passed here.
 - [x] Tip builds, like upstream's `release-tip.yml` (the discussion's
       release workflow item): a rolling prerelease of the latest
       `windows` commit, so people can try it without building. Approved
