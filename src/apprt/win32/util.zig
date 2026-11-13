@@ -362,6 +362,16 @@ pub fn highContrast() bool {
     return hc.dwFlags & c.HCF_HIGHCONTRASTON != 0;
 }
 
+/// The system accent color, falling back to a Windows blue, or a high
+/// contrast theme's highlight color.
+pub fn accentColor() c.COLORREF {
+    if (highContrast()) return c.GetSysColor(c.COLOR_HIGHLIGHT);
+    var argb: c.DWORD = 0;
+    var opaque_blend: c.BOOL = 0;
+    if (c.DwmGetColorizationColor(&argb, &opaque_blend) < 0) return rgb(0, 120, 215);
+    return rgb(@truncate(argb >> 16), @truncate(argb >> 8), @truncate(argb));
+}
+
 /// Whether Windows animates its controls and windows (Settings >
 /// Accessibility > Visual effects > Animation effects). Our own
 /// animations are skipped when it's off.
