@@ -458,6 +458,15 @@ fn chooseSelected(self: *CommandPalette) void {
     if (index >= self.entries.len) return;
     const choice = self.entries[index].choice;
 
+    // The choice's action (its text, for `text:` and the like) is in the
+    // arena, which closing frees: keep it until the action has run. It's
+    // freed without touching `self`, as the action can close the surface
+    // and with it the palette.
+    var arena = self.arena;
+    self.arena = null;
+    self.entries = &.{};
+    defer if (arena) |*v| v.deinit();
+
     // Close first, so that the action runs with the surface focused.
     self.hide();
     _ = c.SetFocus(c.GetParent(self.hwnd));

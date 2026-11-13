@@ -3509,6 +3509,17 @@ Notes:
     second OSC 52 read aren't asked about. Without the change the
     repeated write was asked again and the OSC 52 read's question went
     unanswered. It passed here; paste-race and dialog-race too.
+- [x] A command palette entry whose action carries text crashed Ghostty
+      (found 2026-11-12, reviewing `CommandPalette.zig`): choosing an
+      entry closed the palette, which freed the entries (their actions
+      were cloned into its arena), and then ran the action. A
+      `command-palette-entry` with `text:`, `csi:` or `esc:` read freed
+      memory: a segfault in `config.string.parse`. Now the arena is
+      kept until the action has run, and freed without touching the
+      palette, which the action may have closed with its surface.
+  - Test: `command-palette.ps1` adds an entry
+    (`text:echo palette-ok>palette.txt\x0d`), chooses it, and checks the
+    file. Without the fix Ghostty crashed there; with it it passed here.
 - [x] Unimplemented apprt actions (as of 2026-10-25)
   - [x] `show_on_screen_keyboard`: toggles the touch keyboard through the
         shell's (undocumented) `ITipInvocation`, starting TabTip.exe if
