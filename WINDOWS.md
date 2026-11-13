@@ -3522,6 +3522,16 @@ Notes:
     (`text:echo palette-ok>palette.txt\x0d`), chooses it, and checks the
     file. Without the fix Ghostty crashed there; with it it passed here,
     and in CI run 43396498162 (its log has the text entry's check).
+- [x] Review of UI Automation (`Accessibility.zig`, 2026-11-13): nothing
+      to change. Checked what clients control: a text unit outside
+      UIA's (`TextRange.Unit` is a non-exhaustive `enum(i32)`, so any
+      value is one, handled as the nearest unit), a point anywhere
+      (saturated), a range from another snapshot (`MoveEndpointByRange`
+      clamps to this one's text), ranges of another provider (refused by
+      their vtable), and `GetText` lengths (an emoji isn't cut in half).
+      References are atomic, a detached provider answers
+      `UIA_E_ELEMENTNOTAVAILABLE`, and the text is read under the
+      renderer mutex.
 - [x] Unimplemented apprt actions (as of 2026-10-25)
   - [x] `show_on_screen_keyboard`: toggles the touch keyboard through the
         shell's (undocumented) `ITipInvocation`, starting TabTip.exe if
