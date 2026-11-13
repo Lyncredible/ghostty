@@ -3436,7 +3436,7 @@ Notes:
       test, and `search.ps1` now sends its next, previous and
       `end_search` keys to the field (it fails without the change).
       A sequence's leader typed in the field waits for its next key in
-      the terminal.
+      the terminal. CI run 43344097139 passed on all five jobs.
 - [x] Ctrl+Backspace in the search field and the command palette
       (2026-11-12) typed a box (U+007F, the key's character, as plain
       edit controls do) instead of deleting the word before the caret.
