@@ -315,7 +315,10 @@ Ghostty's own window. (The link preview needs a real Ctrl key, so
 Checks `set_window_theme` with `theme = light:Builtin Light,dark:Builtin
 Dark`: forcing the window theme opposite to Windows's app mode shows the
 other theme, it outlasts a config reload, forcing the other one and back
-works, and `config` follows the app mode again. Keys bound to the actions
+works, and `config` follows the app mode again. Then, started with
+`window-theme` opposite to the app mode, that theme shows (as on GTK, a
+light or dark window theme forces the color scheme), until
+`set_window_theme:system` follows the app mode. Keys bound to the actions
 are posted to the terminal and the background is read with `PrintWindow`,
 so it runs on a locked desktop and changes no desktop settings.
 
