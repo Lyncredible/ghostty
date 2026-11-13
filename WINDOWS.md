@@ -3460,7 +3460,8 @@ Notes:
       only runs in CI). Checked the values from the configuration that
       become integers (`unfocused-split-opacity`, saved split ratios,
       the quick terminal's animation, the bell's volume): all clamped,
-      with NaN too.
+      with NaN too. CI run 43367365077 passed on all five jobs; its log
+      has the new title dialog, search field and window size checks.
 - [x] Unimplemented apprt actions (as of 2026-10-25)
   - [x] `show_on_screen_keyboard`: toggles the touch keyboard through the
         shell's (undocumented) `ITipInvocation`, starting TabTip.exe if
