@@ -523,6 +523,57 @@ pub fn unsubclass(hwnd: c.HWND, original: c.WNDPROC) void {
     if (original) |proc| _ = c.SetWindowLongPtrW(hwnd, c.GWLP_WNDPROC, @bitCast(@intFromPtr(proc)));
 }
 
+/// Ctrl+Backspace in one of our edit fields (of up to 1023 characters):
+/// deletes the selection, or else the word before the caret. Edit
+/// controls type a box (U+007F, the key's character) for it otherwise.
+pub fn deleteWordBefore(edit: c.HWND) void {
+    var start: c.DWORD = 0;
+    var end: c.DWORD = 0;
+    _ = c.SendMessageW(edit, c.EM_GETSEL, @intFromPtr(&start), @bitCast(@intFromPtr(&end)));
+    if (start == end) {
+        var buf: [1024]u16 = undefined;
+        const len: usize = @intCast(@max(0, c.GetWindowTextW(edit, &buf, buf.len)));
+        if (end > len) return;
+        start = @intCast(wordStart(buf[0..len], end));
+        _ = c.SendMessageW(edit, c.EM_SETSEL, start, @intCast(end));
+    }
+    const empty = std.unicode.utf8ToUtf16LeStringLiteral("");
+    _ = c.SendMessageW(edit, c.EM_REPLACESEL, c.TRUE, @bitCast(@intFromPtr(empty)));
+}
+
+/// Where the word before `caret` starts, past any spaces: a run of
+/// letters and digits (any non-ASCII character counts as one, so a
+/// surrogate pair isn't split), or of punctuation.
+fn wordStart(text: []const u16, caret: usize) usize {
+    var i = caret;
+    while (i > 0 and text[i - 1] <= ' ') i -= 1;
+    if (i == 0) return 0;
+    const word = isWordUnit(text[i - 1]);
+    while (i > 0 and text[i - 1] > ' ' and isWordUnit(text[i - 1]) == word) i -= 1;
+    return i;
+}
+
+fn isWordUnit(unit: u16) bool {
+    return unit >= 0x80 or unit == '_' or std.ascii.isAlphanumeric(@intCast(unit));
+}
+
+test wordStart {
+    const testing = std.testing;
+    const L = std.unicode.utf8ToUtf16LeStringLiteral;
+    try testing.expectEqual(0, wordStart(L(""), 0));
+    try testing.expectEqual(4, wordStart(L("foo bar"), 7));
+    try testing.expectEqual(0, wordStart(L("foo bar"), 4));
+    try testing.expectEqual(0, wordStart(L("foo bar"), 2));
+    try testing.expectEqual(0, wordStart(L("   "), 3));
+    // Punctuation is a word of its own.
+    try testing.expectEqual(4, wordStart(L("foo.bar"), 7));
+    try testing.expectEqual(3, wordStart(L("foo.bar"), 4));
+    try testing.expectEqual(4, wordStart(L("foo --x"), 6));
+    // Letters beyond ASCII, and an emoji's pair, stay whole.
+    try testing.expectEqual(4, wordStart(L("abc Grüße"), 9));
+    try testing.expectEqual(2, wordStart(L("a \u{1F600}"), 4));
+}
+
 /// A handle (HWND, HDC, ...) passed in a message's WPARAM or LPARAM.
 /// Handles aren't pointers to aligned memory, so `@ptrFromInt` would fail
 /// its alignment check for many of them; we reinterpret the bits instead.
