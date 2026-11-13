@@ -3817,7 +3817,15 @@ Notes:
         kept off the transparent color key (`avoidKey`), and the
         overlay's opacity for `unfocused-split-opacity`
         (`DimOverlay.alphaFor`). `overlays.ps1` passes here; the bell
-        and high contrast tests run only in CI.
+        and high contrast tests run only in CI. CI run 43524213382
+        (62cb45874) passed every job.
+  - [x] The inspector window had none either. The seconds since its
+        last frame, which Dear ImGui asserts are more than 0 (a 60th
+        for the first frame, and never 0 for frames at the same instant),
+        are now `InspectorWindow.deltaTime`, with a unit test. Every
+        file in `src/apprt/win32` now has unit tests and is in the
+        test list.
+        `memory-leak.ps1`, which opens the inspector, passes here.
   - [x] The other actions Win32 doesn't handle (found 2026-11-06), left
         unhandled on purpose: `show_child_exited` (unhandled, the core
         prints "Process exited. Press any key to close the terminal." in

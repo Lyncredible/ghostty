@@ -219,6 +219,14 @@ fn ensureTarget(self: *InspectorWindow) !*d3d.ID3D11RenderTargetView {
     return target.?;
 }
 
+/// The seconds since the last frame, for Dear ImGui, which asserts that
+/// they're more than 0: a 60th of a second for the first frame.
+fn deltaTime(since_last: ?std.Io.Duration) f32 {
+    const last = since_last orelse return 1.0 / 60.0;
+    const ns: f64 = @floatFromInt(last.nanoseconds);
+    return @max(0.00001, @as(f32, @floatCast(ns / std.time.ns_per_s)));
+}
+
 fn render(self: *InspectorWindow) void {
     if (self.rendering) return;
     self.rendering = true;
@@ -229,10 +237,7 @@ fn render(self: *InspectorWindow) void {
 
     const io: *cimgui.c.ImGuiIO = cimgui.c.ImGui_GetIO();
     const now: std.Io.Timestamp = .now(global.io(), .awake);
-    io.DeltaTime = if (self.last_frame) |prev| delta: {
-        const ns: f64 = @floatFromInt(prev.durationTo(now).nanoseconds);
-        break :delta @max(0.00001, @as(f32, @floatCast(ns / std.time.ns_per_s)));
-    } else 1.0 / 60.0;
+    io.DeltaTime = deltaTime(if (self.last_frame) |prev| prev.durationTo(now) else null);
     self.last_frame = now;
 
     // Like GTK, we draw twice, since some ImGui behaviors take two frames.
@@ -321,4 +326,14 @@ pub fn wndProc(hwnd: c.HWND, msg: c.UINT, wparam: c.WPARAM, lparam: c.LPARAM) ca
         else => {},
     }
     return c.DefWindowProcW(hwnd, msg, wparam, lparam);
+}
+
+test deltaTime {
+    const testing = std.testing;
+    try testing.expectEqual(@as(f32, 1.0 / 60.0), deltaTime(null));
+    try testing.expectApproxEqAbs(@as(f32, 0.05), deltaTime(.{ .nanoseconds = 50 * std.time.ns_per_ms }), 1e-6);
+    // Frames at the same instant, or a clock that went back, still pass
+    // ImGui's check.
+    try testing.expect(deltaTime(.{ .nanoseconds = 0 }) > 0);
+    try testing.expect(deltaTime(.{ .nanoseconds = -5 }) > 0);
 }
