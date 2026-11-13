@@ -367,7 +367,10 @@ right one has the focus (the taskbar button only shows the focused one's):
 fifth of its width that slides across, an error at 30% a bar 30% wide, and
 removing it hides it. While the terminal is hidden (the other split
 zoomed) the piece waits in the middle, so nothing animates unseen, and
-moves again once shown. Windows are read with `GetWindowRect`, so it runs
+moves again once shown. With Windows' animation effects off the piece
+always waits in the middle: CI's runners have them off, so there the test
+checks that, then turns them on for the rest of the test (for the session,
+not saved) and back off. Windows are read with `GetWindowRect`, so it runs
 on a locked desktop.
 
 ## splits.ps1

@@ -2182,7 +2182,10 @@ Notes:
       `progress.ps1` (new, in CI): from an unfocused split, 50% is half
       its width along its top, an unknown amount slides, and waits in
       the middle while hidden by the other split's zoom, an error at
-      30% is 30% wide, and removing hides it. It passed here.
+      30% is 30% wide, and removing hides it. It passed here. Its first
+      CI run (43437893650) found the runners have animation effects off,
+      so the piece waited in the middle, as it should; the test now
+      checks that there, then turns them on for the rest.
   - [x] Desktop notifications (OSC 9 and OSC 777) as toasts
 - [x] Command-finished notifications
   - [x] Configured bell action and duration/focus filtering
