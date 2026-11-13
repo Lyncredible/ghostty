@@ -94,22 +94,25 @@ function Prompt([IntPtr]$surface, [string]$what) {
     [void](WaitFor { (ScreenText $surface) -match '>\s*$' } "the prompt in $what")
 }
 
-# Type `echo <marker>` and wait for it on the screen twice (the command
-# and its output). If nothing of it shows for a while, type it again: on
-# a runner the characters, posted right after the prompt showed, once
+# Type `echo <marker>` and wait for its output. A caret in the typed word
+# (cmd's escape, which echo drops) keeps the command line from matching:
+# Windows Server 2022's console host has broken a typed line in two on
+# the screen (`echo MOVE-THIS-TA`, a line break, `B`) while cmd still
+# got all of it. If nothing shows for a while, type it again: on a
+# runner the characters, posted right after the prompt showed, once
 # never arrived.
 function Mark([IntPtr]$surface, [string]$marker, [string]$what) {
-    $W::Type($surface, "echo $marker`r")
+    $command = "echo $($marker.Substring(0, 1))^$($marker.Substring(1))`r"
+    $W::Type($surface, $command)
     $typed = Get-Date
     [void](WaitFor {
         $text = ScreenText $surface
-        $count = ([regex]::Matches($text, [regex]::Escape($marker))).Count
         $end = ($text.TrimEnd() -replace '\s+', ' ')
-        $script:note = "$count of 2 '$marker' on screen, which ends: '$($end.Substring([Math]::Max(0, $end.Length - 80)))'"
-        if ($count -ge 2) { return $true }
-        if ($count -eq 0 -and ((Get-Date) - $typed).TotalSeconds -gt 8) {
-            Write-Host "::notice title=tabs::typing $marker again: nothing of it showed after 8 s"
-            $W::Type($surface, "echo $marker`r")
+        $script:note = "no '$marker' on screen, which ends: '$($end.Substring([Math]::Max(0, $end.Length - 80)))'"
+        if ($text -match [regex]::Escape($marker)) { return $true }
+        if (((Get-Date) - $typed).TotalSeconds -gt 8) {
+            Write-Host "::notice title=tabs::typing $marker again: it didn't show after 8 s"
+            $W::Type($surface, $command)
             $typed = Get-Date
         }
     } $what)
