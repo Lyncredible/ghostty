@@ -1604,6 +1604,12 @@ Notes:
         job then failed in `tabs.ps1` (see below). With that test fixed,
         CI run 43465658037 (d7e14cb1f) passed every job, and
         `windows-tip` moved.
+  - [x] 2026-11-13: a thirty-fifth sync (6 commits: one `clearCells`
+        for pages and screens, the Kitty temp-dir test skipped under
+        `/tmp`, an action's version). No conflicts; dates kept (898
+        commits checked). The app builds, and the `clearCells` (82),
+        Screen (325) and Kitty tests pass. Pushed as 66e867a87; CI run
+        43478129412 passed every job, and `windows-tip` moved.
   - [x] It failed there again in run 42948447833 (098593a94), now
         saying what was on screen: the command had run (its output was
         there), but the typed line read `echo M`, a line break,
