@@ -110,8 +110,22 @@ try {
             throw
         }
 
-        & (Join-Path $bin 'ghostty.com') +version
-        if ($LASTEXITCODE -ne 0) { throw 'Ghostty version check failed' }
+        # Redirect both streams so this check also works from an interactive
+        # console, where the GUI executable must otherwise attach to a console.
+        $versionStdout = Join-Path $stage 'version.stdout.txt'
+        $versionStderr = Join-Path $stage 'version.stderr.txt'
+        $versionProcess = Start-Process -FilePath (Join-Path $bin 'ghostty.com') -ArgumentList '+version' `
+            -WindowStyle Hidden -Wait -PassThru -RedirectStandardOutput $versionStdout -RedirectStandardError $versionStderr
+        $versionOutput = Get-Content -LiteralPath $versionStdout -Raw
+        $versionErrors = Get-Content -LiteralPath $versionStderr -Raw
+        if ($versionOutput) { Write-Host $versionOutput.TrimEnd() }
+        if ($versionErrors) { Write-Host $versionErrors.TrimEnd() }
+        if ($versionProcess.ExitCode -ne 0) {
+            throw "Ghostty version check failed (exit $($versionProcess.ExitCode)).`n$versionOutput`n$versionErrors"
+        }
+        if ($versionOutput -notmatch '(?m)^Ghostty\s+\S+') {
+            throw 'Ghostty version check returned no version output.'
+        }
 
         # The query test exits its PowerShell process. Run it in a child and
         # hide the temporary test window, leaving the checked-in test intact.
