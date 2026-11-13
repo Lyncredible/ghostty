@@ -3567,6 +3567,22 @@ Notes:
         makes a terminal at its minimum use a larger font
         (`increase_font_size:12`): 29 pixels became 48. Without the
         change it stayed 29 and the test failed.
+  - CI run 43407598927 (the one-cell minimum) passed; its log has the
+    resize steps (14 pixels there, a smaller cell).
+- [x] A clipboard question showed only the text of a Kitty request with
+      more (found 2026-11-13, from upstream's GTK "preview every
+      representation of a clipboard request"): a write or read of text
+      and an image (or any other type) showed the text, so the user
+      allowed data they were never shown. Now (`clipboardPreview`) the
+      other representations are listed first, each type and size (the
+      preview is cut short after a few lines), then the text under its
+      type. Text alone is shown as before. GTK's pages and image
+      preview aren't here; a task dialog has only text.
+  - Tests: `clipboardPreview` (an image, HTML and text), and the "ask"
+    run of `kitty-clipboard.ps1` reads the write's question by UI
+    Automation, which must list `application/x-ghostty-test (12
+    bytes)`. Without the change it showed only the text and the test
+    failed. It passed here, all three runs.
 - [x] Unimplemented apprt actions (as of 2026-10-25)
   - [x] `show_on_screen_keyboard`: toggles the touch keyboard through the
         shell's (undocumented) `ITipInvocation`, starting TabTip.exe if

@@ -584,8 +584,9 @@ which puts the text on the clipboard, reads both back with the listing of
 the types there, and turns on paste events (mode 5522), after which a
 paste (a key bound to `paste_from_clipboard`) sends the listing rather
 than the text. In CI it runs again with `clipboard-write` and
-`clipboard-read` set to `ask`: allowing the write writes, and denying the
-read answers `EPERM`. A third run checks the question's "Remember choice"
+`clipboard-read` set to `ask`: allowing the write writes (its question,
+read by UI Automation, must list the type of its own as well as the
+text), and denying the read answers `EPERM`. A third run checks the question's "Remember choice"
 box (with `TDM_CLICK_VERIFICATION`): after a write with a password (and a
 name) is allowed and remembered, the same write isn't asked about again,
 and nor is an OSC 52 read after one that was; a question that came back
