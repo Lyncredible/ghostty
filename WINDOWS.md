@@ -3444,6 +3444,13 @@ Notes:
       `wordStart` has a unit test with punctuation, letters beyond ASCII
       and an emoji). `search.ps1` checks it (and fails without it), and
       `command-palette.ps1` passes. CI run 43350648379 passed on all five jobs.
+- [x] Review of window sizes (`Window.zig`, 2026-11-12): a huge
+      `window-height` (100000000) aborted Ghostty at start, converting
+      the size to pixels ("integer does not fit in destination type" in
+      `windowSizeFor`); a program's resize request went the same way.
+      Sizes are capped at 2^20 pixels now, past any screen (`scalePoints`,
+      unit test), and `window-options.ps1` checks that such a window
+      opens as tall as Windows allows (it fails without the change).
 - [x] Unimplemented apprt actions (as of 2026-10-25)
   - [x] `show_on_screen_keyboard`: toggles the touch keyboard through the
         shell's (undocumented) `ITipInvocation`, starting TabTip.exe if
