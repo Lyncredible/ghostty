@@ -2,8 +2,12 @@
 # entries, typing `new_split:right` narrows the list, Enter runs the entry
 # (the terminal splits left and right) and closes the palette, and Escape
 # closes it again without doing anything. Then `close_surface`, `undo` and
-# `redo` from the palette close the split, reopen it and close it again. Keys and characters are posted to
-# Ghostty's windows, so it runs on a locked desktop.
+# `redo` from the palette close the split, reopen it and close it again.
+# Last, an entry of our own whose action carries text (`text:`, typing a
+# command that writes a file) runs with its text intact: the palette frees
+# its entries as it closes, which once happened before the action ran.
+# Keys and characters are posted to Ghostty's windows, so it runs on a
+# locked desktop.
 #
 #     ./command-palette.ps1 -Exe zig-out/bin/ghostty.exe
 
@@ -40,9 +44,15 @@ public static void Key(System.IntPtr h, int vk, int scan) {
 $W = [GhosttyPalette.Win32]
 
 $log = Join-Path ([IO.Path]::GetTempPath()) "ghostty-palette-$PID.log"
+$work = Join-Path ([IO.Path]::GetTempPath()) "ghostty-palette-$PID"
+New-Item -ItemType Directory -Force $work | Out-Null
+$written = Join-Path $work 'palette.txt'
+# Quoted, as Start-Process joins the arguments as they are; \x0d is Enter
+# (a backslash before the closing quote would escape it).
 $process = Start-Process -FilePath $Exe -PassThru -RedirectStandardError $log -ArgumentList '--command=cmd.exe',
     '--window-save-state=never', '--keybind=f9=toggle_command_palette',
-    '--confirm-close-surface=false', '--undo-timeout=60s'
+    '--confirm-close-surface=false', '--undo-timeout=60s', "`"--working-directory=$work`"",
+    '"--command-palette-entry=title:Palette Text Check,action:text:echo palette-ok>palette.txt\x0d"'
 
 function Fail([string]$message) {
     Write-Host "::error title=command-palette::$message"
@@ -132,10 +142,19 @@ try {
     Run $one[0] 'undo'
     $two = WaitFor { $t = Terminals; if ($t.Count -eq 2) { $t } } 'undo to reopen the split'
     Run $two[0] 'redo'
-    [void](WaitFor { $t = Terminals; if ($t.Count -eq 1) { $t } } 'redo to close the split again')
+    $one = WaitFor { $t = Terminals; if ($t.Count -eq 1) { $t } } 'redo to close the split again'
     Write-Host 'Undo from the palette reopened a closed split, and redo closed it again.'
+
+    # The entry's text is typed into cmd.exe as it was configured.
+    Run $one[0] 'palette text check'
+    [void](WaitFor {
+        $script:note = if (Test-Path $written) { "the file has '$((Get-Content -Raw $written).Trim())'" } else { 'no file' }
+        (Test-Path $written) -and (Get-Content -Raw $written).Trim() -eq 'palette-ok'
+    } 'the text entry to write palette-ok')
+    Write-Host 'An entry with text typed it as configured.'
 } finally {
     if (-not $process.HasExited) { Stop-Process -Id $process.Id -Force }
     Remove-Item -LiteralPath $log -Force -ErrorAction SilentlyContinue
+    Remove-Item -Recurse -Force $work -ErrorAction SilentlyContinue
 }
 exit 0

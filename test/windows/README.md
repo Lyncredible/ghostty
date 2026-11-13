@@ -463,7 +463,11 @@ runs on a locked desktop.
 Checks the command palette: `toggle_command_palette` opens it with many
 entries, typing `new_split:right` narrows the list, Enter runs it (the
 terminal splits left and right) and closes the palette, and Escape closes
-it without running anything.
+it without running anything. `close_surface`, `undo` and `redo` from it
+close a split, reopen it and close it again. Last, an entry of its own
+(`command-palette-entry`) whose action carries text (`text:`) types a
+command that writes a file: that action once ran after the palette had
+freed it, and Ghostty crashed.
 
 ## localization.ps1
 
