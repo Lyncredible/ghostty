@@ -1,7 +1,8 @@
 # Checks the options for new windows: `window-position-x/y` puts the
 # visible frame's corner that many points from the primary monitor's work
 # area, a position off every monitor falls back to the work area's corner,
-# `maximize` maximizes the window and `fullscreen` covers its monitor. Each
+# `maximize` maximizes the window, `fullscreen` covers its monitor, and a
+# huge `window-height` (once an overflow that aborted) makes a tall window. Each
 # case starts Ghostty and only reads its window, so it runs on a locked
 # desktop.
 #
@@ -95,4 +96,11 @@ Check @('--fullscreen=true') {
     $script:note = "window $(Rect $r), monitor $(Rect $m)"
     $r.l -le $m.l -and $r.t -le $m.t -and $r.r -ge $m.r -and $r.b -ge $m.b
 } 'fullscreen covers the monitor'
+
+Check @('--window-width=80', '--window-height=100000000') {
+    param($h)
+    $r = New-Object GhosttyWindowOptions.Win32+RECT; [void]$W::GetWindowRect($h, [ref]$r)
+    $script:note = "window $(Rect $r), work area $(Rect $work), exited: $($process.HasExited)"
+    -not $process.HasExited -and ($r.b - $r.t) -ge ($work.b - $work.t)
+} 'a huge window-height makes a window as tall as Windows allows'
 exit 0

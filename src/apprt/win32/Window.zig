@@ -1993,7 +1993,27 @@ pub fn setSizeLimit(self: *Window, limit: apprt.action.SizeLimit) void {
 }
 
 fn pointsToPixels(self: *const Window, points: u32) u32 {
-    return @intCast(@divTrunc(@as(u64, points) * c.GetDpiForWindow(self.hwnd), util.USER_DEFAULT_SCREEN_DPI));
+    return scalePoints(points, c.GetDpiForWindow(self.hwnd));
+}
+
+/// The largest terminal size we ask for, in pixels: far past any screen
+/// (Windows limits a window to its screens anyway), and small enough that
+/// adding the frame and the tab bar can't overflow.
+const max_terminal_pixels = 1 << 20;
+
+/// Points to pixels at a DPI, at most `max_terminal_pixels`. A huge
+/// `window-height` (100000000) or a program's resize request no longer
+/// overflows what Windows takes.
+fn scalePoints(points: u32, dpi: c.UINT) u32 {
+    return @intCast(@min(max_terminal_pixels, @as(u64, points) * dpi / util.USER_DEFAULT_SCREEN_DPI));
+}
+
+test scalePoints {
+    const testing = std.testing;
+    try testing.expectEqual(@as(u32, 800), scalePoints(400, 192));
+    try testing.expectEqual(@as(u32, 150), scalePoints(100, 144));
+    try testing.expectEqual(@as(u32, max_terminal_pixels), scalePoints(2_000_000_000, 192));
+    try testing.expectEqual(@as(u32, max_terminal_pixels), scalePoints(std.math.maxInt(u32), 480));
 }
 
 /// The window size for the given terminal area size in pixels,
