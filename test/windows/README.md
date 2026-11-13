@@ -350,11 +350,13 @@ command again.
 ## search.ps1
 
 Checks the search bar: cmd prints a marker three times (six matches with
-the command line), `start_search` opens the bar, typing the marker into its
-field counts six matches, `navigate_search:next` selects a match and then
-another, `:previous` goes back, and `end_search` closes it. The count is
-read from the bar's window text ("Match 2 of 6"), which is also what screen
-readers see.
+the command line), `start_search` opens the bar, Ctrl+Backspace (its
+character, U+007F) deletes a word in the field, typing the marker into it
+counts six matches, `navigate_search:next` selects a match and then
+another, `:previous` goes back, and `end_search` closes it. Those three keys
+go to the field, which passes keys it has no use for to the terminal's
+keybindings. The count is read from the bar's window text ("Match 2 of 6"),
+which is also what screen readers see.
 
 ## splits.ps1
 
@@ -497,13 +499,16 @@ Checks the options for new windows, starting Ghostty once for each:
 `window-position-x/y` of 100,50 puts the visible frame (DWM's extended
 frame bounds) that many points from the primary monitor's work area at its
 DPI, a position off every monitor falls back to the work area's corner,
-`maximize` maximizes the window, and `fullscreen` covers its monitor.
+`maximize` maximizes the window, `fullscreen` covers its monitor, and a huge
+`window-height` (100000000, which once overflowed and aborted) makes a
+window at least as tall as the work area.
 
 ## title-prompt.ps1
 
 Checks `prompt_surface_title`: the "Change Terminal Title" dialog sets the
 title (the window's title follows), and an empty title clears the override,
-bringing back the shell's title. The field is set with `WM_SETTEXT` and OK
+bringing back the shell's title. Ctrl+Backspace deletes a word in the
+field. The field is set with `WM_SETTEXT` and OK
 pressed with `BM_CLICK`. It shows a dialog, so it only runs in CI (set
 `CI=true` to run it elsewhere).
 
