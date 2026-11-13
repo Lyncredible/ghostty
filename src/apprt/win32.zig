@@ -38,6 +38,8 @@ test {
     _ = @import("win32/LinkPreview.zig");
     _ = @import("win32/ProgressBar.zig");
     _ = @import("win32/Taskbar.zig");
+    _ = @import("win32/BellBorder.zig");
+    _ = @import("win32/DimOverlay.zig");
     _ = @import("win32/shells.zig");
     _ = @import("win32/shell.zig");
     _ = @import("win32/clipboard.zig");
