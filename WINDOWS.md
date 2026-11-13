@@ -3452,6 +3452,15 @@ Notes:
       unit test), and `window-options.ps1` checks that such a window
       opens as tall as Windows allows (it fails without the change). CI
       run 43359201089 passed on all five jobs.
+- [x] Review of the title dialog (`TitleDialog.zig`, 2026-11-12): its
+      field typed a box for Ctrl+Backspace too, like the search and
+      palette fields did. It's subclassed for that key now (the rest goes
+      to the edit control's own procedure), and `title-prompt.ps1` checks
+      it (it fails without the change; it passed here too, though it
+      only runs in CI). Checked the values from the configuration that
+      become integers (`unfocused-split-opacity`, saved split ratios,
+      the quick terminal's animation, the bell's volume): all clamped,
+      with NaN too.
 - [x] Unimplemented apprt actions (as of 2026-10-25)
   - [x] `show_on_screen_keyboard`: toggles the touch keyboard through the
         shell's (undocumented) `ITipInvocation`, starting TabTip.exe if

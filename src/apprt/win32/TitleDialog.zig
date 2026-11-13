@@ -188,6 +188,11 @@ fn dlgProc(hwnd: c.HWND, msg: c.UINT, wparam: c.WPARAM, lparam: c.LPARAM) callco
             const edit = c.GetDlgItem(hwnd, id_edit);
             _ = c.SetWindowTextW(edit, state.initial);
             _ = c.SendMessageW(edit, c.EM_SETSEL, 0, -1);
+            // For Ctrl+Backspace. The dialog manager destroys the field,
+            // which the original procedure still sees, since we pass it all
+            // but that key.
+            const original = c.SetWindowLongPtrW(edit, c.GWLP_WNDPROC, @bitCast(@intFromPtr(&editProc)));
+            if (original != 0) edit_proc = @ptrFromInt(@as(usize, @bitCast(original)));
             _ = c.SetFocus(edit);
 
             // We set the focus ourselves.
@@ -219,6 +224,18 @@ fn dlgProc(hwnd: c.HWND, msg: c.UINT, wparam: c.WPARAM, lparam: c.LPARAM) callco
         else => {},
     }
     return c.FALSE;
+}
+
+/// The edit control's own window procedure, the same for every field.
+var edit_proc: c.WNDPROC = null;
+
+fn editProc(hwnd: c.HWND, msg: c.UINT, wparam: c.WPARAM, lparam: c.LPARAM) callconv(.c) c.LRESULT {
+    // Ctrl+Backspace's character, which the field would type as a box.
+    if (msg == c.WM_CHAR and wparam == 0x7f) {
+        util.deleteWordBefore(hwnd);
+        return 0;
+    }
+    return c.CallWindowProcW(edit_proc, hwnd, msg, wparam, lparam);
 }
 
 fn readText(alloc: Allocator, edit: c.HWND) ![:0]u8 {
