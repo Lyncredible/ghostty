@@ -726,6 +726,11 @@ fn editProc(hwnd: c.HWND, msg: c.UINT, wparam: c.WPARAM, lparam: c.LPARAM) callc
         // Don't beep for the characters of the keys we handle.
         c.WM_CHAR => switch (wparam) {
             '\r', 0x1b => return 0,
+            // Ctrl+Backspace.
+            0x7f => {
+                util.deleteWordBefore(hwnd);
+                return 0;
+            },
             else => {},
         },
 

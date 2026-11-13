@@ -3437,6 +3437,13 @@ Notes:
       `end_search` keys to the field (it fails without the change).
       A sequence's leader typed in the field waits for its next key in
       the terminal.
+- [x] Ctrl+Backspace in the search field and the command palette
+      (2026-11-12) typed a box (U+007F, the key's character, as plain
+      edit controls do) instead of deleting the word before the caret.
+      It deletes the selection or that word now (`util.deleteWordBefore`;
+      `wordStart` has a unit test with punctuation, letters beyond ASCII
+      and an emoji). `search.ps1` checks it (and fails without it), and
+      `command-palette.ps1` passes.
 - [x] Unimplemented apprt actions (as of 2026-10-25)
   - [x] `show_on_screen_keyboard`: toggles the touch keyboard through the
         shell's (undocumented) `ITipInvocation`, starting TabTip.exe if

@@ -1,4 +1,5 @@
-# Checks the search bar: `start_search` opens it, typing a needle counts the
+# Checks the search bar: `start_search` opens it, Ctrl+Backspace deletes a
+# word in its field, typing a needle counts the
 # matches on screen (the bar's name, which screen readers see, is the
 # count), `navigate_search:next` and `:previous` move the selected match,
 # and `end_search` closes it. Those keys go to the search field, which
@@ -26,7 +27,10 @@ Add-Type -Namespace GhosttySearch -Name Win32 -MemberDefinition @'
 [DllImport("user32.dll")] public static extern bool IsWindowVisible(System.IntPtr h);
 [DllImport("user32.dll", CharSet = CharSet.Unicode)] public static extern int GetWindowTextW(System.IntPtr h, System.Text.StringBuilder s, int n);
 [DllImport("user32.dll", CharSet = CharSet.Unicode)] public static extern System.IntPtr FindWindowExW(System.IntPtr parent, System.IntPtr after, string cls, string title);
+[DllImport("user32.dll", CharSet = CharSet.Unicode)] public static extern System.IntPtr SendMessageW(System.IntPtr h, uint m, System.IntPtr w, System.Text.StringBuilder l);
 public static string Text(System.IntPtr h) { var s = new System.Text.StringBuilder(256); GetWindowTextW(h, s, 256); return s.ToString(); }
+// An edit field's text (GetWindowText doesn't read another process's).
+public static string FieldText(System.IntPtr h) { var s = new System.Text.StringBuilder(256); SendMessageW(h, 0x000D, (System.IntPtr)256, s); return s.ToString(); }
 // Characters, as WM_CHAR.
 public static void Type(System.IntPtr h, string s) {
   foreach (char ch in s) { PostMessageW(h, 0x0102, (System.IntPtr)ch, (System.IntPtr)1); System.Threading.Thread.Sleep(5); }
@@ -91,6 +95,16 @@ try {
     $script:bar = WaitFor { $h = $W::FindWindowExW($surface, [IntPtr]::Zero, 'GhosttySearchBar', [NullString]::Value); if ($h -ne [IntPtr]::Zero -and $W::IsWindowVisible($h)) { $h } } 'the search bar'
     $edit = $W::FindWindowExW($bar, [IntPtr]::Zero, 'Edit', [NullString]::Value)
     if ($edit -eq [IntPtr]::Zero) { Fail 'the search bar has no text field' }
+
+    # Ctrl+Backspace (its character, U+007F) deletes the word before the
+    # caret rather than typing a box.
+    $W::Type($edit, 'abc def')
+    $W::Type($edit, [string][char]0x7F)
+    [void](WaitFor { $script:note = "the field has '$($W::FieldText($edit))'"; $W::FieldText($edit) -eq 'abc ' } 'Ctrl+Backspace to delete a word')
+    $W::Type($edit, [string][char]0x7F)
+    [void](WaitFor { $script:note = "the field has '$($W::FieldText($edit))'"; $W::FieldText($edit) -eq '' } 'Ctrl+Backspace to delete the other')
+    Write-Host 'Ctrl+Backspace deletes the word before the caret.'
+
     $W::Type($edit, $marker)
     $count = WaitFor { $c = Count; if ($c -and $c.Total -eq 6) { $c } } 'six matches'
     Write-Host "Searching for $marker counts six matches ($note)."
