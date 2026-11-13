@@ -3443,7 +3443,7 @@ Notes:
       It deletes the selection or that word now (`util.deleteWordBefore`;
       `wordStart` has a unit test with punctuation, letters beyond ASCII
       and an emoji). `search.ps1` checks it (and fails without it), and
-      `command-palette.ps1` passes.
+      `command-palette.ps1` passes. CI run 43350648379 passed on all five jobs.
 - [x] Unimplemented apprt actions (as of 2026-10-25)
   - [x] `show_on_screen_keyboard`: toggles the touch keyboard through the
         shell's (undocumented) `ITipInvocation`, starting TabTip.exe if
