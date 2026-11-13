@@ -3450,7 +3450,8 @@ Notes:
       `windowSizeFor`); a program's resize request went the same way.
       Sizes are capped at 2^20 pixels now, past any screen (`scalePoints`,
       unit test), and `window-options.ps1` checks that such a window
-      opens as tall as Windows allows (it fails without the change).
+      opens as tall as Windows allows (it fails without the change). CI
+      run 43359201089 passed on all five jobs.
 - [x] Unimplemented apprt actions (as of 2026-10-25)
   - [x] `show_on_screen_keyboard`: toggles the touch keyboard through the
         shell's (undocumented) `ITipInvocation`, starting TabTip.exe if
