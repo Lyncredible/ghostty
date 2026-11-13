@@ -11,6 +11,7 @@ const SearchBar = @This();
 const std = @import("std");
 const Config = @import("../../config.zig").Config;
 
+const key = @import("key.zig");
 const util = @import("util.zig");
 const i18n = @import("../../os/main.zig").i18n;
 const c = util.c;
@@ -51,6 +52,10 @@ edit_brush: c.HBRUSH = null,
 edit_proc: c.WNDPROC = null,
 
 on_event: ?*const fn (ctx: *anyopaque, event: Event) void = null,
+/// Offered the keys the field doesn't use (see `fieldUses`), so the
+/// terminal's keybindings work while it has focus: Ctrl+Tab, a new tab,
+/// scrolling. Returns true if it used the key.
+on_key: ?*const fn (ctx: *anyopaque, wparam: c.WPARAM, lparam: c.LPARAM) bool = null,
 ctx: *anyopaque = undefined,
 
 background: c.COLORREF = 0,
@@ -74,11 +79,13 @@ pub fn init(
     config: *const Config,
     ctx: *anyopaque,
     on_event: *const fn (ctx: *anyopaque, event: Event) void,
+    on_key: *const fn (ctx: *anyopaque, wparam: c.WPARAM, lparam: c.LPARAM) bool,
 ) void {
     self.parent = parent;
     self.instance = instance;
     self.ctx = ctx;
     self.on_event = on_event;
+    self.on_key = on_key;
     self.setCount(null, null);
     self.updateConfig(config);
 }
@@ -516,16 +523,27 @@ fn editProc(hwnd: c.HWND, msg: c.UINT, wparam: c.WPARAM, lparam: c.LPARAM) callc
     if (ptr == 0) return c.DefWindowProcW(hwnd, msg, wparam, lparam);
     const self: *SearchBar = @ptrFromInt(@as(usize, @bitCast(ptr)));
     switch (msg) {
-        c.WM_KEYDOWN => switch (wparam) {
-            c.VK_RETURN => {
-                self.emit(if (c.GetKeyState(c.VK_SHIFT) < 0) .previous else .next);
-                return 0;
-            },
-            c.VK_ESCAPE => {
-                self.emit(.close);
-                return 0;
-            },
-            else => {},
+        c.WM_KEYDOWN, c.WM_SYSKEYDOWN => {
+            if (msg == c.WM_KEYDOWN) switch (wparam) {
+                c.VK_RETURN => {
+                    self.emit(if (c.GetKeyState(c.VK_SHIFT) < 0) .previous else .next);
+                    return 0;
+                },
+                c.VK_ESCAPE => {
+                    self.emit(.close);
+                    return 0;
+                },
+                else => {},
+            };
+
+            const vk: c.UINT = @intCast(wparam & 0xFFFF);
+            const mods = key.currentMods();
+            const typing = (!mods.ctrl and !mods.alt or mods.ctrl and mods.alt and key.altGr()) and
+                c.MapVirtualKeyW(vk, c.MAPVK_VK_TO_CHAR) != 0;
+            if (!fieldUses(vk, mods.ctrl, mods.alt, typing)) {
+                // The key may close the terminal, and us with it.
+                if (self.on_key) |on_key| if (on_key(self.ctx, wparam, lparam)) return 0;
+            }
         },
 
         // Don't beep for the characters of the keys we handle.
@@ -537,4 +555,43 @@ fn editProc(hwnd: c.HWND, msg: c.UINT, wparam: c.WPARAM, lparam: c.LPARAM) callc
         else => {},
     }
     return c.CallWindowProcW(self.edit_proc, hwnd, msg, wparam, lparam);
+}
+
+/// Whether the edit field has a use for a key: one that types (`typing`,
+/// which AltGr's keys may), moves the caret, deletes, or (with Ctrl)
+/// selects all, copies, pastes, cuts, or undoes. Ghostty's own bindings
+/// for those (such as Ctrl+Shift+V to paste) act on the field, as in a
+/// browser's find bar.
+fn fieldUses(vk: c.UINT, ctrl: bool, alt: bool, typing: bool) bool {
+    if (typing) return true;
+    if (alt) return false;
+    return switch (vk) {
+        c.VK_LEFT, c.VK_RIGHT, c.VK_HOME, c.VK_END, c.VK_BACK, c.VK_DELETE, c.VK_INSERT => true,
+        // Up and down move the caret too, but with Ctrl they do nothing.
+        c.VK_UP, c.VK_DOWN => !ctrl,
+        'A', 'C', 'V', 'X', 'Z', 'Y' => ctrl,
+        else => false,
+    };
+}
+
+test fieldUses {
+    const testing = std.testing;
+    // Typing, editing, and the field's shortcuts.
+    try testing.expect(fieldUses('T', false, false, true));
+    try testing.expect(fieldUses('Q', true, true, true)); // AltGr
+    try testing.expect(fieldUses(c.VK_LEFT, true, false, false));
+    try testing.expect(fieldUses(c.VK_BACK, true, false, false));
+    try testing.expect(fieldUses(c.VK_UP, false, false, false));
+    try testing.expect(fieldUses('V', true, false, false));
+    try testing.expect(fieldUses('A', true, false, false));
+    // The rest are the terminal's: Ctrl+Shift+T, Ctrl+Tab, Ctrl+Page
+    // Down, Ctrl+Alt+Left, Alt+1, F11, Shift+Page Up, Ctrl+Up.
+    try testing.expect(!fieldUses('T', true, false, false));
+    try testing.expect(!fieldUses(c.VK_TAB, true, false, false));
+    try testing.expect(!fieldUses(c.VK_NEXT, true, false, false));
+    try testing.expect(!fieldUses(c.VK_LEFT, true, true, false));
+    try testing.expect(!fieldUses('1', false, true, false));
+    try testing.expect(!fieldUses(c.VK_F11, false, false, false));
+    try testing.expect(!fieldUses(c.VK_PRIOR, false, false, false));
+    try testing.expect(!fieldUses(c.VK_UP, true, false, false));
 }

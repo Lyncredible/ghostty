@@ -353,7 +353,7 @@ pub fn init(self: *Surface, app: *App, window: *Window, opts: Options) !void {
         .dwBlock = c.GC_PAN_WITH_SINGLE_FINGER_HORIZONTALLY | c.GC_PAN_WITH_GUTTER,
     };
     _ = c.SetGestureConfig(hwnd, 0, 1, &gesture, @sizeOf(c.GESTURECONFIG));
-    self.search_bar.init(hwnd, app.hinstance, &config, self, searchEvent);
+    self.search_bar.init(hwnd, app.hinstance, &config, self, searchEvent, searchKey);
     errdefer self.search_bar.deinit();
     self.command_palette.init(hwnd, app.hinstance, &config, self, commandPaletteChoice);
     errdefer self.command_palette.deinit();
@@ -932,6 +932,49 @@ fn searchEvent(ctx: *anyopaque, event: SearchBar.Event) void {
     _ = self.core_surface.performBindingAction(action) catch |err| {
         log.warn("error performing search action err={}", .{err});
     };
+}
+
+/// Called by the search bar for a key its field doesn't use: if it's
+/// bound, the binding is performed as if the terminal had focus. A
+/// binding that would also send the key to the terminal (`unconsumed:`,
+/// or `performable:` when it can't be performed) is left to the field.
+fn searchKey(ctx: *anyopaque, wparam: c.WPARAM, lparam: c.LPARAM) bool {
+    const self: *Surface = @ptrCast(@alignCast(ctx));
+    if (!self.core_initialized) return false;
+    const vk: c.UINT = @intCast(wparam & 0xFFFF);
+    const l: usize = @bitCast(lparam);
+    const native = key.nativeKeycode(wparam, lparam);
+    const scancode: c.UINT = native & 0xFF;
+    const mods = key.currentMods();
+
+    // The key's text for matching a binding, as in keyEvent: without
+    // Ctrl, the key's own; Alt's characters are matched by the
+    // unshifted codepoint.
+    var utf8_buf: [32]u8 = undefined;
+    const utf8: []const u8 = if (mods.ctrl and !(mods.alt and key.altGr()))
+        key.textWithoutCtrl(vk, scancode, &utf8_buf)
+    else
+        "";
+    const event: input.KeyEvent = .{
+        .action = if ((l >> 30) & 1 != 0) .repeat else .press,
+        .key = key.physicalKey(native),
+        .mods = mods,
+        .consumed_mods = .{ .shift = mods.shift and utf8.len > 0 and !std.ascii.isControl(utf8[0]) },
+        .utf8 = utf8,
+        .unshifted_codepoint = key.unshiftedCodepoint(vk, scancode),
+    };
+    const flags = self.core_surface.keyEventIsBinding(event) orelse return false;
+    if (!flags.consumed or flags.performable) return false;
+
+    // The field doesn't get the characters TranslateMessage queued.
+    var peeked: c.MSG = undefined;
+    while (c.PeekMessageW(&peeked, self.search_bar.edit, c.WM_CHAR, c.WM_DEADCHAR, c.PM_REMOVE) != 0 or
+        c.PeekMessageW(&peeked, self.search_bar.edit, c.WM_SYSCHAR, c.WM_SYSDEADCHAR, c.PM_REMOVE) != 0)
+    {}
+    _ = self.core_surface.keyCallback(event) catch |err| {
+        log.err("error in key callback err={}", .{err});
+    };
+    return true;
 }
 
 /// Called by the scrollbar while dragging its thumb.

@@ -1,9 +1,11 @@
 # Checks the search bar: `start_search` opens it, typing a needle counts the
 # matches on screen (the bar's name, which screen readers see, is the
 # count), `navigate_search:next` and `:previous` move the selected match,
-# and `end_search` closes it. cmd prints a marker three times, so with the
-# command line there are six matches. Keys and characters are posted to
-# Ghostty's windows, so it runs on a locked desktop.
+# and `end_search` closes it. Those keys go to the search field, which
+# passes keys it has no use for to the terminal's keybindings. cmd prints
+# a marker three times, so with the command line there are six matches.
+# Keys and characters are posted to Ghostty's windows, so it runs on a
+# locked desktop.
 #
 #     ./search.ps1 -Exe zig-out/bin/ghostty.exe
 
@@ -93,16 +95,17 @@ try {
     $count = WaitFor { $c = Count; if ($c -and $c.Total -eq 6) { $c } } 'six matches'
     Write-Host "Searching for $marker counts six matches ($note)."
 
-    # Next selects a match (or the one after), previous goes back.
-    $W::Key($surface, 0x79, 0x44)   # F10: navigate_search:next
+    # Next selects a match (or the one after), previous goes back. The
+    # keys go to the field, which has focus.
+    $W::Key($edit, 0x79, 0x44)   # F10: navigate_search:next
     $first = WaitFor { $c = Count; if ($c -and $c.Selected -gt 0 -and $c.Selected -ne $count.Selected) { $c } } 'next to select a match'
-    $W::Key($surface, 0x79, 0x44)
+    $W::Key($edit, 0x79, 0x44)
     $second = WaitFor { $c = Count; if ($c -and $c.Selected -gt 0 -and $c.Selected -ne $first.Selected) { $c } } 'next to move to another match'
-    $W::Key($surface, 0x7A, 0x57)   # F11: navigate_search:previous
+    $W::Key($edit, 0x7A, 0x57)   # F11: navigate_search:previous
     [void](WaitFor { $c = Count; $c -and $c.Selected -eq $first.Selected } "previous to go back to match $($first.Selected)")
     Write-Host "Next selected match $($first.Selected), then $($second.Selected); previous went back to $($first.Selected)."
 
-    $W::Key($surface, 0x7B, 0x58)   # F12: end_search
+    $W::Key($edit, 0x7B, 0x58)   # F12: end_search
     [void](WaitFor { $script:note = 'still shown'; -not $W::IsWindowVisible($bar) } 'the search bar to close')
     Write-Host 'end_search closes the search bar.'
 } finally {

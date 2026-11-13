@@ -3423,6 +3423,20 @@ Notes:
       a shell. A state with more than 2048 nodes in all is now ignored,
       with a warning (`withinLimits`, unit test). `session-restore`
       passes here. CI run 43334066138 passed on all five jobs.
+- [x] Keybindings while the search field has focus (2026-11-12): the
+      field took every key, so Ctrl+Tab, a new tab, scrolling, or the
+      search's own `navigate_search` bindings did nothing until the
+      terminal was clicked (in GTK and macOS menu shortcuts still work
+      there, and Windows Terminal's find box passes its keybindings on).
+      Keys the field has no use for (not typing, moving the caret,
+      deleting, or Ctrl+A/C/V/X/Z/Y) now go to the terminal's bindings
+      first; a bound one is performed as if the terminal had focus. A
+      binding that would also send the key to the shell (`unconsumed:`,
+      or `performable:`) is left to the field. `fieldUses` has a unit
+      test, and `search.ps1` now sends its next, previous and
+      `end_search` keys to the field (it fails without the change).
+      A sequence's leader typed in the field waits for its next key in
+      the terminal.
 - [x] Unimplemented apprt actions (as of 2026-10-25)
   - [x] `show_on_screen_keyboard`: toggles the touch keyboard through the
         shell's (undocumented) `ITipInvocation`, starting TabTip.exe if
