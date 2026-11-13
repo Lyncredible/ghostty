@@ -3583,7 +3583,8 @@ Notes:
     run of `kitty-clipboard.ps1` reads the write's question by UI
     Automation, which must list `application/x-ghostty-test (12
     bytes)`. Without the change it showed only the text and the test
-    failed. It passed here, all three runs.
+    failed. It passed here, all three runs, and in CI run 43426587372
+    (its log has the question's text with both types).
 - [x] A notification stayed up after its terminal was focused or closed
       (found 2026-11-13, from upstream's GTK "clear surface
       notifications on focus and close", which macOS does too): the
@@ -3599,7 +3600,7 @@ Notes:
     focused it, and its second went when its shell exited. Without the
     change the first stayed and the test failed. It passed here. In
     CI's Explorer notifications time out at once, so there these are
-    notices.
+    notices (CI run 43426587372 passed with that notice).
   - Also from upstream's GTK changes, nothing to do on Windows: moving
     a split between windows (Windows moves splits only within a tab),
     the close button position (`gtk-tabs-close-button-position`, a GTK
