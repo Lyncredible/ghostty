@@ -2219,7 +2219,8 @@ Notes:
       test covered (a button's progress can't be read back), is
       `Taskbar.Progress.of`, with a unit test: an error or pause keeps
       the last percentage (a button can't slide in red, as the bar and
-      GTK's do), and over 100 is 100.
+      GTK's do), and over 100 is 100. CI run 43498749066 (10d9139c5)
+      passed every job.
   - [x] Desktop notifications (OSC 9 and OSC 777) as toasts
 - [x] Command-finished notifications
   - [x] Configured bell action and duration/focus filtering
