@@ -3422,7 +3422,7 @@ Notes:
       16 MB) could ask for hundreds of thousands of terminals, each with
       a shell. A state with more than 2048 nodes in all is now ignored,
       with a warning (`withinLimits`, unit test). `session-restore`
-      passes here.
+      passes here. CI run 43334066138 passed on all five jobs.
 - [x] Unimplemented apprt actions (as of 2026-10-25)
   - [x] `show_on_screen_keyboard`: toggles the touch keyboard through the
         shell's (undocumented) `ITipInvocation`, starting TabTip.exe if
