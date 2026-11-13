@@ -1220,7 +1220,7 @@ pub fn clipboardRequest(
             return .started;
         },
         .kitty_read => {
-            self.kittyRead(state, false);
+            self.kittyRead(state, false, false);
             return .started;
         },
         .kitty_write => {
@@ -1298,8 +1298,9 @@ fn completeClipboardList(self: *Surface, state: apprt.ClipboardRequest) void {
 /// Serve a Kitty clipboard protocol read (OSC 5522): the representations
 /// it asks for that the clipboard has, and the listing if it asks. If
 /// the configuration says to ask, the user is asked first, and allowing
-/// it reads again, `confirmed`.
-fn kittyRead(self: *Surface, state: apprt.ClipboardRequest, confirmed: bool) void {
+/// it reads again, `confirmed` (and `remember` if the user chose to, which
+/// grants the request's password).
+fn kittyRead(self: *Surface, state: apprt.ClipboardRequest, confirmed: bool, remember: bool) void {
     const kitty = state.kitty_read;
     var arena: std.heap.ArenaAllocator = .init(self.app.core_app.alloc);
     defer arena.deinit();
@@ -1324,6 +1325,7 @@ fn kittyRead(self: *Surface, state: apprt.ClipboardRequest, confirmed: bool) voi
         .contents = contents,
         .available = available,
         .confirmed = confirmed,
+        .remember = remember,
     }) catch |err| switch (err) {
         error.UnauthorizedPaste => {
             const preview = clipboardPreview(self.app.core_app.alloc, contents) catch
@@ -1544,32 +1546,120 @@ test clipboardQuestion {
     try testing.expectEqualStrings("Einfügen", clipboardQuestion(.unsafe_paste).accept);
 }
 
+/// What a clipboard question can remember, as GTK's dialog does.
+const Remember = enum {
+    /// Nothing (a paste, or a Kitty request without a password).
+    none,
+    /// The answer, for OSC 52 in this terminal: its read or write policy
+    /// becomes allow or deny until the configuration is reloaded.
+    policy,
+    /// An allowed Kitty clipboard protocol request, as a grant for its
+    /// password: later requests with it aren't asked about this session.
+    grant,
+
+    fn of(kind: @FieldType(PendingClipboard, "kind")) Remember {
+        const state = switch (kind) {
+            .unsafe_paste => return .none,
+            .write => return .policy,
+            .read, .kitty_write => |state| state,
+        };
+        return switch (state) {
+            .osc_52_read, .osc_52_write => .policy,
+            inline .kitty_read, .kitty_write => |kitty| if (kitty.pw.len > 0) .grant else .none,
+            .paste, .list => .none,
+        };
+    }
+
+    /// The checkbox for it: GTK's words, and translations of those for
+    /// OSC 52 (GTK hasn't marked the Kitty ones for translation yet).
+    fn check(self: Remember, checked: *bool) ?Dialog.Check {
+        return switch (self) {
+            .none => null,
+            .policy => .{
+                .text = i18n.text("Remember choice for this split"),
+                .note = i18n.text("Reload configuration to show this prompt again"),
+                .checked = checked,
+            },
+            .grant => .{
+                .text = "Remember choice for this terminal session",
+                .note = "Future requests with the same token will be allowed",
+                .checked = checked,
+            },
+        };
+    }
+};
+
+test Remember {
+    const testing = std.testing;
+    try testing.expectEqual(Remember.none, Remember.of(.{ .unsafe_paste = .{ .paste = .standard } }));
+    try testing.expectEqual(Remember.policy, Remember.of(.{ .write = null }));
+    try testing.expectEqual(Remember.policy, Remember.of(.{ .read = .{ .osc_52_read = .standard } }));
+
+    // A Kitty request remembers only with a password.
+    var write: apprt.ClipboardRequest.KittyWrite = .{
+        .arena = undefined,
+        .location = .standard,
+        .contents = &.{},
+        .id = "",
+        .pw = "",
+        .name = "",
+        .granted = false,
+        .terminator = .st,
+    };
+    try testing.expectEqual(Remember.none, Remember.of(.{ .kitty_write = .{ .kitty_write = &write } }));
+    write.pw = "secret";
+    try testing.expectEqual(Remember.grant, Remember.of(.{ .kitty_write = .{ .kitty_write = &write } }));
+    var checked = true;
+    try testing.expect(Remember.none.check(&checked) == null);
+    try testing.expectEqualStrings("Remember choice for this terminal session", Remember.grant.check(&checked).?.text);
+}
+
 fn confirmClipboard(self: *Surface) void {
     const pending = self.pending_clipboard orelse return;
     self.pending_clipboard = null;
     const alloc = self.app.core_app.alloc;
     defer pending.deinit(alloc);
 
-    // Like GTK, we say what's happening and show the text.
+    // Like GTK, we say what's happening and show the text, with the choice
+    // to remember the answer where there's one.
     const hwnd = self.hwnd;
     const identity = c.GetWindowLongPtrW(hwnd, util.GWLP_USERDATA);
-    const allowed = Window.confirmText(self.window, alloc, clipboardQuestion(pending.kind), pending.text);
+    const remember_kind: Remember = .of(pending.kind);
+    var checked = false;
+    const allowed = Window.confirmText(self.window, alloc, clipboardQuestion(pending.kind), pending.text, remember_kind.check(&checked));
 
     // The process can exit and destroy this surface while the dialog pumps
     // messages. No one will answer a Kitty clipboard protocol request
     // then, and the request is ours to free.
     if (c.GetWindowLongPtrW(hwnd, util.GWLP_USERDATA) != identity) return pending.discard();
-    if (!allowed) return pending.deny(self);
+    const remember = checked and remember_kind != .none;
+    // The policy changes after a denial is answered: an OSC 52 read is
+    // answered (empty) by the path that serves allowed reads, which
+    // asserts reads aren't denied.
+    if (!allowed) pending.deny(self);
+    if (remember and remember_kind == .policy) {
+        // Like GTK: until the configuration is reloaded.
+        const policy: @TypeOf(self.core_surface.config.clipboard_read) = if (allowed) .allow else .deny;
+        switch (pending.kind) {
+            .write => self.core_surface.config.clipboard_write = policy,
+            .read => self.core_surface.config.clipboard_read = policy,
+            .unsafe_paste, .kitty_write => {},
+        }
+    }
+    if (!allowed) return;
     switch (pending.kind) {
         .unsafe_paste, .read => |state| switch (state) {
             // Read again: the question only showed the text.
-            .kitty_read => self.kittyRead(state, true),
+            .kitty_read => self.kittyRead(state, true, remember),
             else => self.completeClipboardText(state, pending.text, true),
         },
         .write => |html| self.writeClipboard(pending.text, html, &.{}) catch |err| {
             log.warn("failed to write clipboard err={}", .{err});
         },
-        .kitty_write => |state| self.core_surface.completeClipboardRequest(state, .{ .confirmed = true }) catch |err| {
+        .kitty_write => |state| self.core_surface.completeClipboardRequest(state, .{
+            .confirmed = true,
+            .remember = remember,
+        }) catch |err| {
             log.warn("failed to write clipboard err={}", .{err});
         },
     }

@@ -3479,8 +3479,8 @@ Notes:
       OSC 52 (a read shows the text, or each type and size), and allowing
       a read reads again. A request whose terminal closes while it's
       asked about is freed (the first run of the test found that leak).
-      The question has no "remember" choice yet (GTK offers one for
-      requests with a password).
+      The question had no "remember" choice then (GTK offers one for
+      requests with a password); see the next entry.
   - Tests: `mimeOfName`, the formats for MIME types, `htmlFragment`
     (and a round trip with our own CF_HTML), `clipboardPreview`, and
     `test/windows/kitty-clipboard.ps1` (in CI, with the ConPTY package,
@@ -3490,6 +3490,25 @@ Notes:
     read). Without the change the write and read got `ENOSYS` and the
     paste event never came. It passed here, both runs, and in CI
     (43381078319), whose log shows each check and the two answers.
+- [x] "Remember choice" in the clipboard questions (found 2026-11-12,
+      after the entry above): GTK's dialog has a switch for it, ours had
+      nothing, for OSC 52 either. Now the task dialog's checkbox
+      (`Dialog.askWithCheck`, its "verification" checkbox, with GTK's
+      note in the footer) does what GTK's switch does: for OSC 52, the
+      answer becomes this terminal's `clipboard-read` or
+      `clipboard-write` until the configuration is reloaded ("Remember
+      choice for this split", which has translations); for a Kitty
+      request with a password (which counts only with a name), allowing
+      it grants the password for the session, so the program isn't
+      asked again. Pastes and Kitty requests without a password have no
+      checkbox. As in GTK, a denied OSC 52 read is answered before the
+      policy changes (that path asserts reads aren't denied).
+  - Tests: `Remember` (which questions can remember what), and a third
+    run of `kitty-clipboard.ps1` in CI that checks the box
+    (`TDM_CLICK_VERIFICATION`): a second write with the password and a
+    second OSC 52 read aren't asked about. Without the change the
+    repeated write was asked again and the OSC 52 read's question went
+    unanswered. It passed here; paste-race and dialog-race too.
 - [x] Unimplemented apprt actions (as of 2026-10-25)
   - [x] `show_on_screen_keyboard`: toggles the touch keyboard through the
         shell's (undocumented) `ITipInvocation`, starting TabTip.exe if

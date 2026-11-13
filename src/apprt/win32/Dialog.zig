@@ -32,6 +32,17 @@ pub const Text = struct {
 
 pub const Default = enum { accept, reject };
 
+/// A checkbox under the buttons (the task dialog's "verification"
+/// checkbox), such as GTK's "Remember choice", with a note in the footer
+/// that says what checking it does.
+pub const Check = struct {
+    text: []const u8,
+    note: ?[]const u8 = null,
+    /// Whether the user checked it, set when the dialog closes. It stays
+    /// unchecked where there's no task dialog.
+    checked: *bool,
+};
+
 /// The buttons' IDs, which are also what Enter and Escape press in a
 /// dialog. The tests press them with `TDM_CLICK_BUTTON`.
 pub const id_accept = c.IDOK;
@@ -49,12 +60,28 @@ pub fn ask(
     reject: []const u8,
     default: Default,
 ) bool {
+    return askWithCheck(owner, title, message, accept, reject, default, null);
+}
+
+/// `ask`, with a checkbox.
+pub fn askWithCheck(
+    owner: c.HWND,
+    title: []const u8,
+    message: [*:0]const u16,
+    accept: []const u8,
+    reject: []const u8,
+    default: Default,
+    check: ?Check,
+) bool {
     var title_buf: [256]u16 = undefined;
     const title16 = util.utf16TruncateZ(&title_buf, title);
+    if (check) |v| v.checked.* = false;
 
     if (taskDialog()) |show| {
         var accept_buf: [128]u16 = undefined;
         var reject_buf: [128]u16 = undefined;
+        var check_buf: [256]u16 = undefined;
+        var note_buf: [256]u16 = undefined;
         const buttons = [_]Button{
             .{ .id = id_accept, .text = label(&accept_buf, accept).ptr },
             .{ .id = id_reject, .text = label(&reject_buf, reject).ptr },
@@ -73,10 +100,16 @@ pub fn ask(
                 .accept => id_accept,
                 .reject => id_reject,
             },
+            .pszVerificationText = if (check) |v| util.utf16TruncateZ(&check_buf, v.text).ptr else null,
+            .pszFooter = if (check) |v| if (v.note) |note| util.utf16TruncateZ(&note_buf, note).ptr else null else null,
         };
         var pressed: c_int = 0;
-        const hr = show(&config, &pressed, null, null);
-        if (hr >= 0) return pressed == id_accept;
+        var checked: c.BOOL = 0;
+        const hr = show(&config, &pressed, null, &checked);
+        if (hr >= 0) {
+            if (check) |v| v.checked.* = checked != 0;
+            return pressed == id_accept;
+        }
         log.warn("task dialog failed, using a message box hr=0x{x}", .{@as(u32, @bitCast(hr))});
     }
 

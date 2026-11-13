@@ -2322,7 +2322,9 @@ pub fn confirmText(
     alloc: Allocator,
     question: Dialog.Text,
     text: []const u8,
+    check: ?Dialog.Check,
 ) bool {
+    if (check) |v| v.checked.* = false;
     var body: std.Io.Writer.Allocating = .init(alloc);
     defer body.deinit();
     writePreview(&body.writer, question.message, text) catch
@@ -2330,13 +2332,14 @@ pub fn confirmText(
     const body16 = util.utf16Alloc(alloc, body.written()) catch
         return confirm(window, question);
     defer alloc.free(body16);
-    return Dialog.ask(
+    return Dialog.askWithCheck(
         if (window) |w| w.hwnd else null,
         question.title,
         body16.ptr,
         question.accept,
         question.reject,
         .accept,
+        check,
     );
 }
 

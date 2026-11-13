@@ -4,7 +4,10 @@
 # (mode 5522), after which a paste sends the listing instead of the text.
 # The clipboard then has the text for other programs too. In CI, a second
 # run asks first (`clipboard-write` and `clipboard-read` = ask): allowing
-# the write writes, and denying the read answers EPERM.
+# the write writes, and denying the read answers EPERM. A third checks the
+# question's "Remember choice" box: a write with a password, allowed and
+# remembered, isn't asked about again, and nor is an OSC 52 read after one
+# that was.
 #
 # The ConPTY built into Windows (build 26100) swallows OSC 5522, so this
 # needs the ConPTY package's conpty.dll next to ghostty.exe
@@ -29,6 +32,7 @@ Add-Type -Namespace GhosttyKittyClipboard -Name Win32 -MemberDefinition @'
 [DllImport("user32.dll")] public static extern bool PostMessageW(System.IntPtr h, uint m, System.IntPtr w, System.IntPtr l);
 [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(System.IntPtr h, out uint pid);
 [DllImport("user32.dll")] public static extern bool IsWindow(System.IntPtr h);
+[DllImport("user32.dll")] public static extern System.IntPtr SendMessageW(System.IntPtr h, uint m, System.IntPtr w, System.IntPtr l);
 [DllImport("user32.dll", CharSet = CharSet.Unicode)] public static extern System.IntPtr FindWindowExW(System.IntPtr parent, System.IntPtr after, string cls, string title);
 // A key press and release, with the scan code in lParam.
 public static void Key(System.IntPtr h, int vk, int scan) {
@@ -50,7 +54,7 @@ $log = Join-Path $work 'ghostty.log'
 # Runs in Ghostty: VT output and raw VT input. Each step's reply is what
 # arrives as input until its last packet (status=DONE).
 Set-Content -Encoding utf8 -Path $inner -Value @'
-param([string]$Result, [string]$Ready, [string]$Paste)
+param([string]$Result, [string]$Ready, [string]$Mode)
 trap { "error: $($_.Exception.Message) (at line $($_.InvocationInfo.ScriptLineNumber))" | Set-Content $Result; exit 1 }
 Add-Type -Namespace KittyClipboard -Name Kernel32 -MemberDefinition @"
 [DllImport("kernel32.dll")] public static extern System.IntPtr GetStdHandle(int n);
@@ -59,22 +63,40 @@ Add-Type -Namespace KittyClipboard -Name Kernel32 -MemberDefinition @"
 "@
 $K = [KittyClipboard.Kernel32]
 $stdin = $K::GetStdHandle(-10); $stdout = $K::GetStdHandle(-11)
-$mode = 0; [void]$K::GetConsoleMode($stdout, [ref]$mode)
-[void]$K::SetConsoleMode($stdout, $mode -bor 4)   # ENABLE_VIRTUAL_TERMINAL_PROCESSING
+$output = 0; [void]$K::GetConsoleMode($stdout, [ref]$output)
+[void]$K::SetConsoleMode($stdout, $output -bor 4)   # ENABLE_VIRTUAL_TERMINAL_PROCESSING
 [void]$K::SetConsoleMode($stdin, 0x200)           # ENABLE_VIRTUAL_TERMINAL_INPUT only (raw)
 $e = [char]27; $st = "$e\"
 function B64([string]$s) { [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($s)) }
 function Send([string]$s) { [Console]::Out.Write($s); [Console]::Out.Flush() }
-function Collect([double]$seconds) {
+function Collect([double]$seconds, [string]$until = 'status=DONE') {
     $got = ''
     $deadline = (Get-Date).AddSeconds($seconds)
-    while ((Get-Date) -lt $deadline -and -not $got.Contains('status=DONE')) {
+    while ((Get-Date) -lt $deadline -and -not $got.Contains($until)) {
         while ([Console]::KeyAvailable) { $got += [Console]::ReadKey($true).KeyChar }
         Start-Sleep -Milliseconds 20
     }
     $got -replace $e, '\e'
 }
 $replies = [ordered]@{}
+
+if ($Mode -eq 'remember') {
+    # Each is asked about at most once: the first with the box checked.
+    # A password counts only with a name.
+    $who = "pw=$(B64 'test-token'):name=$(B64 'the test')"
+    foreach ($n in 1, 2) {
+        Send "$e]5522;type=write:$who$st"
+        Send "$e]5522;type=wdata:mime=$(B64 'text/plain');$(B64 "remembered $n")$st"
+        Send "$e]5522;type=wdata$st"
+        $replies["write$n"] = Collect 15
+    }
+    foreach ($n in 1, 2) {
+        Send "$e]52;c;?$st"
+        $replies["osc52_$n"] = Collect 15 $st
+    }
+    $replies | ConvertTo-Json | Set-Content -Encoding utf8 $Result
+    exit 0
+}
 
 Send "$e]5522;type=write$st"
 Send "$e]5522;type=wdata:mime=$(B64 'text/plain');$(B64 'kitty text')$st"
@@ -85,7 +107,7 @@ $replies['write'] = Collect 10
 Send "$e]5522;type=read;$(B64 'text/plain application/x-ghostty-test .')$st"
 $replies['read'] = Collect 10
 
-if ($Paste -eq 'yes') {
+if ($Mode -eq 'paste') {
     Send "$e[?5522h"
     Set-Content $Ready 'ready'
     $replies['paste'] = Collect 20
@@ -99,11 +121,11 @@ $bundled = Test-Path (Join-Path (Split-Path $Exe) 'conpty.dll')
 $process = $null
 
 # Start Ghostty running the program, with the options.
-function Launch([string[]]$options, [string]$paste) {
+function Launch([string[]]$options, [string]$mode) {
     Remove-Item -Force $result, $ready -ErrorAction SilentlyContinue
     $script:process = Start-Process -FilePath $Exe -PassThru -RedirectStandardError $log -ArgumentList (@('--window-save-state=never',
         '--keybind=f9=paste_from_clipboard') + $options + @('-e',
-        'powershell.exe', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $inner, $result, $ready, $paste))
+        'powershell.exe', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $inner, $result, $ready, $mode))
     $window = WaitFor { $script:process.Refresh(); if ($script:process.MainWindowHandle -ne 0) { $script:process.MainWindowHandle } } 'the window'
     $script:surface = WaitFor { $h = $W::FindWindowExW($window, [IntPtr]::Zero, 'GhosttySurface', [NullString]::Value); if ($h -ne [IntPtr]::Zero) { $h } } 'the surface'
 }
@@ -115,7 +137,7 @@ function Replies {
     $text = Get-Content -Raw $result
     if ($text.StartsWith('error:')) { Fail "the script in Ghostty failed: $text" }
     $replies = $text | ConvertFrom-Json
-    foreach ($name in 'write', 'read', 'paste') { if ($replies.$name) { Write-Host "  $name -> '$($replies.$name)'" } }
+    foreach ($property in $replies.PSObject.Properties) { Write-Host "  $($property.Name) -> '$($property.Value)'" }
     $replies
 }
 
@@ -155,8 +177,10 @@ function Dialog {
 # Answer the question: 1 is the accept button (Allow), 2 the reject one
 # (Deny), pressed with TDM_CLICK_BUTTON until the dialog is ready and goes
 # (the next question can follow at once, with the same title).
-function Answer([int]$button, [string]$what) {
+function Answer([int]$button, [string]$what, [switch]$Remember) {
     $dialog = WaitFor { Dialog } "the question about the $what"
+    # TDM_CLICK_VERIFICATION: check the "Remember choice" box.
+    if ($Remember) { [void]$W::SendMessageW($dialog, 0x0471, [IntPtr]1, [IntPtr]::Zero) }
     [void](WaitFor {
         [void]$W::PostMessageW($dialog, 0x0466, [IntPtr]$button, [IntPtr]::Zero)
         Start-Sleep -Milliseconds 300
@@ -178,7 +202,7 @@ $custom = "mime=$(B64 'application/x-ghostty-test');$(B64 'custom bytes')"
 try {
     Write-Host "ConPTY: $(if ($bundled) { "conpty.dll next to $Exe" } else { 'the one built into Windows' })"
     Set-Clipboard -Value 'before the test'
-    Launch @('--clipboard-read=allow', '--clipboard-write=allow') 'yes'
+    Launch @('--clipboard-read=allow', '--clipboard-write=allow') 'paste'
 
     # Paste once the program waits for the event.
     [void](WaitFor { (Test-Path $ready) -or (Test-Path $result) } 'the program to turn on paste events')
@@ -213,7 +237,7 @@ try {
     # Asking first shows dialogs, so only in CI.
     if ($env:CI -eq 'true') {
         Set-Clipboard -Value 'before the question'
-        Launch @('--clipboard-read=ask', '--clipboard-write=ask') 'no'
+        Launch @('--clipboard-read=ask', '--clipboard-write=ask') 'ask'
         Answer 1 'write'
         Answer 2 'read'
         $replies = Replies
@@ -223,6 +247,23 @@ try {
         if ($clip -ne 'kitty text') { Fail "after allowing the write the clipboard has '$clip'" }
         if ($replies.read -notmatch 'type=read:status=EPERM') { Fail "the denied read got '$($replies.read)', not EPERM" }
         Write-Host 'Asked first: allowing the write wrote, and denying the read answered EPERM.'
+
+        # Remembered: the second of each isn't asked about, so a question
+        # left unanswered would leave its reply empty.
+        Launch @('--clipboard-read=ask', '--clipboard-write=ask') 'remember'
+        Answer 1 'write with a password' -Remember
+        Answer 1 'OSC 52 read' -Remember
+        $replies = Replies
+        Close
+        foreach ($n in 1, 2) {
+            if ($replies."write$n" -notmatch 'type=write:status=DONE') { Fail "write $n with the remembered password got '$($replies."write$n")'" }
+        }
+        $clip = Get-Clipboard -Raw
+        if ($clip -ne 'remembered 2') { Fail "after the remembered writes the clipboard has '$clip'" }
+        foreach ($n in 1, 2) {
+            if (-not $replies."osc52_$n".Contains("52;c;$(B64 'remembered 2')")) { Fail "OSC 52 read $n got '$($replies."osc52_$n")'" }
+        }
+        Write-Host 'Remembered: the second write with the password and the second OSC 52 read weren''t asked about.'
     }
 } finally {
     Close
