@@ -3508,7 +3508,8 @@ Notes:
     (`TDM_CLICK_VERIFICATION`): a second write with the password and a
     second OSC 52 read aren't asked about. Without the change the
     repeated write was asked again and the OSC 52 read's question went
-    unanswered. It passed here; paste-race and dialog-race too.
+    unanswered. It passed here; paste-race and dialog-race too. CI run
+    43389105071 passed; its log has the remembered write and OSC 52 read.
 - [x] A command palette entry whose action carries text crashed Ghostty
       (found 2026-11-12, reviewing `CommandPalette.zig`): choosing an
       entry closed the palette, which freed the entries (their actions
