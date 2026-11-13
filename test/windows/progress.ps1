@@ -4,7 +4,10 @@
 # 50% makes a bar half its width at its top, an unknown amount a piece a
 # fifth of its width that slides across (but not while the terminal is
 # hidden, by zooming the other split: then it waits in the middle), an
-# error at 30% a bar 30% wide, and removing it hides it. Keys are posted to the terminals and windows
+# error at 30% a bar 30% wide, and removing it hides it. With Windows'
+# animation effects off the piece always waits in the middle; CI's
+# runners have them off, so there the test checks that, then turns them
+# on for the rest (and back off after). Elsewhere it leaves them be. Keys are posted to the terminals and windows
 # are read with GetWindowRect, so it runs on a locked desktop.
 #
 #     ./progress.ps1 -Exe zig-out/bin/ghostty.exe
@@ -23,6 +26,8 @@ Add-Type -Namespace GhosttyProgress -Name Win32 -MemberDefinition @'
 [DllImport("user32.dll")] public static extern bool GetWindowRect(System.IntPtr h, out RECT r);
 [DllImport("user32.dll")] public static extern bool IsWindowVisible(System.IntPtr h);
 [DllImport("user32.dll")] public static extern bool SetProcessDPIAware();
+[DllImport("user32.dll")] public static extern bool SystemParametersInfoW(uint action, uint param, out bool value, uint winIni);
+[DllImport("user32.dll", EntryPoint = "SystemParametersInfoW")] public static extern bool SetSystemParameter(uint action, uint param, System.IntPtr value, uint winIni);
 [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(System.IntPtr h, out uint pid);
 [DllImport("user32.dll")] public static extern bool GetGUIThreadInfo(uint thread, ref GUITHREADINFO info);
 [DllImport("user32.dll", CharSet = CharSet.Unicode)] public static extern System.IntPtr FindWindowExW(System.IntPtr parent, System.IntPtr after, string cls, string title);
@@ -118,24 +123,47 @@ try {
     if ($bar.Left -ne 0 -or $bar.Top -ne 0 -or $bar.Height -lt 1 -or $bar.Height -gt 12) { Fail "the 50% bar is at $(Say $bar), not along the top" }
     Write-Host "50%: the bar is $(Say $bar)."
 
-    # Unknown: a piece a fifth of the width (less at the edges) that moves.
+    # Unknown: a piece a fifth of the width (less at the edges) that moves,
+    # or with animation effects off waits in the middle.
+    $animated = $true
+    [void]$W::SystemParametersInfoW(0x1042, 0, [ref]$animated, 0)   # SPI_GETCLIENTAREAANIMATION
+    $piece = [Math]::Floor($width / 5)
+    $middle = [Math]::Floor(($width + $piece) / 2) - $piece
+    function Still([string]$what) {
+        $still = WaitFor { $b = Placed; if ([Math]::Abs($b.Left - $middle) -le 1 -and $b.Width -eq $piece) { $b } } "$what to wait in the middle ($middle)"
+        Start-Sleep -Milliseconds 500
+        if ((Placed).Left -ne $still.Left) { Fail "$what moved from $(Say $still) to $(Say (Placed))" }
+        $still
+    }
     Go 1
-    $first = WaitFor { $b = Bar; if ($b -and $b.Width -le [Math]::Ceiling($width / 5) + 1) { $b } } 'the sliding piece'
-    $moved = WaitFor { $b = Bar; if ($b -and $b.Left -ne $first.Left) { $b } } "the piece to move from $(Say $first)"
-    Write-Host "Unknown: the piece went from $(Say $first) to $(Say $moved)."
-
-    # Hidden (the right split zoomed), it waits in the middle: nothing
-    # moves where no one can see it. Shown again, it moves again.
-    $W::Key($right, 0x75, 0x40)   # F6: toggle_split_zoom
-    [void](WaitFor { -not $W::IsWindowVisible($left) } 'the left terminal to be hidden by the zoom')
-    $middle = [Math]::Floor(($width + [Math]::Floor($width / 5)) / 2) - [Math]::Floor($width / 5)
-    $still = WaitFor { $b = Placed; if ([Math]::Abs($b.Left - $middle) -le 1) { $b } } "the hidden piece to wait in the middle ($middle)"
-    Start-Sleep -Milliseconds 500
-    if ((Placed).Left -ne $still.Left) { Fail "the hidden piece moved from $(Say $still) to $(Say (Placed))" }
-    Write-Host "Hidden: the piece waits at $(Say $still)."
-    $W::Key($right, 0x75, 0x40)   # F6: toggle_split_zoom
-    [void](WaitFor { $b = Bar; if ($b -and $b.Left -ne $still.Left) { $b } } 'the piece to move again once shown')
-    Write-Host 'Shown again: the piece moves.'
+    if (-not $animated) {
+        $still = Still 'the piece (animation effects are off)'
+        Write-Host "Unknown, with animation effects off: the piece waits at $(Say $still)."
+        if ($env:CI -eq 'true') {
+            # For this session only (not saved), until the test ends.
+            [void]$W::SetSystemParameter(0x1043, 0, [IntPtr]1, 0)   # SPI_SETCLIENTAREAANIMATION
+            $script:restoreAnimations = $true
+            $animated = $true
+            Write-Host 'Turned animation effects on for the rest.'
+        } else {
+            Write-Host "::notice title=progress::Windows' animation effects are off here, so the piece's sliding isn't checked."
+        }
+    } else {
+        $first = WaitFor { $b = Bar; if ($b -and $b.Width -le $piece + 1) { $b } } 'the sliding piece'
+        $moved = WaitFor { $b = Bar; if ($b -and $b.Left -ne $first.Left) { $b } } "the piece to move from $(Say $first)"
+        Write-Host "Unknown: the piece went from $(Say $first) to $(Say $moved)."
+    }
+    if ($animated) {
+        # Hidden (the right split zoomed), it waits in the middle: nothing
+        # moves where no one can see it. Shown again, it moves again.
+        $W::Key($right, 0x75, 0x40)   # F6: toggle_split_zoom
+        [void](WaitFor { -not $W::IsWindowVisible($left) } 'the left terminal to be hidden by the zoom')
+        $still = Still 'the hidden piece'
+        Write-Host "Hidden: the piece waits at $(Say $still)."
+        $W::Key($right, 0x75, 0x40)   # F6: toggle_split_zoom
+        [void](WaitFor { $b = Bar; if ($b -and $b.Left -ne $still.Left) { $b } } 'the piece to move again once shown')
+        Write-Host 'Shown again: the piece moves.'
+    }
 
     # An error at 30%.
     Go 2
@@ -147,6 +175,7 @@ try {
     [void](WaitFor { -not (Bar) } 'the bar to go')
     Write-Host 'Removed: the bar is hidden.'
 } finally {
+    if ($script:restoreAnimations) { [void]$W::SetSystemParameter(0x1043, 0, [IntPtr]0, 0) }
     if (-not $process.HasExited) { Stop-Process -Id $process.Id -Force }
     Start-Sleep -Milliseconds 500
     Remove-Item -LiteralPath $dir -Recurse -Force -ErrorAction SilentlyContinue
