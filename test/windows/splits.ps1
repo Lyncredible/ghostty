@@ -2,9 +2,10 @@
 # terminals side by side, goto_split moves the keyboard focus between
 # them, resize_split moves the divider, equalize_splits makes them even
 # again, resizing far past either edge leaves that terminal a cell wide
-# (and resizing back moves at once), and toggle_split_zoom gives the
-# focused one the whole tab and back. Keys are posted to the terminals and the focus is read from
-# Ghostty's thread (GetGUIThreadInfo), so it runs on a locked desktop.
+# (and resizing back moves at once, and a larger font makes it larger),
+# and toggle_split_zoom gives the focused one the whole tab and back.
+# Keys are posted to the terminals and the focus is read from Ghostty's
+# thread (GetGUIThreadInfo), so it runs on a locked desktop.
 #
 #     ./splits.ps1 -Exe zig-out/bin/ghostty.exe
 
@@ -46,7 +47,8 @@ $process = Start-Process -FilePath $Exe -PassThru -RedirectStandardError $log -A
     '--window-save-state=never', '--window-width=100', '--window-height=30',
     '--keybind=f5=new_split:right', '--keybind=f6=goto_split:left', '--keybind=f7=goto_split:right',
     '--keybind=f8=resize_split:right,200', '--keybind=f9=equalize_splits', '--keybind=f10=toggle_split_zoom',
-    '--keybind=f11=resize_split:left,10000', '--keybind=f12=resize_split:right,10000'
+    '--keybind=f11=resize_split:left,10000', '--keybind=f12=resize_split:right,10000',
+    '--keybind=f13=increase_font_size:12'
 
 function Fail([string]$message) {
     Write-Host "::error title=splits::$message"
@@ -127,6 +129,11 @@ try {
     $W::Key($left, 0x7B, 0x58)    # F12: resize_split:right,10000
     [void](WaitFor { $px = Width $right; $px -ge 8 -and $px -lt $even / 2 -and $W::IsWindowVisible($right) } 'the right terminal to shrink to a cell')
     Write-Host "resize_split:right,10000: the right terminal is $(Width $right) px wide."
+    # A larger font makes its cell larger, and the terminal at least that.
+    $least = Width $right
+    $W::Key($right, 0x7C, 0x64)   # F13: increase_font_size:12
+    [void](WaitFor { (Width $right) -gt $least + 5 } "the right terminal to grow with its font from $least px")
+    Write-Host "increase_font_size:12 made it $(Width $right) px wide."
     $W::Key($left, 0x78, 0x43)    # F9: equalize_splits
     [void](WaitFor { [Math]::Abs((Width $left) - (Width $right)) -le 2 } 'the splits to be even again')
 

@@ -1346,7 +1346,14 @@ pub fn performAction(
 
         .cell_size => switch (target) {
             .app => return false,
-            .surface => |v| v.rt_surface.cell_size = value,
+            .surface => |v| {
+                const surface = v.rt_surface;
+                const old = surface.cell_size;
+                surface.cell_size = value;
+                if (old != null and (old.?.width != value.width or old.?.height != value.height)) {
+                    surface.window.cellSizeChanged(surface);
+                }
+            },
         },
 
         .color_change => switch (target) {
