@@ -3414,7 +3414,8 @@ Notes:
       (`Accessibility.zig`, 2026-11-12). A range's text, asked for with a
       length limit, could end on the first half of an emoji's surrogate
       pair; it now stops before the character (`limitText`, unit test).
-      `uia-ranges` passes here.
+      `uia-ranges` passes here. CI run 43323758757 passed on all five
+      jobs.
 - [x] Unimplemented apprt actions (as of 2026-10-25)
   - [x] `show_on_screen_keyboard`: toggles the touch keyboard through the
         shell's (undocumented) `ITipInvocation`, starting TabTip.exe if
