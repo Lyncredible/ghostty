@@ -1,8 +1,9 @@
 # Checks the split actions from keybinds: new_split:right makes two
 # terminals side by side, goto_split moves the keyboard focus between
 # them, resize_split moves the divider, equalize_splits makes them even
-# again, and toggle_split_zoom gives the focused one the whole tab and
-# back. Keys are posted to the terminals and the focus is read from
+# again, resizing far past either edge leaves that terminal a cell wide
+# (and resizing back moves at once), and toggle_split_zoom gives the
+# focused one the whole tab and back. Keys are posted to the terminals and the focus is read from
 # Ghostty's thread (GetGUIThreadInfo), so it runs on a locked desktop.
 #
 #     ./splits.ps1 -Exe zig-out/bin/ghostty.exe
@@ -44,7 +45,8 @@ $log = Join-Path ([IO.Path]::GetTempPath()) "ghostty-splits-$PID.log"
 $process = Start-Process -FilePath $Exe -PassThru -RedirectStandardError $log -ArgumentList '--command=cmd.exe',
     '--window-save-state=never', '--window-width=100', '--window-height=30',
     '--keybind=f5=new_split:right', '--keybind=f6=goto_split:left', '--keybind=f7=goto_split:right',
-    '--keybind=f8=resize_split:right,200', '--keybind=f9=equalize_splits', '--keybind=f10=toggle_split_zoom'
+    '--keybind=f8=resize_split:right,200', '--keybind=f9=equalize_splits', '--keybind=f10=toggle_split_zoom',
+    '--keybind=f11=resize_split:left,10000', '--keybind=f12=resize_split:right,10000'
 
 function Fail([string]$message) {
     Write-Host "::error title=splits::$message"
@@ -110,6 +112,23 @@ try {
     $W::Key($left, 0x78, 0x43)    # F9: equalize_splits
     [void](WaitFor { [Math]::Abs((Width $left) - (Width $right)) -le 2 } 'the splits to be even again')
     Write-Host "equalize_splits: $(Describe $left) and $(Describe $right)."
+
+    # Resizing far past an edge leaves the terminal there a cell (and its
+    # padding) wide, never nothing: no cell is narrower than 8 pixels.
+    $even = Width $left
+    $W::Key($left, 0x7A, 0x57)    # F11: resize_split:left,10000
+    [void](WaitFor { $px = Width $left; $px -ge 8 -and $px -lt $even / 2 -and $W::IsWindowVisible($left) } 'the left terminal to shrink to a cell')
+    $least = Width $left
+    Write-Host "resize_split:left,10000: the left terminal is $least px wide, the right $(Width $right)."
+    # It stops there: resizing back moves the divider at once.
+    $W::Key($left, 0x77, 0x42)    # F8: resize_split:right,200
+    [void](WaitFor { [Math]::Abs((Width $left) - $least - 200) -le 3 } "the divider to move 200 pixels right from $least")
+    Write-Host "resize_split:right,200 then made it $(Width $left) px wide."
+    $W::Key($left, 0x7B, 0x58)    # F12: resize_split:right,10000
+    [void](WaitFor { $px = Width $right; $px -ge 8 -and $px -lt $even / 2 -and $W::IsWindowVisible($right) } 'the right terminal to shrink to a cell')
+    Write-Host "resize_split:right,10000: the right terminal is $(Width $right) px wide."
+    $W::Key($left, 0x78, 0x43)    # F9: equalize_splits
+    [void](WaitFor { [Math]::Abs((Width $left) - (Width $right)) -le 2 } 'the splits to be even again')
 
     # toggle_split_zoom gives the left one the whole tab, then back.
     $split = "$(Describe $left) | $(Describe $right)"
