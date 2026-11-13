@@ -1,8 +1,8 @@
 # Checks `prompt_surface_title`: the "Change Terminal Title" dialog sets the
 # terminal's title (the window's title follows it), and an empty title
-# clears the override so the shell's title comes back. The dialog's field is
-# set with WM_SETTEXT and OK pressed with BM_CLICK. It shows a dialog, so it
-# only runs in CI.
+# clears the override so the shell's title comes back. Ctrl+Backspace in
+# the field deletes a word. The dialog's field is set with WM_SETTEXT and OK
+# pressed with BM_CLICK. It shows a dialog, so it only runs in CI.
 #
 #     $env:CI = 'true'; ./title-prompt.ps1 -Exe zig-out/bin/ghostty.exe
 
@@ -25,7 +25,11 @@ Add-Type -Namespace GhosttyTitlePrompt -Name Win32 -MemberDefinition @'
 [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(System.IntPtr h, out uint pid);
 [DllImport("user32.dll", CharSet = CharSet.Unicode)] public static extern int GetWindowTextW(System.IntPtr h, System.Text.StringBuilder s, int n);
 [DllImport("user32.dll", CharSet = CharSet.Unicode)] public static extern System.IntPtr FindWindowExW(System.IntPtr parent, System.IntPtr after, string cls, string title);
+[DllImport("user32.dll", EntryPoint = "SendMessageW")] public static extern System.IntPtr SendInt(System.IntPtr h, uint m, System.IntPtr w, System.IntPtr l);
+[DllImport("user32.dll", EntryPoint = "SendMessageW", CharSet = CharSet.Unicode)] public static extern System.IntPtr SendBuffer(System.IntPtr h, uint m, System.IntPtr w, System.Text.StringBuilder l);
 public static string Text(System.IntPtr h) { var s = new System.Text.StringBuilder(512); GetWindowTextW(h, s, 512); return s.ToString(); }
+// An edit field's text (GetWindowText doesn't read another process's).
+public static string FieldText(System.IntPtr h) { var s = new System.Text.StringBuilder(512); SendBuffer(h, 0x000D, (System.IntPtr)512, s); return s.ToString(); }
 // A key press and release, with the scan code in lParam.
 public static void Key(System.IntPtr h, int vk, int scan) {
   PostMessageW(h, 0x0100, (System.IntPtr)vk, (System.IntPtr)(1 | (scan << 16)));                       // WM_KEYDOWN
@@ -68,13 +72,20 @@ function Dialog {
     }
 }
 
-# Open the dialog, type the title and press OK.
-function SetTitle([string]$title) {
+# Open the dialog, type the title and press OK. With $extra after the
+# title, Ctrl+Backspace (its character, U+007F) deletes it first.
+function SetTitle([string]$title, [string]$extra = '') {
     $W::Key($surface, 0x78, 0x43)   # F9: prompt_surface_title
     $dialog = WaitFor { Dialog } 'the title dialog'
     # The dialog can be found before its controls are made.
     $edit = WaitFor { $e = $W::FindWindowExW($dialog, [IntPtr]::Zero, 'Edit', [NullString]::Value); if ($e -ne [IntPtr]::Zero) { $e } } "the title dialog's text field"
-    [void]$W::SendMessageW($edit, 0x000C, [IntPtr]::Zero, $title)   # WM_SETTEXT
+    [void]$W::SendMessageW($edit, 0x000C, [IntPtr]::Zero, "$title$extra")   # WM_SETTEXT
+    if ($extra) {
+        [void]$W::SendInt($edit, 0x00B1, [IntPtr]1000, [IntPtr]1000)   # EM_SETSEL: the caret at the end
+        [void]$W::PostMessageW($edit, 0x0102, [IntPtr]0x7F, [IntPtr]1)   # WM_CHAR
+        [void](WaitFor { $W::FieldText($edit) -eq $title } "Ctrl+Backspace to delete '$extra' (the field has '$($W::FieldText($edit))')")
+        Write-Host "Ctrl+Backspace deleted '$extra' in the field."
+    }
     $ok = $W::GetDlgItem($dialog, 1)   # IDOK
     if ($ok -eq [IntPtr]::Zero) { Fail 'the title dialog has no OK button' }
     [void]$W::PostMessageW($ok, 0x00F5, [IntPtr]::Zero, [IntPtr]::Zero)   # BM_CLICK
@@ -87,7 +98,7 @@ try {
     $shell = WaitFor { $t = $W::Text($window); if ($t -and $t -notmatch '^Ghostty') { $t } } "the shell's title"
     Write-Host "The shell's title: '$shell'."
 
-    SetTitle 'Title From The Test'
+    SetTitle 'Title From The Test ' 'Extra'
     [void](WaitFor { $W::Text($window) -match 'Title From The Test' } 'the new title')
     Write-Host "The dialog set the title: '$($W::Text($window))'."
 
