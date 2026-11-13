@@ -1155,18 +1155,25 @@ pub fn setProgressReport(self: *Surface, report: terminal.osc.Command.ProgressRe
     }
 }
 
-/// Show our progress report on our bar, and keep it going: the sliding
-/// piece moves only while anyone can see it (and Windows animates), and a
-/// report that stops coming goes after 15 seconds, as the taskbar's does.
-fn updateProgressBar(self: *Surface) void {
-    _ = c.KillTimer(self.hwnd, progress_timer_id);
-    const now = c.GetTickCount64();
+/// Our progress report at `now`, for our bar and the taskbar: a report
+/// that stops coming goes after 15 seconds, as on macOS.
+pub fn progressReport(self: *Surface, now: u64) ?terminal.osc.Command.ProgressReport {
     if (self.progress_report != null and self.progress_expires_at <= now) {
         log.debug("progress report expired", .{});
         self.progress_report = null;
         self.progress_value = null;
     }
-    const look: ProgressBar.Look = if (self.progress_style) .of(self.progress_report, self.progress_value) else .none;
+    return self.progress_report;
+}
+
+/// Show our progress report on our bar, and keep it going: the sliding
+/// piece moves only while anyone can see it (and Windows animates), and
+/// the bar goes when the report expires.
+fn updateProgressBar(self: *Surface) void {
+    _ = c.KillTimer(self.hwnd, progress_timer_id);
+    const now = c.GetTickCount64();
+    const report = self.progressReport(now);
+    const look: ProgressBar.Look = if (self.progress_style) .of(report, self.progress_value) else .none;
     const moving = look == .sliding and self.seen and util.animations();
     const dpi: c_int = @intCast(c.GetDpiForWindow(self.hwnd));
     const rect = ProgressBar.place(look, @intCast(self.size.width), dpi, if (moving) now else ProgressBar.slide_ms / 2);
