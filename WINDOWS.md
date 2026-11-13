@@ -3690,6 +3690,15 @@ Notes:
     `check_for_updates`, `toggle_tab_overview`, `show_gtk_inspector`,
     `render` (embedded), `selection_changed` (no primary selection).
     Unhandled, as on GTK: `cell_size`, `pwd`.
+  - Checked again 2026-11-13 (every `Action` field against `App.zig`,
+    and every config field GTK reads against the Win32 apprt): the
+    actions Win32 never names are the ones above plus
+    `show_child_exited`, and the fields only GTK reads are `gtk-*`,
+    `linux-cgroup*`, `x11-instance-name` and `async-backend` (GTK or
+    Linux only), `quick-terminal-keyboard-interactivity` (Wayland; its
+    docs say Windows acts as `on-demand`), and ones the core applies
+    for us (`font-size`, `theme`, `term`, `clipboard-read`/`-write`,
+    `window-width`/`-height` through `initial_size`). Nothing missing.
   - [x] `color_change`: the tab bar follows the active terminal's
         background and foreground when programs change them (OSC 10/11,
         and their resets). Checked with a screenshot after OSC 11/10.
