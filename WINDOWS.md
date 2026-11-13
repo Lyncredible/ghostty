@@ -1594,6 +1594,13 @@ Notes:
         commits checked). The app builds. Pushed as 0043c2e1f with
         the FindText checks in `uia-ranges.ps1`; CI run 43154589789
         passed every job, and `windows-tip` moved.
+  - [x] 2026-11-13: a thirty-fourth sync (4 commits: the page list
+        skips a pin lookup on a carriage return, and a cloned page
+        clears its padding rows to its page's width). No conflicts;
+        author dates kept (898 commits checked; three whose committer
+        time was seconds after their author time now match it). The
+        app builds, and the clone (140) and page list (413) tests pass.
+        Pushed as 11e64e563.
   - [x] It failed there again in run 42948447833 (098593a94), now
         saying what was on screen: the command had run (its output was
         there), but the typed line read `echo M`, a line break,
