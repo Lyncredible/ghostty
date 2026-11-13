@@ -3520,7 +3520,8 @@ Notes:
       palette, which the action may have closed with its surface.
   - Test: `command-palette.ps1` adds an entry
     (`text:echo palette-ok>palette.txt\x0d`), chooses it, and checks the
-    file. Without the fix Ghostty crashed there; with it it passed here.
+    file. Without the fix Ghostty crashed there; with it it passed here,
+    and in CI run 43396498162 (its log has the text entry's check).
 - [x] Unimplemented apprt actions (as of 2026-10-25)
   - [x] `show_on_screen_keyboard`: toggles the touch keyboard through the
         shell's (undocumented) `ITipInvocation`, starting TabTip.exe if
