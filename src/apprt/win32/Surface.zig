@@ -25,6 +25,7 @@ const LinkPreview = @import("LinkPreview.zig");
 const Scrollbar = @import("Scrollbar.zig");
 const Badge = @import("Badge.zig");
 const SearchBar = @import("SearchBar.zig");
+const clipboard = @import("clipboard.zig");
 const Overrides = @import("Overrides.zig");
 const Menu = @import("Menu.zig");
 const CommandPalette = @import("CommandPalette.zig");
@@ -387,7 +388,10 @@ pub fn deinit(self: *Surface) void {
 
     // Detach from our window first so that no more messages reach us.
     _ = c.SetWindowLongPtrW(self.hwnd, util.GWLP_USERDATA, 0);
-    if (self.pending_clipboard) |pending| pending.deinit(alloc);
+    if (self.pending_clipboard) |pending| {
+        pending.discard();
+        pending.deinit(alloc);
+    }
     self.dim_overlay.deinit();
     self.bell_border.deinit();
     self.link_preview.deinit(alloc);
@@ -998,7 +1002,7 @@ pub fn setMouseOverLink(self: *Surface, url: []const u8) void {
 pub fn copyTitleToClipboard(self: *Surface) !bool {
     const title = self.effectiveTitle() orelse return false;
     if (title.len == 0) return false;
-    try writeClipboardText(self.app.core_app.alloc, self.hwnd, title, null);
+    try writeClipboardText(self.app.core_app.alloc, self.hwnd, title, null, &.{});
     return true;
 }
 
@@ -1209,9 +1213,20 @@ pub fn clipboardRequest(
     switch (state) {
         .paste, .osc_52_read => {},
 
-        // We only support plain text for now, which isn't enough to
-        // serve the Kitty clipboard protocol or paste events.
-        .kitty_read, .kitty_write, .list => return .unsupported,
+        // These complete before we return (or wait for the user to
+        // allow them), since reading the clipboard is immediate here.
+        .list => {
+            self.completeClipboardList(state);
+            return .started;
+        },
+        .kitty_read => {
+            self.kittyRead(state, false);
+            return .started;
+        },
+        .kitty_write => {
+            self.kittyWrite(state);
+            return .started;
+        },
 
         // No clipboard write code paths travel through this function
         .osc_52_write => unreachable,
@@ -1262,6 +1277,119 @@ fn completeClipboardText(
     };
 }
 
+/// List the clipboard's MIME types for a paste event (mode 5522), which
+/// reads no data.
+fn completeClipboardList(self: *Surface, state: apprt.ClipboardRequest) void {
+    var arena: std.heap.ArenaAllocator = .init(self.app.core_app.alloc);
+    defer arena.deinit();
+    const available: []const []const u8 = available: {
+        openClipboard(self.hwnd) catch |err| {
+            log.warn("failed to open clipboard err={}", .{err});
+            break :available &.{};
+        };
+        defer _ = c.CloseClipboard();
+        break :available clipboard.available(arena.allocator()) catch &.{};
+    };
+    self.core_surface.completeClipboardRequest(state, .{ .available = available }) catch |err| {
+        log.warn("failed to complete clipboard request err={}", .{err});
+    };
+}
+
+/// Serve a Kitty clipboard protocol read (OSC 5522): the representations
+/// it asks for that the clipboard has, and the listing if it asks. If
+/// the configuration says to ask, the user is asked first, and allowing
+/// it reads again, `confirmed`.
+fn kittyRead(self: *Surface, state: apprt.ClipboardRequest, confirmed: bool) void {
+    const kitty = state.kitty_read;
+    var arena: std.heap.ArenaAllocator = .init(self.app.core_app.alloc);
+    defer arena.deinit();
+    const alloc = arena.allocator();
+
+    var contents_buf: [terminal.kitty.clipboard.max_read_mimes]terminal.clipboard.Content = undefined;
+    var contents_len: usize = 0;
+    var available: []const []const u8 = &.{};
+    if (openClipboard(self.hwnd)) {
+        defer _ = c.CloseClipboard();
+        for (kitty.mimes) |mime| {
+            if (contents_len == contents_buf.len) break;
+            const data = (readMime(alloc, mime) catch null) orelse continue;
+            contents_buf[contents_len] = .{ .mime = mime, .data = data };
+            contents_len += 1;
+        }
+        if (kitty.list) available = clipboard.available(alloc) catch &.{};
+    } else |err| log.warn("failed to open clipboard err={}", .{err});
+
+    const contents = contents_buf[0..contents_len];
+    self.core_surface.completeClipboardRequest(state, .{
+        .contents = contents,
+        .available = available,
+        .confirmed = confirmed,
+    }) catch |err| switch (err) {
+        error.UnauthorizedPaste => {
+            const preview = clipboardPreview(self.app.core_app.alloc, contents) catch
+                return self.core_surface.denyClipboardRequest(state);
+            self.queueClipboard(.{ .kind = .{ .read = state }, .text = preview });
+        },
+        else => log.err("error completing clipboard request err={}", .{err}),
+    };
+}
+
+/// A representation on the open clipboard by MIME type, or null.
+fn readMime(alloc: Allocator, mime: []const u8) !?[]const u8 {
+    return switch (clipboard.formatFor(mime) orelse return null) {
+        .text => try readOpenClipboardText(alloc),
+        .html => |format| clipboard.htmlFragment(try clipboard.readRaw(alloc, format) orelse return null),
+        .raw => |format| try clipboard.readRaw(alloc, format),
+    };
+}
+
+/// Complete a Kitty clipboard protocol write, which carries its own
+/// contents (the core writes them with setClipboard), asking first if
+/// the configuration says to.
+fn kittyWrite(self: *Surface, state: apprt.ClipboardRequest) void {
+    self.core_surface.completeClipboardRequest(state, .{}) catch |err| switch (err) {
+        error.UnauthorizedPaste => {
+            const preview = clipboardPreview(self.app.core_app.alloc, state.kitty_write.contents) catch
+                return self.core_surface.denyClipboardRequest(state);
+            self.queueClipboard(.{ .kind = .{ .kitty_write = state }, .text = preview });
+        },
+        else => log.err("error completing clipboard request err={}", .{err}),
+    };
+}
+
+/// What a confirmation shows of clipboard contents: the text, or else
+/// each representation's type and size.
+fn clipboardPreview(alloc: Allocator, contents: anytype) ![:0]u8 {
+    for (contents) |content| {
+        if (terminal.clipboard.isTextMime(content.mime)) return alloc.dupeSentinel(u8, content.data, 0);
+    }
+    var text: std.Io.Writer.Allocating = .init(alloc);
+    defer text.deinit();
+    for (contents, 0..) |content, i| {
+        if (i > 0) try text.writer.writeByte('\n');
+        try text.writer.print("{s} ({d} bytes)", .{ content.mime, content.data.len });
+    }
+    return text.toOwnedSliceSentinel(0);
+}
+
+test clipboardPreview {
+    const testing = std.testing;
+    const alloc = testing.allocator;
+    const Content = terminal.clipboard.Content;
+    const text = try clipboardPreview(alloc, &[_]Content{
+        .{ .mime = "image/png", .data = "PNG" },
+        .{ .mime = "text/plain", .data = "hello" },
+    });
+    defer alloc.free(text);
+    try testing.expectEqualStrings("hello", text);
+    const types = try clipboardPreview(alloc, &[_]Content{
+        .{ .mime = "image/png", .data = "1234" },
+        .{ .mime = "text/html", .data = "<b>" },
+    });
+    defer alloc.free(types);
+    try testing.expectEqualStrings("image/png (4 bytes)\ntext/html (3 bytes)", types);
+}
+
 pub fn setClipboard(
     self: *Surface,
     clipboard_type: apprt.Clipboard,
@@ -1271,29 +1399,35 @@ pub fn setClipboard(
     if (clipboard_type != .standard) return;
 
     // We write plain text, and HTML (with colors and styles) when we have
-    // it, which rich text editors paste.
-    const text: [:0]const u8 = for (contents) |content| {
-        if (std.mem.eql(u8, content.mime, "text/plain")) break content.data;
-    } else return;
+    // it, which rich text editors paste. A Kitty clipboard protocol write
+    // can also have other representations, such as an image, or no text.
+    const text: ?[:0]const u8 = for (contents) |content| {
+        if (terminal.clipboard.isTextMime(content.mime)) break content.data;
+    } else null;
     const html: ?[]const u8 = for (contents) |content| {
         if (std.mem.eql(u8, content.mime, "text/html")) break content.data;
     } else null;
 
     const alloc = self.app.core_app.alloc;
     if (confirm) {
-        const owned_text = try alloc.dupeSentinel(u8, text, 0);
+        // Only OSC 52 asks here, with text.
+        const owned_text = try alloc.dupeSentinel(u8, text orelse return, 0);
         errdefer alloc.free(owned_text);
         const owned_html = if (html) |v| try alloc.dupe(u8, v) else null;
         self.queueClipboard(.{ .kind = .{ .write = owned_html }, .text = owned_text });
         return;
     }
-    try self.writeClipboard(text, html);
+    if (text == null and html == null and contents.len == 0) return;
+    try self.writeClipboard(text, html, contents);
 }
 
-fn writeClipboard(self: *Surface, text: [:0]const u8, html: ?[]const u8) !void {
-    try writeClipboardText(self.app.core_app.alloc, self.hwnd, text, html);
+fn writeClipboard(self: *Surface, text: ?[]const u8, html: ?[]const u8, others: []const apprt.ClipboardContent) !void {
+    try writeClipboardText(self.app.core_app.alloc, self.hwnd, text, html, others);
     if (self.app.config.@"app-notifications".@"clipboard-copy") {
-        self.showToast(i18n.text(if (text.len > 0) "Copied to clipboard" else "Cleared clipboard"));
+        const empty = (if (text) |t| t.len == 0 else true) and (if (html) |h| h.len == 0 else true) and for (others) |other| {
+            if (other.data.len > 0) break false;
+        } else true;
+        self.showToast(i18n.text(if (empty) "Cleared clipboard" else "Copied to clipboard"));
     }
 }
 
@@ -1305,22 +1439,40 @@ const PendingClipboard = struct {
         read: apprt.ClipboardRequest,
         /// A program writing the clipboard (OSC 52), with any HTML.
         write: ?[]u8,
+        /// A program writing the clipboard with the Kitty clipboard
+        /// protocol; the request has what it would write.
+        kitty_write: apprt.ClipboardRequest,
     },
+    /// What the question shows.
     text: [:0]u8,
 
     fn deinit(self: PendingClipboard, alloc: Allocator) void {
         alloc.free(self.text);
         switch (self.kind) {
             .write => |html| if (html) |v| alloc.free(v),
-            .unsafe_paste, .read => {},
+            .unsafe_paste, .read, .kitty_write => {},
         }
     }
 
     /// Answer a request without asking, as if the user said no.
     fn deny(self: PendingClipboard, surface: *Surface) void {
         switch (self.kind) {
-            .unsafe_paste, .read => |state| surface.core_surface.denyClipboardRequest(state),
+            .unsafe_paste, .read, .kitty_write => |state| surface.core_surface.denyClipboardRequest(state),
             .write => {},
+        }
+    }
+
+    /// Free a Kitty clipboard protocol request that no one will answer,
+    /// as the surface closes.
+    fn discard(self: PendingClipboard) void {
+        const state = switch (self.kind) {
+            .unsafe_paste, .read, .kitty_write => |state| state,
+            .write => return,
+        };
+        switch (state) {
+            .kitty_read => |kitty| kitty.destroy(),
+            .kitty_write => |kitty| kitty.destroy(),
+            else => {},
         }
     }
 };
@@ -1356,7 +1508,7 @@ fn clipboardQuestion(kind: std.meta.Tag(@FieldType(PendingClipboard, "kind"))) D
             .accept = "Allow",
             .reject = "Deny",
         },
-        .write => .{
+        .write, .kitty_write => .{
             .title = "Authorize Clipboard Access",
             .message = "An application is attempting to write to the clipboard. The current clipboard contents are shown below.",
             .accept = "Allow",
@@ -1366,7 +1518,7 @@ fn clipboardQuestion(kind: std.meta.Tag(@FieldType(PendingClipboard, "kind"))) D
     if (msgids.translated()) |text| return text;
     var english = msgids;
     // What's shown is what it would copy, not what the clipboard has.
-    if (kind == .write) english.message = "An application is attempting to write to the clipboard. The text it would copy is shown below.";
+    if (kind == .write or kind == .kitty_write) english.message = "An application is attempting to write to the clipboard. The text it would copy is shown below.";
     return english;
 }
 
@@ -1404,12 +1556,20 @@ fn confirmClipboard(self: *Surface) void {
     const allowed = Window.confirmText(self.window, alloc, clipboardQuestion(pending.kind), pending.text);
 
     // The process can exit and destroy this surface while the dialog pumps
-    // messages.
-    if (c.GetWindowLongPtrW(hwnd, util.GWLP_USERDATA) != identity) return;
+    // messages. No one will answer a Kitty clipboard protocol request
+    // then, and the request is ours to free.
+    if (c.GetWindowLongPtrW(hwnd, util.GWLP_USERDATA) != identity) return pending.discard();
     if (!allowed) return pending.deny(self);
     switch (pending.kind) {
-        .unsafe_paste, .read => |state| self.completeClipboardText(state, pending.text, true),
-        .write => |html| self.writeClipboard(pending.text, html) catch |err| {
+        .unsafe_paste, .read => |state| switch (state) {
+            // Read again: the question only showed the text.
+            .kitty_read => self.kittyRead(state, true),
+            else => self.completeClipboardText(state, pending.text, true),
+        },
+        .write => |html| self.writeClipboard(pending.text, html, &.{}) catch |err| {
+            log.warn("failed to write clipboard err={}", .{err});
+        },
+        .kitty_write => |state| self.core_surface.completeClipboardRequest(state, .{ .confirmed = true }) catch |err| {
             log.warn("failed to write clipboard err={}", .{err});
         },
     }
@@ -1494,7 +1654,11 @@ fn readClipboardText(alloc: Allocator, hwnd: c.HWND) !?[:0]u8 {
 
     try openClipboard(hwnd);
     defer _ = c.CloseClipboard();
+    return readOpenClipboardText(alloc);
+}
 
+/// The open clipboard's text, as readClipboardText.
+fn readOpenClipboardText(alloc: Allocator) !?[:0]u8 {
     const handle = c.GetClipboardData(c.CF_UNICODETEXT) orelse return null;
     const ptr: [*]const u16 = @ptrCast(@alignCast(c.GlobalLock(handle) orelse return null));
     defer _ = c.GlobalUnlock(handle);
@@ -1511,36 +1675,54 @@ fn readClipboardText(alloc: Allocator, hwnd: c.HWND) !?[:0]u8 {
     return shrunk[0..len :0];
 }
 
-/// Write text to the clipboard. Line endings are converted from LF to
-/// CRLF, as is standard for text on Windows.
-fn writeClipboardText(alloc: Allocator, hwnd: c.HWND, text: []const u8, html: ?[]const u8) !void {
-    const crlf = try lfToCrlf(alloc, text);
-    defer alloc.free(crlf);
-    const text16 = try util.utf16Alloc(alloc, crlf);
-    defer alloc.free(text16);
+/// Write text to the clipboard, with any HTML and other representations
+/// (by MIME type; the text and HTML among them are skipped). Line endings
+/// are converted from LF to CRLF, as is standard for text on Windows.
+fn writeClipboardText(
+    alloc: Allocator,
+    hwnd: c.HWND,
+    text: ?[]const u8,
+    html: ?[]const u8,
+    others: []const apprt.ClipboardContent,
+) !void {
+    const mem: c.HGLOBAL = if (text) |t| mem: {
+        const crlf = try lfToCrlf(alloc, t);
+        defer alloc.free(crlf);
+        const text16 = try util.utf16Alloc(alloc, crlf);
+        defer alloc.free(text16);
 
-    const bytes = (text16.len + 1) * @sizeOf(u16);
-    const mem = c.GlobalAlloc(c.GMEM_MOVEABLE, bytes) orelse return error.OutOfMemory;
-    {
-        const dst: [*]u16 = @ptrCast(@alignCast(c.GlobalLock(mem) orelse {
-            _ = c.GlobalFree(mem);
+        const bytes = (text16.len + 1) * @sizeOf(u16);
+        const m = c.GlobalAlloc(c.GMEM_MOVEABLE, bytes) orelse return error.OutOfMemory;
+        const dst: [*]u16 = @ptrCast(@alignCast(c.GlobalLock(m) orelse {
+            _ = c.GlobalFree(m);
             return error.OutOfMemory;
         }));
         @memcpy(dst[0 .. text16.len + 1], text16[0 .. text16.len + 1]);
-        _ = c.GlobalUnlock(mem);
-    }
+        _ = c.GlobalUnlock(m);
+        break :mem m;
+    } else null;
 
     openClipboard(hwnd) catch |err| {
-        _ = c.GlobalFree(mem);
+        if (mem != null) _ = c.GlobalFree(mem);
         return err;
     };
     defer _ = c.CloseClipboard();
 
     _ = c.EmptyClipboard();
-    if (c.SetClipboardData(c.CF_UNICODETEXT, mem) == null) {
+    if (mem != null and c.SetClipboardData(c.CF_UNICODETEXT, mem) == null) {
         // On success the system owns the memory, otherwise we do.
         _ = c.GlobalFree(mem);
         return error.SetClipboardFailed;
+    }
+
+    for (others) |content| {
+        if (std.mem.eql(u8, content.mime, "text/html")) continue;
+        switch (clipboard.formatFor(content.mime) orelse continue) {
+            .text, .html => {},
+            .raw => |format| if (!clipboard.writeRaw(format, content.data)) {
+                log.warn("failed to write clipboard representation mime={s}", .{content.mime});
+            },
+        }
     }
 
     // HTML is a bonus, so failing to add it isn't an error.
@@ -1671,6 +1853,8 @@ test cfHtml {
     try testing.expectEqualStrings("<b>hi</b>", data[offset(data, "StartFragment:")..offset(data, "EndFragment:")]);
     try testing.expectEqualStrings("<html>", data[offset(data, "StartHTML:")..][0..6]);
     try testing.expectEqual(data.len, offset(data, "EndHTML:"));
+    // What a Kitty clipboard protocol read gets back.
+    try testing.expectEqualStrings("<b>hi</b>", clipboard.htmlFragment(data).?);
 }
 
 pub fn defaultTermioEnv(self: *Surface) !std.process.Environ.Map {

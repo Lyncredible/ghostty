@@ -570,6 +570,19 @@ its `OK` for the Kitty query. The
 ConPTY built into Windows swallows these queries, so without it the test
 only reports what came back.
 
+## kitty-clipboard.ps1
+
+Checks the Kitty clipboard protocol (OSC 5522): a PowerShell inside
+Ghostty writes text and a type of its own (`application/x-ghostty-test`),
+which puts the text on the clipboard, reads both back with the listing of
+the types there, and turns on paste events (mode 5522), after which a
+paste (a key bound to `paste_from_clipboard`) sends the listing rather
+than the text. In CI it runs again with `clipboard-write` and
+`clipboard-read` set to `ask`: allowing the write writes, and denying the
+read answers `EPERM`. Like `color-query.ps1` it needs `conpty.dll` next to
+`ghostty.exe`; without it the test only reports that nothing came back.
+It replaces what's on the clipboard.
+
 ## cli-ipc.ps1
 
 Checks the CLI actions that talk to a running Ghostty: `+new-tab` adds a tab

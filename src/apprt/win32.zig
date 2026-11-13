@@ -38,4 +38,5 @@ test {
     _ = @import("win32/LinkPreview.zig");
     _ = @import("win32/shells.zig");
     _ = @import("win32/shell.zig");
+    _ = @import("win32/clipboard.zig");
 }

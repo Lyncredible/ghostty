@@ -3462,6 +3462,33 @@ Notes:
       the quick terminal's animation, the bell's volume): all clamped,
       with NaN too. CI run 43367365077 passed on all five jobs; its log
       has the new title dialog, search field and window size checks.
+- [x] The Kitty clipboard protocol (OSC 5522) and its paste events
+      (found 2026-11-12, reviewing the clipboard): upstream's core, GTK
+      and the embedded runtime serve them, but Windows answered every
+      read and write `ENOSYS`. Worse, a program that turned on paste
+      events (mode 5522) got nothing at all when the user pasted: the
+      core asks the runtime for the listing of types, which Windows
+      didn't give. Now (`clipboard.zig`): text is `CF_UNICODETEXT`,
+      `text/html` the "HTML Format" (CF_HTML, its fragment), `image/png`
+      the "PNG" format browsers and Office use, and any other type a
+      format registered under its own name, so programs can trade it
+      through the clipboard. Paste events list those types; reads serve
+      them, with the listing when asked; writes put every representation
+      on the clipboard (one without text works too). With
+      `clipboard-read`/`clipboard-write = ask` the user is asked as for
+      OSC 52 (a read shows the text, or each type and size), and allowing
+      a read reads again. A request whose terminal closes while it's
+      asked about is freed (the first run of the test found that leak).
+      The question has no "remember" choice yet (GTK offers one for
+      requests with a password).
+  - Tests: `mimeOfName`, the formats for MIME types, `htmlFragment`
+    (and a round trip with our own CF_HTML), `clipboardPreview`, and
+    `test/windows/kitty-clipboard.ps1` (in CI, with the ConPTY package,
+    which passes OSC 5522 where the inbox ConPTY swallows it): a write
+    of text and a type of its own, a read of both with the listing, a
+    paste event, and in CI the questions (allowing the write, denying the
+    read). Without the change the write and read got `ENOSYS` and the
+    paste event never came. It passed here, both runs.
 - [x] Unimplemented apprt actions (as of 2026-10-25)
   - [x] `show_on_screen_keyboard`: toggles the touch keyboard through the
         shell's (undocumented) `ITipInvocation`, starting TabTip.exe if
