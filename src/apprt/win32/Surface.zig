@@ -421,7 +421,7 @@ pub fn deinit(self: *Surface) void {
 
     // Remove ourselves from the list of known surfaces in the app.
     self.app.core_app.deleteSurface(self);
-    self.app.notifier.surfaceDestroyed(&self.core_surface);
+    self.app.notifier.withdraw(&self.core_surface);
 
     // Clean up our core surface so that all the rendering and IO stop.
     if (self.core_initialized) {
@@ -2110,7 +2110,11 @@ pub fn wndProc(
         },
 
         c.WM_SETFOCUS, c.WM_KILLFOCUS => {
-            if (msg == c.WM_SETFOCUS) self.window.surfaceFocused(self);
+            if (msg == c.WM_SETFOCUS) {
+                self.window.surfaceFocused(self);
+                // As on GTK and macOS: its notification has been seen.
+                self.app.notifier.withdraw(&self.core_surface);
+            }
 
             // Screen readers follow the output of the focused terminal.
             if (msg == c.WM_SETFOCUS)

@@ -5,7 +5,8 @@
 //! registered with a Start menu shortcut, which unpackaged builds don't have.
 //!
 //! The icon is only added while a notification is showing, and removed
-//! once the user clicks or dismisses it or it times out.
+//! once the user clicks or dismisses it or it times out, or (as on GTK
+//! and macOS) once the terminal that sent it is focused or closed.
 const Notifier = @This();
 
 const std = @import("std");
@@ -117,9 +118,24 @@ pub fn handleMessage(self: *Notifier, lparam: c.LPARAM) ?*CoreSurface {
     return null;
 }
 
-/// Forget a surface that is being destroyed.
-pub fn surfaceDestroyed(self: *Notifier, surface: *CoreSurface) void {
-    if (self.surface == surface) self.surface = null;
+/// Withdraw the notification a surface sent, if it's the one showing:
+/// once its terminal is focused it has been seen, and once it's closed a
+/// click would have nothing to bring back.
+pub fn withdraw(self: *Notifier, surface: *CoreSurface) void {
+    if (self.surface != surface) return;
+    if (self.added) log.debug("withdrawing notification", .{});
+    self.remove();
+}
+
+test withdraw {
+    const testing = std.testing;
+    var surfaces: [2]CoreSurface = undefined;
+    var notifier: Notifier = .init(null, null);
+    notifier.surface = &surfaces[0];
+    notifier.withdraw(&surfaces[1]);
+    try testing.expectEqual(&surfaces[0], notifier.surface.?);
+    notifier.withdraw(&surfaces[0]);
+    try testing.expectEqual(null, notifier.surface);
 }
 
 fn remove(self: *Notifier) void {
