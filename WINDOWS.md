@@ -1610,6 +1610,17 @@ Notes:
         commits checked). The app builds, and the `clearCells` (82),
         Screen (325) and Kitty tests pass. Pushed as 66e867a87; CI run
         43478129412 passed every job, and `windows-tip` moved.
+  - [x] 2026-11-13: a thirty-sixth sync (2 commits: `copy-on-select`
+        defaults to the selection clipboard on macOS, and `true` means
+        `primary` there). One conflict: our docs of the option said what
+        it does on Windows, upstream rewrote them; upstream's text now
+        says Windows has no selection clipboard, so `primary` copies
+        nothing and `both` only to the system clipboard (`true` is
+        `clipboard` on Windows, unchanged). Dates kept (907 commits
+        checked). The app builds and upstream's two new copy-on-select
+        tests pass on Windows. Pushed as 6cc24517b; CI run 43515840112
+        passed every job, and `windows-tip` moved. Before it, CI run
+        43508244280 (3d25335a3, the title bar test) passed every job.
   - [x] It failed there again in run 42948447833 (098593a94), now
         saying what was on screen: the command had run (its output was
         there), but the typed line read `echo M`, a line break,
