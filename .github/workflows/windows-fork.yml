@@ -419,13 +419,16 @@ jobs:
         shell: pwsh
         run: ./test/windows/color-query.ps1 -Exe zig-out/bin/ghostty.exe
 
-      - name: Color query test (ConPTY package)
-        timeout-minutes: 5
+      - name: Color query and Kitty clipboard tests (ConPTY package)
+        timeout-minutes: 8
         shell: pwsh
         run: |
           ./dist/windows/conpty.ps1 -Destination zig-out/bin
           try {
             ./test/windows/color-query.ps1 -Exe zig-out/bin/ghostty.exe
+            # The Kitty clipboard protocol (OSC 5522) needs the package's
+            # ConPTY too.
+            ./test/windows/kitty-clipboard.ps1 -Exe zig-out/bin/ghostty.exe
           } finally {
             Start-Sleep -Seconds 2
             Remove-Item zig-out/bin/conpty.dll, zig-out/bin/OpenConsole.exe -Force -ErrorAction SilentlyContinue
