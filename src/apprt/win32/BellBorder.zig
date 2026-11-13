@@ -87,11 +87,24 @@ pub fn setVisible(self: *BellBorder, visible: bool) void {
     _ = c.ShowWindow(self.hwnd, if (visible) c.SW_SHOWNA else c.SW_HIDE);
 }
 
-/// The accent color (`util.accentColor`), avoiding our transparent color
-/// key.
-fn accentColor() c.COLORREF {
-    const color = util.accentColor();
+/// A color to draw, changed slightly if it's our transparent color key
+/// so it doesn't vanish.
+fn avoidKey(color: c.COLORREF) c.COLORREF {
     return if (color == transparent_key) util.rgb(0xFE, 0, 0xFF) else color;
+}
+
+/// The part of a client rectangle inside the border, which is drawn in
+/// the transparent color key, or null if the border fills it.
+fn hole(rect: c.RECT, dpi: c_int) ?c.RECT {
+    const border: c_int = @max(1, util.scale(width, dpi));
+    const inner: c.RECT = .{
+        .left = rect.left + border,
+        .top = rect.top + border,
+        .right = rect.right - border,
+        .bottom = rect.bottom - border,
+    };
+    if (inner.right <= inner.left or inner.bottom <= inner.top) return null;
+    return inner;
 }
 
 pub fn wndProc(hwnd: c.HWND, msg: c.UINT, wparam: c.WPARAM, lparam: c.LPARAM) callconv(.c) c.LRESULT {
@@ -106,21 +119,35 @@ pub fn wndProc(hwnd: c.HWND, msg: c.UINT, wparam: c.WPARAM, lparam: c.LPARAM) ca
             var rect: c.RECT = undefined;
             _ = c.GetClientRect(hwnd, &rect);
             const dpi: c_int = @intCast(c.GetDpiForWindow(hwnd));
-            const border: c_int = @max(1, util.scale(width, dpi));
 
-            const accent = c.CreateSolidBrush(accentColor());
+            const accent = c.CreateSolidBrush(avoidKey(util.accentColor()));
             defer _ = c.DeleteObject(accent);
             const key = c.CreateSolidBrush(transparent_key);
             defer _ = c.DeleteObject(key);
 
             _ = c.FillRect(dc, &rect, accent);
-            var inner = rect;
-            _ = c.InflateRect(&inner, -border, -border);
-            if (inner.right > inner.left and inner.bottom > inner.top) {
-                _ = c.FillRect(dc, &inner, key);
-            }
+            if (hole(rect, dpi)) |inner| _ = c.FillRect(dc, &inner, key);
             return 0;
         },
         else => return c.DefWindowProcW(hwnd, msg, wparam, lparam),
     }
+}
+
+test avoidKey {
+    const testing = std.testing;
+    try testing.expectEqual(util.rgb(0, 120, 215), avoidKey(util.rgb(0, 120, 215)));
+    try testing.expect(avoidKey(transparent_key) != transparent_key);
+}
+
+test hole {
+    const testing = std.testing;
+    const rect: c.RECT = .{ .left = 0, .top = 0, .right = 800, .bottom = 600 };
+    // 3 pixels at 96 DPI, 6 at 192, and at least 1 however small the DPI.
+    try testing.expectEqual(c.RECT{ .left = 3, .top = 3, .right = 797, .bottom = 597 }, hole(rect, 96).?);
+    try testing.expectEqual(c.RECT{ .left = 6, .top = 6, .right = 794, .bottom = 594 }, hole(rect, 192).?);
+    try testing.expectEqual(c.RECT{ .left = 1, .top = 1, .right = 799, .bottom = 599 }, hole(rect, 1).?);
+    // A surface too small for a hole is all border.
+    try testing.expectEqual(null, hole(.{ .left = 0, .top = 0, .right = 6, .bottom = 600 }, 96));
+    try testing.expectEqual(null, hole(.{ .left = 0, .top = 0, .right = 800, .bottom = 5 }, 96));
+    try testing.expectEqual(null, hole(.{ .left = 0, .top = 0, .right = 0, .bottom = 0 }, 96));
 }

@@ -3810,6 +3810,14 @@ Notes:
   - [x] The title bar's choice of dark (`Window.darkTitleBar`: the
         background's luminance for `auto` and `ghostty`, the app mode
         for `system`) has a unit test too, as `colorScheme` has.
+  - [x] The bell border and the split dimming overlay had no unit tests
+        (2026-11-13). Their arithmetic is now in small functions with
+        tests: the border's transparent hole at each DPI, empty when
+        the surface is too small (`BellBorder.hole`), the accent color
+        kept off the transparent color key (`avoidKey`), and the
+        overlay's opacity for `unfocused-split-opacity`
+        (`DimOverlay.alphaFor`). `overlays.ps1` passes here; the bell
+        and high contrast tests run only in CI.
   - [x] The other actions Win32 doesn't handle (found 2026-11-06), left
         unhandled on purpose: `show_child_exited` (unhandled, the core
         prints "Process exited. Press any key to close the terminal." in

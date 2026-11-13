@@ -75,7 +75,7 @@ pub fn updateConfig(self: *DimOverlay, config: *const Config) !void {
     const brush = c.CreateSolidBrush(util.rgb(color.r, color.g, color.b)) orelse return error.CreateBrushFailed;
     errdefer _ = c.DeleteObject(brush);
 
-    const alpha: u8 = @intFromFloat(@round((1 - config.@"unfocused-split-opacity") * 255));
+    const alpha = alphaFor(config.@"unfocused-split-opacity");
     if (self.hwnd != null) {
         if (c.SetLayeredWindowAttributes(self.hwnd, 0, alpha, c.LWA_ALPHA) == 0) {
             return error.SetOpacityFailed;
@@ -86,6 +86,12 @@ pub fn updateConfig(self: *DimOverlay, config: *const Config) !void {
     self.brush = brush;
     self.alpha = alpha;
     self.updateVisibility();
+}
+
+/// The overlay's opacity (0 to 255) for an `unfocused-split-opacity`:
+/// the overlay hides as much of the surface as the surface should lose.
+fn alphaFor(opacity: f64) u8 {
+    return @intFromFloat(@round((1 - std.math.clamp(opacity, 0, 1)) * 255));
 }
 
 /// Resizing a layered window resizes its bitmap, which costs several
@@ -134,4 +140,16 @@ pub fn wndProc(hwnd: c.HWND, msg: c.UINT, wparam: c.WPARAM, lparam: c.LPARAM) ca
         },
         else => return c.DefWindowProcW(hwnd, msg, wparam, lparam),
     }
+}
+
+test alphaFor {
+    const testing = std.testing;
+    // Fully opaque splits need no overlay, which then never shows.
+    try testing.expectEqual(@as(u8, 0), alphaFor(1));
+    try testing.expectEqual(@as(u8, 77), alphaFor(0.7));
+    try testing.expectEqual(@as(u8, 217), alphaFor(0.15));
+    try testing.expectEqual(@as(u8, 255), alphaFor(0));
+    // Out of range values (the config clamps them) still fit a byte.
+    try testing.expectEqual(@as(u8, 0), alphaFor(1.5));
+    try testing.expectEqual(@as(u8, 255), alphaFor(-1));
 }
