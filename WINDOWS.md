@@ -3777,7 +3777,8 @@ Notes:
         updates the scheme, as GTK's does. `window-theme.ps1` starts
         with `window-theme` opposite to the app mode and expects that
         theme, then `set_window_theme:system` the app mode's. Without
-        the change it timed out on the first. It passed here.
+        the change it timed out on the first. It passed here, and in CI
+        run 43488738233 (c51af03b8), which passed every job.
   - [x] The other actions Win32 doesn't handle (found 2026-11-06), left
         unhandled on purpose: `show_child_exited` (unhandled, the core
         prints "Process exited. Press any key to close the terminal." in
