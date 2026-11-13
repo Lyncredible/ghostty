@@ -1574,6 +1574,9 @@ pub fn performAction(
                 self.config.deinit();
                 self.config = config;
                 self.global_keys.update(&self.config);
+                // `window-theme` may force another scheme. The core ignores
+                // a report of the scheme it has, so this doesn't loop.
+                self.updateColorScheme();
                 for (self.windows.items) |window| window.configChanged();
             } else |err| {
                 log.err("error updating app config err={}", .{err});
@@ -1622,13 +1625,9 @@ pub fn windowTheme(self: *const App) configpkg.Config.WindowTheme {
 /// Tell the core whether Windows uses the light or dark app mode, which
 /// picks the theme of `theme = light:...,dark:...` and answers color
 /// scheme queries. The core ignores reports that don't change the scheme.
-/// Like GTK, `set_window_theme` with `light` or `dark` forces it.
+/// Like GTK, a `light` or `dark` window theme forces it.
 pub fn updateColorScheme(self: *App) void {
-    const scheme: apprt.ColorScheme = switch (self.window_theme_override) {
-        .light => .light,
-        .dark => .dark,
-        .config, .system => if (Window.systemUsesDarkTheme()) .dark else .light,
-    };
+    const scheme = colorScheme(self.windowTheme(), Window.systemUsesDarkTheme());
     self.core_app.colorSchemeEvent(self, scheme) catch |err| {
         log.warn("error updating app color scheme err={}", .{err});
     };
@@ -1636,6 +1635,31 @@ pub fn updateColorScheme(self: *App) void {
         surface.core().colorSchemeCallback(scheme) catch |err| {
             log.warn("unable to tell surface about color scheme change err={}", .{err});
         };
+    }
+}
+
+/// The color scheme for a window theme, as GTK's style manager makes it: a
+/// `light` or `dark` theme (from `window-theme` or `set_window_theme`)
+/// forces its own, and the others follow the app mode. (GTK's `auto` and
+/// `ghostty` only prefer the background's, which a system with its own
+/// preference, as Windows always has, overrides.)
+fn colorScheme(theme: configpkg.Config.WindowTheme, system_dark: bool) apprt.ColorScheme {
+    return switch (theme) {
+        .light => .light,
+        .dark => .dark,
+        .auto, .ghostty, .system => if (system_dark) .dark else .light,
+    };
+}
+
+test colorScheme {
+    const testing = std.testing;
+    for ([_]bool{ false, true }) |dark| {
+        try testing.expectEqual(apprt.ColorScheme.light, colorScheme(.light, dark));
+        try testing.expectEqual(apprt.ColorScheme.dark, colorScheme(.dark, dark));
+        const system: apprt.ColorScheme = if (dark) .dark else .light;
+        try testing.expectEqual(system, colorScheme(.auto, dark));
+        try testing.expectEqual(system, colorScheme(.ghostty, dark));
+        try testing.expectEqual(system, colorScheme(.system, dark));
     }
 }
 

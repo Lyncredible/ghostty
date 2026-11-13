@@ -3765,6 +3765,19 @@ Notes:
         the core, which picks `theme = light:...,dark:...`. Test:
         `test/windows/window-theme.ps1` (both directions, after a reload,
         and back to `config`).
+  - [x] `window-theme = light` or `dark` in the config forces the color
+        scheme too (found 2026-11-13, reviewing `App.zig` against GTK's
+        `colorScheme`): only `set_window_theme` did, so with
+        `window-theme = dark` on a light desktop the title bar was dark
+        but `theme = light:...,dark:...` picked the light theme and
+        programs were told light. Now `colorScheme` (unit test) gives
+        `light`/`dark` their own scheme and the app mode otherwise
+        (GTK's `auto` and `ghostty` only prefer the background's, and
+        Windows always has a preference of its own), and a config change
+        updates the scheme, as GTK's does. `window-theme.ps1` starts
+        with `window-theme` opposite to the app mode and expects that
+        theme, then `set_window_theme:system` the app mode's. Without
+        the change it timed out on the first. It passed here.
   - [x] The other actions Win32 doesn't handle (found 2026-11-06), left
         unhandled on purpose: `show_child_exited` (unhandled, the core
         prints "Process exited. Press any key to close the terminal." in

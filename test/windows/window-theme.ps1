@@ -2,7 +2,10 @@
 # (`theme = light:...,dark:...`), forcing the dark window theme must show the
 # dark theme and forcing the light one the light theme, whatever Windows's
 # app mode is. The choice must outlast a config reload, and `config` must go
-# back to following the app mode. Keys bound to the actions are posted to
+# back to following the app mode. Then, started with `window-theme` set to
+# the opposite of the app mode, that theme must show (as on GTK, a light or
+# dark window theme forces the scheme), until `set_window_theme:system`
+# follows the app mode again. Keys bound to the actions are posted to
 # the terminal, and the background is read with PrintWindow, so it works
 # with the desktop locked and doesn't change any desktop settings.
 #
@@ -43,10 +46,14 @@ $light = (Get-ItemProperty $personalize -ErrorAction SilentlyContinue).AppsUseLi
 $systemDark = $null -ne $light -and $light -eq 0
 
 $log = Join-Path ([IO.Path]::GetTempPath()) "ghostty-window-theme-$PID.log"
-$process = Start-Process -FilePath $Exe -PassThru -RedirectStandardError $log -ArgumentList '--command=cmd.exe',
-    '--window-save-state=never', '"--theme=light:Builtin Light,dark:Builtin Dark"',
-    '--keybind=f9=set_window_theme:dark', '--keybind=f10=set_window_theme:light',
-    '--keybind=f11=set_window_theme:config', '--keybind=f12=reload_config'
+function Launch([string[]]$more) {
+    $script:process = Start-Process -FilePath $Exe -PassThru -RedirectStandardError $log -ArgumentList (@('--command=cmd.exe',
+        '--window-save-state=never', '"--theme=light:Builtin Light,dark:Builtin Dark"',
+        '--keybind=f8=set_window_theme:system', '--keybind=f9=set_window_theme:dark', '--keybind=f10=set_window_theme:light',
+        '--keybind=f11=set_window_theme:config', '--keybind=f12=reload_config') + $more)
+    $script:window = WaitFor { $process.Refresh(); if ($process.MainWindowHandle -ne 0) { $process.MainWindowHandle } } 'the window'
+    $script:surface = WaitFor { $h = $W::FindWindowExW($window, [IntPtr]::Zero, 'GhosttySurface', [NullString]::Value); if ($h -ne [IntPtr]::Zero) { $h } } 'the surface'
+}
 
 function Fail([string]$message) {
     Write-Host "::error title=window-theme::$message"
@@ -59,7 +66,7 @@ function Fail([string]$message) {
 function WaitFor([scriptblock]$condition, [string]$what) {
     $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
     while ((Get-Date) -lt $deadline) {
-        if ($process.HasExited) { Fail "Ghostty exited while waiting for $what" }
+        if ($process -and $process.HasExited) { Fail "Ghostty exited while waiting for $what" }
         $result = & $condition
         if ($result) { return $result }
         Start-Sleep -Milliseconds 250
@@ -88,8 +95,7 @@ function Expect([bool]$dark, [string]$what) {
 }
 
 try {
-    $window = WaitFor { $process.Refresh(); if ($process.MainWindowHandle -ne 0) { $process.MainWindowHandle } } 'the window'
-    $surface = WaitFor { $h = $W::FindWindowExW($window, [IntPtr]::Zero, 'GhosttySurface', [NullString]::Value); if ($h -ne [IntPtr]::Zero) { $h } } 'the surface'
+    Launch @()
     Expect $systemDark "at startup, following the app mode ($(if ($systemDark) { 'dark' } else { 'light' }))"
 
     # Force the opposite of the app mode first, so the change shows.
@@ -109,8 +115,16 @@ try {
     Expect (-not $systemDark) 'after forcing it back'
     $W::Key($surface, 0x7A, 0x57)   # F11: set_window_theme:config
     Expect $systemDark "after going back to the config's window theme"
+    Stop-Process -Id $process.Id -Force; $process.WaitForExit()
+
+    # The config's window theme, the opposite of the app mode, forces it.
+    $theme = if ($systemDark) { 'light' } else { 'dark' }
+    Launch @("--window-theme=$theme")
+    Expect (-not $systemDark) "at startup with window-theme = $theme"
+    $W::Key($surface, 0x77, 0x42)   # F8: set_window_theme:system
+    Expect $systemDark 'after set_window_theme:system'
 } finally {
-    if (-not $process.HasExited) { Stop-Process -Id $process.Id -Force }
+    if ($process -and -not $process.HasExited) { Stop-Process -Id $process.Id -Force }
     Remove-Item -LiteralPath $log -Force -ErrorAction SilentlyContinue
 }
 exit 0
