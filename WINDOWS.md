@@ -3488,7 +3488,8 @@ Notes:
     of text and a type of its own, a read of both with the listing, a
     paste event, and in CI the questions (allowing the write, denying the
     read). Without the change the write and read got `ENOSYS` and the
-    paste event never came. It passed here, both runs.
+    paste event never came. It passed here, both runs, and in CI
+    (43381078319), whose log shows each check and the two answers.
 - [x] Unimplemented apprt actions (as of 2026-10-25)
   - [x] `show_on_screen_keyboard`: toggles the touch keyboard through the
         shell's (undocumented) `ITipInvocation`, starting TabTip.exe if
