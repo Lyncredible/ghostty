@@ -1600,7 +1600,10 @@ Notes:
         author dates kept (898 commits checked; three whose committer
         time was seconds after their author time now match it). The
         app builds, and the clone (140) and page list (413) tests pass.
-        Pushed as 11e64e563.
+        Pushed as 11e64e563; CI run 43455876603's Windows Server 2022
+        job then failed in `tabs.ps1` (see below). With that test fixed,
+        CI run 43465658037 (d7e14cb1f) passed every job, and
+        `windows-tip` moved.
   - [x] It failed there again in run 42948447833 (098593a94), now
         saying what was on screen: the command had run (its output was
         there), but the typed line read `echo M`, a line break,
@@ -1625,7 +1628,7 @@ Notes:
         test needs the output, not the echo: `Mark` now types a caret
         in the word (`echo M^OVE-THIS-TAB`, which cmd's echo prints
         without it) and waits for the word once, which only the output
-        can match. `tabs.ps1` passed here.
+        can match. `tabs.ps1` passed here and in CI run 43465658037.
 - [x] Tip builds, like upstream's `release-tip.yml` (the discussion's
       release workflow item): a rolling prerelease of the latest
       `windows` commit, so people can try it without building. Approved
@@ -2686,7 +2689,9 @@ Notes:
     Since 2026-11-13 each round also shows the progress bar at a
     percentage, sliding, as an error and removed (it paints with a new
     brush each time). No growth here over 25 rounds; with the brush's
-    `DeleteObject` taken out, the test failed (344 GDI objects).
+    `DeleteObject` taken out, the test failed (344 GDI objects). In CI
+    run 43465658037 no GDI growth either; the test took 8 min 40 s of
+    its 12.
   - Memory leaks (2026-11-09): Debug builds use Zig's debug allocator,
     which reports what's still allocated when Ghostty exits normally,
     but every UI test ended it with `Stop-Process`. The new
