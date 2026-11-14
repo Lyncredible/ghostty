@@ -73,8 +73,9 @@ runs it with PowerShell 7, Windows PowerShell, and cmd.
 
 ## desktop-input.ps1
 
-Checks typing, Ctrl+V pasting, Ctrl+C copying (with a selection) and
-interrupting (without), focus-follows-mouse between splits,
+Checks typing, Alt codes, that ctrl with a key that has no control
+character (ctrl+1) types nothing, Ctrl+V pasting, Ctrl+C copying (with a
+selection) and interrupting (without), focus-follows-mouse between splits,
 mouse-hide-while-typing, and window-step-resize while dragging the window's corner
 with real (synthesized) keyboard and mouse input. Since that input goes to
 the foreground window, it refuses to run unless `CI` is `true`; CI runs it

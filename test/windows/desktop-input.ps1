@@ -133,6 +133,21 @@ try {
     if ($line.Trim() -ne "alt-$([char]0xE9)-ok") { Fail "the Alt code gave: $line" }
     Write-Host 'Alt codes type their character.'
 
+    # Ctrl with a key that has no control character types nothing, as in
+    # Windows' own console: ctrl+1 and ctrl+shift+[ (unbound), whose text
+    # without ctrl ("1" and "{") the shell used to get.
+    foreach ($ch in 'echo ctrl-'.ToCharArray()) { [GhosttyDesktop.Win32]::Char($ch) }
+    [GhosttyDesktop.Win32]::Key(0x11, $false)
+    [GhosttyDesktop.Win32]::Key(0x31, $false); [GhosttyDesktop.Win32]::Key(0x31, $true)
+    [GhosttyDesktop.Win32]::Key(0x10, $false)
+    [GhosttyDesktop.Win32]::Key(0xDB, $false); [GhosttyDesktop.Win32]::Key(0xDB, $true)
+    [GhosttyDesktop.Win32]::Key(0x10, $true)
+    [GhosttyDesktop.Win32]::Key(0x11, $true)
+    TypeLine '-ok'
+    $line = WaitFor { (Text $surface) -split "`n" | Where-Object { $_ -match '^ctrl-.*-ok' } | Select-Object -Last 1 } 'the ctrl line to run'
+    if ($line.Trim() -ne 'ctrl--ok') { Fail "ctrl+1 and ctrl+shift+[ typed: $line" }
+    Write-Host 'Ctrl with a key that has no control character types nothing.'
+
     # Ctrl+V pastes (the default binding on Windows).
     Set-Clipboard -Value 'echo pasted-%USERNAME:~0,0%ok'
     [GhosttyDesktop.Win32]::Key(0x11, $false); [GhosttyDesktop.Win32]::Key(0x56, $false)
