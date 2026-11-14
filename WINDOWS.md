@@ -3738,7 +3738,8 @@ Notes:
         `-oX=y`). `test/windows/wsl-ssh.sh` checks four such commands
         run once with no install and four sessions still install; the
         old script fails the four. Passes in Ubuntu 24.04 here (dash);
-        WSL isn't on CI's runners.
+        WSL isn't on CI's runners. CI run 43574367312 (247a5110c) passed
+        every job (the build and the other tests).
     - [ ] Upstream's native `+ssh` (`src/cli/ssh.zig`) builds its
           install the same way (`_ssh_args` then the script), so it has
           the same bug on every platform. The owner may want to report
