@@ -3777,6 +3777,17 @@ Notes:
       state with text that isn't UTF-8 reads back as it was (std.json
       writes it as bytes), now tested. `handoff.ps1` passes here. CI
       run 43585138391 (3255def88) passed every job.
+- [x] Global keybinds on the numpad's digits took the navigation keys
+      (found 2026-11-14 reviewing `GlobalKeys.zig`). A hot key's virtual
+      key came from the key's scan code, and the numpad's digits share
+      theirs with Home, End, the arrows and so on, so
+      `keybind = global:ctrl+numpad_1=…` registered ctrl+End and took it
+      from every application. They are now VK_NUMPAD0 to 9 (and the
+      decimal VK_DECIMAL), which they are with num lock on. The numpad's
+      Enter, whose virtual key is the main Enter's, gets no hot key
+      rather than taking ctrl+Enter everywhere; it's logged like other
+      keys without one. Unit tested ("hotKey physical keys"; the old code
+      gives VK_INSERT for numpad 0).
 - [x] Screen readers' text ranges were placed by the wrong lines and
       columns (found 2026-11-14 reviewing `Accessibility.zig`). The text
       was the viewport as copying gives it, with a wrapped row joined to
