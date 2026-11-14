@@ -1621,6 +1621,12 @@ Notes:
         tests pass on Windows. Pushed as 6cc24517b; CI run 43515840112
         passed every job, and `windows-tip` moved. Before it, CI run
         43508244280 (3d25335a3, the title bar test) passed every job.
+  - [x] 2026-11-13: a thirty-seventh sync (5 commits: a fallback font
+        face that fails to load counts as no font instead of blanking
+        its row, fontconfig matches without a file are skipped, and
+        fontconfig's package version). No conflicts; author dates kept
+        (915 commits checked). The app builds, and the `SharedGrid`,
+        `discovery`, font name and DirectWrite tests pass on Windows.
   - [x] It failed there again in run 42948447833 (098593a94), now
         saying what was on screen: the command had run (its output was
         there), but the typed line read `echo M`, a line break,
