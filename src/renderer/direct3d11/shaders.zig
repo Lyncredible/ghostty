@@ -534,3 +534,38 @@ pub const BgImage = extern struct {
         };
     };
 };
+
+test "Shaders builds every pipeline and compiles a custom shader once" {
+    const testing = std.testing;
+    const Device = @import("Device.zig");
+    const created = Device.createDefault() catch return error.SkipZigTest;
+    defer {
+        com.release(created.context);
+        com.release(created.device);
+    }
+
+    // Creating the input layouts checks our vertex structs against the
+    // compiled vertex shaders' inputs.
+    const post = "float4 main(float4 pos : SV_Position) : SV_Target { return float4(1, 0, 0, 1); }";
+    var shaders = try Shaders.init(testing.allocator, created.device, &.{ post, post });
+    try testing.expectEqual(@as(usize, 2), shaders.post_pipelines.len);
+    try testing.expect(shaders.pipelines.cell_text.input_layout != null);
+    try testing.expect(shaders.pipelines.image.input_layout != null);
+    try testing.expectEqual(@as(?*c.ID3D11InputLayout, null), shaders.pipelines.bg_color.input_layout);
+    try testing.expectEqual(@as(?*c.ID3D11BlendState, null), shaders.pipelines.bg_color.blend_state);
+    try testing.expect(shaders.pipelines.cell_bg.blend_state != null);
+    try testing.expectEqual(@sizeOf(CellText), shaders.pipelines.cell_text.stride);
+    shaders.deinit(testing.allocator);
+    // A second deinit does nothing.
+    shaders.deinit(testing.allocator);
+
+    // The same source again is the same bytecode, not a new compile.
+    const first = try compileCustom(post);
+    defer com.release(first);
+    const again = try compileCustom(post);
+    defer com.release(again);
+    try testing.expectEqual(first, again);
+    const other = try compileCustom("float4 main() : SV_Target { return 0; }");
+    defer com.release(other);
+    try testing.expect(other != first);
+}
