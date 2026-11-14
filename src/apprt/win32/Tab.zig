@@ -578,10 +578,12 @@ pub fn updateDragHandles(self: *Tab) void {
     while (it.next()) |entry| entry.view.drag_handle.setShown(show);
 }
 
-/// The terminal at a point on the screen, if any.
+/// The terminal shown at a point on the screen, if any. Terminals hidden
+/// by a zoom keep their old place, so they're skipped.
 pub fn surfaceAt(self: *const Tab, pt: c.POINT) ?*Surface {
     var it = self.tree.iterator();
     while (it.next()) |entry| {
+        if (c.IsWindowVisible(entry.view.hwnd) == 0) continue;
         var rect: c.RECT = undefined;
         if (c.GetWindowRect(entry.view.hwnd, &rect) == 0) continue;
         if (c.PtInRect(&rect, pt) != 0) return entry.view;
