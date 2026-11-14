@@ -3725,7 +3725,8 @@ Notes:
         to 1000, NaN none (`weightFromAxis`, unit tested). The rest
         needs no change: blending's gamma and contrast are clamped (NaN
         too), and an argument's quoting is the standard one, tested by
-        reading each case back with Windows' rules.
+        reading each case back with Windows' rules. CI run 43569444493
+        (2baa21426, with the WSL fix) passed every job.
 - [x] A split never smaller than one cell (found 2026-11-13, checking
       upstream's recent GTK changes: "never resize a split smaller than
       one cell", "keep split ratios on window resize and sync on
