@@ -3789,6 +3789,7 @@ Notes:
       The command palette's `buildEntries` got a test too: supported
       commands only, searchable by action, shortcuts, then the
       terminals with a working directory only when the title lacks it.
+      CI run 43606542724 passed them in every job.
 - [x] A dragged split let go where a zoom hides a terminal (found
       2026-11-14 reviewing `SplitDrag.zig`): a zoom lays out only the
       zoomed terminal, and the others stay hidden where they were.
