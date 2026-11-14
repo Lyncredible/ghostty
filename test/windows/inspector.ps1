@@ -25,6 +25,7 @@ Add-Type -Namespace GhosttyInspector -Name Win32 -MemberDefinition @'
 [DllImport("user32.dll")] public static extern bool GetWindowRect(System.IntPtr h, out RECT r);
 [DllImport("user32.dll")] public static extern uint GetDpiForWindow(System.IntPtr h);
 [DllImport("user32.dll")] public static extern bool SetProcessDpiAwarenessContext(System.IntPtr context);
+[DllImport("user32.dll")] public static extern int GetSystemMetricsForDpi(int index, uint dpi);
 [DllImport("user32.dll")] public static extern bool SetWindowPos(System.IntPtr h, System.IntPtr after, int x, int y, int cx, int cy, uint flags);
 [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(System.IntPtr h, out uint pid);
 [DllImport("user32.dll", CharSet = CharSet.Unicode)] public static extern System.IntPtr FindWindowExW(System.IntPtr parent, System.IntPtr after, string cls, string title);
@@ -108,7 +109,10 @@ try {
     if ($text.ToString() -ne 'Inspector: inspected') { Fail "the inspector is named '$text', not for its terminal" }
     $r = New-Object GhosttyInspector.Win32+RECT; [void]$W::GetWindowRect($inspector, [ref]$r)
     $dpi = $W::GetDpiForWindow($inspector)
-    $want = "$([int][Math]::Floor(1000 * $dpi / 96))x$([int][Math]::Floor(800 * $dpi / 96))"
+    # Windows keeps a window within its largest tracking size (about the
+    # screen and borders): CI's 1024x768 screen gives 788 pixels, not 800.
+    $maxW = $W::GetSystemMetricsForDpi(59, $dpi); $maxH = $W::GetSystemMetricsForDpi(60, $dpi)   # SM_CXMAXTRACK, SM_CYMAXTRACK
+    $want = "$([Math]::Min([int][Math]::Floor(1000 * $dpi / 96), $maxW))x$([Math]::Min([int][Math]::Floor(800 * $dpi / 96), $maxH))"
     $size = "$($r.r - $r.l)x$($r.b - $r.t)"
     if ($size -ne $want) { Fail "the inspector is $size, not 1000x800 points ($want at $dpi DPI)" }
     Write-Host "inspector:toggle opens '$text', $size at $dpi DPI."
