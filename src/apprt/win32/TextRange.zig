@@ -49,6 +49,17 @@ pub const Snapshot = struct {
     cell_width: f64 = 0,
     cell_height: f64 = 0,
 
+    /// The screen column of each unit of the text, whose lines are the
+    /// screen's rows: wide characters (CJK) take two columns, and an
+    /// emoji's two units share one. Without them (as in tests), a unit
+    /// is a column. A newline's entry isn't used.
+    cells: []const Cell = &.{},
+
+    pub const Cell = struct {
+        x: u16,
+        wide: bool = false,
+    };
+
     pub fn ref(self: *Snapshot) void {
         _ = self.refs.fetchAdd(1, .acq_rel);
     }
@@ -56,7 +67,22 @@ pub const Snapshot = struct {
     pub fn unref(self: *Snapshot) void {
         if (self.refs.fetchSub(1, .acq_rel) != 1) return;
         self.alloc.free(self.text);
+        self.alloc.free(self.cells);
         self.alloc.destroy(self);
+    }
+
+    fn hasCells(self: *const Snapshot) bool {
+        return self.cells.len == self.text.len;
+    }
+
+    /// The screen column of an offset in the line starting at
+    /// `line_start`: its character's, or at the line's end, the column
+    /// after its last character.
+    fn cellColumn(self: *const Snapshot, line_start: u32, pos: u32) u32 {
+        if (pos < self.len() and self.text[pos] != '\n') return self.cells[pos].x;
+        if (pos == line_start) return 0;
+        const last = self.cells[pos - 1];
+        return @as(u32, last.x) + @as(u32, if (last.wide) 2 else 1);
     }
 
     fn len(self: *const Snapshot) u32 {
@@ -101,20 +127,24 @@ pub const Snapshot = struct {
         return self.unitStart(start - 1, unit);
     }
 
-    /// The zero-based line and column of an offset.
+    /// The zero-based line and (screen) column of an offset.
     pub fn lineColumn(self: *const Snapshot, pos: u32) struct { line: u32, column: u32 } {
+        const p = @min(pos, self.len());
         var line: u32 = 0;
         var line_start: u32 = 0;
-        for (self.text[0..@min(pos, self.len())], 0..) |ch, i| {
+        for (self.text[0..p], 0..) |ch, i| {
             if (ch == '\n') {
                 line += 1;
                 line_start = @intCast(i + 1);
             }
         }
-        return .{ .line = line, .column = pos - line_start };
+        if (!self.hasCells()) return .{ .line = line, .column = p - line_start };
+        return .{ .line = line, .column = self.cellColumn(line_start, p) };
     }
 
-    /// The offset of a line and column, clamped to the text.
+    /// The offset of a line and (screen) column, clamped to the text: the
+    /// character there, or the line's end if it's past the last one. A
+    /// wide character's second column is that character.
     pub fn offsetOf(self: *const Snapshot, line: u32, column: u32) u32 {
         var current: u32 = 0;
         var start: u32 = 0;
@@ -123,7 +153,25 @@ pub const Snapshot = struct {
             start = @intCast(nl + 1);
         }
         const end: u32 = if (std.mem.indexOfScalarPos(u16, self.text, start, '\n')) |nl| @intCast(nl) else self.len();
-        return @min(start + column, end);
+        if (!self.hasCells()) return @min(start +| column, end);
+        for (self.cells[start..end], start..) |cell, i| {
+            if (@as(u32, cell.x) + @intFromBool(cell.wide) >= column) return @intCast(i);
+        }
+        return end;
+    }
+
+    /// The offset after the character at a line and (screen) column, for
+    /// a range that ends with it, or the line's end if it's past the last
+    /// one.
+    pub fn offsetAfter(self: *const Snapshot, line: u32, column: u32) u32 {
+        const at = self.offsetOf(line, column);
+        if (at >= self.len() or self.text[at] == '\n') return at;
+        var p = self.nextUnit(at, .character);
+        // With the marks that combine with it, in the same cell.
+        if (self.hasCells()) while (p < self.len() and self.text[p] != '\n' and
+            self.cells[p].x == self.cells[at].x) : (p += 1)
+        {};
+        return p;
     }
 };
 
@@ -260,6 +308,11 @@ test Range {
     try testing.expectEqual(@as(u32, 1), snapshot.lineColumn(7).column);
     try testing.expectEqual(@as(u32, 9), snapshot.offsetOf(1, 3));
     try testing.expectEqual(@as(u32, 11), snapshot.offsetOf(1, 99));
+    // A selection going on below the screen ends past its last line's
+    // end, which used to overflow.
+    try testing.expectEqual(@as(u32, 11), snapshot.offsetOf(1, std.math.maxInt(u32)));
+    try testing.expectEqual(@as(u32, 11), snapshot.offsetAfter(1, std.math.maxInt(u32)));
+    try testing.expectEqual(@as(u32, 8), snapshot.offsetAfter(1, 1));
 }
 
 test "Range: characters keep surrogate pairs whole" {
