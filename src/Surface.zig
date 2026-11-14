@@ -2826,6 +2826,9 @@ pub fn keyCallback(
     crash.sentry.thread_state = self.crashThreadState();
     defer crash.sentry.thread_state = null;
 
+    // Kept for after a closing binding, which may free us.
+    const alloc = self.alloc;
+
     // Setup our inspector event if we have an inspector.
     var insp_ev: ?inspectorpkg.KeyEvent = if (self.inspector != null) ev: {
         var copy = event;
@@ -2857,7 +2860,15 @@ pub fn keyCallback(
     if (try self.maybeHandleBinding(
         event,
         if (insp_ev) |*ev| ev else null,
-    )) |v| return v;
+    )) |v| {
+        // A closing binding may have freed us, and our inspector with
+        // us, so the event can't go to it.
+        if (v == .closed) if (insp_ev) |ev| {
+            ev.deinit(alloc);
+            insp_ev = null;
+        };
+        return v;
+    }
     // If we allow KAM and KAM is enabled then we do nothing.
     if (self.config.vt_kam_allowed) {
         self.renderer_state.mutex.lockUncancelable(global.io());
