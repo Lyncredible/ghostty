@@ -3777,6 +3777,18 @@ Notes:
       state with text that isn't UTF-8 reads back as it was (std.json
       writes it as bytes), now tested. `handoff.ps1` passes here. CI
       run 43585138391 (3255def88) passed every job.
+- [x] The scrollbar's thumb under the pointer (found 2026-11-14 by a new
+      property test of `Scrollbar.zig`): the thumb was drawn as far down
+      the track as the view is down all the rows, but dragging reads it
+      as how far along the track's free space it is. With long
+      scrollback, where the thumb keeps its minimum length, those differ:
+      pressing the thumb scrolled about 1500 rows (800000 rows of
+      scrollback), and dragging, the thumb ran ahead of the pointer. It's
+      placed the way dragging reads it now, and the test (random states:
+      the row for the thumb's own position is the view's, to within half
+      a pixel's rows) fails the old placement. `scrollbar.ps1` passes
+      here (its 1300 lines give a thumb of natural length, so it couldn't
+      see this).
 - [x] A split never smaller than one cell (found 2026-11-13, checking
       upstream's recent GTK changes: "never resize a split smaller than
       one cell", "keep split ratios on window resize and sync on
