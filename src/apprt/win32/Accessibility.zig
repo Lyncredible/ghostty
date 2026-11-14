@@ -456,29 +456,32 @@ fn takeSnapshot(self: *Accessibility) !*TextRange.Snapshot {
     if (!surface.core_initialized) return error.NoSurface;
     const alloc = self.alloc;
 
-    const text, const cursor_line: u32, const cursor_column: u32, const selection = text: {
+    var rows: ViewportRows = .{};
+    errdefer rows.deinit(alloc);
+    const cursor_line: u32, const cursor_column: u32, const selection = text: {
         const core = &surface.core_surface;
         core.renderer_state.mutex.lockUncancelable(global.io());
         defer core.renderer_state.mutex.unlock(global.io());
         const screen = core.io.terminal.screens.active;
-        const top_left = screen.pages.getTopLeft(.viewport);
-        const bottom_right = screen.pages.getBottomRight(.viewport) orelse return error.NoViewport;
-        const utf8 = try screen.selectionString(alloc, .{
-            .sel = terminal.Selection.init(top_left, bottom_right, false),
-            .trim = true,
-        });
-        break :text .{ utf8, screen.cursor.y, screen.cursor.x, viewportSelection(screen) };
+        const cursor = screen.pages.pointFromPin(.viewport, screen.cursor.page_pin.*);
+        try rows.read(alloc, screen, if (cursor) |p| p.coord().y else null);
+        break :text if (cursor) |p|
+            .{ p.coord().y, p.coord().x, viewportSelection(screen) }
+        else
+            // Scrolled away from the cursor: it's past the visible text.
+            .{ std.math.maxInt(u32), 0, viewportSelection(screen) };
     };
-    defer alloc.free(text);
-    const text16 = try util.utf16Alloc(alloc, text);
+    const text16 = try rows.text.toOwnedSliceSentinel(alloc, 0);
     errdefer alloc.free(text16);
+    const cells = try rows.cells.toOwnedSlice(alloc);
+    errdefer alloc.free(cells);
 
     const snapshot = try alloc.create(TextRange.Snapshot);
-    snapshot.* = .{ .alloc = alloc, .text = text16, .cursor = 0 };
+    snapshot.* = .{ .alloc = alloc, .text = text16, .cursor = 0, .cells = cells };
     snapshot.cursor = snapshot.offsetOf(cursor_line, cursor_column);
     if (selection) |sel| snapshot.selection = .{
         snapshot.offsetOf(sel.start_line, sel.start_column),
-        snapshot.offsetOf(sel.end_line, sel.end_column),
+        snapshot.offsetAfter(sel.end_line, sel.end_column),
     };
 
     var rect: c.RECT = undefined;
@@ -492,8 +495,154 @@ fn takeSnapshot(self: *Accessibility) !*TextRange.Snapshot {
     return snapshot;
 }
 
+/// The visible text as UTF-16 for text ranges, a line per screen row (as
+/// Windows Terminal gives screen readers), with each unit's column. The
+/// cursor, the selection and bounding rectangles are rows and columns, so
+/// a wrapped row can't be joined to the next, and a wide character is two
+/// columns.
+const ViewportRows = struct {
+    text: std.ArrayList(u16) = .empty,
+    cells: std.ArrayList(TextRange.Snapshot.Cell) = .empty,
+
+    fn deinit(self: *ViewportRows, alloc: Allocator) void {
+        self.text.deinit(alloc);
+        self.cells.deinit(alloc);
+    }
+
+    /// Read the viewport's rows. Empty rows at the bottom are left out,
+    /// except down to `keep_row` (the cursor's).
+    fn read(self: *ViewportRows, alloc: Allocator, screen: *terminal.Screen, keep_row: ?u32) !void {
+        // The length of the text up to the last row that stays.
+        var kept: usize = 0;
+        var y: u32 = 0;
+        while (y < screen.pages.rows) : (y += 1) {
+            const start = screen.pages.pin(.{ .viewport = .{ .x = 0, .y = y } }) orelse break;
+            const end = screen.pages.pin(.{ .viewport = .{ .x = screen.pages.cols - 1, .y = y } }) orelse break;
+            if (y > 0) {
+                try self.text.append(alloc, '\n');
+                try self.cells.append(alloc, .{ .x = 0 });
+            }
+            const row = try screen.selectionStringMap(alloc, .{
+                .sel = terminal.Selection.init(start, end, false),
+                .trim = true,
+            });
+            defer row.deinit(alloc);
+            try self.appendRow(alloc, row);
+            if (row.string.len > 0 or (keep_row != null and y <= keep_row.?)) kept = self.text.items.len;
+        }
+        self.text.shrinkRetainingCapacity(kept);
+        self.cells.shrinkRetainingCapacity(kept);
+    }
+
+    fn appendRow(self: *ViewportRows, alloc: Allocator, row: terminal.StringMap) !void {
+        var i: usize = 0;
+        while (i < row.string.len) {
+            const n = std.unicode.utf8ByteSequenceLength(row.string[i]) catch 1;
+            const cp: u21 = if (i + n <= row.string.len)
+                std.unicode.utf8Decode(row.string[i..][0..n]) catch 0xFFFD
+            else
+                0xFFFD;
+            const cell: TextRange.Snapshot.Cell = if (row.map.get(i)) |pin| .{
+                .x = pin.x,
+                .wide = pin.rowAndCell().cell.wide == .wide,
+            } else .{ .x = 0 };
+            i += n;
+
+            var units: [2]u16 = undefined;
+            const count: usize = if (cp < 0x10000) one: {
+                units[0] = @intCast(cp);
+                break :one 1;
+            } else two: {
+                const v = cp - 0x10000;
+                units = .{ @intCast(0xD800 + (v >> 10)), @intCast(0xDC00 + (v & 0x3FF)) };
+                break :two 2;
+            };
+            try self.text.appendSlice(alloc, units[0..count]);
+            try self.cells.appendNTimes(alloc, cell, count);
+        }
+    }
+};
+
+test ViewportRows {
+    const testing = std.testing;
+    const alloc = testing.allocator;
+    const L = std.unicode.utf8ToUtf16LeStringLiteral;
+
+    var s: terminal.Screen = try .init(testing.io, alloc, .{ .cols = 8, .rows = 5, .max_scrollback_bytes = 0 });
+    defer s.deinit();
+    // A row that wraps onto the next, then wide characters and an emoji
+    // (日 at columns 0-1, 本 2-3, x 4, the emoji 5-6). The cursor is on
+    // the row after them.
+    try s.testWriteString("abcdefghij\n日本x\u{1F600}\n");
+
+    const snapshotOf = struct {
+        fn f(screen: *terminal.Screen, keep_row: ?u32) !*TextRange.Snapshot {
+            var rows: ViewportRows = .{};
+            errdefer rows.deinit(alloc);
+            try rows.read(alloc, screen, keep_row);
+            const text = try rows.text.toOwnedSliceSentinel(alloc, 0);
+            errdefer alloc.free(text);
+            const cells = try rows.cells.toOwnedSlice(alloc);
+            errdefer alloc.free(cells);
+            const snapshot = try alloc.create(TextRange.Snapshot);
+            snapshot.* = .{ .alloc = alloc, .text = text, .cursor = 0, .cells = cells };
+            return snapshot;
+        }
+    }.f;
+
+    // Without a row to keep, the empty rows at the bottom are left out.
+    {
+        const snapshot = try snapshotOf(&s, null);
+        defer snapshot.unref();
+        try testing.expectEqualSlices(u16, L("abcdefgh\nij\n日本x\u{1F600}"), snapshot.text);
+    }
+
+    const snapshot = try snapshotOf(&s, 3);
+    defer snapshot.unref();
+    // A line per row, the wrapped row's rest on its own, down to the
+    // cursor's row.
+    try testing.expectEqualSlices(u16, L("abcdefgh\nij\n日本x\u{1F600}\n"), snapshot.text);
+    const Case = struct { line: u32, column: u32, offset: u32 };
+    for ([_]Case{
+        // The wrapped row's rest.
+        .{ .line = 1, .column = 0, .offset = 9 },
+        .{ .line = 1, .column = 1, .offset = 10 },
+        // Wide characters, by either of their columns.
+        .{ .line = 2, .column = 0, .offset = 12 },
+        .{ .line = 2, .column = 2, .offset = 13 },
+        .{ .line = 2, .column = 3, .offset = 13 },
+        .{ .line = 2, .column = 4, .offset = 14 },
+        .{ .line = 2, .column = 6, .offset = 15 },
+        // Past a line's end, its end; past the text, its end.
+        .{ .line = 2, .column = 7, .offset = 17 },
+        .{ .line = 1, .column = std.math.maxInt(u32), .offset = 11 },
+        .{ .line = 3, .column = 0, .offset = 18 },
+        .{ .line = 4, .column = 0, .offset = 18 },
+    }) |case| {
+        errdefer std.debug.print("line={} column={}\n", .{ case.line, case.column });
+        try testing.expectEqual(case.offset, snapshot.offsetOf(case.line, case.column));
+    }
+
+    // Back from offsets to columns: a character's, and the end of a line
+    // after its last character (the emoji's two columns).
+    try testing.expectEqual(@as(u32, 4), snapshot.lineColumn(14).column);
+    try testing.expectEqual(@as(u32, 5), snapshot.lineColumn(16).column);
+    try testing.expectEqual(@as(u32, 2), snapshot.lineColumn(17).line);
+    try testing.expectEqual(@as(u32, 7), snapshot.lineColumn(17).column);
+    try testing.expectEqual(@as(u32, 2), snapshot.lineColumn(11).column);
+    try testing.expectEqual(@as(u32, 0), snapshot.lineColumn(18).column);
+
+    // The end of a range that ends with a cell's character.
+    try testing.expectEqual(@as(u32, 14), snapshot.offsetAfter(2, 2));
+    try testing.expectEqual(@as(u32, 14), snapshot.offsetAfter(2, 3));
+    try testing.expectEqual(@as(u32, 17), snapshot.offsetAfter(2, 5));
+    try testing.expectEqual(@as(u32, 17), snapshot.offsetAfter(2, std.math.maxInt(u32)));
+    try testing.expectEqual(@as(u32, 8), snapshot.offsetAfter(0, 7));
+}
+
 /// The part of the screen's selection in the viewport, as lines and
-/// columns of the viewport with an exclusive end, or null if none of it
+/// columns of the viewport with the end's column the last cell selected
+/// (past the line's end when it goes on below), or null if none of it
 /// is visible. A rectangle selection is treated as running from its top
 /// left to its bottom right.
 fn viewportSelection(screen: *terminal.Screen) ?struct {
@@ -515,7 +664,7 @@ fn viewportSelection(screen: *terminal.Screen) ?struct {
         .start_line = if (start.y < top) 0 else start.y - top,
         .start_column = if (start.y < top) 0 else start.x,
         .end_line = @min(end.y, bottom) - top,
-        .end_column = if (end.y > bottom) std.math.maxInt(u32) else @as(u32, end.x) + 1,
+        .end_column = if (end.y > bottom) std.math.maxInt(u32) else end.x,
     };
 }
 
@@ -538,7 +687,7 @@ test viewportSelection {
     try testing.expectEqual(@as(u32, 1), inside.start_line);
     try testing.expectEqual(@as(u32, 1), inside.start_column);
     try testing.expectEqual(@as(u32, 2), inside.end_line);
-    try testing.expectEqual(@as(u32, 3), inside.end_column);
+    try testing.expectEqual(@as(u32, 2), inside.end_column);
 
     // Starting in the scrollback: the visible part starts at the top.
     try s.select(terminal.Selection.init(
@@ -550,7 +699,7 @@ test viewportSelection {
     try testing.expectEqual(@as(u32, 0), above.start_line);
     try testing.expectEqual(@as(u32, 0), above.start_column);
     try testing.expectEqual(@as(u32, 1), above.end_line);
-    try testing.expectEqual(@as(u32, 2), above.end_column);
+    try testing.expectEqual(@as(u32, 1), above.end_column);
 
     // Only in the scrollback.
     try s.select(terminal.Selection.init(
@@ -843,9 +992,10 @@ fn rangeBoundingRectangles(iface: *Interface, out: *?*anyopaque) callconv(.winap
         while (true) {
             const line_end = s.nextUnit(pos, .line);
             const end = @min(line_end, self.range.end);
+            // In screen columns, without the line's newline.
             const lc = s.lineColumn(pos);
-            var columns: u32 = end - pos;
-            if (columns > 0 and s.text[end - 1] == '\n') columns -= 1;
+            const last = if (end > pos and s.text[end - 1] == '\n') end - 1 else end;
+            const columns: u32 = s.lineColumn(last).column -| lc.column;
             if (columns > 0) rects.appendSlice(self.owner.alloc, &.{
                 s.origin_x + @as(f64, @floatFromInt(lc.column)) * s.cell_width,
                 s.origin_y + @as(f64, @floatFromInt(lc.line)) * s.cell_height,
