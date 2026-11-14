@@ -211,17 +211,24 @@ fn rowAt(self: *const Scrollbar, y: c_int, track: c_int) usize {
 
 /// The thumb's top and bottom within a track of the given height: as long
 /// as the share of the screen that's visible, but at least `min_len`, and
-/// as far down as the view is. A track with no room (a terminal shorter
-/// than the margins) has an empty thumb.
+/// as far along the track's free space as the view is along the rows it
+/// can scroll to, which is what `rowFor` reads back. (It was as far down as
+/// the view's share of all rows, which only agrees for a thumb of its
+/// natural length: with long scrollback, pressing the thumb scrolled
+/// hundreds of rows and the thumb ran ahead of the pointer.) A track with
+/// no room (a terminal shorter than the margins) has an empty thumb.
 fn thumbSpan(state: terminal.Scrollbar, track: c_int, min_len: c_int) [2]c_int {
     if (track <= 0) return .{ 0, 0 };
     const total: f64 = @floatFromInt(@max(state.total, 1));
     const h: f64 = @floatFromInt(track);
     const share: c_int = @intFromFloat(@min(h, h * @as(f64, @floatFromInt(state.len)) / total));
     const len = std.math.clamp(share, @min(min_len, track), track);
-    const top: c_int = @intFromFloat(@min(h, h * @as(f64, @floatFromInt(state.offset)) / total));
-    const clamped = std.math.clamp(top, 0, track - len);
-    return .{ clamped, clamped + len };
+    const free = track - len;
+    const max_offset = state.total -| state.len;
+    if (free <= 0 or max_offset == 0) return .{ 0, len };
+    const along = @min(1, @as(f64, @floatFromInt(state.offset)) / @as(f64, @floatFromInt(max_offset)));
+    const top: c_int = @intFromFloat(@round(along * @as(f64, @floatFromInt(free))));
+    return .{ top, top + len };
 }
 
 /// The row to scroll to so the thumb's top is at y in the track.
@@ -243,6 +250,10 @@ test thumbSpan {
     // Long scrollback: the thumb keeps its minimum and stays in the track.
     try testing.expectEqual([2]c_int{ 0, 24 }, thumbSpan(.{ .total = 100000, .offset = 0, .len = 25 }, 400, 24));
     try testing.expectEqual([2]c_int{ 376, 400 }, thumbSpan(.{ .total = 100000, .offset = 99975, .len = 25 }, 400, 24));
+    // Halfway through it, halfway along the track's free space (it was
+    // at 199, half of the whole track, 11 pixels below the pointer that
+    // dragged it there).
+    try testing.expectEqual([2]c_int{ 188, 212 }, thumbSpan(.{ .total = 100025, .offset = 50000, .len = 25 }, 400, 24));
     // A track shorter than the minimum is filled.
     try testing.expectEqual([2]c_int{ 0, 10 }, thumbSpan(.{ .total = 1000, .offset = 500, .len = 25 }, 10, 24));
     // No room at all, as in a terminal a few pixels tall: this used to
@@ -264,6 +275,42 @@ test rowFor {
     // No room, or nothing to scroll.
     try testing.expectEqual(@as(usize, 0), rowFor(state, 10, -4, 24));
     try testing.expectEqual(@as(usize, 0), rowFor(.{ .total = 25, .offset = 0, .len = 25 }, 10, 400, 24));
+}
+
+test "rowFor: the thumb's own position is its row" {
+    // Pressing the thumb without moving it mustn't scroll: the row for
+    // the thumb's top is the view's, as near as a pixel can say.
+    const testing = std.testing;
+    var prng: std.Random.DefaultPrng = .init(0x5c0);
+    const random = prng.random();
+    for (0..5000) |_| {
+        const len = random.intRangeAtMost(usize, 1, 200);
+        const total = len + random.uintAtMost(usize, if (random.boolean()) 1000 else 1_000_000);
+        const offset = random.uintAtMost(usize, total - len);
+        const track = random.intRangeAtMost(c_int, 1, 4000);
+        const min_len = random.intRangeAtMost(c_int, 0, 48);
+        const state: terminal.Scrollbar = .{ .total = total, .offset = offset, .len = len };
+
+        const top, const bottom = thumbSpan(state, track, min_len);
+        try testing.expect(0 <= top and top <= bottom and bottom <= track);
+        const row = rowFor(state, top, track, min_len);
+        try testing.expect(row <= total - len);
+
+        // Rows per pixel of the thumb's travel; the thumb's top is rounded
+        // to a pixel, so its row is off by at most half of that, plus one
+        // for rounding the row.
+        const free = track - (bottom - top);
+        if (free <= 0 or total == len) {
+            try testing.expectEqual(@as(usize, 0), row);
+            continue;
+        }
+        const per_pixel = @as(f64, @floatFromInt(total - len)) / @as(f64, @floatFromInt(free));
+        const diff = @abs(@as(f64, @floatFromInt(row)) - @as(f64, @floatFromInt(offset)));
+        if (diff > per_pixel / 2 + 1) {
+            std.debug.print("total={} offset={} len={} track={} min={} top={} row={}\n", .{ total, offset, len, track, min_len, top, row });
+            return error.TestUnexpectedResult;
+        }
+    }
 }
 
 fn trackHeight(self: *const Scrollbar) c_int {
