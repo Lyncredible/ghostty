@@ -330,7 +330,9 @@ Runs inside a WSL distribution and checks the WSL version of `ghostty +ssh`
 the first connection installs `xterm-ghostty` and caches the host, the next
 one uses the cache, `--terminfo=false` and `--forward-env=false` work, a
 failed install falls back to `xterm-256color`, `-G` goes straight to ssh,
-and the launcher and the bash and zsh integrations only wrap `ssh` when the
+a remote command (`ssh host ./deploy.sh`) runs once with no install
+(ssh's options and their values, combined or not, aren't taken for the
+destination), and the launcher and the bash and zsh integrations only wrap `ssh` when the
 script is there. It needs no sshd and changes nothing outside the
 temporary directory. Pass the resources directory as a Linux path:
 
