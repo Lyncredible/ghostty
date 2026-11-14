@@ -3777,6 +3777,17 @@ Notes:
       state with text that isn't UTF-8 reads back as it was (std.json
       writes it as bytes), now tested. `handoff.ps1` passes here. CI
       run 43585138391 (3255def88) passed every job.
+- [x] A dragged split let go where a zoom hides a terminal (found
+      2026-11-14 reviewing `SplitDrag.zig`): a zoom lays out only the
+      zoomed terminal, and the others stay hidden where they were.
+      `Tab.surfaceAt` took any terminal under the point, so with
+      `drag-handle = always` (a zoomed terminal then has a handle)
+      letting go where a hidden one was moved the split out of sight
+      and undid the zoom, when the hidden one came first in the tree.
+      Only shown terminals count now, like GTK's drop targets.
+      `splits.ps1` runs with `drag-handle = always` and drops a zoomed
+      terminal's handle where the other was, each way; the old code
+      failed it. Passed here, with `overlays.ps1`.
 - [x] Closing a terminal from a key with its inspector open (found
       2026-11-14 by the new `inspector.ps1`): Ghostty crashed. The core's
       `keyCallback` copies each key for an open inspector and hands it
