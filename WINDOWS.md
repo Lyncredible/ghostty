@@ -3663,6 +3663,17 @@ Notes:
       runs the editor through cmd, which still expands a `%NAME%` pair
       in the quoted path; a config path with one is very unlikely and
       cmd has no escape for it, so it stays.
+  - [x] FreeType font names (`freetype.zig`): a Unicode name was
+        decoded into the caller's buffer without checking it fit, and
+        many callers pass 256 bytes while a name can need 1536, which
+        is an assertion (a crash, or undefined behaviour in a release
+        build) for a font with a long name; upstream's code did the
+        same. Names are now cut short at a whole character
+        (`utf16BeToUtf8`, unit tested; without the check the test hits
+        that assertion), and so is a variable font instance's full
+        name, which returned an error when it didn't fit. The
+        DirectWrite rasterizer falls back to FreeType on any failure;
+        nothing to change there.
 - [x] A split never smaller than one cell (found 2026-11-13, checking
       upstream's recent GTK changes: "never resize a split smaller than
       one cell", "keep split ratios on window resize and sync on
