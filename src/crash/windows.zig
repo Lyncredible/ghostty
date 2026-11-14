@@ -59,12 +59,33 @@ fn report(msg: []const u8, first_trace_addr: usize) void {
     text.append(msg[0..@min(msg.len, 300)]);
     text.append("\n\nA report with the details was saved to:\n");
     text.appendUtf16(path);
+    showDialog(text.slice());
+}
+
+/// Show the dialog on a thread of its own and wait for it. A message box
+/// runs a message loop, and on our thread that would go on handling our
+/// windows' messages after the panic: paints, timers and keys would run
+/// code in whatever state the panic left, and a second panic (the same
+/// paint or timer panicking again) goes straight to the default handler,
+/// which ends the process and takes the dialog with it. Waiting, our
+/// windows just stop responding until the dialog is closed.
+fn showDialog(text: [:0]const u16) void {
+    const thread = CreateThread(null, 0, dialogThread, @constCast(text.ptr), 0, null) orelse {
+        _ = dialogThread(@constCast(text.ptr));
+        return;
+    };
+    defer _ = CloseHandle(thread);
+    _ = WaitForSingleObject(thread, INFINITE);
+}
+
+fn dialogThread(text: ?*anyopaque) callconv(.winapi) DWORD {
     _ = MessageBoxW(
         null,
-        text.slice(),
+        @ptrCast(@alignCast(text)),
         std.unicode.utf8ToUtf16LeStringLiteral("Ghostty"),
         MB_OK | MB_ICONERROR | MB_SETFOREGROUND,
     );
+    return 0;
 }
 
 /// Whether our standard error goes somewhere: a GUI program started from
@@ -281,4 +302,14 @@ extern "kernel32" fn CreateFileW(
 ) callconv(.winapi) HANDLE;
 extern "kernel32" fn WriteFile(file: HANDLE, buf: [*]const u8, len: DWORD, written: *DWORD, overlapped: ?*anyopaque) callconv(.winapi) BOOL;
 extern "kernel32" fn CloseHandle(handle: HANDLE) callconv(.winapi) BOOL;
+extern "kernel32" fn CreateThread(
+    security: ?*anyopaque,
+    stack_size: usize,
+    start: *const fn (?*anyopaque) callconv(.winapi) DWORD,
+    param: ?*anyopaque,
+    flags: DWORD,
+    id: ?*DWORD,
+) callconv(.winapi) ?HANDLE;
+extern "kernel32" fn WaitForSingleObject(handle: HANDLE, ms: DWORD) callconv(.winapi) DWORD;
+const INFINITE: DWORD = 0xFFFFFFFF;
 extern "user32" fn MessageBoxW(hwnd: ?HANDLE, text: [*:0]const u16, caption: [*:0]const u16, flags: u32) callconv(.winapi) i32;

@@ -460,7 +460,11 @@ standard error in a file, panics on a posted F12, exits by itself (with a
 standard error there's no dialog), saves a report in
 `%LOCALAPPDATA%\ghostty\crash` with the version, the panic message and the
 return addresses, prints the panic to standard error, and `+crash-report`
-lists the report. The report is deleted afterwards.
+lists the report. Then, without a standard error, the crash shows a dialog
+with the message and the report's path; a second F12 while it's up must
+leave it up (the dialog runs on a thread of its own, so the panicked
+thread handles no more messages), and Ghostty exits once it's closed. The
+reports are deleted afterwards.
 
 ## win-key-defaults.ps1
 
