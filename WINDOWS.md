@@ -3855,6 +3855,8 @@ Notes:
         are now `InspectorWindow.deltaTime`, with a unit test. Every
         file in `src/apprt/win32` now has unit tests and is in the
         test list.
+        `memory-leak.ps1`, which opens the inspector, passes here. CI
+        run 43532618495 (88be238ac) passed every job.
   - [x] The Direct3D 11 renderer (`src/renderer/direct3d11`) had no
         unit tests; the UI tests drew with it, but nothing checked its
         pieces alone. Now: the vertex attribute formats and offsets a
@@ -3876,8 +3878,16 @@ Notes:
         image's struct did here), blending only where it's wanted, two
         custom shaders, a second `deinit` doing nothing, and a custom
         shader's source compiled once and then reused.
-        `memory-leak.ps1`, which opens the inspector, passes here. CI
-        run 43532618495 (88be238ac) passed every job.
+        CI run 43550713969 (50dfc1af5) passed every job, the test
+        running on the x64 and arm64 runners.
+  - [x] And the swap chain, on a hidden window: made at the window's
+        size, resized to a frame's target, presented, the back buffer's
+        view kept from frame to frame and remade as sRGB for linear
+        blending (leaving out that remake fails the test), and a new
+        device made as after a lost one, which binds and presents
+        again. `Direct3D11.zig`'s header and the swap chain format's
+        comment still said frames were copied from an offscreen
+        target into the back buffer; we draw straight into it.
   - [x] The other actions Win32 doesn't handle (found 2026-11-06), left
         unhandled on purpose: `show_child_exited` (unhandled, the core
         prints "Process exited. Press any key to close the terminal." in

@@ -2,8 +2,8 @@
 //!
 //! Each surface renderer has its own ID3D11Device and immediate context,
 //! and a DXGI flip model swap chain shown on the surface's HWND with
-//! DirectComposition. Frames are rendered into an offscreen target which
-//! is copied into the swap chain's back buffer when presented.
+//! DirectComposition. Frames are rendered straight into the swap chain's
+//! back buffer (see `Target`), and presented.
 //!
 //! We use a composition swap chain, rather than one for the HWND, because
 //! only those support transparency: our frames have premultiplied alpha,
@@ -54,8 +54,8 @@ pub const swap_chain_count = 1;
 const dxgi_buffer_count = 2;
 
 /// The format of the DXGI swap chain buffers. Flip model swap chains
-/// can't use sRGB formats, but our targets can be sRGB since copying
-/// between formats in the same family copies the raw bytes.
+/// can't use sRGB formats, but our view of the back buffer can be sRGB
+/// (`targetFormat`, `bindTarget`), which encodes what we write.
 const swap_chain_format = c.DXGI_FORMAT_B8G8R8A8_UNORM;
 
 const log = std.log.scoped(.direct3d11);
@@ -697,4 +697,77 @@ pub inline fn beginFrame(
         .rasterizer = self.rasterizer,
         .default_sampler = self.default_sampler.sampler,
     }, renderer, target);
+}
+
+test "a swap chain on a window binds, presents, resizes and survives a lost device" {
+    const testing = std.testing;
+    const hwnd = c.CreateWindowExW(
+        0,
+        std.unicode.utf8ToUtf16LeStringLiteral("STATIC"),
+        null,
+        c.WS_OVERLAPPEDWINDOW,
+        0,
+        0,
+        300,
+        200,
+        null,
+        null,
+        null,
+        null,
+    ) orelse return error.SkipZigTest;
+    defer _ = c.DestroyWindow(hwnd);
+
+    const device: Device = .{ .adapter = null };
+    const objects = objects: {
+        const created = try Device.createDefault();
+        errdefer {
+            com.release(created.context);
+            com.release(created.device);
+        }
+        break :objects try Objects.init(created, hwnd);
+    };
+    var self: Direct3D11 = .{
+        .device = &device,
+        .d3d = objects.d3d,
+        .context = objects.context,
+        .hwnd = hwnd,
+        .swap_chain = objects.swap_chain,
+        .composition = objects.composition,
+        .swap_chain_width = objects.swap_chain_width,
+        .swap_chain_height = objects.swap_chain_height,
+        .rasterizer = objects.rasterizer,
+        .default_sampler = objects.default_sampler,
+        .blending = .native,
+    };
+    defer self.deinit();
+    const client = clientSize(hwnd);
+    try testing.expectEqual(client.width, self.swap_chain_width);
+    try testing.expect(!self.deviceLost());
+
+    // A frame the size of the target, which resizes the buffers.
+    var target = try self.initTarget(320, 240);
+    try self.bindTarget(&target);
+    try testing.expect(target.rtv != null);
+    try testing.expectEqual(@as(u32, 320), self.swap_chain_width);
+    try testing.expectEqual(@as(u32, 240), self.swap_chain_height);
+    try testing.expectEqual(@as(c.DXGI_FORMAT, c.DXGI_FORMAT_B8G8R8A8_UNORM), self.back_buffer_format);
+    com.call(self.context, "ClearRenderTargetView", .{ target.rtv.?, &[4]f32{ 0, 0, 0, 1 } });
+    try self.present(target);
+
+    // The same view for the next frame; an sRGB one for linear blending.
+    const view = target.rtv;
+    try self.bindTarget(&target);
+    try testing.expectEqual(view, target.rtv);
+    self.blending = .linear;
+    try self.bindTarget(&target);
+    try testing.expectEqual(@as(c.DXGI_FORMAT, c.DXGI_FORMAT_B8G8R8A8_UNORM_SRGB), self.back_buffer_format);
+    try self.present(target);
+
+    // A new device, as after a lost one, at the window's size again.
+    try self.recreateDevice();
+    try testing.expect(!self.deviceLost());
+    try testing.expectEqual(@as(?*c.ID3D11RenderTargetView, null), self.back_buffer_rtv);
+    try self.bindTarget(&target);
+    try testing.expectEqual(@as(u32, 320), self.swap_chain_width);
+    try self.present(target);
 }
