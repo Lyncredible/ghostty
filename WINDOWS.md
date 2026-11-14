@@ -3789,7 +3789,8 @@ Notes:
       modifiers, so letters on non-Latin layouts are control characters
       too. Unit tested on a US layout ("win32 input: ctrl types what
       the layout's ctrl column has"); `desktop-input.ps1` checks that
-      ctrl+1 and ctrl+shift+[ type nothing into cmd.
+      ctrl+1 and ctrl+shift+[ type nothing into cmd. CI run
+      43612567326 passed every job, the new check included.
 - [x] Test coverage, 2026-11-14: the shared OpenGL GLSL that this branch
       changed (`dwrite_alpha` in `common.glsl`, used by
       `cell_text.f.glsl`) was never compiled, since OpenGL only runs on
