@@ -20,10 +20,14 @@ Add-Type -AssemblyName UIAutomationClient, UIAutomationTypes
 $AE = [System.Windows.Automation.AutomationElement]
 
 $log = Join-Path ([IO.Path]::GetTempPath()) "ghostty-uia-ranges-$PID.log"
-# The shell waits a few seconds (ping), then prints.
+# The shell waits a few seconds (ping), then prints: the marks, wide
+# characters (日本語, two columns each) next to as many columns of narrow
+# ones, and a line that wraps onto three of the 80 columns' rows.
+$cjk = "$([char]0x65E5)$([char]0x672C)$([char]0x8A9E)"
+$long = ('L' * 200) + 'END'
 $process = Start-Process -FilePath $Exe -PassThru -RedirectStandardError $log -ArgumentList '--window-save-state=never',
-    '"--command=cmd.exe /k ping -n 4 127.0.0.1 >nul & for /l %i in (1,1,30) do @echo RANGEMARK line %i"',
-    '--confirm-close-surface=false'
+    "`"--command=cmd.exe /k ping -n 4 127.0.0.1 >nul & (for /l %i in (1,1,30) do @echo RANGEMARK line %i) & echo WIDE abcdef $cjk& echo $long`"",
+    '--confirm-close-surface=false', '--window-width=80', '--window-height=30'
 
 function Fail([string]$message) {
     Write-Host "::error title=uia-ranges::$message"
@@ -50,7 +54,7 @@ try {
     if ($before -match 'RANGEMARK') { Fail 'the shell printed before the first range was taken' }
 
     $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
-    while ((Get-Date) -lt $deadline -and $text.DocumentRange.GetText(-1) -notmatch 'RANGEMARK line 30') {
+    while ((Get-Date) -lt $deadline -and $text.DocumentRange.GetText(-1) -notmatch 'LEND') {
         Start-Sleep -Milliseconds 250
     }
     $after = $text.DocumentRange.GetText(-1)
@@ -81,6 +85,35 @@ try {
     if ($first.CompareEndpoints($Start, $last, $Start) -ge 0) { Fail 'FindText backward found nothing later than the first RANGEMARK' }
     if ($all.FindText('NO-SUCH-TEXT-HERE', $false, $true)) { Fail "FindText found text that isn't there" }
     Write-Host "FindText found 'RANGEMARK line 30' ignoring case and not when matching it, and the first and last RANGEMARK apart."
+
+    # Where text is on the screen, which screen readers highlight: lines
+    # are the screen's rows and a wide character is two columns. The text
+    # used to join a wrapped row to the next, and count a character a
+    # column.
+    function Rect([string]$find) {
+        $range = $all.FindText($find, $false, $false)
+        if (-not $range) { Fail "FindText didn't find '$find'" }
+        $rects = @($range.GetBoundingRectangles())
+        if ($rects.Count -ne 1) { Fail "'$find' has $($rects.Count) rectangles, not one" }
+        $rects[0]
+    }
+    $narrow = Rect 'abcdef'
+    $wide = Rect $cjk
+    $mark = Rect 'WIDE'
+    $end = Rect 'LEND'
+    $cell = $narrow.Width / 6
+    if ($cell -le 0 -or $narrow.Height -le 0) { Fail "'abcdef' is $($narrow.Width)x$($narrow.Height)" }
+    if ([math]::Abs($wide.Width - $narrow.Width) -gt 0.5) {
+        Fail "three wide characters are $($wide.Width) wide, not the $($narrow.Width) of six narrow ones"
+    }
+    # LEND is on the third row of the wrapped line, the row after WIDE's
+    # being its first, at column 199 - 160.
+    $rows = ($end.Top - $mark.Top) / $narrow.Height
+    $columns = ($end.Left - $mark.Left) / $cell
+    if ([math]::Abs($rows - 3) -gt 0.01 -or [math]::Abs($columns - 39) -gt 0.01) {
+        Fail "'LEND' is $rows rows and $columns columns from 'WIDE', not 3 and 39"
+    }
+    Write-Host "Wide characters are two columns wide, and a wrapped line's rows are lines."
 } finally {
     if (-not $process.HasExited) { Stop-Process -Id $process.Id -Force }
     Start-Sleep -Milliseconds 500

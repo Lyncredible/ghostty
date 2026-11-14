@@ -691,7 +691,10 @@ Checks that screen readers can mix text ranges taken at different times:
 the document's range is taken on an empty screen, the shell prints, and the
 range's ends are moved to the newer selection's end (`MoveEndpointByRange`)
 and read. That end is past the old range's text, which crashed Ghostty. It
-uses UI Automation only, so it runs on a locked desktop.
+also checks `FindText`, and where text is on the screen
+(`GetBoundingRectangles`, in an 80 column window): three wide characters
+are as wide as six narrow ones, and a line that wraps is three lines, one
+per row. It uses UI Automation only, so it runs on a locked desktop.
 
 ## config-reload.ps1
 
