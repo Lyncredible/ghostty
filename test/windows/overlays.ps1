@@ -234,6 +234,28 @@ try {
     $a2 = New-Object GhosttyBadges.Win32+RECT; [void]$W::GetWindowRect($first, [ref]$a2)
     if ($a2.l -ne $a.l -or $a2.t -ne $a.t -or $a2.r -ne $a.r) { Fail "letting go over the first terminal moved it" }
     Write-Host "Dragging the first terminal's handle over the second shows its drop zone on top, and letting go over the first hides it: $($children -join ', ')"
+
+    # Letting go near the second's right side moves the first there, and
+    # it keeps the focus (the second dims); near its bottom, below it.
+    function Drop([int]$x, [int]$y) {
+        $r = New-Object GhosttyBadges.Win32+RECT; [void]$W::GetWindowRect($handle, [ref]$r)
+        $W::Mouse($handle, 0x0201, 1, $r.l + 2, $r.t + 2)
+        $W::Mouse($handle, 0x0200, 1, $x, $y)
+        $W::Mouse($handle, 0x0202, 0, $x, $y)
+    }
+    function Rect([IntPtr]$h) { $r = New-Object GhosttyBadges.Win32+RECT; [void]$W::GetWindowRect($h, [ref]$r); $r }
+    function Dimmed([IntPtr]$h) {
+        $o = $W::FindWindowExW($h, [IntPtr]::Zero, 'GhosttyDimOverlay', [NullString]::Value)
+        $o -ne [IntPtr]::Zero -and $W::IsWindowVisible($o)
+    }
+    Drop ($b.r - 10) ([int](($b.t + $b.b) / 2))
+    [void](WaitFor { $f = Rect $first; $s = Rect $second; $f.l -ge $s.r -and $f.t -eq $s.t } 'the first terminal to move right of the second')
+    [void](WaitFor { (Dimmed $second) -and -not (Dimmed $first) } 'the moved terminal to keep the focus')
+    $b = Rect $second
+    Drop ([int](($b.l + $b.r) / 2)) ($b.b - 10)
+    [void](WaitFor { $f = Rect $first; $s = Rect $second; $f.t -ge $s.b -and $f.l -eq $s.l } 'the first terminal to move below the second')
+    $f = Rect $first; $s = Rect $second
+    Write-Host "Dropping the first terminal on the second's right side and then its bottom moves it there: first $($f.l),$($f.t)-$($f.r),$($f.b), second $($s.l),$($s.t)-$($s.r),$($s.b)"
 } finally {
     if (-not $process.HasExited) { Stop-Process -Id $process.Id -Force }
     Remove-Item -LiteralPath $log -Force -ErrorAction SilentlyContinue
