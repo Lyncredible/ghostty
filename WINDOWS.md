@@ -3777,6 +3777,19 @@ Notes:
       state with text that isn't UTF-8 reads back as it was (std.json
       writes it as bytes), now tested. `handoff.ps1` passes here. CI
       run 43585138391 (3255def88) passed every job.
+- [x] Ctrl keys in win32 input mode typed the wrong character (found
+      2026-11-14 rereading `key_encode.zig`). Only ctrl+letters and
+      ctrl+[, \ and ] became control characters; any other key with
+      ctrl sent its text without ctrl. Windows (asked with
+      `ToUnicodeEx`, US layout) types 0x00, 0x1E and 0x1F for
+      ctrl+shift+2, 6 and - (ctrl+_ is readline's undo), and nothing
+      (a 0 character) for every other key, so ctrl+1 typed a "1" into
+      cmd where Windows' console types nothing. The character now comes
+      from the keyboard layout's ctrl column, with the event's
+      modifiers, so letters on non-Latin layouts are control characters
+      too. Unit tested on a US layout ("win32 input: ctrl types what
+      the layout's ctrl column has"); `desktop-input.ps1` checks that
+      ctrl+1 and ctrl+shift+[ type nothing into cmd.
 - [x] Test coverage, 2026-11-14: the shared OpenGL GLSL that this branch
       changed (`dwrite_alpha` in `common.glsl`, used by
       `cell_text.f.glsl`) was never compiled, since OpenGL only runs on
