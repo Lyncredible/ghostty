@@ -1,7 +1,8 @@
 # Checks of the Windows app with real (synthesized) keyboard and mouse
 # input, for CI: typing, Ctrl+V pasting, Ctrl+C copying and interrupting,
 # focus-follows-mouse between splits, mouse-hide-while-typing, and
-# window-step-resize while dragging the window's corner. SendInput goes to
+# window-step-resize while dragging the window's corner, and a global
+# keybind on the numpad. SendInput goes to
 # whatever window is in the foreground, so this only runs in CI (where
 # nothing else is on the desktop), never on a developer's machine.
 #
@@ -65,7 +66,8 @@ $env:GHOSTTY_LOG = 'debug'
 $process = Start-Process -FilePath $Exe -PassThru -RedirectStandardError $log -ArgumentList `
     '--command=cmd.exe', '--window-save-state=never', '--focus-follows-mouse=true', `
     '--clipboard-paste-protection=false', '--keybind=f8=new_split:right', `
-    '--keybind=f9=select_all', '--window-step-resize=true', '--mouse-hide-while-typing=true'
+    '--keybind=f9=select_all', '--window-step-resize=true', '--mouse-hide-while-typing=true', `
+    '--keybind=global:ctrl+alt+numpad_3=new_window'
 
 function Fail([string]$message) {
     Write-Host "::error title=desktop-input::$message"
@@ -231,6 +233,32 @@ try {
     if ($dw -eq 0 -or $dh -eq 0) { Fail "the corner drag didn't resize the window" }
     if ($dw % $cellW -ne 0 -or $dh % $cellH -ne 0) { Fail "the resize wasn't whole cells" }
     Write-Host 'window-step-resize resizes by whole cells.'
+
+    # A global keybind on a numpad digit is that key, not the navigation
+    # key it shares a scan code with (numpad 3 and Page Down): only
+    # ctrl+alt+numpad 3 opens a window. Last, as the new window takes the
+    # foreground.
+    function Windows {
+        $condition = New-Object System.Windows.Automation.AndCondition(
+            (New-Object System.Windows.Automation.PropertyCondition(
+                [System.Windows.Automation.AutomationElement]::ProcessIdProperty, $process.Id)),
+            (New-Object System.Windows.Automation.PropertyCondition(
+                [System.Windows.Automation.AutomationElement]::ClassNameProperty, 'GhosttyWindow')))
+        @([System.Windows.Automation.AutomationElement]::RootElement.FindAll(
+            [System.Windows.Automation.TreeScope]::Children, $condition)).Count
+    }
+    function CtrlAlt([uint16]$vk) {
+        [GhosttyDesktop.Win32]::Key(0x11, $false); [GhosttyDesktop.Win32]::Key(0x12, $false)
+        [GhosttyDesktop.Win32]::Key($vk, $false); [GhosttyDesktop.Win32]::Key($vk, $true)
+        [GhosttyDesktop.Win32]::Key(0x12, $true); [GhosttyDesktop.Win32]::Key(0x11, $true)
+    }
+    if ((Windows) -ne 1) { Fail "there are $(Windows) windows before the global keybind, not one" }
+    CtrlAlt 0x22 # VK_NEXT
+    Start-Sleep -Seconds 2
+    if ((Windows) -ne 1) { Fail 'ctrl+alt+Page Down ran the global keybind on ctrl+alt+numpad_3' }
+    CtrlAlt 0x63 # VK_NUMPAD3
+    [void](WaitFor { (Windows) -eq 2 } 'the global keybind on ctrl+alt+numpad_3 to open a window')
+    Write-Host 'A global keybind on numpad 3 is numpad 3, not Page Down.'
 } catch {
     if (-not $script:reported) { Write-Host "::error title=desktop-input::$($_.Exception.Message)" }
     throw
