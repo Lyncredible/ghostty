@@ -45,6 +45,11 @@ public static System.IntPtr Cursor() {
 public static void Key(ushort vk, bool up) {
   var i = new INPUT[1]; i[0].type = 1; i[0].u.ki.wVk = vk; i[0].u.ki.dwFlags = up ? 2u : 0u;
   SendInput(1, i, System.Runtime.InteropServices.Marshal.SizeOf(typeof(INPUT))); }
+// An extended key: the navigation keys' own, not the numpad's that share
+// their scan codes (which Num Lock makes digits).
+public static void ExtendedKey(ushort vk, bool up) {
+  var i = new INPUT[1]; i[0].type = 1; i[0].u.ki.wVk = vk; i[0].u.ki.dwFlags = 1u | (up ? 2u : 0u); // KEYEVENTF_EXTENDEDKEY
+  SendInput(1, i, System.Runtime.InteropServices.Marshal.SizeOf(typeof(INPUT))); }
 // A key by scancode only, as a keyboard sends it (Alt codes need these).
 public static void Scan(ushort scan, bool up) {
   var i = new INPUT[1]; i[0].type = 1; i[0].u.ki.wScan = scan; i[0].u.ki.dwFlags = 8u | (up ? 2u : 0u); // KEYEVENTF_SCANCODE
@@ -247,13 +252,25 @@ try {
         @([System.Windows.Automation.AutomationElement]::RootElement.FindAll(
             [System.Windows.Automation.TreeScope]::Children, $condition)).Count
     }
-    function CtrlAlt([uint16]$vk) {
+    function CtrlAlt([uint16]$vk, [switch]$Extended) {
         [GhosttyDesktop.Win32]::Key(0x11, $false); [GhosttyDesktop.Win32]::Key(0x12, $false)
-        [GhosttyDesktop.Win32]::Key($vk, $false); [GhosttyDesktop.Win32]::Key($vk, $true)
+        if ($Extended) {
+            [GhosttyDesktop.Win32]::ExtendedKey($vk, $false); [GhosttyDesktop.Win32]::ExtendedKey($vk, $true)
+        } else {
+            [GhosttyDesktop.Win32]::Key($vk, $false); [GhosttyDesktop.Win32]::Key($vk, $true)
+        }
         [GhosttyDesktop.Win32]::Key(0x12, $true); [GhosttyDesktop.Win32]::Key(0x11, $true)
     }
     if ((Windows) -ne 1) { Fail "there are $(Windows) windows before the global keybind, not one" }
-    CtrlAlt 0x22 # VK_NEXT
+    # Numpad 3 is only itself with Num Lock on: without, Windows makes it
+    # Page Down.
+    if (-not [Console]::NumberLock) {
+        [GhosttyDesktop.Win32]::Key(0x90, $false); [GhosttyDesktop.Win32]::Key(0x90, $true)
+        [void](WaitFor { [Console]::NumberLock } 'Num Lock to turn on')
+    }
+    # The Page Down key, an extended key. Without the flag it would be the
+    # numpad's 3 key, which Windows makes numpad 3 with Num Lock on.
+    CtrlAlt 0x22 -Extended # VK_NEXT
     Start-Sleep -Seconds 2
     if ((Windows) -ne 1) { Fail 'ctrl+alt+Page Down ran the global keybind on ctrl+alt+numpad_3' }
     CtrlAlt 0x63 # VK_NUMPAD3
