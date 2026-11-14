@@ -479,6 +479,21 @@ test "state round trip" {
     try testing.expectEqual(@as(usize, 3), direct.direct.len);
     try testing.expectEqualStrings("Ubuntu 24.04", direct.direct[2]);
 
+    // Text that isn't UTF-8 comes back too, so it can't make the whole
+    // file unreadable: a title typed with an unpaired surrogate (which
+    // the title dialog keeps as WTF-8) and a directory a program reported
+    // with stray bytes. JSON can't hold them as strings, so std.json
+    // writes them as arrays of bytes.
+    {
+        const odd: State = .{ .windows = &.{.{ .left = 0, .top = 0, .right = 1, .bottom = 1, .tabs = &.{
+            .{ .title = "a\xed\xa0\x80b", .nodes = &.{.{ .pwd = "C:\\\xff" }} },
+        } }} };
+        const odd_json = try std.json.Stringify.valueAlloc(alloc, odd, .{});
+        const odd_parsed = try std.json.parseFromSliceLeaky(State, alloc, odd_json, .{});
+        try testing.expectEqualStrings("a\xed\xa0\x80b", odd_parsed.windows[0].tabs[0].title.?);
+        try testing.expectEqualStrings("C:\\\xff", odd_parsed.windows[0].tabs[0].nodes[0].pwd.?);
+    }
+
     // An empty command isn't one.
     try testing.expect(try (CommandState{}).command(alloc) == null);
     try testing.expect(try (CommandState{ .direct = &.{} }).command(alloc) == null);

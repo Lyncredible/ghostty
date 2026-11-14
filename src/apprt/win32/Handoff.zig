@@ -136,7 +136,9 @@ fn establish(
     if (info) |startup| {
         if (startup.title) |value| {
             const len = SysStringLen(value);
-            if (len > 0) title = std.unicode.utf16LeToUtf8AllocZ(alloc, value[0..len]) catch null;
+            // As with titles from elsewhere, an unpaired surrogate doesn't
+            // lose the whole title.
+            if (len > 0) title = util.utf8Alloc(alloc, value[0..len]) catch null;
         }
         show = showCommand(startup.flags, startup.show_window);
         log.info("console handoff title={?s} flags=0x{x} show={}", .{ title, startup.flags, startup.show_window });
@@ -284,6 +286,50 @@ const handoff_vtbl = HandoffVtbl{
         }
     }.f,
 };
+
+test "the class as COM uses it" {
+    const testing = std.testing;
+    var out: ?*anyopaque = null;
+
+    // The factory is a class factory, and makes the handoff object for
+    // the interfaces it has, not aggregated.
+    try testing.expectEqual(S_OK, factory_vtbl.QueryInterface(&factory, &IID_IClassFactory, &out));
+    try testing.expectEqual(@as(?*anyopaque, &factory), out);
+    try testing.expectEqual(E_NOINTERFACE, factory_vtbl.QueryInterface(&factory, &IID_ITerminalHandoff3, &out));
+    try testing.expectEqual(null, out);
+    try testing.expectEqual(S_OK, factory_vtbl.CreateInstance(&factory, null, &IID_ITerminalHandoff3, &out));
+    try testing.expectEqual(@as(?*anyopaque, &handoff_object), out);
+    try testing.expectEqual(S_OK, factory_vtbl.CreateInstance(&factory, null, &IID_IUnknown, &out));
+    try testing.expectEqual(@as(?*anyopaque, &handoff_object), out);
+    try testing.expectEqual(E_NOINTERFACE, factory_vtbl.CreateInstance(&factory, null, &IID_IClassFactory, &out));
+    try testing.expectEqual(null, out);
+    var outer: u8 = 0;
+    try testing.expectEqual(CLASS_E_NOAGGREGATION, factory_vtbl.CreateInstance(&factory, &outer, &IID_ITerminalHandoff3, &out));
+    try testing.expectEqual(null, out);
+    // An older version of the interface isn't ours.
+    var iid = IID_ITerminalHandoff3;
+    iid.d[7] +%= 1;
+    try testing.expectEqual(E_NOINTERFACE, handoff_vtbl.QueryInterface(&handoff_object, &iid, &out));
+
+    // A handoff with no app to take it (one after we unregistered, still
+    // on its way) fails without touching the handles or the pipes.
+    try testing.expect(target == null);
+    var in: c.HANDLE = null;
+    var pipe_out: c.HANDLE = null;
+    const bogus: c.HANDLE = @ptrFromInt(0x1234);
+    try testing.expectEqual(E_UNEXPECTED, handoff_vtbl.EstablishPtyHandoff(
+        &handoff_object,
+        &in,
+        &pipe_out,
+        bogus,
+        bogus,
+        bogus,
+        bogus,
+        null,
+    ));
+    try testing.expectEqual(null, in);
+    try testing.expectEqual(null, pipe_out);
+}
 
 const Interface = extern struct { vtbl: *const anyopaque };
 
