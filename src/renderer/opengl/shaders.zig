@@ -350,6 +350,27 @@ fn initPostPipeline(data: [:0]const u8) !Pipeline {
     });
 }
 
+test "Uniforms is laid out as the Globals block (std140)" {
+    // Offsets std140 gives common.glsl's Globals block: the vec4s on 16
+    // bytes, the rest packed on 4.
+    const testing = std.testing;
+    try testing.expectEqual(0, @offsetOf(Uniforms, "projection_matrix"));
+    try testing.expectEqual(64, @offsetOf(Uniforms, "screen_size"));
+    try testing.expectEqual(72, @offsetOf(Uniforms, "cell_size"));
+    try testing.expectEqual(80, @offsetOf(Uniforms, "grid_size"));
+    try testing.expectEqual(96, @offsetOf(Uniforms, "grid_padding"));
+    try testing.expectEqual(112, @offsetOf(Uniforms, "padding_extend"));
+    try testing.expectEqual(116, @offsetOf(Uniforms, "min_contrast"));
+    try testing.expectEqual(120, @offsetOf(Uniforms, "cursor_pos"));
+    try testing.expectEqual(124, @offsetOf(Uniforms, "cursor_color"));
+    try testing.expectEqual(128, @offsetOf(Uniforms, "bg_color"));
+    try testing.expectEqual(132, @offsetOf(Uniforms, "bools"));
+    try testing.expectEqual(136, @offsetOf(Uniforms, "text_contrast"));
+    try testing.expectEqual(140, @offsetOf(Uniforms, "text_boost"));
+    try testing.expectEqual(144, @offsetOf(Uniforms, "text_gamma_ratios"));
+    try testing.expectEqual(160, @sizeOf(Uniforms));
+}
+
 test "the shaders compile" {
     // glslang parses them as the driver would, for OpenGL. This also
     // runs on Windows, which doesn't draw with OpenGL, so that a change to
