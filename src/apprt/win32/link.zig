@@ -341,24 +341,36 @@ fn lowerUnit(unit: u16) u16 {
     return if (unit >= 'A' and unit <= 'Z') unit + ('a' - 'A') else unit;
 }
 
+/// Ours: Windows' list leaves out scripts that an installed interpreter
+/// runs when opened (as macOS blocks every script type), links and
+/// configurations that connect to other computers or run commands
+/// (`.rdp`, `.wsb`), installers and add-ins, theme packs, and Excel's web
+/// queries and SYLK files, which can start programs.
 const dangerous_extensions = [_][]const u8{
-    ".ade",                ".adp",               ".app",        ".appinstaller",
-    ".application",        ".appref-ms",         ".appx",       ".appxbundle",
-    ".bas",                ".bat",               ".cer",        ".chm",
-    ".cmd",                ".com",               ".cpl",        ".crt",
-    ".der",                ".diagcab",           ".diagcfg",    ".diagpkg",
-    ".exe",                ".gadget",            ".hlp",        ".hta",
-    ".inf",                ".ins",               ".isp",        ".jar",
-    ".js",                 ".jse",               ".library-ms", ".lnk",
-    ".mde",                ".msc",               ".msh",        ".msi",
-    ".msix",               ".msixbundle",        ".msp",        ".mst",
-    ".pif",                ".ps1",               ".ps1xml",     ".ps2",
-    ".psc1",               ".psd1",              ".psm1",       ".reg",
-    ".scf",                ".scr",               ".sct",        ".search-ms",
-    ".searchconnector-ms", ".settingcontent-ms", ".shb",        ".shs",
-    ".url",                ".vb",                ".vbe",        ".vbs",
-    ".website",            ".ws",                ".wsc",        ".wsf",
-    ".wsh",                ".xbap",              ".xll",
+    ".ade",               ".adp",           ".ahk",        ".app",
+    ".appinstaller",      ".application",   ".appref-ms",  ".appx",
+    ".appxbundle",        ".au3",           ".bas",        ".bash",
+    ".bat",               ".cer",           ".chm",        ".class",
+    ".cmd",               ".com",           ".cpl",        ".crt",
+    ".der",               ".deskthemepack", ".diagcab",    ".diagcfg",
+    ".diagpkg",           ".dqy",           ".exe",        ".gadget",
+    ".hlp",               ".hta",           ".inf",        ".ins",
+    ".iqy",               ".isp",           ".jar",        ".jnlp",
+    ".js",                ".jse",           ".library-ms", ".lnk",
+    ".lua",               ".mde",           ".msc",        ".msh",
+    ".msi",               ".msix",          ".msixbundle", ".msp",
+    ".mst",               ".php",           ".pif",        ".provxml",
+    ".ps1",               ".ps1xml",        ".ps2",        ".psc1",
+    ".psd1",              ".psm1",          ".py",         ".pyw",
+    ".pyz",               ".pyzw",          ".rb",         ".rbw",
+    ".rdp",               ".reg",           ".rqy",        ".scf",
+    ".scr",               ".sct",           ".search-ms",  ".searchconnector-ms",
+    ".settingcontent-ms", ".sh",            ".shb",        ".shs",
+    ".slk",               ".tcl",           ".themepack",  ".url",
+    ".vb",                ".vbe",           ".vbs",        ".vsix",
+    ".vsto",              ".website",       ".ws",         ".wsb",
+    ".wsc",               ".wsf",           ".wsh",        ".xbap",
+    ".xll",               ".zsh",
 };
 
 /// Whether the value has control, invisible or text-reversing characters,
@@ -428,6 +440,22 @@ extern "shlwapi" fn PathCreateFromUrlW(
 ) callconv(.winapi) c.HRESULT;
 
 const testing = std.testing;
+
+test isDangerousExtension {
+    const L = std.unicode.utf8ToUtf16LeStringLiteral;
+    // Ours, in any case; Windows' own list; PATHEXT's.
+    for ([_][]const u16{ L(".py"), L(".PYW"), L(".sh"), L(".rdp"), L(".wsb"), L(".themepack"), L(".lnk") }) |ext| {
+        try testing.expect(isDangerousExtension(ext));
+    }
+    try testing.expect(isDangerousExtension(L(".pif")));
+    try testing.expect(isDangerousExtension(L(".cpl")));
+    // Documents and pictures open.
+    for ([_][]const u16{ L(".txt"), L(".md"), L(".pdf"), L(".png"), L(".log"), L("."), L("") }) |ext| {
+        try testing.expect(!isDangerousExtension(ext));
+    }
+    // Too long to look up: refused rather than truncated.
+    try testing.expect(isDangerousExtension(L("." ++ @as([40]u8, @splat('x')))));
+}
 
 fn expectDeny(reason: Reason, value: []const u8, plain_paths: bool) !void {
     const decision = try check(testing.allocator, value, plain_paths);

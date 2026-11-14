@@ -3616,6 +3616,24 @@ Notes:
       while their surfaces are made; menus' actions are constants), and
       code after a modal loop (close confirmations, Save As) checks its
       window is still there.
+- [x] Review of the bell's audio, the shell helpers and link checks
+      (`BellAudio.zig`, `shell.zig`, `link.zig`, 2026-11-13). Links to
+      local files refused types that run code by Windows' list
+      (`AssocIsDangerous`), `PATHEXT` and ours. Windows' list (checked
+      here) leaves out scripts that an installed interpreter runs when
+      the file is opened: Python, Ruby, PHP, Lua, Tcl, AutoHotkey,
+      AutoIt, and `.sh` (Git for Windows runs it in Git Bash). The
+      macOS app refuses every script type. It also leaves out `.rdp`
+      (connects to a computer and can share drives with it), `.wsb`
+      (Windows Sandbox, which runs a logon command), `.jnlp` and
+      `.class` (Java), theme packs, VS and Office add-in installers,
+      `.provxml`, and Excel's web queries and SYLK files. They're all
+      on our list now (unit test `isDangerousExtension`). Nothing to
+      change in the bell's audio or the shell helpers, nor in the
+      search bar (`SearchBar.zig`): a lone surrogate typed in its field
+      becomes WTF-8, and the core's search compares bytes, so it only
+      finds nothing. Every file in `src/apprt/win32` has now had a
+      review.
 - [x] A split never smaller than one cell (found 2026-11-13, checking
       upstream's recent GTK changes: "never resize a split smaller than
       one cell", "keep split ratios on window resize and sync on
@@ -3825,7 +3843,8 @@ Notes:
         are now `InspectorWindow.deltaTime`, with a unit test. Every
         file in `src/apprt/win32` now has unit tests and is in the
         test list.
-        `memory-leak.ps1`, which opens the inspector, passes here.
+        `memory-leak.ps1`, which opens the inspector, passes here. CI
+        run 43532618495 (88be238ac) passed every job.
   - [x] The other actions Win32 doesn't handle (found 2026-11-06), left
         unhandled on purpose: `show_child_exited` (unhandled, the core
         prints "Process exited. Press any key to close the terminal." in
