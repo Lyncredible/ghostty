@@ -3646,6 +3646,23 @@ Notes:
       spare device made before a driver update fails its first present
       and is replaced like any lost device; and a render pass unbinds
       its targets and every resource slot it may have bound.
+      `dcomp.zig`'s vtable slots match `dcomp.h`, and the swap chain
+      test builds its composition tree.
+- [x] Review of the Windows changes outside the apprt and renderer
+      (shell integration, `~` and file URI paths, translations,
+      `+edit-config`, custom shaders to HLSL; 2026-11-13). PowerShell's
+      integration script was loaded from a single-quoted path with `'`
+      doubled, but PowerShell also takes the typographic quotes (U+2018
+      to U+201B) as quotes, so a resources folder under a profile like
+      `O’Brien` ended the string early and PowerShell started without
+      the integration ("The string is missing the terminator", checked
+      here). It now uses the quoting dropped files already had for
+      PowerShell (`shell.writePowerShellQuoted`, shared and unit
+      tested, with a test of the setup from such a folder); with it,
+      PowerShell loads the script from that folder. `+edit-config`
+      runs the editor through cmd, which still expands a `%NAME%` pair
+      in the quoted path; a config path with one is very unlikely and
+      cmd has no escape for it, so it stays.
 - [x] A split never smaller than one cell (found 2026-11-13, checking
       upstream's recent GTK changes: "never resize a split smaller than
       one cell", "keep split ratios on window resize and sync on
