@@ -2,6 +2,7 @@
 //! for the shell and separated by spaces, like Windows Terminal.
 const std = @import("std");
 const Allocator = std.mem.Allocator;
+const internal_os = @import("../../os/main.zig");
 
 /// The kind of shell the paths are for.
 pub const Shell = enum {
@@ -64,22 +65,7 @@ fn writePowerShell(writer: *std.Io.Writer, path: []const u8) std.Io.Writer.Error
         if (!(std.ascii.isAlphanumeric(ch) or std.mem.indexOfScalar(u8, "\\:._-", ch) != null)) break false;
     } else true;
     if (safe) return writer.writeAll(path);
-
-    // Single quotes, in which nothing expands. PowerShell also takes the
-    // typographic single quotes (U+2018 to U+201B) as quotes, and writing
-    // any of them twice stands for itself.
-    try writer.writeByte('\'');
-    var i: usize = 0;
-    while (i < path.len) {
-        const len = std.unicode.utf8ByteSequenceLength(path[i]) catch 1;
-        const ch = path[i..@min(i + len, path.len)];
-        try writer.writeAll(ch);
-        const quote = std.mem.eql(u8, ch, "'") or
-            (ch.len == 3 and ch[0] == 0xE2 and ch[1] == 0x80 and ch[2] >= 0x98 and ch[2] <= 0x9B);
-        if (quote) try writer.writeAll(ch);
-        i += ch.len;
-    }
-    try writer.writeByte('\'');
+    try internal_os.shell.writePowerShellQuoted(writer, path);
 }
 
 fn writeSingleQuoted(writer: *std.Io.Writer, path: []const u8) std.Io.Writer.Error!void {

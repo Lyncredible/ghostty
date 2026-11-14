@@ -492,16 +492,16 @@ fn setupPowerShell(
         }
     }
 
-    // Single quotes are escaped by doubling them in PowerShell strings.
-    const quoted_path = try std.mem.replaceOwned(u8, alloc, script_path, "'", "''");
+    // The path as a PowerShell string, which escapes any quotes in it,
+    // typographic ones too (a profile folder such as O’Brien).
+    var script: std.Io.Writer.Allocating = .init(alloc);
+    const w = &script.writer;
+    w.writeAll(". ([ScriptBlock]::Create([IO.File]::ReadAllText(") catch return error.OutOfMemory;
+    internal_os.shell.writePowerShellQuoted(w, script_path) catch return error.OutOfMemory;
+    w.writeAll(")))") catch return error.OutOfMemory;
     try result.append(alloc, "-NoExit");
     try result.append(alloc, "-Command");
-    try result.append(alloc, try std.fmt.allocPrintSentinel(
-        alloc,
-        ". ([ScriptBlock]::Create([IO.File]::ReadAllText('{s}')))",
-        .{quoted_path},
-        0,
-    ));
+    try result.append(alloc, try script.toOwnedSliceSentinel(0));
     return .{ .direct = try result.toOwnedSlice(alloc) };
 }
 
@@ -525,6 +525,33 @@ test "powershell" {
     try testing.expectEqualStrings("-Command", args[5]);
     try testing.expect(std.mem.startsWith(u8, args[6], ". ([ScriptBlock]::Create("));
     try testing.expect(std.mem.endsWith(u8, args[6], "/shell-integration/powershell/ghostty.ps1')))"));
+}
+
+test "powershell: quotes in the resources path" {
+    const testing = std.testing;
+    var arena = ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const alloc = arena.allocator();
+
+    var tmp_dir = std.testing.tmpDir(.{});
+    defer tmp_dir.cleanup();
+    const name = "O\u{2019}Brien's";
+    try tmp_dir.dir.createDirPath(testing.io, name ++ "/shell-integration/powershell");
+    try tmp_dir.dir.writeFile(testing.io, .{
+        .sub_path = name ++ "/shell-integration/powershell/ghostty.ps1",
+        .data = "",
+    });
+    const root = try tmp_dir.dir.realPathFileAlloc(testing.io, ".", alloc);
+    const resources = try std.fmt.allocPrint(alloc, "{s}/{s}", .{ root, name });
+
+    // Each quote, of either kind, is doubled.
+    const command = try setupPowerShell(alloc, .{ .shell = "pwsh" }, resources);
+    const script = command.?.direct[3];
+    try testing.expect(std.mem.endsWith(
+        u8,
+        script,
+        "O\u{2019}\u{2019}Brien''s/shell-integration/powershell/ghostty.ps1')))",
+    ));
 }
 
 test "powershell: unsupported options" {

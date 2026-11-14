@@ -194,3 +194,36 @@ test "shell escape 7" {
     try shell.writer.writeAll("a(1)");
     try testing.expectEqualStrings("a\\(1\\)", writer.buffered());
 }
+
+/// Write a string as a single-quoted PowerShell string, in which nothing
+/// expands. PowerShell also takes the typographic single quotes (U+2018
+/// to U+201B) as quotes, and writing any of them twice stands for itself.
+pub fn writePowerShellQuoted(writer: *Writer, s: []const u8) Writer.Error!void {
+    try writer.writeByte('\'');
+    var i: usize = 0;
+    while (i < s.len) {
+        const len = std.unicode.utf8ByteSequenceLength(s[i]) catch 1;
+        const ch = s[i..@min(i + len, s.len)];
+        try writer.writeAll(ch);
+        const quote = std.mem.eql(u8, ch, "'") or
+            (ch.len == 3 and ch[0] == 0xE2 and ch[1] == 0x80 and ch[2] >= 0x98 and ch[2] <= 0x9B);
+        if (quote) try writer.writeAll(ch);
+        i += ch.len;
+    }
+    try writer.writeByte('\'');
+}
+
+test writePowerShellQuoted {
+    var buf: [128]u8 = undefined;
+    var writer: std.Io.Writer = .fixed(&buf);
+    try writePowerShellQuoted(&writer, "C:\\it's $(here) \u{2018}\u{2019}\u{201A}\u{201B} \u{201C}");
+    try testing.expectEqualStrings(
+        "'C:\\it''s $(here) \u{2018}\u{2018}\u{2019}\u{2019}\u{201A}\u{201A}\u{201B}\u{201B} \u{201C}'",
+        writer.buffered(),
+    );
+
+    // Bytes that aren't UTF-8 are written as they are.
+    writer = .fixed(&buf);
+    try writePowerShellQuoted(&writer, "a\xE2\x80");
+    try testing.expectEqualStrings("'a\xE2\x80'", writer.buffered());
+}
