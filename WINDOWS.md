@@ -3867,6 +3867,15 @@ Notes:
         rounded up to 16 bytes. They use a real device (hardware, or
         WARP, which Windows always has; CI's runners draw the UI tests
         with one). Changing an expected pixel fails the texture test.
+        CI run 43545470803 (af6cc8036) passed every job, the four new
+        tests running (not skipped) on the x64 and arm64 runners.
+  - [x] Building the shaders on a device has a test too: every built-in
+        pipeline (whose input layout Direct3D checks against the
+        compiled vertex shader, so a vertex struct that doesn't match
+        its shader fails, as giving the image pipeline the background
+        image's struct did here), blending only where it's wanted, two
+        custom shaders, a second `deinit` doing nothing, and a custom
+        shader's source compiled once and then reused.
         `memory-leak.ps1`, which opens the inspector, passes here. CI
         run 43532618495 (88be238ac) passed every job.
   - [x] The other actions Win32 doesn't handle (found 2026-11-06), left
