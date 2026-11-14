@@ -207,8 +207,10 @@ pub const Face = struct {
             const style: [*:0]const u8 = handle.*.style_name orelse break :instance;
             var family_buf: [512]u8 = undefined;
             const family = try self.name(&family_buf);
-            return std.fmt.bufPrint(buf, "{s} {s}", .{ family, std.mem.span(style) }) catch
-                error.OutOfMemory;
+            // Cut short, at a whole character, if it doesn't fit.
+            var writer: std.Io.Writer = .fixed(buf);
+            writer.print("{s} {s}", .{ family, std.mem.span(style) }) catch {};
+            return wholeUtf8(writer.buffered());
         }
         const full = try self.sfntName(freetype.c.TT_NAME_ID_FULL_NAME, buf);
         return if (full.len > 0) full else try self.name(buf);
@@ -240,12 +242,73 @@ pub const Face = struct {
         const entry = best orelse return "";
         const string = entry.string[0..entry.string_len];
         if (!isUtf16Name(entry)) return string;
-        if (string.len % 2 != 0 or string.len > 1024) return string;
-        var tmp: [512]u16 = undefined;
-        const max = string.len / 2;
-        for (0..max) |j| tmp[j] = std.mem.readInt(u16, string[j * 2 ..][0..2], .big);
-        const len = std.unicode.utf16LeToUtf8(buf, tmp[0..max]) catch return string;
+        return utf16BeToUtf8(buf, string) orelse string;
+    }
+
+    /// Decode a UTF-16BE name into `buf`, cut short at a character if it
+    /// doesn't fit. Null if it isn't valid UTF-16.
+    fn utf16BeToUtf8(buf: []u8, string: []const u8) ?[]u8 {
+        if (string.len % 2 != 0) return null;
+        var len: usize = 0;
+        var i: usize = 0;
+        while (i < string.len) {
+            const units: [2]u16 = .{
+                std.mem.readInt(u16, string[i..][0..2], .big),
+                if (i + 4 <= string.len) std.mem.readInt(u16, string[i + 2 ..][0..2], .big) else 0,
+            };
+            const cp: u21 = if (std.unicode.utf16IsHighSurrogate(units[0]))
+                std.unicode.utf16DecodeSurrogatePair(&units) catch return null
+            else if (std.unicode.utf16IsLowSurrogate(units[0]))
+                return null
+            else
+                units[0];
+            i += if (cp > 0xFFFF) 4 else 2;
+            const n = std.unicode.utf8CodepointSequenceLength(cp) catch unreachable;
+            if (len + n > buf.len) break;
+            _ = std.unicode.utf8Encode(cp, buf[len..]) catch unreachable;
+            len += n;
+        }
         return buf[0..len];
+    }
+
+    /// `s` without a UTF-8 sequence cut off at its end.
+    fn wholeUtf8(s: []const u8) []const u8 {
+        var i = s.len;
+        while (i > 0 and s.len - i < 4) {
+            i -= 1;
+            const len = std.unicode.utf8ByteSequenceLength(s[i]) catch continue;
+            return if (i + len > s.len) s[0..i] else s;
+        }
+        return s;
+    }
+
+    test wholeUtf8 {
+        try testing.expectEqualStrings("", wholeUtf8(""));
+        try testing.expectEqualStrings("ab", wholeUtf8("ab"));
+        try testing.expectEqualStrings("a中", wholeUtf8("a中"));
+        try testing.expectEqualStrings("a", wholeUtf8("a\xE4\xB8"));
+        try testing.expectEqualStrings("a", wholeUtf8("a\xE4"));
+        try testing.expectEqualStrings("a\u{1F600}", wholeUtf8("a\u{1F600}"));
+        try testing.expectEqualStrings("a", wholeUtf8("a\xF0\x9F\x98"));
+    }
+
+    test utf16BeToUtf8 {
+        var buf: [16]u8 = undefined;
+        // "Aé中" and an emoji, which is a surrogate pair.
+        const encoded = "\x00A\x00\xE9\x4E\x2D\xD8\x3D\xDE\x00";
+        try testing.expectEqualStrings("Aé中\u{1F600}", utf16BeToUtf8(&buf, encoded).?);
+
+        // Too long for the buffer: cut short at a whole character.
+        try testing.expectEqualStrings("Aé中", utf16BeToUtf8(buf[0..9], encoded).?);
+        try testing.expectEqualStrings("A", utf16BeToUtf8(buf[0..2], encoded).?);
+        try testing.expectEqualStrings("", utf16BeToUtf8(buf[0..0], encoded).?);
+
+        // Not UTF-16: an odd length, a lone low surrogate, a high one at
+        // the end or before a character that isn't a low surrogate.
+        try testing.expect(utf16BeToUtf8(&buf, "\x00A\x00") == null);
+        try testing.expect(utf16BeToUtf8(&buf, "\x00A\xDE\x00") == null);
+        try testing.expect(utf16BeToUtf8(&buf, "\x00A\xD8\x3D") == null);
+        try testing.expect(utf16BeToUtf8(&buf, "\xD8\x3D\x00A") == null);
     }
 
     /// Whether a name table entry is UTF-16BE: Unicode platform names,
