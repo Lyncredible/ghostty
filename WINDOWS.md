@@ -3777,6 +3777,18 @@ Notes:
       state with text that isn't UTF-8 reads back as it was (std.json
       writes it as bytes), now tested. `handoff.ps1` passes here. CI
       run 43585138391 (3255def88) passed every job.
+- [x] Test coverage, 2026-11-14: the shared OpenGL GLSL that this branch
+      changed (`dwrite_alpha` in `common.glsl`, used by
+      `cell_text.f.glsl`) was never compiled, since OpenGL only runs on
+      Linux and FreeBSD and the fork's CI builds Windows. A test in
+      `opengl/shaders.zig`, pulled into the renderer tests everywhere,
+      has glslang parse each pipeline's shaders for OpenGL (a typo in
+      `dwrite_alpha` fails it, naming the shader and line), and another
+      checks the Zig `Uniforms` offsets against std140's for the
+      `Globals` block (the D3D11 ones already had comptime asserts).
+      The command palette's `buildEntries` got a test too: supported
+      commands only, searchable by action, shortcuts, then the
+      terminals with a working directory only when the title lacks it.
 - [x] A dragged split let go where a zoom hides a terminal (found
       2026-11-14 reviewing `SplitDrag.zig`): a zoom lays out only the
       zoomed terminal, and the others stay hidden where they were.
