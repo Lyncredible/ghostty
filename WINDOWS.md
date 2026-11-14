@@ -3766,6 +3766,17 @@ Notes:
       so it can't leave out a face the directory walk finds; the
       catalog reader checks every offset before reading; after a lost
       device the image state starts over, so Kitty images come back.
+- [x] Test coverage of what other processes send us (2026-11-14):
+      `Ipc.zig`'s request decoding (WM_COPYDATA from any process in the
+      session) is tested with short and unknown requests, argument
+      edge cases and random data; WM_COPYDATA without its structure is
+      refused (Windows doesn't deliver one from another process,
+      checked here). The handoff class's COM methods are tested,
+      including a handoff with no app to take it. A handed off title
+      with an unpaired surrogate is kept instead of dropped. Saved
+      state with text that isn't UTF-8 reads back as it was (std.json
+      writes it as bytes), now tested. `handoff.ps1` passes here. CI
+      run 43585138391 (3255def88) passed every job.
 - [x] A split never smaller than one cell (found 2026-11-13, checking
       upstream's recent GTK changes: "never resize a split smaller than
       one cell", "keep split ratios on window resize and sync on
