@@ -350,6 +350,47 @@ fn initPostPipeline(data: [:0]const u8) !Pipeline {
     });
 }
 
+test "the shaders compile" {
+    // glslang parses them as the driver would, for OpenGL. This also
+    // runs on Windows, which doesn't draw with OpenGL, so that a change to
+    // the shared GLSL (such as `dwrite_alpha`) is checked there too.
+    const glslang = @import("glslang");
+    const c = glslang.c;
+    try glslang.testing.ensureInit();
+
+    inline for (pipeline_descs) |pipeline| {
+        inline for (.{
+            .{ c.GLSLANG_STAGE_VERTEX, pipeline[1].vertex_fn, "vertex" },
+            .{ c.GLSLANG_STAGE_FRAGMENT, pipeline[1].fragment_fn, "fragment" },
+        }) |stage| {
+            const input: c.glslang_input_t = .{
+                .language = c.GLSLANG_SOURCE_GLSL,
+                .stage = stage[0],
+                .client = c.GLSLANG_CLIENT_OPENGL,
+                .client_version = c.GLSLANG_TARGET_OPENGL_450,
+                .target_language = c.GLSLANG_TARGET_NONE,
+                .target_language_version = 0,
+                .code = stage[1].ptr,
+                .default_version = 100,
+                .default_profile = c.GLSLANG_NO_PROFILE,
+                .force_default_version_and_profile = 0,
+                .forward_compatible = 0,
+                .messages = c.GLSLANG_MSG_DEFAULT_BIT,
+                .resource = c.glslang_default_resource(),
+            };
+            const shader = try glslang.Shader.create(&input);
+            defer shader.delete();
+            errdefer log.err("{s} {s} shader: {s}", .{
+                pipeline[0],
+                stage[2],
+                shader.getInfoLog() catch "",
+            });
+            try shader.preprocess(&input);
+            try shader.parse(&input);
+        }
+    }
+}
+
 /// Load shader code from the target path, processing `#include` directives.
 ///
 /// Comptime only for now, this code is really sloppy and makes a bunch of
