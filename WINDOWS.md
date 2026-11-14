@@ -3777,6 +3777,25 @@ Notes:
       state with text that isn't UTF-8 reads back as it was (std.json
       writes it as bytes), now tested. `handoff.ps1` passes here. CI
       run 43585138391 (3255def88) passed every job.
+- [x] Closing a terminal from a key with its inspector open (found
+      2026-11-14 by the new `inspector.ps1`): Ghostty crashed. The core's
+      `keyCallback` copies each key for an open inspector and hands it
+      over in a deferred block once the key is handled, but a closing
+      binding may free the surface (`InputEffect.closed` says so), and
+      the inspector with it; the block still read `self.inspector`. A
+      terminal closed with `undo-timeout = 0` is freed at once here. Now `.closed` frees the copy with an
+      allocator taken beforehand, and nothing touches the surface. This
+      is in the shared core (`src/Surface.zig`), though GTK and macOS
+      free surfaces later, so it's only a candidate for upstream if
+      another runtime frees at once (owner's call).
+  - `inspector.ps1` (new, in CI): the inspector opens titled for its
+    terminal at 1000x800 points, takes resizing to 1x1, minimizing and
+    input, `inspector:show` keeps one window, toggling and `WM_CLOSE`
+    close it, closing its terminal closes it, and quitting with one open
+    exits with 0 and no leaks. Passed here.
+  - `overlays.ps1` now also drops a dragged split on the other terminal's
+    right side and then its bottom: it must move there and keep the
+    focus. Moving a split wasn't tested (the drag let go over itself).
 - [x] The scrollbar's thumb under the pointer (found 2026-11-14 by a new
       property test of `Scrollbar.zig`): the thumb was drawn as far down
       the track as the view is down all the rows, but dragging reads it
