@@ -2633,7 +2633,8 @@ Notes:
           a tab whose `ping` exits by itself, sends the messages Windows
           sends, and checks both tabs are saved after the ping tab
           closes; without the change it fails at once (nothing saved
-          when Windows asks). Passes here.
+          when Windows asks). Passes here, and in CI run 43564242706
+          (d687406bd), which passed every job.
     - [ ] Check with a real reboot with a WSL tab open. If it's still
           lost, the other cause would be the restore: the WSL tab's
           `wsl.exe` failing early after sign-in, closing its tab.
