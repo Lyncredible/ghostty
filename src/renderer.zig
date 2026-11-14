@@ -69,4 +69,7 @@ test {
     _ = Thread;
     _ = State;
     _ = @import("renderer/text_blend.zig");
+
+    // The OpenGL shaders' GLSL is checked wherever the tests run.
+    _ = @import("renderer/opengl/shaders.zig");
 }
