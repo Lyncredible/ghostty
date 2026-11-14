@@ -3634,6 +3634,17 @@ Notes:
       becomes WTF-8, and the core's search compares bytes, so it only
       finds nothing. Every file in `src/apprt/win32` has now had a
       review.
+- [x] Review of the Direct3D 11 renderer's resources (`Device.zig`,
+      `buffer.zig`, `Texture.zig`, `Target.zig`, `Sampler.zig`,
+      `Frame.zig`, `RenderPass.zig`, `com.zig` in
+      `src/renderer/direct3d11`, 2026-11-13): nothing to change. Every
+      view and buffer is released on the error paths; a zero-sized
+      surface never makes textures (the renderer skips the frame); an
+      image too big for a texture fails its upload and isn't drawn
+      (Kitty images stop at 10000 pixels, under Direct3D's 16384); a
+      spare device made before a driver update fails its first present
+      and is replaced like any lost device; and a render pass unbinds
+      its targets and every resource slot it may have bound.
 - [x] A split never smaller than one cell (found 2026-11-13, checking
       upstream's recent GTK changes: "never resize a split smaller than
       one cell", "keep split ratios on window resize and sync on
