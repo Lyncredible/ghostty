@@ -312,6 +312,20 @@ bottom, below it. It only posts messages to
 Ghostty's own window. (The link preview needs a real Ctrl key, so
 `links.ps1` checks it.)
 
+## inspector.ps1
+
+Checks the terminal inspector's window. `inspector:toggle` must open it,
+titled `Inspector: ` and its terminal's title, 1000x800 points at its DPI.
+It's resized (down to 1x1), minimized and restored, and given posted
+mouse moves, clicks, the wheel and keys, and must keep answering.
+`inspector:show` with it open must not open another; toggling again and
+`WM_CLOSE` must each close it and leave the terminal. Closing a terminal
+(`close_surface` from a key, in a second tab, with `undo-timeout = 0` so
+it's freed at once) must close its inspector: this crashed Ghostty, the
+core recording the key for an inspector that had gone with the terminal.
+Last, it quits with the inspector open: Ghostty must exit with code 0 and
+log no errors or leaks. It only posts messages to Ghostty's windows.
+
 ## window-theme.ps1
 
 Checks `set_window_theme` with `theme = light:Builtin Light,dark:Builtin
