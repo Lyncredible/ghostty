@@ -891,7 +891,10 @@ fn msgWndProc(
             },
 
             c.WM_COPYDATA => {
-                const copy: *const c.COPYDATASTRUCT = @ptrFromInt(@as(usize, @bitCast(lparam)));
+                // Another process's data, which Windows copies for us.
+                // Don't count on there being any.
+                const copy_ptr: ?*const c.COPYDATASTRUCT = @ptrFromInt(@as(usize, @bitCast(lparam)));
+                const copy = copy_ptr orelse return 0;
                 if (copy.dwData != Ipc.magic) return 0;
                 const data: [*]const u8 = @ptrCast(copy.lpData orelse return 0);
                 return @intFromBool(self.handleIpc(data[0..copy.cbData]));

@@ -97,6 +97,69 @@ test "encode and decode" {
     try testing.expectError(error.InvalidRequest, decode(alloc, &.{ 9, 0 }));
 }
 
+test "decode: requests from another process" {
+    // The data comes from whatever process sends us WM_COPYDATA, so
+    // anything must decode or be refused, never read past its end.
+    const testing = std.testing;
+    var arena: std.heap.ArenaAllocator = .init(testing.allocator);
+    defer arena.deinit();
+    const alloc = arena.allocator();
+
+    // Too short, by a byte, and kinds we don't know.
+    try testing.expectError(error.InvalidRequest, decode(alloc, ""));
+    try testing.expectError(error.InvalidRequest, decode(alloc, &.{ 1, 0, 0, 0, 0, 0, 0, 0, 0 }));
+    for ([_]u8{ 0, 4, 0xff }) |kind| {
+        try testing.expectError(error.InvalidRequest, decode(alloc, &.{ kind, 0, 0, 0, 0, 0, 0, 0, 0, 0 }));
+    }
+
+    // Arguments said to be there but none given: an empty list, which a
+    // new window takes as no arguments.
+    {
+        const request = try decode(alloc, &.{ 2, 0, 0, 0, 0, 0, 0, 0, 0, 1 });
+        try testing.expectEqual(0, request.arguments.?.len);
+    }
+    // Any nonzero flag means arguments; the last one needs no NUL.
+    {
+        const request = try decode(alloc, "\x01\x00\x00\x00\x00\x00\x00\x00\x00\x07-e\x00pwsh");
+        const args = request.arguments.?;
+        try testing.expectEqual(2, args.len);
+        try testing.expectEqualStrings("-e", args[0]);
+        try testing.expectEqualStrings("pwsh", args[1]);
+    }
+    // Empty arguments in the middle and at the end are kept, but not the
+    // one after the final NUL.
+    {
+        const request = try decode(alloc, "\x03\xff\xff\xff\xff\xff\xff\xff\xff\x01\x00a\x00\x00");
+        try testing.expectEqual(Kind.toggle_quick_terminal, request.kind);
+        try testing.expectEqual(std.math.maxInt(u64), request.surface_id);
+        const args = request.arguments.?;
+        try testing.expectEqual(3, args.len);
+        try testing.expectEqualStrings("", args[0]);
+        try testing.expectEqualStrings("a", args[1]);
+        try testing.expectEqualStrings("", args[2]);
+    }
+
+    // Random data: decoded or refused, with every argument inside it.
+    var prng: std.Random.DefaultPrng = .init(0x47484950);
+    const random = prng.random();
+    var buf: [64]u8 = undefined;
+    for (0..2000) |_| {
+        const data = buf[0..random.uintAtMost(usize, buf.len)];
+        random.bytes(data);
+        // Mostly kinds we know, so the arguments get decoded too.
+        if (data.len > 0 and random.boolean()) data[0] = random.intRangeAtMost(u8, 1, 3);
+        const request = decode(alloc, data) catch |err| {
+            try testing.expectEqual(error.InvalidRequest, err);
+            continue;
+        };
+        for (request.arguments orelse &.{}) |arg| {
+            const start = @intFromPtr(arg.ptr) - @intFromPtr(data.ptr);
+            try testing.expect(start >= 10 and start + arg.len <= data.len);
+            try testing.expect(std.mem.indexOfScalar(u8, arg, 0) == null);
+        }
+    }
+}
+
 /// The window title of an instance's message window.
 pub fn windowTitle(buf: []u16, class: []const u8) ?[:0]const u16 {
     return util.utf16Exact(buf, class) catch null;
