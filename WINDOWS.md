@@ -3777,6 +3777,24 @@ Notes:
       state with text that isn't UTF-8 reads back as it was (std.json
       writes it as bytes), now tested. `handoff.ps1` passes here. CI
       run 43585138391 (3255def88) passed every job.
+- [x] Screen readers' text ranges were placed by the wrong lines and
+      columns (found 2026-11-14 reviewing `Accessibility.zig`). The text
+      was the viewport as copying gives it, with a wrapped row joined to
+      the next, while the cursor, the selection and the point a reader
+      asks about are screen rows and cells, and bounding rectangles
+      counted a UTF-16 unit a column. So below a line that wrapped, the
+      caret and selection were on the wrong line, and a wide character
+      (CJK) got half its width. The text is now a line per row, as
+      Windows Terminal gives it, with each unit's screen column (from
+      `selectionStringMap`); a wide character's second column is that
+      character, and the selection's end includes a wide last
+      character. A selection going on below the screen overflowed
+      (`start + maxInt`, a panic in safe builds, a line short in fast
+      ones); it now saturates. `GetValue`, for the whole text, is
+      unchanged. Unit tested with a wrapped row, wide characters and an
+      emoji ("test.ViewportRows"); `uia-ranges.ps1` checks the
+      rectangles in the app (the old code fails it: "three wide
+      characters are 57 wide, not the 114 of six narrow ones").
 - [x] Ctrl keys in win32 input mode typed the wrong character (found
       2026-11-14 rereading `key_encode.zig`). Only ctrl+letters and
       ctrl+[, \ and ] became control characters; any other key with
