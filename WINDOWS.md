@@ -3787,7 +3787,8 @@ Notes:
       Only shown terminals count now, like GTK's drop targets.
       `splits.ps1` runs with `drag-handle = always` and drops a zoomed
       terminal's handle where the other was, each way; the old code
-      failed it. Passed here, with `overlays.ps1`.
+      failed it. Passed here, with `overlays.ps1`, and in CI run
+      43599684647 with the inspector entry below.
 - [x] Closing a terminal from a key with its inspector open (found
       2026-11-14 by the new `inspector.ps1`): Ghostty crashed. The core's
       `keyCallback` copies each key for an open inspector and hands it
@@ -3803,7 +3804,10 @@ Notes:
     terminal at 1000x800 points, takes resizing to 1x1, minimizing and
     input, `inspector:show` keeps one window, toggling and `WM_CLOSE`
     close it, closing its terminal closes it, and quitting with one open
-    exits with 0 and no leaks. Passed here.
+    exits with 0 and no leaks. Passed here, and in CI run 43599684647
+    (it first failed there only on the size: Windows keeps a window
+    within its largest tracking size, 1000x788 on CI's 1024x768 screen,
+    which the test now allows for).
   - `overlays.ps1` now also drops a dragged split on the other terminal's
     right side and then its bottom: it must move there and keep the
     focus. Moving a split wasn't tested (the drag let go over itself).
