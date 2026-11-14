@@ -101,6 +101,20 @@ fn hotKey(trigger: Binding.Trigger) ?HotKey {
     const vk: c.UINT = switch (trigger.key) {
         .catch_all => return null,
         .physical => |key| vk: {
+            // The numpad's digits share scan codes with the navigation
+            // keys, which the scan code maps to: numpad 1 would be End, and
+            // ctrl+End taken from every application. They are their own
+            // keys with num lock on. Its Enter is the main Enter key's
+            // virtual key, which a hot key can't tell apart, so it has none.
+            switch (key) {
+                inline .numpad_0, .numpad_1, .numpad_2, .numpad_3, .numpad_4, .numpad_5, .numpad_6, .numpad_7, .numpad_8, .numpad_9 => |digit| {
+                    const name = @tagName(digit);
+                    break :vk c.VK_NUMPAD0 + (name[name.len - 1] - '0');
+                },
+                .numpad_decimal => break :vk c.VK_DECIMAL,
+                .numpad_enter => return null,
+                else => {},
+            }
             const native = for (input.keycodes.entries) |entry| {
                 if (entry.key == key) break entry.native;
             } else return null;
@@ -169,6 +183,22 @@ test "hotKey physical keys" {
         try testing.expectEqual(case[1], hotkey.vk);
         try testing.expectEqual(@as(c.UINT, c.MOD_CONTROL), hotkey.mods);
     }
+    // The numpad's digits are their own keys, not the navigation keys they
+    // share scan codes with (numpad 1 and End both map to VK_END), and its
+    // Enter, which would be the main Enter, has no hot key.
+    const numpad = [_]struct { input.Key, c.UINT }{
+        .{ .numpad_0, c.VK_NUMPAD0 },
+        .{ .numpad_1, c.VK_NUMPAD1 },
+        .{ .numpad_9, c.VK_NUMPAD9 },
+        .{ .numpad_decimal, c.VK_DECIMAL },
+        .{ .numpad_multiply, c.VK_MULTIPLY },
+        .{ .numpad_divide, c.VK_DIVIDE },
+        .{ .end, c.VK_END },
+    };
+    for (numpad) |case| {
+        try testing.expectEqual(case[1], hotKey(.{ .key = .{ .physical = case[0] } }).?.vk);
+    }
+    try testing.expect(hotKey(.{ .key = .{ .physical = .numpad_enter } }) == null);
     // A key no keyboard has a scan code for.
     try testing.expect(hotKey(.{ .key = .{ .physical = .unidentified } }) == null);
 }
