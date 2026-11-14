@@ -3716,6 +3716,16 @@ Notes:
       encoding: nothing to change (extended keys' scan codes carry the
       `0xE0` prefix `MapVirtualKeyW` wants, text of any length is
       streamed, invalid UTF-8 gives no characters).
+  - [x] And the DirectWrite font lookup, the text blending parameters
+        and the command line quoting (`dwrite_fallback.zig`,
+        `dwrite_raster.zig`, `text_blend.zig`, `os/windows.zig`). A
+        variable font's named instance's weight, from the font, was
+        made an integer as it was: a negative or NaN weight in a broken
+        or hostile font was a crash. It's now clamped to OpenType's 1
+        to 1000, NaN none (`weightFromAxis`, unit tested). The rest
+        needs no change: blending's gamma and contrast are clamped (NaN
+        too), and an argument's quoting is the standard one, tested by
+        reading each case back with Windows' rules.
 - [x] A split never smaller than one cell (found 2026-11-13, checking
       upstream's recent GTK changes: "never resize a split smaller than
       one cell", "keep split ratios on window resize and sync on

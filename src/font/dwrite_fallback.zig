@@ -203,9 +203,26 @@ fn axisWeight(ref: *c.IDWriteFontFaceReference) u32 {
     const n = @min(values.len, call(ref1.?, "GetFontAxisValueCount", .{}));
     check(call(ref1.?, "GetFontAxisValues", .{ &values, @as(c.UINT32, @intCast(n)) })) catch return 0;
     for (values[0..n]) |value| {
-        if (value.axisTag == c.DWRITE_FONT_AXIS_TAG_WEIGHT) return @intFromFloat(value.value);
+        if (value.axisTag == c.DWRITE_FONT_AXIS_TAG_WEIGHT) return weightFromAxis(value.value);
     }
     return 0;
+}
+
+/// A weight axis value as a weight: OpenType's 1 to 1000, or zero for
+/// NaN. A font's value can be anything, which as an integer could crash.
+fn weightFromAxis(value: f32) u32 {
+    if (std.math.isNan(value)) return 0;
+    return @intFromFloat(@round(std.math.clamp(value, 1, 1000)));
+}
+
+test weightFromAxis {
+    const testing = std.testing;
+    try testing.expectEqual(@as(u32, 400), weightFromAxis(400));
+    try testing.expectEqual(@as(u32, 351), weightFromAxis(350.6));
+    try testing.expectEqual(@as(u32, 1), weightFromAxis(-200));
+    try testing.expectEqual(@as(u32, 1000), weightFromAxis(32767));
+    try testing.expectEqual(@as(u32, 1000), weightFromAxis(std.math.inf(f32)));
+    try testing.expectEqual(@as(u32, 0), weightFromAxis(std.math.nan(f32)));
 }
 
 fn inDirs(path: []const u8, dirs: []const []const u8) bool {
