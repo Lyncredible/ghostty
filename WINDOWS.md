@@ -2607,6 +2607,15 @@ Notes:
         quits, and checks the PowerShell tab's command was saved again
         and the cmd tab saved none. WSL isn't on the runners; it was
         checked by hand (above).
+  - [ ] A WSL tab lost after a reboot (reported 2026-11-13): the cmd
+        tabs came back in the right working directories, the WSL tab
+        didn't come back. Likely cause, to confirm: the session is saved
+        only at `WM_ENDSESSION`, late in the shutdown, and by then WSL
+        may already have stopped, so the WSL shell had exited and its tab
+        had closed before the save. To try: save at
+        `WM_QUERYENDSESSION` as well (or keep terminals whose process
+        exits once the session is ending), then check with a reboot; and
+        read the log for when the WSL terminal's child exited.
 - [x] Ctrl+F for Find by default (requested 2026-11-06; decided
       2026-11-07: the owner keeps the default at Ctrl+Shift+F, as in
       Windows Terminal, and users who want Ctrl+F can add
