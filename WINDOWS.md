@@ -3705,6 +3705,17 @@ Notes:
         name, which returned an error when it didn't fit. The
         DirectWrite rasterizer falls back to FreeType on any failure;
         nothing to change there.
+- [x] Review of win32 input mode's key encoding and the WSL helpers
+      (`key_encode.zig`, `wsl.zig`, 2026-11-14). The WSL terminal's
+      distribution, which its working directory's
+      `\\wsl.localhost\<distro>` path is made with, was read from `-d`
+      anywhere in a `wsl.exe` command: `wsl ls -d x` named `x`, and
+      `wsl --cd -d -d Arch` took the directory for the option. It now
+      parses like wsl.exe (options' values skipped, the command starting
+      at the first argument that isn't an option), unit tested. Key
+      encoding: nothing to change (extended keys' scan codes carry the
+      `0xE0` prefix `MapVirtualKeyW` wants, text of any length is
+      streamed, invalid UTF-8 gives no characters).
 - [x] A split never smaller than one cell (found 2026-11-13, checking
       upstream's recent GTK changes: "never resize a split smaller than
       one cell", "keep split ratios on window resize and sync on
