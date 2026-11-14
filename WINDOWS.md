@@ -3789,7 +3789,12 @@ Notes:
       keys without one. Unit tested ("hotKey physical keys"; the old code
       gives VK_INSERT for numpad 0); `desktop-input.ps1` binds
       `global:ctrl+alt+numpad_3=new_window` and checks that ctrl+alt+Page
-      Down opens no window and ctrl+alt+numpad 3 does.
+      Down opens no window and ctrl+alt+numpad 3 does. That check found
+      another bug: a key sent as a virtual key (SendInput without a
+      scancode) took its scancode from MapVirtualKeyW, which gives the
+      navigation keys the numpad's without the extended prefix, so Page
+      Down was numpad 3 to keybindings. The message's extended flag now
+      adds the prefix ("nativeKeycode without a scancode").
 - [x] Screen readers' text ranges were placed by the wrong lines and
       columns (found 2026-11-14 reviewing `Accessibility.zig`). The text
       was the viewport as copying gives it, with a wrapped row joined to
