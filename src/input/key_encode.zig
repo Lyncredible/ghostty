@@ -135,16 +135,20 @@ fn win32(
     }
 
     const scan = win32ScanCode(event.key);
+    const vk = win32VirtualKey(event.key, scan, event.mods);
     const down = event.action != .release;
     const state = win32ControlKeyState(event.mods, scan > 0xFF);
 
     // The characters, as Windows produces them for the key: the first
     // UTF-16 unit is the key's, and any others follow it.
-    const control = if (down) win32ControlChar(event) else null;
+    const control = if (down)
+        win32ControlChar(event) orelse win32CtrlChar(vk, scan, event.mods)
+    else
+        null;
     var units: Utf16Units = .init(if (down and control == null) event.utf8 else "");
 
     try win32Record(writer, .{
-        .vk = win32VirtualKey(event.key, scan, event.mods),
+        .vk = vk,
         .scan = @intCast(scan & 0xFF),
         .char = control orelse units.next() orelse 0,
         .down = down,
@@ -225,8 +229,8 @@ fn win32ControlKeyState(mods: key.Mods, enhanced: bool) u32 {
     return state;
 }
 
-/// The character Windows produces for keys whose text isn't in the event:
-/// control characters for ctrl+letter and the keys that type them.
+/// The character Windows produces for the keys that type control
+/// characters of their own, whose text isn't in the event.
 fn win32ControlChar(event: key.KeyEvent) ?u16 {
     // AltGr (ctrl+alt) types the character in the event.
     const ctrl = event.mods.ctrl and !event.mods.alt;
@@ -235,19 +239,63 @@ fn win32ControlChar(event: key.KeyEvent) ?u16 {
         .tab => if (ctrl) null else 0x09,
         .backspace => if (ctrl) 0x7F else 0x08,
         .escape => 0x1B,
-        else => {
-            if (!ctrl or event.utf8.len != 1) return null;
-            return switch (event.utf8[0]) {
-                'a'...'z' => event.utf8[0] - 'a' + 1,
-                'A'...'Z' => event.utf8[0] - 'A' + 1,
-                '[' => 0x1B,
-                '\\' => 0x1C,
-                ']' => 0x1D,
-                else => null,
-            };
-        },
+        else => null,
     };
 }
+
+/// The character Windows produces for a key with ctrl held, or null
+/// without ctrl (or with AltGr, which types the event's text). The event
+/// has the key's text without ctrl, but Windows types what the layout's
+/// ctrl column says: a control character for letters, ctrl+[, \ and ],
+/// and on a US layout ctrl+shift+2, 6 and - (0x00, 0x1E and 0x1F), and
+/// for every other key nothing, which is a 0 character. We ask the
+/// layout itself, so letters on non-Latin layouts are control characters
+/// too, and ctrl+1 types no "1".
+fn win32CtrlChar(vk: u16, scan: u32, mods: key.Mods) ?u16 {
+    if (!mods.ctrl or mods.alt) return null;
+    if (vk == 0) return 0;
+
+    // The keyboard state of these modifiers only, so the result doesn't
+    // depend on the thread's keyboard state.
+    var state: [256]u8 = @splat(0);
+    const pressed = 0x80;
+    state[0x11] = pressed; // VK_CONTROL
+    state[if (mods.sides.ctrl == .right) 0xA3 else 0xA2] = pressed; // VK_RCONTROL, VK_LCONTROL
+    if (mods.shift) {
+        state[0x10] = pressed; // VK_SHIFT
+        state[if (mods.sides.shift == .right) 0xA1 else 0xA0] = pressed; // VK_RSHIFT, VK_LSHIFT
+    }
+    if (mods.caps_lock) state[0x14] = 0x01; // VK_CAPITAL, toggled
+    if (mods.num_lock) state[0x90] = 0x01; // VK_NUMLOCK, toggled
+
+    // Don't change the keyboard's dead key state (Windows 10 1607 and
+    // later), which a key with ctrl could otherwise clear.
+    const TOUNICODE_NO_STATE_CHANGE = 0x4;
+    // The scan code's top bit would mean a key release, so it's sent
+    // without the extended key's 0xE000.
+    var buf: [4]u16 = undefined;
+    const n = ToUnicodeEx(
+        vk,
+        scan & 0xFF,
+        &state,
+        &buf,
+        buf.len,
+        TOUNICODE_NO_STATE_CHANGE,
+        GetKeyboardLayout(0),
+    );
+    return if (n > 0) buf[0] else 0;
+}
+
+extern "user32" fn ToUnicodeEx(
+    vk: u32,
+    scan: u32,
+    state: *const [256]u8,
+    buf: [*]u16,
+    len: c_int,
+    flags: u32,
+    layout: ?*anyopaque,
+) callconv(.winapi) c_int;
+extern "user32" fn GetKeyboardLayout(thread: u32) callconv(.winapi) ?*anyopaque;
 
 /// The scan code of a key, with 0xE000 set for extended keys, or 0.
 fn win32ScanCode(k: key.Key) u32 {
@@ -309,11 +357,46 @@ test "win32 input: control key state" {
 }
 
 test "win32 input: control characters" {
-    try testing.expectEqual(@as(?u16, 0x01), win32ControlChar(.{ .key = .key_a, .mods = .{ .ctrl = true }, .utf8 = "a" }));
+    // Letters are the layout's, with ctrl or without.
+    try testing.expectEqual(@as(?u16, null), win32ControlChar(.{ .key = .key_a, .mods = .{ .ctrl = true }, .utf8 = "a" }));
     try testing.expectEqual(@as(?u16, null), win32ControlChar(.{ .key = .key_a, .utf8 = "a" }));
-    try testing.expectEqual(@as(?u16, null), win32ControlChar(.{ .key = .key_q, .mods = .{ .ctrl = true, .alt = true }, .utf8 = "@" }));
     try testing.expectEqual(@as(?u16, 0x0D), win32ControlChar(.{ .key = .enter }));
+    try testing.expectEqual(@as(?u16, 0x0A), win32ControlChar(.{ .key = .enter, .mods = .{ .ctrl = true } }));
     try testing.expectEqual(@as(?u16, 0x7F), win32ControlChar(.{ .key = .backspace, .mods = .{ .ctrl = true } }));
+    try testing.expectEqual(@as(?u16, null), win32ControlChar(.{ .key = .tab, .mods = .{ .ctrl = true } }));
+}
+
+test "win32 input: ctrl types what the layout's ctrl column has" {
+    if (comptime !win32_input_available) return error.SkipZigTest;
+    // The keys of a US layout, which CI's runners have.
+    if (@intFromPtr(GetKeyboardLayout(0)) & 0xFFFF != 0x0409) return error.SkipZigTest;
+
+    const cases = [_]struct { key.KeyEvent, []const u8 }{
+        // Control characters: ctrl+a, ctrl+[, and ctrl+shift+6 and -,
+        // whose text without ctrl is "^" and "_".
+        .{ .{ .key = .key_a, .mods = .{ .ctrl = true }, .utf8 = "a" }, "\x1b[65;30;1;1;8;1_" },
+        .{ .{ .key = .key_a, .mods = .{ .ctrl = true, .shift = true }, .utf8 = "A" }, "\x1b[65;30;1;1;24;1_" },
+        .{ .{ .key = .bracket_left, .mods = .{ .ctrl = true }, .utf8 = "[" }, "\x1b[219;26;27;1;8;1_" },
+        .{ .{ .key = .digit_6, .mods = .{ .ctrl = true, .shift = true }, .utf8 = "^" }, "\x1b[54;7;30;1;24;1_" },
+        .{ .{ .key = .minus, .mods = .{ .ctrl = true, .shift = true }, .utf8 = "_" }, "\x1b[189;12;31;1;24;1_" },
+        .{ .{ .key = .digit_2, .mods = .{ .ctrl = true, .shift = true }, .utf8 = "@" }, "\x1b[50;3;0;1;24;1_" },
+        // Keys with nothing in the ctrl column type nothing.
+        .{ .{ .key = .digit_1, .mods = .{ .ctrl = true }, .utf8 = "1" }, "\x1b[49;2;0;1;8;1_" },
+        .{ .{ .key = .bracket_left, .mods = .{ .ctrl = true, .shift = true }, .utf8 = "{" }, "\x1b[219;26;0;1;24;1_" },
+        .{ .{ .key = .arrow_up, .mods = .{ .ctrl = true } }, "\x1b[38;72;0;1;264;1_" },
+        // Right ctrl too.
+        .{ .{ .key = .key_c, .mods = .{ .ctrl = true, .sides = .{ .ctrl = .right } }, .utf8 = "c" }, "\x1b[67;46;3;1;4;1_" },
+        // AltGr types the event's text.
+        .{ .{ .key = .key_q, .mods = .{ .ctrl = true, .alt = true, .sides = .{ .alt = .right } }, .utf8 = "@" }, "\x1b[81;16;64;1;9;1_" },
+        // A release has no character.
+        .{ .{ .action = .release, .key = .key_a, .mods = .{ .ctrl = true }, .utf8 = "a" }, "\x1b[65;30;0;0;8;1_" },
+    };
+    var buf: [64]u8 = undefined;
+    for (cases) |case| {
+        var writer: std.Io.Writer = .fixed(&buf);
+        try encode(&writer, case[0], .{ .win32_input = true });
+        try testing.expectEqualStrings(case[1], writer.buffered());
+    }
 }
 
 test "win32 input: encode" {
