@@ -277,6 +277,11 @@ jobs:
         shell: pwsh
         run: ./test/windows/overlays.ps1 -Exe zig-out/bin/ghostty.exe
 
+      - name: Inspector test
+        timeout-minutes: 5
+        shell: pwsh
+        run: ./test/windows/inspector.ps1 -Exe zig-out/bin/ghostty.exe
+
       - name: Window theme test
         timeout-minutes: 5
         shell: pwsh
@@ -652,6 +657,11 @@ jobs:
         timeout-minutes: 5
         shell: pwsh
         run: ./test/windows/overlays.ps1 -Exe zig-out/bin/ghostty.exe
+
+      - name: Inspector test
+        timeout-minutes: 5
+        shell: pwsh
+        run: ./test/windows/inspector.ps1 -Exe zig-out/bin/ghostty.exe
 
   # The app on ARM64 hardware.
   build-windows-arm64:
