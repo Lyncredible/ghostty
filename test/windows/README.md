@@ -404,7 +404,11 @@ pixels, `equalize_splits` evens them out, resizing 10000 pixels past
 either edge leaves that terminal a cell and its padding wide (it used to
 get nothing) and resizing back by 200 moves at once, a larger font
 then makes it larger, and `toggle_split_zoom` gives the focused terminal
-the whole tab and then puts both back. Keys are posted, so it runs on a locked desktop.
+the whole tab and then puts both back. With `drag-handle = always` a zoomed
+terminal has a drag handle: dropping it where the hidden one was, each way,
+must move nothing (the hidden terminal, which keeps its old place, was a
+drop target, and the split changed out of sight). Keys and mouse messages
+are posted, so it runs on a locked desktop.
 
 ## window-actions.ps1
 

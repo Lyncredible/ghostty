@@ -4,7 +4,8 @@
 # again, resizing far past either edge leaves that terminal a cell wide
 # (and resizing back moves at once, and a larger font makes it larger),
 # and toggle_split_zoom gives the focused one the whole tab and back.
-# Keys are posted to the terminals and the focus is read from Ghostty's
+# With drag-handle = always, dropping a zoomed terminal's handle where the
+# hidden one was must move nothing. Keys and the mouse are posted to the terminals and the focus is read from Ghostty's
 # thread (GetGUIThreadInfo), so it runs on a locked desktop.
 #
 #     ./splits.ps1 -Exe zig-out/bin/ghostty.exe
@@ -32,6 +33,13 @@ public static void Key(System.IntPtr h, int vk, int scan) {
   uint up = 1u | ((uint)scan << 16) | (3u << 30);
   PostMessageW(h, 0x0101, (System.IntPtr)vk, (System.IntPtr)unchecked((int)up));
 }
+[DllImport("user32.dll")] public static extern bool ScreenToClient(System.IntPtr h, ref POINT p);
+[StructLayout(LayoutKind.Sequential)] public struct POINT { public int x, y; }
+// A mouse message to h at a point on the screen.
+public static void Mouse(System.IntPtr h, uint msg, uint keys, int x, int y) {
+  var p = new POINT { x = x, y = y }; ScreenToClient(h, ref p);
+  PostMessageW(h, msg, (System.IntPtr)keys, (System.IntPtr)((p.x & 0xFFFF) | (p.y << 16)));
+}
 // The window with the keyboard focus on the thread of `window`.
 public static System.IntPtr Focus(System.IntPtr window) {
   uint pid; uint thread = GetWindowThreadProcessId(window, out pid);
@@ -48,7 +56,7 @@ $process = Start-Process -FilePath $Exe -PassThru -RedirectStandardError $log -A
     '--keybind=f5=new_split:right', '--keybind=f6=goto_split:left', '--keybind=f7=goto_split:right',
     '--keybind=f8=resize_split:right,200', '--keybind=f9=equalize_splits', '--keybind=f10=toggle_split_zoom',
     '--keybind=f11=resize_split:left,10000', '--keybind=f12=resize_split:right,10000',
-    '--keybind=f13=increase_font_size:12'
+    '--keybind=f13=increase_font_size:12', '--drag-handle=always'
 
 function Fail([string]$message) {
     Write-Host "::error title=splits::$message"
@@ -145,6 +153,29 @@ try {
     $W::Key($left, 0x79, 0x44)
     [void](WaitFor { "$(Describe $left) | $(Describe $right)" -eq $split } "the splits back ($split)")
     Write-Host 'toggle_split_zoom again put both back.'
+
+    # With drag-handle = always a zoomed terminal has a drag handle.
+    # Letting it go where the hidden one was moves nothing: the hidden one
+    # keeps its old place but isn't a drop target (it was, and the
+    # terminals swapped out of sight). Each way, as only the first match
+    # in the tree counted.
+    foreach ($pair in @(@($right, $left), @($left, $right))) {
+        $zoomed, $hidden = $pair
+        $old = Box $hidden
+        $W::Key($zoomed, 0x79, 0x44)   # F10: toggle_split_zoom
+        [void](WaitFor { (Describe $zoomed) -eq $whole -and -not $W::IsWindowVisible($hidden) } "a terminal to fill the tab ($whole)")
+        $handle = WaitFor { $h = $W::FindWindowExW($zoomed, [IntPtr]::Zero, 'GhosttyDragHandle', [NullString]::Value); if ($h -ne [IntPtr]::Zero -and $W::IsWindowVisible($h)) { $h } } "the zoomed terminal's drag handle"
+        $h = Box $handle
+        $x = $old.l + 20; $y = [int](($old.t + $old.b) / 2)
+        $W::Mouse($handle, 0x0201, 1, $h.l + 2, $h.t + 2)   # WM_LBUTTONDOWN
+        $W::Mouse($handle, 0x0200, 1, $x, $y)               # WM_MOUSEMOVE
+        $W::Mouse($handle, 0x0202, 0, $x, $y)               # WM_LBUTTONUP
+        Start-Sleep -Seconds 1
+        if ((Describe $zoomed) -ne $whole -or $W::IsWindowVisible($hidden)) { Fail "dropping the zoomed terminal changed the zoom: $(Describe $left) | $(Describe $right)" }
+        $W::Key($zoomed, 0x79, 0x44)
+        [void](WaitFor { "$(Describe $left) | $(Describe $right)" -eq $split } "the splits back as they were ($split), not $(Describe $left) | $(Describe $right)")
+    }
+    Write-Host 'Dropping a zoomed terminal where the hidden one was moved nothing, either way.'
 } finally {
     if (-not $process.HasExited) { Stop-Process -Id $process.Id -Force }
     Remove-Item -LiteralPath $log -Force -ErrorAction SilentlyContinue
