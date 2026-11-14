@@ -306,7 +306,9 @@ must dim the first terminal, with its dim overlay just above the bell
 border and below the search bar and palette. Then it drags the first
 terminal's drag handle over the second with posted mouse messages: the
 second's drop zone must show on top, and letting go over the first must
-hide it and move nothing. It only posts messages to
+hide it and move nothing. Letting go near the second's right side must
+move the first to its right, with the focus (the second dims), and near its
+bottom, below it. It only posts messages to
 Ghostty's own window. (The link preview needs a real Ctrl key, so
 `links.ps1` checks it.)
 
