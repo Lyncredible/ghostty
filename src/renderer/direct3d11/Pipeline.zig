@@ -183,3 +183,29 @@ fn vertexFormat(comptime T: type, comptime len: usize) c.DXGI_FORMAT {
     }
     return format;
 }
+
+test inputElements {
+    const testing = std.testing;
+    const Flags = packed struct(u8) { a: bool, b: bool, _: u6 = 0 };
+    const Kind = enum(u16) { one, two };
+    const Attrs = extern struct {
+        pos: [2]f32,
+        color: [4]u8,
+        glyph: u32,
+        flags: Flags,
+        kind: Kind,
+        offset: [2]i16,
+    };
+    const elements = comptime inputElements(Attrs);
+    try testing.expectEqual(@as(usize, 6), elements.len);
+    const expected = [_]InputElement{
+        .{ .index = 0, .format = c.DXGI_FORMAT_R32G32_FLOAT, .offset = 0 },
+        .{ .index = 1, .format = c.DXGI_FORMAT_R8G8B8A8_UINT, .offset = 8 },
+        .{ .index = 2, .format = c.DXGI_FORMAT_R32_UINT, .offset = 12 },
+        // A packed struct is its backing integer, an enum its tag.
+        .{ .index = 3, .format = c.DXGI_FORMAT_R8_UINT, .offset = 16 },
+        .{ .index = 4, .format = c.DXGI_FORMAT_R16_UINT, .offset = 18 },
+        .{ .index = 5, .format = c.DXGI_FORMAT_R16G16_SINT, .offset = 20 },
+    };
+    for (expected, elements) |want, got| try testing.expectEqual(want, got);
+}

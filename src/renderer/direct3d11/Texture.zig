@@ -157,3 +157,76 @@ pub fn bppOf(format: c.DXGI_FORMAT) usize {
         else => @panic("unsupported DXGI format"),
     };
 }
+
+test bppOf {
+    const testing = std.testing;
+    try testing.expectEqual(@as(usize, 1), bppOf(c.DXGI_FORMAT_R8_UNORM));
+    try testing.expectEqual(@as(usize, 4), bppOf(c.DXGI_FORMAT_B8G8R8A8_UNORM_SRGB));
+}
+
+test "init and replaceRegion upload pixels" {
+    const testing = std.testing;
+    const Device = @import("Device.zig");
+    // A hardware device, or WARP, which Windows always has.
+    const created = Device.createDefault() catch return error.SkipZigTest;
+    defer {
+        com.release(created.context);
+        com.release(created.device);
+    }
+    const opts: Options = .{
+        .device = created.device,
+        .context = created.context,
+        .format = c.DXGI_FORMAT_R8_UNORM,
+    };
+
+    var initial: [4 * 3]u8 = undefined;
+    for (&initial, 0..) |*p, i| p.* = @intCast(i);
+    const texture = try init(opts, 4, 3, &initial);
+    defer texture.deinit();
+    try testing.expectEqual(@as(?*c.ID3D11RenderTargetView, null), texture.rtv);
+
+    // Two pixels in the middle row, from the second column.
+    try texture.replaceRegion(1, 1, 2, 1, &.{ 200, 201 });
+
+    var pixels: [4 * 3]u8 = undefined;
+    try readBack(texture, &pixels);
+    try testing.expectEqualSlices(u8, &.{
+        0, 1,   2,   3,
+        4, 200, 201, 7,
+        8, 9,   10,  11,
+    }, &pixels);
+
+    // A render target has a view to render to.
+    const target = try init(.{
+        .device = created.device,
+        .context = created.context,
+        .format = c.DXGI_FORMAT_B8G8R8A8_UNORM,
+        .render_target = true,
+    }, 2, 2, null);
+    defer target.deinit();
+    try testing.expect(target.rtv != null);
+}
+
+/// Copy a texture's pixels back from the GPU, row by row, for tests.
+fn readBack(self: Self, out: []u8) !void {
+    var desc: c.D3D11_TEXTURE2D_DESC = undefined;
+    com.call(self.texture, "GetDesc", .{&desc});
+    desc.Usage = c.D3D11_USAGE_STAGING;
+    desc.BindFlags = 0;
+    desc.CPUAccessFlags = c.D3D11_CPU_ACCESS_READ;
+    var device: ?*c.ID3D11Device = null;
+    com.call(self.texture, "GetDevice", .{&device});
+    defer com.releaseOpt(device);
+    var staging: ?*c.ID3D11Texture2D = null;
+    try com.check(com.call(device.?, "CreateTexture2D", .{ &desc, null, &staging }), "CreateTexture2D");
+    defer com.releaseOpt(staging);
+    const resource: *c.ID3D11Resource = @ptrCast(staging.?);
+    com.call(self.context, "CopyResource", .{ resource, @as(*c.ID3D11Resource, @ptrCast(self.texture)) });
+
+    var mapped: c.D3D11_MAPPED_SUBRESOURCE = undefined;
+    try com.check(com.call(self.context, "Map", .{ resource, 0, c.D3D11_MAP_READ, 0, &mapped }), "Map");
+    defer com.call(self.context, "Unmap", .{ resource, 0 });
+    const row = self.width * self.bpp;
+    const data: [*]const u8 = @ptrCast(mapped.pData.?);
+    for (0..self.height) |y| @memcpy(out[y * row ..][0..row], data[y * mapped.RowPitch ..][0..row]);
+}
