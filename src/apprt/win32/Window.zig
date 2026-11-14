@@ -791,8 +791,11 @@ pub fn close(self: *Window) void {
 pub fn destroy(self: *Window) void {
     // When the last window closes, save the session if the user closed it,
     // and otherwise (its shell exited) forget it. Quitting saves before
-    // closing the windows.
-    if (!self.quick and !self.app.quitting and !self.app.closing_all and self.app.lastWindow() == self) {
+    // closing the windows, and so does the session ending, when shells
+    // exit as they're told to.
+    if (!self.quick and !self.app.quitting and !self.app.closing_all and
+        !self.app.session_saved and self.app.lastWindow() == self)
+    {
         if (self.closing_by_user) SaveState.save(self.app) else SaveState.clear(self.app);
     }
     _ = c.DestroyWindow(self.hwnd);
@@ -2720,9 +2723,15 @@ pub fn wndProc(
             return 0;
         },
 
+        // We may end; save the windows before anything closes.
+        c.WM_QUERYENDSESSION => {
+            self.app.endSession();
+            return c.TRUE;
+        },
+
         // The process ends after this, without quitting normally.
         c.WM_ENDSESSION => {
-            if (wparam != 0) self.app.endSession();
+            if (wparam != 0) self.app.endSession() else self.app.endSessionCancelled();
             return 0;
         },
 

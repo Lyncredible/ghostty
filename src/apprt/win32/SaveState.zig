@@ -137,6 +137,18 @@ pub fn registerRestart(app: *const App) void {
     if (hr < 0) log.warn("failed to register for restart hr={x}", .{hr});
 }
 
+/// Ask Windows to end us before the programs in our terminals when the
+/// session ends, so the windows are saved while their shells still run.
+/// Processes end from the highest level down, and the default is 0x280.
+pub fn shutDownBeforeChildren() void {
+    const level = 0x300;
+    if (SetProcessShutdownParameters(level, 0) == 0) {
+        log.warn("failed to set the shutdown order err={}", .{std.os.windows.GetLastError()});
+    }
+}
+
+extern "kernel32" fn SetProcessShutdownParameters(level: u32, flags: u32) callconv(.winapi) c.BOOL;
+
 extern "kernel32" fn RegisterApplicationRestart(command_line: ?[*:0]const u16, flags: u32) callconv(.winapi) c.HRESULT;
 
 fn write(app: *App) void {

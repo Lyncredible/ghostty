@@ -292,6 +292,11 @@ jobs:
         shell: pwsh
         run: ./test/windows/session-restore.ps1 -Exe zig-out/bin/ghostty.exe
 
+      - name: End of session test
+        timeout-minutes: 5
+        shell: pwsh
+        run: ./test/windows/end-session.ps1 -Exe zig-out/bin/ghostty.exe
+
       - name: Search test
         timeout-minutes: 5
         shell: pwsh
