@@ -3787,7 +3787,9 @@ Notes:
       Enter, whose virtual key is the main Enter's, gets no hot key
       rather than taking ctrl+Enter everywhere; it's logged like other
       keys without one. Unit tested ("hotKey physical keys"; the old code
-      gives VK_INSERT for numpad 0).
+      gives VK_INSERT for numpad 0); `desktop-input.ps1` binds
+      `global:ctrl+alt+numpad_3=new_window` and checks that ctrl+alt+Page
+      Down opens no window and ctrl+alt+numpad 3 does.
 - [x] Screen readers' text ranges were placed by the wrong lines and
       columns (found 2026-11-14 reviewing `Accessibility.zig`). The text
       was the viewport as copying gives it, with a wrapped row joined to
