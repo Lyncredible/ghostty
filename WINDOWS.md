@@ -3727,6 +3727,22 @@ Notes:
         too), and an argument's quoting is the standard one, tested by
         reading each case back with Windows' rules. CI run 43569444493
         (2baa21426, with the WSL fix) passed every job.
+  - [x] WSL's `ghostty +ssh` (`wsl/bin/ghostty`) ran a remote command
+        twice on the first connection to a host with `ssh-terminfo`:
+        the install's `sh -c '…'` goes after the ssh arguments, so
+        `ssh host ./deploy.sh` ran `./deploy.sh sh -c '…'` with the
+        terminfo source as its input, then the real command. It now
+        skips the install when there's a remote command (no session to
+        set up; a cached host still gets `xterm-ghostty`), parsing
+        ssh's options and their values as ssh does (`-vp 2222`,
+        `-oX=y`). `test/windows/wsl-ssh.sh` checks four such commands
+        run once with no install and four sessions still install; the
+        old script fails the four. Passes in Ubuntu 24.04 here (dash);
+        WSL isn't on CI's runners.
+    - [ ] Upstream's native `+ssh` (`src/cli/ssh.zig`) builds its
+          install the same way (`_ssh_args` then the script), so it has
+          the same bug on every platform. The owner may want to report
+          it upstream (we don't open issues); left unchanged here.
 - [x] A split never smaller than one cell (found 2026-11-13, checking
       upstream's recent GTK changes: "never resize a split smaller than
       one cell", "keep split ratios on window resize and sync on

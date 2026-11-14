@@ -108,6 +108,45 @@ for arg; do
   esac
 done
 
+# Whether the ssh arguments run a command on the remote: anything after
+# the destination. There's no session to set up a terminal for then, and
+# the install would run that command an extra time (the install's script
+# goes after the arguments, so the remote would run `<command> sh -c ...`
+# with the terminfo source as its input).
+has_command() {
+  while [ $# -gt 0 ]; do
+    case "$1" in
+    --)
+      shift
+      [ $# -gt 1 ]
+      return
+      ;;
+    -?*)
+      # Flags, maybe combined (-vp 22, -p22); those of ssh's options
+      # that take a value take the rest of the word or the next one.
+      __flags=${1#-}
+      shift
+      while [ -n "$__flags" ]; do
+        __rest=${__flags#?}
+        case "$__flags" in
+        [BbcDEeFIiJLlmOoPpQRSWw]*)
+          if [ -z "$__rest" ] && [ $# -gt 0 ]; then shift; fi
+          break
+          ;;
+        esac
+        __flags=$__rest
+      done
+      ;;
+    *)
+      shift
+      [ $# -gt 0 ]
+      return
+      ;;
+    esac
+  done
+  return 1
+}
+
 warn() { printf 'Warning: %s\n' "$*" >&2; }
 note() { [ "$verbose" = false ] || printf '%s\n' "$*" >&2; }
 
@@ -163,6 +202,8 @@ if [ "$terminfo" = true ]; then
     if [ "$cache" = true ] && cached "$dest" "$version"; then
       note "dest: $dest (cached, skipping install)"
       term=xterm-ghostty
+    elif has_command "$@"; then
+      note "dest: $dest (a remote command, skipping install)"
     else
       if [ "$cache" = true ]; then
         note "dest: $dest (not cached, will install)"

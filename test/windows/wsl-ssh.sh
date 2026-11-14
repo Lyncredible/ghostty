@@ -87,6 +87,23 @@ FAKE_SSH_FAIL=1 run --cache=false user@example.test
 # The cache is private to the user.
 [ "$(stat -c %a "$cache")" = 600 ] && pass "the cache is mode 600" || fail "cache mode $(stat -c %a "$cache")"
 
+# A remote command: no install (which would run it an extra time, with the
+# terminfo source as its input), and the command runs once. Options'
+# values (-p 22, -o X, combined as -vp 22) aren't the destination.
+for args in 'user@example.test ./deploy.sh now' '-l me -p 2222 example.test ./deploy.sh' \
+  '-vp 2222 example.test ./deploy.sh' '-oBatchMode=yes example.test ./deploy.sh'; do
+  # shellcheck disable=SC2086 # split on purpose
+  run --cache=false $args
+  [ "$(installs)" = 0 ] && [ "$(grep '^ARGS' "$FAKE_SSH_LOG" | grep -v '^ARGS -G' | grep -c 'deploy.sh')" = 1 ] &&
+    pass "a remote command runs once, with no install ($args)" || fail "remote command ($args): $(cat "$FAKE_SSH_LOG")"
+done
+# Without one, options and their values still install.
+for args in '-p 2222 example.test' '-vp 2222 example.test' '-o BatchMode=yes -- example.test' '-v example.test'; do
+  # shellcheck disable=SC2086 # split on purpose
+  run --cache=false $args
+  [ "$(installs)" = 1 ] && pass "no remote command installs ($args)" || fail "no install ($args): $(cat "$FAKE_SSH_LOG")"
+done
+
 # ssh -G (and other options without a session) go straight to ssh.
 run -G user@example.test
 [ "$(installs)" = 0 ] && [ "$(grep -c '^ARGS' "$FAKE_SSH_LOG")" = 1 ] && pass "ssh -G passes through" || fail "-G: $(cat "$FAKE_SSH_LOG")"
