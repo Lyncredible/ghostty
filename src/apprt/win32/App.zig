@@ -276,6 +276,7 @@ pub fn init(
     self.global_keys.update(&self.config);
     JumpList.updateInBackground(self.config.class);
     SaveState.registerRestart(self);
+    SaveState.shutDownBeforeChildren();
     Handoff.register(self);
     if (self.config._diagnostics.items().len > 0) {
         _ = c.PostMessageW(msg_hwnd, WM_GHOSTTY_CONFIG_ERRORS, 0, 0);
@@ -745,11 +746,20 @@ fn actionWindow(self: *const App, target: apprt.action.Target) ?*Window {
     }
 }
 
-/// Windows is ending the session: save the windows, once.
+/// Windows is ending the session: save the windows, once. Windows asks
+/// first (WM_QUERYENDSESSION) and we save then, while every terminal is
+/// still there: once shells are told the session is ending (WSL's as WSL
+/// stops), they exit and their tabs close.
 pub fn endSession(self: *App) void {
     if (self.session_saved) return;
     self.session_saved = true;
     SaveState.saveForEndSession(self);
+}
+
+/// The session isn't ending after all (another app refused): save again
+/// if it ends later.
+pub fn endSessionCancelled(self: *App) void {
+    self.session_saved = false;
 }
 
 /// The only window other than the quick terminal, if there's just one.

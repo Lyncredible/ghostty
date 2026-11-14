@@ -1627,6 +1627,9 @@ Notes:
         fontconfig's package version). No conflicts; author dates kept
         (915 commits checked). The app builds, and the `SharedGrid`,
         `discovery`, font name and DirectWrite tests pass on Windows.
+        Pushed as f6a654294 with the swap chain test and the PowerShell
+        quoting and font name fixes; CI run 43558545947 passed every
+        job (4376/4467 unit tests, 91 skipped, on x64 and arm64).
   - [x] It failed there again in run 42948447833 (098593a94), now
         saying what was on screen: the command had run (its output was
         there), but the typed line read `echo M`, a line break,
@@ -2615,13 +2618,25 @@ Notes:
         checked by hand (above).
   - [ ] A WSL tab lost after a reboot (reported 2026-11-13): the cmd
         tabs came back in the right working directories, the WSL tab
-        didn't come back. Likely cause, to confirm: the session is saved
-        only at `WM_ENDSESSION`, late in the shutdown, and by then WSL
-        may already have stopped, so the WSL shell had exited and its tab
-        had closed before the save. To try: save at
-        `WM_QUERYENDSESSION` as well (or keep terminals whose process
-        exits once the session is ending), then check with a reboot; and
-        read the log for when the WSL terminal's child exited.
+        didn't come back. Likely cause: the session was saved only at
+        `WM_ENDSESSION`, late in the shutdown, and by then WSL may
+        already have stopped, so the WSL shell had exited and its tab
+        had closed before the save. (There's no log to tell; the crash
+        report there is the old huge `window-height` one, fixed.)
+    - [x] Now the session is saved when Windows first asks
+          (`WM_QUERYENDSESSION`), saved again if a cancelled end is
+          asked again, and not forgotten if the last window's shell
+          exits while the session ends. Ghostty also asks to be ended
+          before the programs in its terminals
+          (`SetProcessShutdownParameters`, above the default level).
+          `test/windows/end-session.ps1` (in CI) restores a cmd tab and
+          a tab whose `ping` exits by itself, sends the messages Windows
+          sends, and checks both tabs are saved after the ping tab
+          closes; without the change it fails at once (nothing saved
+          when Windows asks). Passes here.
+    - [ ] Check with a real reboot with a WSL tab open. If it's still
+          lost, the other cause would be the restore: the WSL tab's
+          `wsl.exe` failing early after sign-in, closing its tab.
 - [x] Ctrl+F for Find by default (requested 2026-11-06; decided
       2026-11-07: the owner keeps the default at Ctrl+Shift+F, as in
       Windows Terminal, and users who want Ctrl+F can add
