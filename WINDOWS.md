@@ -3788,7 +3788,7 @@ Notes:
       the row for the thumb's own position is the view's, to within half
       a pixel's rows) fails the old placement. `scrollbar.ps1` passes
       here (its 1300 lines give a thumb of natural length, so it couldn't
-      see this).
+      see this). CI run 43591069605 passed on all Windows jobs.
 - [x] A split never smaller than one cell (found 2026-11-13, checking
       upstream's recent GTK changes: "never resize a split smaller than
       one cell", "keep split ratios on window resize and sync on
