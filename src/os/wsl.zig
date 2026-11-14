@@ -15,17 +15,28 @@ pub fn isWsl(arg0: []const u8) bool {
 /// --distribution, if any. Returns null if the command isn't wsl.exe.
 pub fn distributionFromArgs(args: []const []const u8) ?[]const u8 {
     if (args.len == 0 or !isWsl(args[0])) return null;
+    // Options that take a value, which may look like an option itself
+    // (`--cd -d` is the directory "-d").
+    const with_value = [_][]const u8{ "--cd", "-u", "--user", "--distribution-id", "--shell-type" };
     var i: usize = 1;
     while (i < args.len) : (i += 1) {
         const arg = args[i];
-        // Everything after these is the command to run in WSL.
-        if (std.mem.eql(u8, arg, "--") or
-            std.mem.eql(u8, arg, "-e") or
-            std.mem.eql(u8, arg, "--exec")) return null;
         if (std.mem.eql(u8, arg, "-d") or std.mem.eql(u8, arg, "--distribution")) {
             if (i + 1 < args.len) return args[i + 1];
             return null;
         }
+        for (with_value) |option| {
+            if (std.mem.eql(u8, arg, option)) break;
+        } else {
+            // `~` starts in the home directory. Everything after `--`,
+            // `-e` or `--exec`, or from the first argument that isn't an
+            // option, is the command to run in WSL.
+            if (std.mem.eql(u8, arg, "~")) continue;
+            if (arg.len == 0 or arg[0] != '-' or std.mem.eql(u8, arg, "--") or
+                std.mem.eql(u8, arg, "-e") or std.mem.eql(u8, arg, "--exec")) return null;
+            continue;
+        }
+        i += 1;
     }
     return null;
 }
@@ -46,6 +57,14 @@ test distributionFromArgs {
     try testing.expect(distributionFromArgs(&.{ "wsl.exe", "-d" }) == null);
     try testing.expect(distributionFromArgs(&.{ "wsl.exe", "--", "ls", "-d", "x" }) == null);
     try testing.expect(distributionFromArgs(&.{ "cmd.exe", "-d", "x" }) == null);
+
+    // Options' values aren't options, and the command starts at the first
+    // argument that isn't one.
+    try testing.expectEqualStrings("Arch", distributionFromArgs(&.{ "wsl", "-u", "root", "~", "-d", "Arch" }).?);
+    try testing.expectEqualStrings("Arch", distributionFromArgs(&.{ "wsl", "--cd", "-d", "-d", "Arch" }).?);
+    try testing.expect(distributionFromArgs(&.{ "wsl", "--cd", "-d" }) == null);
+    try testing.expect(distributionFromArgs(&.{ "wsl", "ls", "-d", "x" }) == null);
+    try testing.expect(distributionFromArgs(&.{ "wsl", "-e", "ls", "-d", "x" }) == null);
 }
 
 /// The Windows path for a Linux path inside a WSL distribution, such as
