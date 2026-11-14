@@ -3744,6 +3744,18 @@ Notes:
           install the same way (`_ssh_args` then the script), so it has
           the same bug on every platform. The owner may want to report
           it upstream (we don't open issues); left unchanged here.
+- [x] The crash dialog (found 2026-11-14, reviewing `crash/windows.zig`)
+      ran its message box on the thread that panicked, whose message
+      loop went on handling our windows' paints, timers and keys after
+      the panic. A second panic there (the same paint or timer panicking
+      again) went to the default handler, which ended the process with
+      the dialog up: checked here, a second `crash:main` F12 closed it
+      at once. The dialog now runs on a thread of its own and the
+      panicked thread waits for it (the windows show as not responding
+      until it's closed). `crash-report.ps1` now also checks the dialog
+      (no standard error): it has the message and the report's path,
+      survives a second F12, and Ghostty exits when it's closed. The old
+      handler fails it.
 - [x] A split never smaller than one cell (found 2026-11-13, checking
       upstream's recent GTK changes: "never resize a split smaller than
       one cell", "keep split ratios on window resize and sync on

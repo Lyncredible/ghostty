@@ -17,6 +17,23 @@ $ErrorActionPreference = 'Stop'
 Add-Type -Namespace GhosttyCrash -Name Win32 -MemberDefinition @'
 [DllImport("user32.dll")] public static extern bool PostMessageW(System.IntPtr h, uint m, System.IntPtr w, System.IntPtr l);
 [DllImport("user32.dll", CharSet = CharSet.Unicode)] public static extern System.IntPtr FindWindowExW(System.IntPtr parent, System.IntPtr after, string cls, string title);
+[DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(System.IntPtr h, out uint pid);
+[DllImport("user32.dll")] public static extern System.IntPtr GetDlgItem(System.IntPtr h, int id);
+[DllImport("user32.dll", CharSet = CharSet.Unicode)] public static extern int GetWindowTextW(System.IntPtr h, System.Text.StringBuilder s, int n);
+// A dialog (a message box) of this process, if it has one.
+public static System.IntPtr Dialog(uint pid) {
+  System.IntPtr h = System.IntPtr.Zero;
+  while ((h = FindWindowExW(System.IntPtr.Zero, h, "#32770", null)) != System.IntPtr.Zero) {
+    uint p; GetWindowThreadProcessId(h, out p); if (p == pid) return h;
+  }
+  return System.IntPtr.Zero;
+}
+// A message box's text: its static control's (ID 0xFFFF).
+public static string DialogText(System.IntPtr h) {
+  var s = new System.Text.StringBuilder(2048);
+  GetWindowTextW(GetDlgItem(h, 0xFFFF), s, s.Capacity);
+  return s.ToString();
+}
 public static void Key(System.IntPtr h, int vk, int scan) {
   PostMessageW(h, 0x0100, (System.IntPtr)vk, (System.IntPtr)(1 | (scan << 16)));
   System.Threading.Thread.Sleep(30);
@@ -84,5 +101,47 @@ try {
     if (-not $process.HasExited) { Stop-Process -Id $process.Id -Force }
     if ($report) { Remove-Item -LiteralPath $report.FullName -Force -ErrorAction SilentlyContinue }
     Remove-Item -LiteralPath $log -Force -ErrorAction SilentlyContinue
+}
+
+# Without a standard error, a dialog says where the report is. It runs on
+# a thread of its own: on the thread that panicked, its message loop would
+# go on handling our windows' messages, and a second panic there (another
+# F12 here; the same paint or timer panicking again in real life) ended
+# the process with the dialog still up. Ghostty exits once it's closed.
+$before = @(if (Test-Path $dir) { Get-ChildItem $dir -Filter 'crash-*.txt' | ForEach-Object Name })
+$report = $null
+$process = Start-Process -FilePath $Exe -PassThru -ArgumentList '--command=cmd.exe',
+    '--window-save-state=never', '--keybind=f12=crash:main'
+$null = $process.Handle
+try {
+    $window = WaitFor { $process.Refresh(); if ($process.MainWindowHandle -ne 0) { $process.MainWindowHandle } } 'the window'
+    $surface = WaitFor { $h = $W::FindWindowExW($window, [IntPtr]::Zero, 'GhosttySurface', [NullString]::Value); if ($h -ne [IntPtr]::Zero) { $h } } 'the surface'
+    Start-Sleep -Milliseconds 500
+    $W::Key($surface, 0x7B, 0x58)   # F12: crash:main
+    $dialog = WaitFor {
+        if ($process.HasExited) { Fail "Ghostty exited without a dialog (exit code $($process.ExitCode))" }
+        $h = $W::Dialog([uint32]$process.Id); if ($h -ne [IntPtr]::Zero) { $h }
+    } 'the crash dialog'
+    $new = @(Get-ChildItem $dir -Filter 'crash-*.txt' | Where-Object { $before -notcontains $_.Name })
+    if ($new.Count -ne 1) { Fail "expected one new report in $dir, found $($new.Count)" }
+    $report = $new[0]
+    $text = $W::DialogText($dialog)
+    if ($text -notmatch [regex]::Escape($message) -or $text -notmatch [regex]::Escape($report.FullName)) {
+        Fail "the dialog doesn't have the message and the report's path: $text"
+    }
+    Write-Host "A dialog has the panic message and the report's path ($($report.Name))."
+
+    $W::Key($surface, 0x7B, 0x58)   # F12 again, while the dialog is up
+    Start-Sleep -Seconds 2
+    if ($process.HasExited) { Fail "a second panic ended Ghostty with the dialog up (exit code $($process.ExitCode))" }
+    if ($W::Dialog([uint32]$process.Id) -ne $dialog) { Fail "the dialog went away after a second F12" }
+    Write-Host 'A second F12 changed nothing: the dialog is still up.'
+
+    [void]$W::PostMessageW($dialog, 0x0010, [IntPtr]::Zero, [IntPtr]::Zero)   # WM_CLOSE
+    [void](WaitFor { $process.HasExited } 'Ghostty to exit after the dialog closed')
+    Write-Host "Ghostty exited once the dialog closed (exit code $($process.ExitCode))."
+} finally {
+    if (-not $process.HasExited) { Stop-Process -Id $process.Id -Force }
+    if ($report) { Remove-Item -LiteralPath $report.FullName -Force -ErrorAction SilentlyContinue }
 }
 exit 0
