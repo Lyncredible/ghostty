@@ -207,3 +207,81 @@ pub fn Buffer(comptime T: type) type {
         }
     };
 }
+
+test "sync grows the buffer and uploads its data" {
+    const testing = std.testing;
+    const Device = @import("Device.zig");
+    const created = Device.createDefault() catch return error.SkipZigTest;
+    defer {
+        com.release(created.context);
+        com.release(created.device);
+    }
+
+    inline for (.{ Options.Kind.vertex, Options.Kind.structured }) |kind| {
+        var buffer = try Buffer(u32).init(.{
+            .device = created.device,
+            .context = created.context,
+            .kind = kind,
+        }, 2);
+        defer buffer.deinit();
+        try testing.expectEqual(@as(usize, 2), buffer.len);
+        try testing.expectEqual(kind == .structured, buffer.buffer.srv != null);
+
+        // Fits: no new buffer.
+        const first = buffer.buffer.buffer;
+        try buffer.sync(&.{ 1, 2 });
+        try testing.expectEqual(first, buffer.buffer.buffer);
+
+        // Doesn't fit: twice what's asked for.
+        try buffer.sync(&.{ 1, 2, 3, 4, 5 });
+        try testing.expectEqual(@as(usize, 10), buffer.len);
+        var out: [5]u32 = undefined;
+        try readBack(u32, created, buffer.buffer, &out);
+        try testing.expectEqualSlices(u32, &.{ 1, 2, 3, 4, 5 }, &out);
+
+        // From several lists, one after another.
+        var a: std.ArrayListUnmanaged(u32) = .empty;
+        defer a.deinit(testing.allocator);
+        try a.appendSlice(testing.allocator, &.{ 7, 8 });
+        var b: std.ArrayListUnmanaged(u32) = .empty;
+        defer b.deinit(testing.allocator);
+        try b.appendSlice(testing.allocator, &.{9});
+        try testing.expectEqual(@as(usize, 3), try buffer.syncFromArrayLists(&.{ a, .empty, b }));
+        try readBack(u32, created, buffer.buffer, out[0..3]);
+        try testing.expectEqualSlices(u32, &.{ 7, 8, 9 }, out[0..3]);
+    }
+
+    // Constant buffers are a multiple of 16 bytes, even for less.
+    const Small = extern struct { a: f32, b: f32, c: f32 };
+    var uniforms = try Buffer(Small).init(.{
+        .device = created.device,
+        .context = created.context,
+        .kind = .constant,
+    }, 1);
+    defer uniforms.deinit();
+    var desc: c.D3D11_BUFFER_DESC = undefined;
+    com.call(uniforms.buffer.buffer, "GetDesc", .{&desc});
+    try testing.expectEqual(@as(c.UINT, 16), desc.ByteWidth);
+}
+
+/// Copy the start of a buffer back from the GPU, for tests.
+fn readBack(comptime T: type, created: anytype, raw: Raw, out: []T) !void {
+    var desc: c.D3D11_BUFFER_DESC = undefined;
+    com.call(raw.buffer, "GetDesc", .{&desc});
+    desc.Usage = c.D3D11_USAGE_STAGING;
+    desc.BindFlags = 0;
+    desc.CPUAccessFlags = c.D3D11_CPU_ACCESS_READ;
+    desc.MiscFlags = 0;
+    desc.StructureByteStride = 0;
+    var staging: ?*c.ID3D11Buffer = null;
+    try com.check(com.call(created.device, "CreateBuffer", .{ &desc, null, &staging }), "CreateBuffer");
+    defer com.releaseOpt(staging);
+    const resource: *c.ID3D11Resource = @ptrCast(staging.?);
+    com.call(created.context, "CopyResource", .{ resource, @as(*c.ID3D11Resource, @ptrCast(raw.buffer)) });
+
+    var mapped: c.D3D11_MAPPED_SUBRESOURCE = undefined;
+    try com.check(com.call(created.context, "Map", .{ resource, 0, c.D3D11_MAP_READ, 0, &mapped }), "Map");
+    defer com.call(created.context, "Unmap", .{ resource, 0 });
+    const data: [*]const T = @ptrCast(@alignCast(mapped.pData.?));
+    @memcpy(out, data[0..out.len]);
+}

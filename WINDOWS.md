@@ -3628,7 +3628,8 @@ Notes:
       (Windows Sandbox, which runs a logon command), `.jnlp` and
       `.class` (Java), theme packs, VS and Office add-in installers,
       `.provxml`, and Excel's web queries and SYLK files. They're all
-      on our list now (unit test `isDangerousExtension`). Nothing to
+      on our list now (unit test `isDangerousExtension`; CI run
+      43540132981 passed every job, `links.ps1` included). Nothing to
       change in the bell's audio or the shell helpers, nor in the
       search bar (`SearchBar.zig`): a lone surrogate typed in its field
       becomes WTF-8, and the core's search compares bytes, so it only
@@ -3854,6 +3855,18 @@ Notes:
         are now `InspectorWindow.deltaTime`, with a unit test. Every
         file in `src/apprt/win32` now has unit tests and is in the
         test list.
+  - [x] The Direct3D 11 renderer (`src/renderer/direct3d11`) had no
+        unit tests; the UI tests drew with it, but nothing checked its
+        pieces alone. Now: the vertex attribute formats and offsets a
+        pipeline derives from a struct (packed structs as their backing
+        integer, enums as their tag); a texture's upload and
+        `replaceRegion`, read back from the GPU through a staging copy;
+        and a buffer's `sync` (kept when the data fits, twice the size
+        when it doesn't) and `syncFromArrayLists`, read back the same
+        way, for vertex and structured buffers, with constant buffers
+        rounded up to 16 bytes. They use a real device (hardware, or
+        WARP, which Windows always has; CI's runners draw the UI tests
+        with one). Changing an expected pixel fails the texture test.
         `memory-leak.ps1`, which opens the inspector, passes here. CI
         run 43532618495 (88be238ac) passed every job.
   - [x] The other actions Win32 doesn't handle (found 2026-11-06), left
