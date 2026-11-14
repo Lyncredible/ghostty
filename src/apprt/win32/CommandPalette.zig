@@ -343,6 +343,70 @@ fn buildEntries(
     return try entries.toOwnedSlice(alloc);
 }
 
+test buildEntries {
+    const testing = std.testing;
+    var arena: std.heap.ArenaAllocator = .init(testing.allocator);
+    defer arena.deinit();
+    const alloc = arena.allocator();
+    var config = try Config.default(testing.allocator);
+    defer config.deinit();
+
+    // Stand-ins: the palette only hands the pointers back.
+    const a: *CoreSurface = @ptrFromInt(0x10000);
+    const b: *CoreSurface = @ptrFromInt(0x20000);
+    const d: *CoreSurface = @ptrFromInt(0x30000);
+    const targets: []const Target = &.{
+        .{ .surface = a, .title = "C:\\Users\\me - cmd", .pwd = "C:\\Users\\me" },
+        .{ .surface = b, .title = "vim", .pwd = "D:\\src" },
+        .{ .surface = d, .title = "ssh" },
+    };
+
+    const u = std.unicode.utf8ToUtf16LeStringLiteral;
+    const entries = try buildEntries(alloc, &config, .commands, targets);
+    const commands = entries.len - targets.len;
+    var supported_count: usize = 0;
+    for (config.@"command-palette-entry".value.items) |command| {
+        if (supported(command.action)) supported_count += 1;
+    }
+    try testing.expect(supported_count > 0);
+    try testing.expectEqual(supported_count, commands);
+
+    var new_tab: ?Entry = null;
+    for (entries[0..commands]) |entry| {
+        const action = entry.choice.action;
+        try testing.expect(supported(action));
+        if (action == .new_tab) new_tab = entry;
+        // The action's name is searched too, as it's written in a config.
+        const key = try std.fmt.allocPrint(alloc, "{f}", .{action});
+        const key16 = try util.utf16Alloc(alloc, key);
+        lower(key16);
+        try testing.expect(std.mem.indexOf(u16, entry.search, key16) != null);
+        try testing.expect(entry.title.len > 0);
+    }
+    // A bound command shows its shortcut.
+    try testing.expect(new_tab.?.shortcut.len > 0);
+
+    // Then the terminals to focus, with a working directory the title
+    // doesn't already show.
+    const focus = entries[commands..];
+    try testing.expectEqual(a, focus[0].choice.surface);
+    try testing.expectEqualSlices(u16, u("Focus: C:\\Users\\me - cmd"), focus[0].title);
+    try testing.expectEqualSlices(u16, u(""), focus[0].description);
+    try testing.expectEqualSlices(u16, u("D:\\src"), focus[1].description);
+    try testing.expectEqualSlices(u16, u("focus: vim d:\\src"), focus[1].search);
+    try testing.expectEqualSlices(u16, u(""), focus[2].description);
+    try testing.expectEqual(d, focus[2].choice.surface);
+
+    // The tab overview lists only the terminals, titled as they are.
+    const overview = try buildEntries(alloc, &config, .terminals, targets);
+    try testing.expectEqual(targets.len, overview.len);
+    try testing.expectEqualSlices(u16, u("vim"), overview[1].title);
+    try testing.expectEqual(b, overview[1].choice.surface);
+
+    // Nothing to list.
+    try testing.expectEqual(0, (try buildEntries(alloc, &config, .terminals, &.{})).len);
+}
+
 /// Whether we implement an action, so that it's worth listing. Unlike
 /// GTK, we have undo and redo (reopening a closed tab or split).
 fn supported(action: input.Binding.Action) bool {
