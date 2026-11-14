@@ -23,11 +23,43 @@ pub fn nativeKeycode(wparam: c.WPARAM, lparam: c.LPARAM) u32 {
     // no scancode, so we derive it from the virtual key.
     if (scancode == 0) {
         const vk: c.UINT = @intCast(wparam & 0xFF);
-        return c.MapVirtualKeyW(vk, c.MAPVK_VK_TO_VSC_EX);
+        return derivedKeycode(c.MapVirtualKeyW(vk, c.MAPVK_VK_TO_VSC_EX), extended);
     }
 
     if (extended) scancode |= 0xE000;
     return scancode;
+}
+
+/// The native keycode for a virtual key's scancode, as Windows maps it,
+/// in a message that says whether the key is extended. Windows maps the
+/// navigation keys (Page Down, the arrows, ...) to the numpad's scancodes
+/// they share, without the prefix the keys themselves have, so the
+/// message's extended flag decides which key it is.
+fn derivedKeycode(mapped: u32, extended: bool) u32 {
+    if (mapped == 0 or mapped > 0xFF or !extended) return mapped;
+    return mapped | 0xE000;
+}
+
+test derivedKeycode {
+    const testing = std.testing;
+    // Page Down sent as a virtual key (VK_NEXT maps to 0x51, numpad 3's
+    // scancode) is Page Down; numpad 3 isn't extended.
+    try testing.expectEqual(input.Key.page_down, physicalKey(derivedKeycode(0x51, true)));
+    try testing.expectEqual(input.Key.numpad_3, physicalKey(derivedKeycode(0x51, false)));
+    // Prefixes Windows gives are kept, and unknown keys stay unknown.
+    try testing.expectEqual(@as(u32, 0xE035), derivedKeycode(0xE035, true));
+    try testing.expectEqual(@as(u32, 0), derivedKeycode(0, true));
+}
+
+test "nativeKeycode without a scancode" {
+    const testing = std.testing;
+    // As SendInput sends a virtual key: no scancode in the message, and
+    // the extended flag (bit 24) for the navigation keys.
+    const extended: c.LPARAM = 1 << 24;
+    try testing.expectEqual(input.Key.page_down, physicalKey(nativeKeycode(c.VK_NEXT, extended)));
+    try testing.expectEqual(input.Key.arrow_left, physicalKey(nativeKeycode(c.VK_LEFT, extended)));
+    try testing.expectEqual(input.Key.numpad_3, physicalKey(nativeKeycode(c.VK_NUMPAD3, 0)));
+    try testing.expectEqual(input.Key.space, physicalKey(nativeKeycode(c.VK_SPACE, 0)));
 }
 
 /// Returns the physical key for a native keycode.
