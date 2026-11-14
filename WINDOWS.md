@@ -3794,7 +3794,8 @@ Notes:
       unchanged. Unit tested with a wrapped row, wide characters and an
       emoji ("test.ViewportRows"); `uia-ranges.ps1` checks the
       rectangles in the app (the old code fails it: "three wide
-      characters are 57 wide, not the 114 of six narrow ones").
+      characters are 57 wide, not the 114 of six narrow ones"). CI run
+      43620621025 passed every job, at CI's 96 DPI too.
 - [x] Ctrl keys in win32 input mode typed the wrong character (found
       2026-11-14 rereading `key_encode.zig`). Only ctrl+letters and
       ctrl+[, \ and ] became control characters; any other key with
