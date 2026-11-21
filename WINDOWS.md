@@ -97,6 +97,10 @@ Notes:
   that ask for the terminal's colors get no answer. The packages bundle
   Microsoft's newer ConPTY; to use it with a dev build, put it next to
   `ghostty.exe`: `./dist/windows/conpty.ps1 -Destination zig-out\bin`.
+- `.\rebuild.cmd` (PowerShell 7) fast-forwards the `windows` branch,
+  builds ReleaseFast with the bundled ConPTY into `zig-out`, and checks
+  the version and `color-query.ps1`. `-SkipPull` builds the checkout as
+  is.
 
 ## Status
 
@@ -3823,6 +3827,19 @@ Notes:
       directory with the command's name"). The menu now lists PowerShell
       with the alias, and `smoke.ps1` started that alias, got a prompt,
       and followed `cd`.
+- [x] `rebuild.cmd` failed in three ways (found 2026-11-21):
+      - Started from PowerShell 7, Windows PowerShell inherited its
+        `PSModulePath` and couldn't load `Get-FileHash`, so bundling
+        ConPTY failed. The rebuild and its child scripts now run on
+        `pwsh`.
+      - `color-query.ps1` read the user's config, where `config-file`
+        includes load after the CLI flags: `window-save-state = always`
+        overrode `--window-save-state=never`, the window restored saved
+        tabs instead of running the queries, and the test timed out. It
+        now passes `--config-default-files=false`.
+      - A branch only ahead of `origin/windows` was reported as
+        diverged; it now builds with nothing to pull.
+      `.\rebuild.cmd` passed end to end, pull included.
 - [x] Screen readers' text ranges were placed by the wrong lines and
       columns (found 2026-11-14 reviewing `Accessibility.zig`). The text
       was the viewport as copying gives it, with a wrapped row joined to
