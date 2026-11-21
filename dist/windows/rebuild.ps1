@@ -48,8 +48,13 @@ try {
         $remoteAfter = Invoke-Git rev-parse origin/windows
         & git merge-base --is-ancestor HEAD origin/windows
         $ancestorExit = $LASTEXITCODE
+        & git merge-base --is-ancestor origin/windows HEAD
+        $aheadExit = $LASTEXITCODE
         if ($ancestorExit -eq 0) {
             Invoke-Git merge --ff-only origin/windows
+        } elseif ($aheadExit -eq 0) {
+            # Only local commits, with nothing new to pull.
+            Write-Host 'Local commits are ahead of origin/windows; nothing to pull.'
         } elseif ($ancestorExit -eq 1 -and $headBefore -eq $remoteBefore -and $remoteAfter -ne $remoteBefore) {
             # The local branch was exactly the previous remote tip. Rebase an
             # empty local range onto the new history, retaining no backup branch.
