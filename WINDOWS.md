@@ -3795,6 +3795,19 @@ Notes:
       navigation keys the numpad's without the extended prefix, so Page
       Down was numpad 3 to keybindings. The message's extended flag now
       adds the prefix ("nativeKeycode without a scancode").
+- [x] The shell menu left out PowerShell 7 installed from the Microsoft
+      Store, as `winget install Microsoft.PowerShell` does (found
+      2026-11-21). Its `pwsh.exe` on the PATH is an app execution alias
+      in WindowsApps, a reparse point only CreateProcess follows:
+      opening it fails with IO_REPARSE_TAG_NOT_HANDLED, which Zig
+      reports as `error.Unexpected`, and `path.expand` gave up on it.
+      On Windows `expand` now reads the candidate's attributes instead
+      of opening it, as `Exec.zig` already did. Unit tested ("expand:
+      app execution alias", skipped without a WindowsApps alias; it
+      fails with that error before the fix, and "expand: skips a
+      directory with the command's name"). The menu now lists PowerShell
+      with the alias, and `smoke.ps1` started that alias, got a prompt,
+      and followed `cd`.
 - [x] Screen readers' text ranges were placed by the wrong lines and
       columns (found 2026-11-14 reviewing `Accessibility.zig`). The text
       was the viewport as copying gives it, with a wrapped row joined to
