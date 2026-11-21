@@ -71,7 +71,7 @@ $replies | ConvertTo-Json | Set-Content -Encoding utf8 $Result
 
 $bundled = Test-Path (Join-Path (Split-Path $Exe) 'conpty.dll')
 if ($Zip -and -not $bundled) { throw "the package has no conpty.dll next to ghostty.exe" }
-$process = Start-Process -FilePath $Exe -PassThru -RedirectStandardError $log -ArgumentList '--window-save-state=never',
+$process = Start-Process -FilePath $Exe -PassThru -RedirectStandardError $log -ArgumentList '--config-default-files=false', '--window-save-state=never',
     '--background=#123456', '--foreground=#abcdef', '-e',
     'powershell.exe', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $inner, $result
 
