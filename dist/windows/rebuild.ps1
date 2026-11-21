@@ -1,7 +1,7 @@
 # Pull and rebuild this checkout, including the pinned Microsoft ConPTY.
 # Run from the checkout root:
 #   .\rebuild.cmd
-#   powershell -NoProfile -ExecutionPolicy Bypass -File .\dist\windows\rebuild.ps1
+#   pwsh -NoProfile -File .\dist\windows\rebuild.ps1
 # Use -SkipPull to rebuild the current checkout, or -ZigPath for a compiler
 # outside PATH. Only backup/windows-before-pull-* branches are deleted.
 param(
@@ -11,7 +11,8 @@ param(
 
 $ErrorActionPreference = 'Stop'
 $repo = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..\..'))
-$powershell = Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
+# Run child scripts with this same PowerShell 7.
+$pwsh = (Get-Process -Id $PID).Path
 
 function Invoke-Git {
     & git @args
@@ -74,7 +75,7 @@ try {
         if ($LASTEXITCODE -ne 0) { throw 'Ghostty build failed' }
 
         # Reuse the repository's version pin, download and SHA-256 validation.
-        & $powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $repo 'dist\windows\conpty.ps1') -Destination (Join-Path $stage 'bin') -Arch x64
+        & $pwsh -NoProfile -ExecutionPolicy Bypass -File (Join-Path $repo 'dist\windows\conpty.ps1') -Destination (Join-Path $stage 'bin') -Arch x64
         if ($LASTEXITCODE -ne 0) { throw 'ConPTY bundling failed' }
 
         $output = Join-Path $repo 'zig-out'
@@ -133,7 +134,7 @@ try {
         $querySource = $querySource.Replace('Start-Process -FilePath $Exe', 'Start-Process -WindowStyle Hidden -FilePath $Exe')
         $queryScript = Join-Path $stage 'color-query.ps1'
         Set-Content -LiteralPath $queryScript -Value $querySource -Encoding utf8
-        & $powershell -NoProfile -ExecutionPolicy Bypass -File $queryScript -Exe $exe -TimeoutSeconds 45
+        & $pwsh -NoProfile -ExecutionPolicy Bypass -File $queryScript -Exe $exe -TimeoutSeconds 45
         if ($LASTEXITCODE -ne 0) { throw 'ConPTY query checks failed' }
 
         Invoke-Git for-each-ref '--format=%(refname:short)' refs/heads
