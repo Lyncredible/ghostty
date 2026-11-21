@@ -39,6 +39,15 @@ pub fn expand(
         path_buf[path_len] = 0;
         const full_path = path_buf[0..path_len :0];
 
+        if (builtin.target.os.tag == .windows) {
+            switch (windowsKind(alloc, full_path)) {
+                .file => return try alloc.dupe(u8, full_path),
+                .access_denied => seen_eacces = true,
+                .directory, .missing => {},
+            }
+            continue;
+        }
+
         // Stat it
         const f = std.Io.Dir.cwd().openFile(
             io,
@@ -70,6 +79,33 @@ pub fn expand(
 
     return null;
 }
+
+/// What a PATH candidate is, on Windows, read from its attributes rather
+/// than by opening it. A Microsoft Store app's command, like the pwsh.exe
+/// that PowerShell from the Store puts in WindowsApps, is an app execution
+/// alias: a reparse point that only CreateProcess follows, so opening it
+/// fails (ERROR_CANT_ACCESS_FILE). Windows has no executable bit to check.
+fn windowsKind(
+    alloc: Allocator,
+    full_path: []const u8,
+) enum { file, directory, missing, access_denied } {
+    const path_w = std.unicode.wtf8ToWtf16LeAllocZ(alloc, full_path) catch return .missing;
+    defer alloc.free(path_w);
+    const attributes = GetFileAttributesW(path_w);
+    if (attributes == INVALID_FILE_ATTRIBUTES) {
+        return switch (std.os.windows.GetLastError()) {
+            .ACCESS_DENIED => .access_denied,
+            else => .missing,
+        };
+    }
+    if (attributes & FILE_ATTRIBUTE_DIRECTORY != 0) return .directory;
+    return .file;
+}
+
+const INVALID_FILE_ATTRIBUTES: u32 = 0xFFFFFFFF;
+const FILE_ATTRIBUTE_DIRECTORY: u32 = 0x10;
+
+extern "kernel32" fn GetFileAttributesW(path: [*:0]const u16) callconv(.winapi) u32;
 
 fn isExecutable(perms: std.Io.File.Permissions) bool {
     return switch (builtin.target.os.tag) {
@@ -141,6 +177,45 @@ test "expand: skips PATH entries that aren't valid paths" {
     const path = (try expand(testing.io, alloc, &only, executable)).?;
     defer alloc.free(path);
     try testing.expectEqualStrings(found, path);
+}
+
+test "expand: app execution alias" {
+    if (builtin.target.os.tag != .windows) return error.SkipZigTest;
+    const alloc = testing.allocator;
+    var environ_map = try testing.environ.createMap(alloc);
+    defer environ_map.deinit();
+    const local = environ_map.get("LOCALAPPDATA") orelse return error.SkipZigTest;
+    const apps = try std.fs.path.join(alloc, &.{ local, "Microsoft", "WindowsApps" });
+    defer alloc.free(apps);
+
+    // The Store's aliases, which can't be opened like a file. Use one
+    // this machine has.
+    const alias = for ([_][]const u8{ "winget.exe", "pwsh.exe", "python.exe", "wt.exe" }) |name| {
+        const full = try std.fs.path.join(alloc, &.{ apps, name });
+        defer alloc.free(full);
+        if (windowsKind(alloc, full) == .file) break name;
+    } else return error.SkipZigTest;
+
+    var only: std.process.Environ.Map = .init(alloc);
+    defer only.deinit();
+    try only.put("PATH", apps);
+    const path = (try expand(testing.io, alloc, &only, alias)).?;
+    defer alloc.free(path);
+    try testing.expect(std.ascii.endsWithIgnoreCase(path, alias));
+}
+
+test "expand: skips a directory with the command's name" {
+    const alloc = testing.allocator;
+    var tmp = testing.tmpDir(.{});
+    defer tmp.cleanup();
+    try tmp.dir.createDir(testing.io, "tool.exe", .default_dir);
+    const dir = try tmp.dir.realPathFileAlloc(testing.io, ".", alloc);
+    defer alloc.free(dir);
+
+    var only: std.process.Environ.Map = .init(alloc);
+    defer only.deinit();
+    try only.put("PATH", dir);
+    try testing.expect(try expand(testing.io, alloc, &only, "tool.exe") == null);
 }
 
 test "expand: does not exist" {
