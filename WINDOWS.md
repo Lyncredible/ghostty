@@ -1630,6 +1630,21 @@ Notes:
         Pushed as f6a654294 with the swap chain test and the PowerShell
         quoting and font name fixes; CI run 43558545947 passed every
         job (4376/4467 unit tests, 91 skipped, on x64 and arm64).
+  - [x] 2026-11-21: a thirty-eighth sync (30 commits: Zig 0.17.1 is
+        required, iTerm2 themes updated, hyperlink strings hashed in one
+        update, CoreText's font cache keyed by grid id, dead code removed
+        from `os/i18n.zig`). Two conflicts. The themes release
+        (20261109) still has names with ':' ("Paper Crane: Midnight
+        Ink" is new), so the pin on the 20261026 release stays. Upstream
+        removed `locales_map` and `staticLocale` and the `locales`
+        import they used; our embedded catalog's `catalog` import stays.
+        Committer dates and names were restored from the old commits
+        (three differ from their author dates, so
+        `--committer-date-is-author-date` would have changed them);
+        every commit's author, committer, dates and message match the
+        old ones (962 checked). The old branch is
+        `backup/windows-before-pull-20261121` until the push. The app
+        builds, and the full unit test suite passes on Windows (GNU ABI).
   - [x] It failed there again in run 42948447833 (098593a94), now
         saying what was on screen: the command had run (its output was
         there), but the typed line read `echo M`, a line break,
