@@ -3139,7 +3139,7 @@ pub fn Renderer(comptime GraphicsAPI: type) type {
                     // Advance our index until we reach or pass
                     // our current x position in the shaper cells.
                     const shaper_cells_unwrapped = shaper_cells.?;
-                    while (run.offset + shaper_cells_unwrapped[shaper_cells_i].x < x) {
+                    while (shaper_cells_i < shaper_cells_unwrapped.len and run.offset + shaper_cells_unwrapped[shaper_cells_i].x < x) {
                         shaper_cells_i += 1;
                     }
                 }
